@@ -2,10 +2,7 @@
 
 import { ShieldCheck, Trash2, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
-// ⚠️ IMPORTANT: Update this path to wherever your supabase client is configured!
-// Example: import { supabase } from '@/lib/supabase' OR import { supabase } from '../../utils/supabase'
 import { supabase } from "@/lib/supabaseClient";
-
 
 export default function AdminDashboard() {
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -27,14 +24,15 @@ export default function AdminDashboard() {
       if (error) throw error
       if (data) setStaffList(data)
     } catch (error) {
+      // Safely logging the error without causing TS warnings
       console.error('Error fetching staff:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // The Delete Function
-  const handleDeleteStaff = async (staffId) => {
+  // The Delete Function - Added ': any' to fix the TypeScript error
+  const handleDeleteStaff = async (staffId: any) => {
     const isConfirmed = window.confirm("Are you sure you want to delete this staff member? This cannot be undone.")
     if (!isConfirmed) return
 
@@ -45,7 +43,7 @@ export default function AdminDashboard() {
       alert("Staff member deleted successfully!")
       
       // Remove the deleted staff member from the screen instantly
-      setStaffList(staffList.filter(staff => staff.id !== staffId))
+      setStaffList(staffList.filter((staff: any) => staff.id !== staffId))
 
     } catch (error) {
       console.error("Error deleting staff:", error)
@@ -100,7 +98,8 @@ export default function AdminDashboard() {
               <p className="text-gray-500 text-center py-4">No staff members found.</p>
             ) : (
               <div className="space-y-4">
-                {staffList.map((staff) => (
+                {/* Added ': any' to staff here as well to be completely safe */}
+                {staffList.map((staff: any) => (
                   <div key={staff.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
                     
                     {/* Staff Info */}
