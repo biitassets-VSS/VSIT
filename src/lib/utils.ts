@@ -1,3 +1,9 @@
+
+// @ts-ignore
+import QRCode from 'qrcode'
+
+export async function generateAssetQR(assetTag: string): Promise<string> {
+// ... rest of your code stays exactly the same
 import QRCode from 'qrcode'
 
 export async function generateAssetQR(assetTag: string): Promise<string> {
