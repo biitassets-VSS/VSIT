@@ -1,120 +1,168 @@
 'use client'
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
-import { AssignAssetModal } from '@/components/admin/AssignAssetModal'
-import { Plus, Search, QrCode } from 'lucide-react'
+import { Plus, Server, CheckCircle, AlertCircle } from 'lucide-react'
 
-export default function AssetListPage() {
+const CATEGORIES = [
+  "Laptop", "Headphone", "Laptop Stand", "Keyboards", 
+  "Wireless Keyboard with Mouse Kit", "USB Mouse", "USB Keyboard", 
+  "USB Keyboard with Mouse Kit", "Mobile", "Cleaning Kits", 
+  "Usb Ext. Hub", "Type C Port Ext Hub", "Other"
+]
+
+export default function AdminAssets() {
   const [assets, setAssets] = useState<any[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [assignModalOpen, setAssignModalOpen] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
 
-  const fetchAssets = async () => {
-    // Join with staff table to show who currently holds the asset
-    const { data } = await supabase
-      .from('assets')
-      .select('*, staff:current_holder(name)')
-      .order('created_at', { ascending: false })
-    
-    if (data) setAssets(data)
-  }
+  // Form State
+  const [formData, setFormData] = useState({
+    asset_tag: '', description: '', category: 'Laptop', serial_number: '',
+    condition: 'New', warranty_details: '', last_inspection_date: '',
+    next_inspection_date: '', notes: ''
+  })
 
   useEffect(() => {
     fetchAssets()
   }, [])
 
-  const filteredAssets = assets.filter(a => 
-    a.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    a.asset_tag.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const fetchAssets = async () => {
+    const { data } = await supabase.from('assets').select(`*, profiles(full_name)`).order('created_at', { ascending: false })
+    if (data) setAssets(data)
+  }
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'In Stock': return 'bg-green-100 text-green-700'
-      case 'Assigned': return 'bg-blue-100 text-blue-700'
-      case 'Repair': return 'bg-orange-100 text-orange-700'
-      default: return 'bg-gray-100 text-gray-700'
+  const handleAddAsset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    
+    // In Step 3 we will add the Image Upload to Supabase Storage, for now we save the text data
+    const { error } = await supabase.from('assets').insert([formData])
+
+    if (error) {
+      setMessage(`Error: ${error.message}`)
+    } else {
+      setMessage('Asset added successfully!')
+      setShowForm(false)
+      fetchAssets() // Refresh list
     }
+    setLoading(false)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Asset Inventory</h1>
-        <Link href="/admin/assets/new" className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
-          <Plus className="w-5 h-5 mr-2" /> Add Asset
-        </Link>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-          <div className="relative w-64">
-            <Search className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
-            <input 
-              type="text" placeholder="Search assets..." 
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">IT Assets Inventory</h1>
+            <p className="text-gray-500">Manage, track, and inspect all company assets.</p>
           </div>
+          <button 
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-5 h-5" />
+            {showForm ? 'Cancel' : 'Add New Asset'}
+          </button>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {message && (
+          <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-200 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" /> {message}
+          </div>
+        )}
+
+        {/* Add Asset Form */}
+        {showForm && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+            <h2 className="text-xl font-bold mb-4">Add Tracking Detail</h2>
+            <form onSubmit={handleAddAsset} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              
+              <div><label className="block text-sm font-medium mb-1">Asset Tag *</label>
+              <input required type="text" className="w-full p-2 border rounded" onChange={e => setFormData({...formData, asset_tag: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Category *</label>
+              <select className="w-full p-2 border rounded" onChange={e => setFormData({...formData, category: e.target.value})}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select></div>
+
+              <div><label className="block text-sm font-medium mb-1">Serial Number</label>
+              <input type="text" className="w-full p-2 border rounded" onChange={e => setFormData({...formData, serial_number: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Condition</label>
+              <select className="w-full p-2 border rounded" onChange={e => setFormData({...formData, condition: e.target.value})}>
+                <option>New</option><option>Refurbished</option><option>Damaged</option>
+              </select></div>
+
+              <div><label className="block text-sm font-medium mb-1">Warranty Details</label>
+              <input type="text" className="w-full p-2 border rounded" onChange={e => setFormData({...formData, warranty_details: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Last Inspection Date</label>
+              <input type="date" className="w-full p-2 border rounded" onChange={e => setFormData({...formData, last_inspection_date: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Next Inspection Due</label>
+              <input type="date" className="w-full p-2 border rounded" onChange={e => setFormData({...formData, next_inspection_date: e.target.value})} /></div>
+
+              <div className="lg:col-span-2"><label className="block text-sm font-medium mb-1">Description / Notes</label>
+              <input type="text" className="w-full p-2 border rounded" onChange={e => setFormData({...formData, description: e.target.value})} /></div>
+
+              {/* Photo Upload Placeholder (We will connect this to Supabase Storage in Step 3) */}
+              <div><label className="block text-sm font-medium mb-1">Upload Photo</label>
+              <input type="file" accept="image/*" className="w-full p-2 border rounded" /></div>
+
+              <div className="lg:col-span-3 mt-4">
+                <button type="submit" disabled={loading} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium">
+                  {loading ? 'Saving...' : 'Save Asset Details'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Assets List */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 text-gray-600 text-sm border-b">
-                <th className="p-4 font-medium">Asset Tag</th>
-                <th className="p-4 font-medium">Name / Brand</th>
-                <th className="p-4 font-medium">Category</th>
-                <th className="p-4 font-medium">Status</th>
-                <th className="p-4 font-medium">Current Holder</th>
-                <th className="p-4 font-medium text-right">Actions</th>
+              <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
+                <th className="p-4">Asset Tag</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">Condition</th>
+                <th className="p-4">Assigned To</th>
+                <th className="p-4">Next Inspection</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredAssets.map(asset => (
-                <tr key={asset.id} className="hover:bg-gray-50 transition">
-                  <td className="p-4 font-medium text-blue-600">{asset.asset_tag}</td>
-                  <td className="p-4">
-                    <p className="font-medium text-gray-900">{asset.name}</p>
-                    <p className="text-xs text-gray-500">{asset.brand}</p>
-                  </td>
+            <tbody>
+              {assets.map(asset => (
+                <tr key={asset.id} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="p-4 font-medium text-gray-900">{asset.asset_tag}</td>
                   <td className="p-4 text-gray-600">{asset.category}</td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(asset.status)}`}>
-                      {asset.status}
+                  <td className="p-4 text-gray-600">
+                    <span className={`px-2 py-1 rounded-full text-xs ${asset.condition === 'New' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {asset.condition}
                     </span>
                   </td>
-                  <td className="p-4 text-gray-600">
-                    {asset.staff ? asset.staff.name : '-'}
-                  </td>
-                  <td className="p-4 flex justify-end space-x-2">
-                    {/* Render Assign Button only if In Stock */}
-                    {asset.status === 'In Stock' && (
-                      <button onClick={() => setAssignModalOpen(asset.id)} className="text-sm px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 font-medium">
-                        Assign
-                      </button>
+                  <td className="p-4 text-gray-600">{asset.profiles?.full_name || 'Unassigned'}</td>
+                  <td className="p-4">
+                    {asset.next_inspection_date && new Date(asset.next_inspection_date) < new Date() ? (
+                       <span className="text-red-600 flex items-center gap-1 text-sm font-medium"><AlertCircle className="w-4 h-4"/> Overdue</span>
+                    ) : (
+                       <span className="text-gray-600 text-sm">{asset.next_inspection_date || 'Not set'}</span>
                     )}
-                    <a href={asset.qr_code_url} download={`QR-${asset.asset_tag}.png`} className="p-1.5 text-gray-400 hover:text-gray-800 bg-gray-100 rounded-md">
-                      <QrCode className="w-5 h-5" />
-                    </a>
                   </td>
                 </tr>
               ))}
+              {assets.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-gray-500">No assets found. Click "Add New Asset" to begin.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-      </div>
 
-      {assignModalOpen && (
-        <AssignAssetModal 
-          assetId={assignModalOpen} 
-          onClose={() => setAssignModalOpen(null)} 
-          onSuccess={fetchAssets}
-        />
-      )}
+      </div>
     </div>
   )
 }
