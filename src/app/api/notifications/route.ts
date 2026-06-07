@@ -42,15 +42,18 @@ export async function GET(request: Request) {
         : 7 // Default to overdue if never inspected
 
       if (daysSinceLast >= 5) {
-        // Create In-App Notification
-        await supabase.from('notifications').insert([{
-          title: 'Inspection Due',
-          message: `Inspection for ${assignment.assets.asset_tag} (${assignment.assets.name}) is due in ${7 - daysSinceLast} days.`,
-          type: 'Warning',
-          target_role: 'staff',
-          target_user: assignment.staff.profile_id
-        }])
+        // Safely extract the data to bypass TypeScript strict mode
+const anyAssignment = assignment as any;
+const asset = Array.isArray(anyAssignment.assets) ? anyAssignment.assets[0] : anyAssignment.assets;
+const staff = Array.isArray(anyAssignment.staff) ? anyAssignment.staff[0] : anyAssignment.staff;
 
+await supabase.from('notifications').insert([{
+  title: 'Inspection Due',
+  message: `Inspection for ${asset.asset_tag} (${asset.name}) is due.`,
+  type: 'Warning',
+  target_role: 'staff',
+  target_user: staff.profile_id
+}])
         // Send Email via Resend
         await resend.emails.send({
           from: 'IT Admin <it-assets@yourdomain.com>',
