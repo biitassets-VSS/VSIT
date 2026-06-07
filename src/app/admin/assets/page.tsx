@@ -18,7 +18,6 @@ export default function AdminAssets() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
   
-  // Track if we are editing an existing asset
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const emptyForm = {
@@ -39,7 +38,6 @@ export default function AdminAssets() {
   }
 
   const fetchAssets = async () => {
-    // We added error checking here so if it fails, it tells us exactly why!
     const { data, error } = await supabase
       .from('assets')
       .select(`*, profiles(full_name)`)
@@ -57,24 +55,20 @@ export default function AdminAssets() {
     setLoading(true)
     setMessage({ type: '', text: '' })
     
-    // FIX: Convert empty strings to actual NULL values for the database
     const payload = {
       ...formData,
       last_inspection_date: formData.last_inspection_date || null,
       next_inspection_date: formData.next_inspection_date || null,
       assigned_to: formData.assigned_to || null,
-      // Auto-update status based on assignment
       status: formData.assigned_to ? 'Assigned' : formData.status
     }
 
     let error;
 
     if (editingId) {
-      // Update existing
       const { error: updateError } = await supabase.from('assets').update(payload).eq('id', editingId)
       error = updateError
     } else {
-      // Insert new
       const { error: insertError } = await supabase.from('assets').insert([payload])
       error = insertError
     }
@@ -86,7 +80,7 @@ export default function AdminAssets() {
       setShowForm(false)
       setEditingId(null)
       setFormData(emptyForm)
-      fetchAssets() // Refresh list instantly
+      fetchAssets()
     }
     setLoading(false)
   }
@@ -167,6 +161,10 @@ export default function AdminAssets() {
               <div><label className="block text-sm font-medium mb-1">Serial Number</label>
               <input type="text" className="w-full p-2 border rounded" value={formData.serial_number} onChange={e => setFormData({...formData, serial_number: e.target.value})} /></div>
 
+              {/* NEW: Description field separated */}
+              <div className="lg:col-span-3"><label className="block text-sm font-medium mb-1">Asset Description</label>
+              <input type="text" placeholder="E.g., Dell XPS 15 9510 Core i7..." className="w-full p-2 border rounded" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
+
               <div><label className="block text-sm font-medium mb-1">Condition</label>
               <select className="w-full p-2 border rounded" value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})}>
                 <option>New</option><option>Refurbished</option><option>Damaged</option>
@@ -194,11 +192,12 @@ export default function AdminAssets() {
               <div><label className="block text-sm font-medium mb-1">Next Inspection Due</label>
               <input type="date" className="w-full p-2 border rounded" value={formData.next_inspection_date} onChange={e => setFormData({...formData, next_inspection_date: e.target.value})} /></div>
 
-              <div className="lg:col-span-2"><label className="block text-sm font-medium mb-1">Description / Notes</label>
-              <input type="text" className="w-full p-2 border rounded" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
+              {/* NEW: Notes field separated */}
+              <div className="lg:col-span-2"><label className="block text-sm font-medium mb-1">Internal Notes</label>
+              <textarea rows={2} className="w-full p-2 border rounded" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} /></div>
 
               <div><label className="block text-sm font-medium mb-1">Upload Photo</label>
-              <input type="file" accept="image/*" className="w-full p-2 border rounded text-sm text-gray-500" /></div>
+              <input type="file" accept="image/*" className="w-full p-2 border rounded text-sm text-gray-500 bg-white" /></div>
 
               <div className="lg:col-span-3 mt-4">
                 <button type="submit" disabled={loading} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700">
@@ -216,7 +215,7 @@ export default function AdminAssets() {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
                   <th className="p-4">Asset Tag</th>
-                  <th className="p-4">Details</th>
+                  <th className="p-4">Details & Description</th>
                   <th className="p-4">Status & Condition</th>
                   <th className="p-4">Assigned To</th>
                   <th className="p-4">Next Inspection</th>
@@ -229,7 +228,8 @@ export default function AdminAssets() {
                     <td className="p-4 font-medium text-gray-900">{asset.asset_tag}</td>
                     <td className="p-4">
                       <div className="text-gray-900 font-medium">{asset.category}</div>
-                      <div className="text-gray-500 text-xs">SN: {asset.serial_number || 'N/A'}</div>
+                      {asset.description && <div className="text-gray-600 text-xs mt-0.5 truncate max-w-xs">{asset.description}</div>}
+                      <div className="text-gray-400 text-xs mt-0.5">SN: {asset.serial_number || 'N/A'}</div>
                     </td>
                     <td className="p-4">
                       <div className="flex flex-col gap-1 items-start">
@@ -266,7 +266,7 @@ export default function AdminAssets() {
                 {assets.length === 0 && (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-gray-500">
-                      No assets found. If you just added one and don't see it, check the error message above!
+                      No assets found. Click "Add Asset" to begin.
                     </td>
                   </tr>
                 )}
