@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 
 export default function AdminDashboard() {
-  const [staffList, setStaffList] = useState([])
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true)
 
   // Fetch staff when the page loads
