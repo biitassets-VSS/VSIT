@@ -1,4 +1,4 @@
-mport { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export function createClient() {
@@ -37,4 +37,4 @@ export function createClient() {
       },
     }
   )
-} please change as require 
+}
