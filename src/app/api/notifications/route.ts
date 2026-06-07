@@ -42,24 +42,27 @@ export async function GET(request: Request) {
         : 7 // Default to overdue if never inspected
 
       if (daysSinceLast >= 5) {
+        
         // Safely extract the data to bypass TypeScript strict mode
-const anyAssignment = assignment as any;
-const asset = Array.isArray(anyAssignment.assets) ? anyAssignment.assets[0] : anyAssignment.assets;
-const staff = Array.isArray(anyAssignment.staff) ? anyAssignment.staff[0] : anyAssignment.staff;
+        const anyAssignment = assignment as any;
+        const asset = Array.isArray(anyAssignment.assets) ? anyAssignment.assets[0] : anyAssignment.assets;
+        const staff = Array.isArray(anyAssignment.staff) ? anyAssignment.staff[0] : anyAssignment.staff;
 
-await supabase.from('notifications').insert([{
-  title: 'Inspection Due',
-  message: `Inspection for ${asset.asset_tag} (${asset.name}) is due.`,
-  type: 'Warning',
-  target_role: 'staff',
-  target_user: staff.profile_id
-}])
+        // Create In-App Notification
+        await supabase.from('notifications').insert([{
+          title: 'Inspection Due',
+          message: `Inspection for ${asset.asset_tag} (${asset.name}) is due.`,
+          type: 'Warning',
+          target_role: 'staff',
+          target_user: staff.profile_id
+        }])
+
         // Send Email via Resend
         await resend.emails.send({
           from: 'IT Admin <it-assets@yourdomain.com>',
-          to: assignment.staff.email,
+          to: staff.email,
           subject: 'Action Required: Asset Inspection Due',
-          html: `<p>Hi ${assignment.staff.name},</p><p>Your weekly inspection for <strong>${assignment.assets.name} (${assignment.assets.asset_tag})</strong> is due soon. Please log into the portal to complete it.</p>`
+          html: `<p>Hi ${staff.name},</p><p>Your weekly inspection for <strong>${asset.name} (${asset.asset_tag})</strong> is due soon. Please log into the portal to complete it.</p>`
         })
 
         alertsCreated++
