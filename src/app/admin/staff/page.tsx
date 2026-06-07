@@ -1,12 +1,18 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Users, Laptop, Shield, Mail } from 'lucide-react'
+import { Users, Laptop, Shield, Mail, Plus, X, UserX, UserCheck, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function AdminStaff() {
   const [staffList, setStaffList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  
+  const [showForm, setShowForm] = useState(false)
+  const [formLoading, setFormLoading] = useState(false)
+  const [message, setMessage] = useState({ type: '', text: '' })
+
+  const emptyForm = { full_name: '', email: '', password: '', role: 'staff' }
+  const [formData, setFormData] = useState(emptyForm)
 
   useEffect(() => {
     fetchStaffDetails()
@@ -14,25 +20,77 @@ export default function AdminStaff() {
 
   const fetchStaffDetails = async () => {
     setLoading(true)
-    
-    // We fetch all profiles and pull in any assets assigned to them!
     const { data, error } = await supabase
       .from('profiles')
       .select(`
-        id, 
-        full_name, 
-        email, 
-        role,
+        id, full_name, email, role, status,
         assets ( id, asset_tag, category, status )
       `)
       .order('full_name', { ascending: true })
 
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      setStaffList(data)
-    }
+    if (data) setStaffList(data)
     setLoading(false)
+  }
+
+  // Toggle Active/Deactive Status
+  const toggleStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'Active' ? 'Deactivated' : 'Active'
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ status: newStatus })
+      .eq('id', id)
+
+    if (error) {
+      setMessage({ type: 'error', text: `Failed to update status: ${error.message}` })
+    } else {
+      setMessage({ type: 'success', text: `User has been ${newStatus.toLowerCase()}!` })
+      fetchStaffDetails() // Refresh list
+    }
+  }
+
+  // Add New Staff
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormLoading(true)
+    setMessage({ type: '', text: '' })
+
+    // 1. Create the user in Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          full_name: formData.full_name,
+          role: formData.role,
+        }
+      }
+    })
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message })
+    } else {
+      // 2. If you don't have a trigger set up, we manually insert the profile
+      if (data.user) {
+         const { error: profileError } = await supabase.from('profiles').upsert({
+            id: data.user.id,
+            email: formData.email,
+            full_name: formData.full_name,
+            role: formData.role,
+            status: 'Active'
+         })
+         
+         if (profileError) {
+             console.log("Profile insert error (might be handled by trigger):", profileError)
+         }
+      }
+
+      setMessage({ type: 'success', text: 'Staff member added successfully!' })
+      setFormData(emptyForm)
+      setShowForm(false)
+      fetchStaffDetails()
+    }
+    setFormLoading(false)
   }
 
   return (
@@ -46,13 +104,51 @@ export default function AdminStaff() {
               <Users className="w-8 h-8 text-blue-600" />
               Staff Directory
             </h1>
-            <p className="text-gray-500 mt-1">View all users and their assigned IT assets.</p>
+            <p className="text-gray-500 mt-1">View, add, and manage users and their assigned assets.</p>
           </div>
+          <button 
+            onClick={() => { setShowForm(!showForm); setMessage({ type: '', text: '' }) }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
+          >
+            {showForm ? <><X className="w-5 h-5"/> Cancel</> : <><Plus className="w-5 h-5" /> Add Staff</>}
+          </button>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl">
-            {error}
+        {/* Message Alert Box */}
+        {message.text && (
+          <div className={`mb-6 p-4 rounded-xl border flex items-center gap-2 ${message.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+            {message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+            {message.text}
+          </div>
+        )}
+
+        {/* Add Staff Form */}
+        {showForm && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+            <h2 className="text-xl font-bold mb-4">Register New Staff Member</h2>
+            <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <div><label className="block text-sm font-medium mb-1">Full Name *</label>
+              <input required type="text" className="w-full p-2 border rounded" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Email Address *</label>
+              <input required type="email" className="w-full p-2 border rounded" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Temporary Password *</label>
+              <input required type="password" minLength={6} className="w-full p-2 border rounded" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Role *</label>
+              <select className="w-full p-2 border rounded" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                <option value="staff">Staff</option>
+                <option value="admin">Admin</option>
+              </select></div>
+
+              <div className="md:col-span-2 mt-2">
+                <button type="submit" disabled={formLoading} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 w-full md:w-auto">
+                  {formLoading ? 'Creating User...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -62,31 +158,39 @@ export default function AdminStaff() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {staffList.map((staff) => (
-              <div key={staff.id} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col h-full hover:shadow-md transition">
+              <div key={staff.id} className={`bg-white rounded-2xl p-6 shadow-sm border transition relative ${staff.status === 'Deactivated' ? 'border-red-200 opacity-80 bg-gray-50' : 'border-gray-100 hover:shadow-md'}`}>
                 
+                {/* Active/Deactive Badge (Top Right corner inside card) */}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${staff.status === 'Deactivated' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        <span className={`w-2 h-2 rounded-full ${staff.status === 'Deactivated' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                        {staff.status || 'Active'}
+                    </span>
+                </div>
+
                 {/* User Info */}
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {staff.full_name || 'Unnamed User'}
-                    </h2>
-                    <div className="flex items-center gap-1 text-gray-500 text-sm mt-1">
-                      <Mail className="w-4 h-4" />
-                      {staff.email}
-                    </div>
+                <div className="mb-4 pr-20">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {staff.full_name || 'Unnamed User'}
+                  </h2>
+                  <div className="flex items-center gap-1 text-gray-500 text-sm mt-1">
+                    <Mail className="w-4 h-4" />
+                    {staff.email}
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-                    staff.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {staff.role === 'admin' && <Shield className="w-3 h-3" />}
-                    {staff.role?.toUpperCase() || 'STAFF'}
-                  </span>
+                  <div className="mt-2">
+                    <span className={`px-2 py-1 rounded text-xs font-bold flex inline-flex items-center gap-1 ${
+                        staff.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                        {staff.role === 'admin' && <Shield className="w-3 h-3" />}
+                        {staff.role?.toUpperCase() || 'STAFF'}
+                    </span>
+                  </div>
                 </div>
 
                 <hr className="my-4 border-gray-100" />
 
                 {/* Assigned Assets Section */}
-                <div className="flex-grow">
+                <div className="flex-grow mb-4">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <Laptop className="w-4 h-4 text-gray-500" />
                     Assigned Assets ({staff.assets?.length || 0})
@@ -106,6 +210,20 @@ export default function AdminStaff() {
                       No assets currently assigned.
                     </p>
                   )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-2 border-t border-gray-100 flex justify-end">
+                    <button 
+                        onClick={() => toggleStatus(staff.id, staff.status || 'Active')}
+                        className={`flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded transition ${
+                            staff.status === 'Deactivated' 
+                            ? 'text-green-700 bg-green-50 hover:bg-green-100' 
+                            : 'text-red-700 bg-red-50 hover:bg-red-100'
+                        }`}
+                    >
+                        {staff.status === 'Deactivated' ? <><UserCheck className="w-4 h-4" /> Reactivate</> : <><UserX className="w-4 h-4" /> Deactivate</>}
+                    </button>
                 </div>
 
               </div>
