@@ -1,51 +1,121 @@
-import Link from 'next/link'
-import { MonitorCheck, ShieldCheck, Users } from 'lucide-react'
+"use client"; // Required for Next.js when using state and click events
 
-export default function HomePage() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
+import React, { useState, useEffect } from "react";
+// ⚠️ IMPORTANT: Change the path below to wherever your Supabase client is located in your project!
+// It might be something like "@/lib/supabase" or "../utils/supabaseClient"
+import { supabase } from "../../lib/supabaseClient"; 
+
+// Define a TypeScript interface for your staff data
+interface StaffMember {
+  id: string;
+  email: string;
+  role: string;
+}
+
+export default function AdminDashboard() {
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1️⃣ Fetch staff members when the page loads
+  useEffect(() => {
+    fetchStaff();
+  }, []);
+
+  const fetchStaff = async () => {
+    try {
+      setLoading(true);
       
-      {/* Header Section */}
-      <div className="text-center mb-12">
-        <div className="inline-flex items-center justify-center p-4 bg-blue-100 rounded-full mb-6">
-          <MonitorCheck className="w-12 h-12 text-blue-600" />
-        </div>
-        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">
-          IT Assets Management
-        </h1>
-        <p className="text-lg text-gray-500 max-w-xl mx-auto">
-          Welcome to the centralized portal for managing and tracking company hardware and software resources.
-        </p>
-      </div>
+      // Note: Change 'profiles' to the actual name of your table!
+      const { data, error } = await supabase
+        .from("profiles") 
+        .select("*")
+        .eq("role", "staff"); // Grabs only users with the role of 'staff'
 
-      {/* Login Options Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl w-full">
-        
-        {/* Admin Portal Card */}
-        <Link href="/login?role=admin" 
-              className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-blue-200 transition-all duration-200 group">
-          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200">
-            <ShieldCheck className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Portal</h2>
-          <p className="text-gray-500 text-center text-sm">
-            Manage inventory, track assignments, and configure system settings.
-          </p>
-        </Link>
+      if (error) throw error;
+      setStaffList(data || []);
+      
+    } catch (error: any) {
+      console.error("Error fetching staff:", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        {/* Staff Portal Card */}
-        <Link href="/login?role=staff" 
-              className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-green-200 transition-all duration-200 group">
-          <div className="w-16 h-16 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-green-600 group-hover:text-white transition-colors duration-200">
-            <Users className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Staff Portal</h2>
-          <p className="text-gray-500 text-center text-sm">
-            View your assigned assets, report issues, and request new equipment.
-          </p>
-        </Link>
+  // 2️⃣ The Delete Function
+  const handleDeleteStaff = async (staffId: string) => {
+    const isConfirmed = window.confirm(
+      "Are you sure you want to delete this staff member? This cannot be undone."
+    );
+    if (!isConfirmed) return;
 
-      </div>
+    try {
+      // Calls the custom SQL function we created in the Supabase Dashboard
+      const { error } = await supabase.rpc("delete_user", { user_id: staffId });
+
+      if (error) throw error;
+
+      alert("Staff member deleted successfully!");
+
+      // Instantly remove the deleted user from the screen
+      setStaffList((currentList) =>
+        currentList.filter((staff) => staff.id !== staffId)
+      );
+    } catch (error: any) {
+      console.error("Error deleting staff:", error.message);
+      alert("Failed to delete staff member.");
+    }
+  };
+
+  // 3️⃣ The UI
+  return (
+    <div style={{ padding: "30px", maxWidth: "800px", margin: "0 auto", fontFamily: "sans-serif" }}>
+      <h2>Admin Dashboard - Manage Staff</h2>
+
+      {loading ? (
+        <p>Loading staff members...</p>
+      ) : staffList.length === 0 ? (
+        <p>No staff members found.</p>
+      ) : (
+        <table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse", marginTop: "20px" }}>
+          <thead>
+            <tr>
+              <th style={{ borderBottom: "2px solid #ccc", padding: "10px" }}>Email</th>
+              <th style={{ borderBottom: "2px solid #ccc", padding: "10px" }}>Role</th>
+              <th style={{ borderBottom: "2px solid #ccc", padding: "10px" }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staffList.map((staff) => (
+              <tr key={staff.id}>
+                <td style={{ borderBottom: "1px solid #eee", padding: "10px" }}>
+                  {staff.email}
+                </td>
+                <td style={{ borderBottom: "1px solid #eee", padding: "10px" }}>
+                  <span style={{ background: "#e6f7ff", color: "#0050b3", padding: "4px 8px", borderRadius: "4px" }}>
+                    {staff.role}
+                  </span>
+                </td>
+                <td style={{ borderBottom: "1px solid #eee", padding: "10px" }}>
+                  <button
+                    onClick={() => handleDeleteStaff(staff.id)}
+                    style={{
+                      backgroundColor: "#ff4d4f",
+                      color: "white",
+                      border: "none",
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "bold"
+                    }}
+                  >
+                    Delete Account
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
-  )
+  );
 }
