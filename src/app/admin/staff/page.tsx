@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Users, Laptop, Shield, Mail, Plus, X, UserX, UserCheck, AlertCircle, CheckCircle } from 'lucide-react'
+import { Users, Laptop, Shield, Mail, Plus, X, UserX, UserCheck, AlertCircle, CheckCircle, Phone, Building, CalendarDays } from 'lucide-react'
 
 export default function AdminStaff() {
   const [staffList, setStaffList] = useState<any[]>([])
@@ -11,7 +11,15 @@ export default function AdminStaff() {
   const [formLoading, setFormLoading] = useState(false)
   const [message, setMessage] = useState({ type: '', text: '' })
 
-  const emptyForm = { full_name: '', email: '', password: '', role: 'staff' }
+  const emptyForm = { 
+    full_name: '', 
+    email: '', 
+    password: '', 
+    role: 'staff',
+    department: '',
+    phone: '',
+    joining_date: ''
+  }
   const [formData, setFormData] = useState(emptyForm)
 
   useEffect(() => {
@@ -23,7 +31,7 @@ export default function AdminStaff() {
     const { data, error } = await supabase
       .from('profiles')
       .select(`
-        id, full_name, email, role, status,
+        id, full_name, email, role, status, department, phone, joining_date,
         assets ( id, asset_tag, category, status )
       `)
       .order('full_name', { ascending: true })
@@ -45,7 +53,7 @@ export default function AdminStaff() {
       setMessage({ type: 'error', text: `Failed to update status: ${error.message}` })
     } else {
       setMessage({ type: 'success', text: `User has been ${newStatus.toLowerCase()}!` })
-      fetchStaffDetails() // Refresh list
+      fetchStaffDetails() 
     }
   }
 
@@ -55,7 +63,7 @@ export default function AdminStaff() {
     setFormLoading(true)
     setMessage({ type: '', text: '' })
 
-    // 1. Create the user in Supabase Auth
+    // Create the user and pass ALL extra data into 'options.data'
     const { data, error } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
@@ -63,6 +71,9 @@ export default function AdminStaff() {
         data: {
           full_name: formData.full_name,
           role: formData.role,
+          department: formData.department,
+          phone: formData.phone,
+          joining_date: formData.joining_date
         }
       }
     })
@@ -70,21 +81,6 @@ export default function AdminStaff() {
     if (error) {
       setMessage({ type: 'error', text: error.message })
     } else {
-      // 2. If you don't have a trigger set up, we manually insert the profile
-      if (data.user) {
-         const { error: profileError } = await supabase.from('profiles').upsert({
-            id: data.user.id,
-            email: formData.email,
-            full_name: formData.full_name,
-            role: formData.role,
-            status: 'Active'
-         })
-         
-         if (profileError) {
-             console.log("Profile insert error (might be handled by trigger):", profileError)
-         }
-      }
-
       setMessage({ type: 'success', text: 'Staff member added successfully!' })
       setFormData(emptyForm)
       setShowForm(false)
@@ -126,7 +122,7 @@ export default function AdminStaff() {
         {showForm && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
             <h2 className="text-xl font-bold mb-4">Register New Staff Member</h2>
-            <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
               <div><label className="block text-sm font-medium mb-1">Full Name *</label>
               <input required type="text" className="w-full p-2 border rounded" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} /></div>
@@ -137,13 +133,22 @@ export default function AdminStaff() {
               <div><label className="block text-sm font-medium mb-1">Temporary Password *</label>
               <input required type="password" minLength={6} className="w-full p-2 border rounded" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} /></div>
 
+              <div><label className="block text-sm font-medium mb-1">Department</label>
+              <input type="text" placeholder="e.g. IT, HR, Sales" className="w-full p-2 border rounded" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Phone No</label>
+              <input type="tel" className="w-full p-2 border rounded" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} /></div>
+
+              <div><label className="block text-sm font-medium mb-1">Joining Date</label>
+              <input type="date" className="w-full p-2 border rounded text-gray-700" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} /></div>
+
               <div><label className="block text-sm font-medium mb-1">Role *</label>
               <select className="w-full p-2 border rounded" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                 <option value="staff">Staff</option>
                 <option value="admin">Admin</option>
               </select></div>
 
-              <div className="md:col-span-2 mt-2">
+              <div className="md:col-span-3 mt-4">
                 <button type="submit" disabled={formLoading} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 w-full md:w-auto">
                   {formLoading ? 'Creating User...' : 'Create Account'}
                 </button>
@@ -158,9 +163,9 @@ export default function AdminStaff() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {staffList.map((staff) => (
-              <div key={staff.id} className={`bg-white rounded-2xl p-6 shadow-sm border transition relative ${staff.status === 'Deactivated' ? 'border-red-200 opacity-80 bg-gray-50' : 'border-gray-100 hover:shadow-md'}`}>
+              <div key={staff.id} className={`bg-white rounded-2xl p-6 shadow-sm border transition relative flex flex-col h-full ${staff.status === 'Deactivated' ? 'border-red-200 opacity-80 bg-gray-50' : 'border-gray-100 hover:shadow-md'}`}>
                 
-                {/* Active/Deactive Badge (Top Right corner inside card) */}
+                {/* Active/Deactive Badge */}
                 <div className="absolute top-4 right-4 flex items-center gap-2">
                     <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${staff.status === 'Deactivated' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                         <span className={`w-2 h-2 rounded-full ${staff.status === 'Deactivated' ? 'bg-red-500' : 'bg-green-500'}`}></span>
@@ -173,12 +178,32 @@ export default function AdminStaff() {
                   <h2 className="text-xl font-bold text-gray-900">
                     {staff.full_name || 'Unnamed User'}
                   </h2>
-                  <div className="flex items-center gap-1 text-gray-500 text-sm mt-1">
-                    <Mail className="w-4 h-4" />
-                    {staff.email}
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      {staff.email}
+                    </div>
+                    {staff.phone && (
+                      <div className="flex items-center gap-2 text-gray-500 text-sm">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        {staff.phone}
+                      </div>
+                    )}
+                    {staff.department && (
+                      <div className="flex items-center gap-2 text-gray-500 text-sm">
+                        <Building className="w-4 h-4 text-gray-400" />
+                        {staff.department}
+                      </div>
+                    )}
+                    {staff.joining_date && (
+                      <div className="flex items-center gap-2 text-gray-500 text-sm">
+                        <CalendarDays className="w-4 h-4 text-gray-400" />
+                        Joined {new Date(staff.joining_date).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-2">
-                    <span className={`px-2 py-1 rounded text-xs font-bold flex inline-flex items-center gap-1 ${
+                  <div className="mt-3">
+                    <span className={`px-2 py-1 rounded text-xs font-bold inline-flex items-center gap-1 ${
                         staff.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                     }`}>
                         {staff.role === 'admin' && <Shield className="w-3 h-3" />}
