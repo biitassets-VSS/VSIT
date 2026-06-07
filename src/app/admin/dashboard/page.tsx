@@ -2,58 +2,52 @@
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { LogOut, Users, MonitorSmartphone, ShieldCheck, LayoutDashboard, Plus, Trash2 } from "lucide-react";
+import { LogOut, Users, MonitorSmartphone, ShieldCheck, Download, CheckCircle, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
-
-interface Profile {
-  id: string;
-  email: string;
-  role: string;
-  created_at: string;
-}
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [users, setUsers] = useState<Profile[]>([]);
+  const [activeTab, setActiveTab] = useState<"staff" | "inspections">("staff");
+  const [users, setUsers] = useState<any[]>([]);
+  const [inspections, setInspections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    fetchData();
+  }, [activeTab]);
 
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+  const fetchData = async () => {
+    setLoading(true);
+    if (activeTab === "staff") {
+      const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
       setUsers(data || []);
-    } catch (error: any) {
-      console.error("Error fetching users:", error.message);
-    } finally {
-      setLoading(false);
+    } else {
+      const { data } = await supabase.from("inspections").select("*, profiles:assigned_to(email)").order("due_date", { ascending: true });
+      setInspections(data || []);
+    }
+    setLoading(false);
+  };
+
+  const handleApprove = async (id: string) => {
+    const { error } = await supabase.from("inspections").update({ status: "approved" }).eq("id", id);
+    if (!error) {
+      alert("Inspection Approved!");
+      fetchData();
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    const isConfirmed = window.confirm("Are you sure you want to delete this user? This removes all their access.");
-    if (!isConfirmed) return;
-
-    try {
-      // Assuming you have a secure RPC function to delete users. 
-      // If not, you may need to delete them from auth.users in the Supabase dashboard manually for now.
-      const { error } = await supabase.from("profiles").delete().eq("id", userId);
-      if (error) throw error;
-      
-      alert("User removed successfully!");
-      setUsers(users.filter((user) => user.id !== userId));
-    } catch (error: any) {
-      console.error("Error deleting user:", error.message);
-      alert("Failed to delete user. Check console for details.");
-    }
+  const handleDownloadReport = () => {
+    const headers = "ID,Asset Name,Staff Assigned,Due Date,Status,Notes\n";
+    const rows = inspections.map(i => 
+      `${i.id},"${i.asset_name}","${i.profiles?.email || 'Unknown'}","${i.due_date}","${i.status}","${(i.notes || '').replace(/"/g, '""')}"`
+    ).join("\n");
+    
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `VSS_Inspection_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
   };
 
   const handleLogout = async () => {
@@ -61,145 +55,123 @@ export default function AdminDashboard() {
     router.push("/login");
   };
 
-  // Quick stats calculations
-  const totalStaff = users.filter(u => u.role === 'staff').length;
-  const totalAdmins = users.filter(u => u.role === 'admin').length;
-
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       
       {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-2 text-blue-400 mb-2">
+      <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col">
+        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+          <div className="flex items-center gap-2 text-blue-400">
             <ShieldCheck className="w-8 h-8" />
             <h1 className="font-bold text-lg leading-tight">Admin<br/>Control</h1>
           </div>
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
-          <button className="w-full flex items-center gap-3 bg-blue-600 text-white px-4 py-3 rounded-xl font-medium shadow-sm transition-all">
-            <LayoutDashboard className="w-5 h-5" /> Dashboard
-          </button>
-          <button className="w-full flex items-center gap-3 text-slate-300 hover:bg-slate-800 hover:text-white px-4 py-3 rounded-xl font-medium transition-all">
+          <button 
+            onClick={() => setActiveTab("staff")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'staff' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+          >
             <Users className="w-5 h-5" /> Manage Staff
           </button>
-          <button className="w-full flex items-center gap-3 text-slate-300 hover:bg-slate-800 hover:text-white px-4 py-3 rounded-xl font-medium transition-all">
-            <MonitorSmartphone className="w-5 h-5" /> IT Assets
+          <button 
+            onClick={() => setActiveTab("inspections")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'inspections' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+          >
+            <MonitorSmartphone className="w-5 h-5" /> Inspections
           </button>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          <button 
-            onClick={handleLogout} 
-            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-300 px-4 py-3 rounded-xl font-medium transition-all"
-          >
+          <button onClick={handleLogout} className="w-full flex justify-center gap-2 bg-slate-800 hover:bg-red-500 px-4 py-3 rounded-xl font-medium transition-all">
             <LogOut className="w-5 h-5" /> Sign Out
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto">
         <header className="mb-8">
           <h2 className="text-3xl font-extrabold text-slate-900">Virtual Staffing Solutions</h2>
-          <p className="text-slate-500 mt-1">Full System Overview & Management</p>
+          <p className="text-slate-500 mt-1">System Management Overview</p>
         </header>
 
-        {/* STATS CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-            <div className="bg-blue-100 text-blue-600 p-4 rounded-xl">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Staff</p>
-              <h3 className="text-3xl font-bold text-slate-900">{totalStaff}</h3>
-            </div>
-          </div>
-          
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-            <div className="bg-indigo-100 text-indigo-600 p-4 rounded-xl">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Admins</p>
-              <h3 className="text-3xl font-bold text-slate-900">{totalAdmins}</h3>
+        {/* STAFF TAB CONTENT */}
+        {activeTab === "staff" && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100"><h3 className="text-lg font-bold">Staff Directory</h3></div>
+            <div className="p-6">
+              {loading ? <p>Loading...</p> : (
+                <ul className="space-y-3">
+                  {users.map(u => (
+                    <li key={u.id} className="p-4 bg-slate-50 rounded-xl flex justify-between items-center">
+                      <span className="font-medium">{u.email}</span>
+                      <span className="px-3 py-1 bg-slate-200 rounded-full text-xs font-bold">{u.role}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
+        )}
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-            <div className="bg-emerald-100 text-emerald-600 p-4 rounded-xl">
-              <MonitorSmartphone className="w-6 h-6" />
+        {/* INSPECTIONS TAB CONTENT */}
+        {activeTab === "inspections" && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h3 className="text-lg font-bold text-slate-900">Asset Inspections</h3>
+              <button onClick={handleDownloadReport} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 shadow-sm transition-all">
+                <Download className="w-4 h-4" /> Download Report
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Active Assets</p>
-              <h3 className="text-3xl font-bold text-slate-900">--</h3>
-            </div>
-          </div>
-        </div>
-
-        {/* STAFF MANAGEMENT TABLE */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
-            <h3 className="text-lg font-bold text-slate-900">User Management</h3>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors">
-              <Plus className="w-4 h-4" /> Add User
-            </button>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Email Address</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Role</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">Joined Date</th>
-                  <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-500">Loading user data...</td>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase">
+                    <th className="p-4">Asset</th>
+                    <th className="p-4">Assigned To</th>
+                    <th className="p-4">Due Date</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
-                ) : users.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-500">No users found in database.</td>
-                  </tr>
-                ) : (
-                  users.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 text-sm font-medium text-slate-900">{user.email}</td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                          user.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
-                        }`}>
-                          {user.role.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="p-4 text-sm text-slate-500">
-                        {new Date(user.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-right">
-                        {user.role !== 'admin' && (
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors inline-flex items-center gap-1 text-sm font-medium"
-                          >
-                            <Trash2 className="w-4 h-4" /> Remove
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loading ? (
+                    <tr><td colSpan={5} className="p-6 text-center">Loading inspections...</td></tr>
+                  ) : inspections.length === 0 ? (
+                    <tr><td colSpan={5} className="p-6 text-center">No inspections found.</td></tr>
+                  ) : (
+                    inspections.map((insp) => (
+                      <tr key={insp.id} className="hover:bg-slate-50">
+                        <td className="p-4 font-bold text-slate-900">{insp.asset_name}</td>
+                        <td className="p-4 text-sm text-slate-600">{insp.profiles?.email}</td>
+                        <td className="p-4 text-sm text-slate-600">{new Date(insp.due_date).toLocaleDateString()}</td>
+                        <td className="p-4">
+                          {insp.status === "approved" ? (
+                            <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2.5 py-1 rounded-lg text-xs font-bold w-max"><CheckCircle className="w-4 h-4"/> Complete</span>
+                          ) : insp.status === "submitted" ? (
+                            <span className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg text-xs font-bold w-max"><Clock className="w-4 h-4"/> Needs Approval</span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg text-xs font-bold w-max">Pending</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right space-x-2">
+                          {insp.photo_url && (
+                            <a href={insp.photo_url} target="_blank" className="text-blue-600 hover:underline text-sm font-medium">View Photo</a>
+                          )}
+                          {insp.status === "submitted" && (
+                            <button onClick={() => handleApprove(insp.id)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700">Approve</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-
+        )}
       </main>
     </div>
   );
