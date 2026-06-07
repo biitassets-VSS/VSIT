@@ -1,22 +1,19 @@
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
 
 // @ts-ignore
 import QRCode from 'qrcode'
 
-export async function generateAssetQR(assetTag: string): Promise<string> {
-// ... rest of your code stays exactly the same
-import QRCode from 'qrcode'
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 export async function generateAssetQR(assetTag: string): Promise<string> {
   try {
-    // Generates a base64 encoded image string
-    const url = await QRCode.toDataURL(`asset:${assetTag}`, {
-      width: 300,
-      margin: 2,
-      color: { dark: '#0F172A', light: '#FFFFFF' }
-    });
-    return url;
+    const qrCodeDataUrl = await QRCode.toDataURL(assetTag)
+    return qrCodeDataUrl
   } catch (err) {
-    console.error("QR Generation failed", err);
-    return '';
+    console.error('Error generating QR code', err)
+    return ''
   }
 }
