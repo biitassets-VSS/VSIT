@@ -27,7 +27,7 @@ export default function AdminDashboard() {
       if (error) throw error
       if (data) setStaffList(data)
     } catch (error) {
-      console.error('Error fetching staff:', error.message)
+      console.error('Error fetching staff:', error)
     } finally {
       setIsLoading(false)
     }
@@ -48,7 +48,7 @@ export default function AdminDashboard() {
       setStaffList(staffList.filter(staff => staff.id !== staffId))
 
     } catch (error) {
-      console.error("Error deleting staff:", error.message)
+      console.error("Error deleting staff:", error)
       alert("Failed to delete staff member.")
     }
   }
