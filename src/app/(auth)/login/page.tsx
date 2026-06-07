@@ -1,11 +1,10 @@
 'use client'
-import { Suspense } from 'react'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { MonitorCheck } from 'lucide-react'
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const rolePrefix = searchParams.get('role') === 'admin' ? 'Admin' : 'Staff'
@@ -88,5 +87,18 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+// This is the new wrapper that safely handles the build requirement
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500 font-medium">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }
