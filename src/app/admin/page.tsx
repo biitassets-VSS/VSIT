@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 // ⚠️ IMPORTANT: Adjust this path to match exactly where your supabase client is!
-import { supabase } from "../../lib/supabaseClient"; 
+import { supabase } from "@/lib/supabaseClient"; 
 
 export default function AdminDashboard() {
   const [assets, setAssets] = useState<any[]>([]);
