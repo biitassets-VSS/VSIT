@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 // ⚠️ IMPORTANT: Change the path below to wherever your Supabase client is located in your project!
 // It might be something like "@/lib/supabase" or "../utils/supabaseClient"
-import { supabase } from "../../lib/supabaseClient"; 
+import { supabase } from "@/lib/supabaseClient";
 
 // Define a TypeScript interface for your staff data
 interface StaffMember {
