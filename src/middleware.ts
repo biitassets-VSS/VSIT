@@ -20,18 +20,39 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // 1. Get the current user session
   const { data: { user } } = await supabase.auth.getUser()
+  const path = request.nextUrl.pathname;
 
-  // Route Protection Logic
-  if (!user && (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/staff'))) {
+  // 2. If NO user is logged in, protect the admin and staff routes
+  if (!user && (path.startsWith('/admin') || path.startsWith('/staff'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // 3. If a user IS logged in, enforce strict role routing
   if (user) {
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     
-    if (profile?.role === 'staff' && request.nextUrl.pathname.startsWith('/admin')) {
+    // Bulletproof role formatting
+    const role = profile?.role?.toLowerCase().trim();
+
+    // Rule A: If Staff tries to access Admin
+    if (role === 'staff' && path.startsWith('/admin')) {
       return NextResponse.redirect(new URL('/staff/dashboard', request.url))
+    }
+
+    // Rule B: If Admin tries to access Staff
+    if (role === 'admin' && path.startsWith('/staff')) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
+
+    // Rule C: If already logged in and visiting the Login or Home page
+    if (path === '/login' || path === '/') {
+      if (role === 'admin') {
+        return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+      } else if (role === 'staff') {
+        return NextResponse.redirect(new URL('/staff/dashboard', request.url))
+      }
     }
   }
 
