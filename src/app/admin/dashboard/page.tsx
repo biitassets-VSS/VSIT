@@ -4,7 +4,8 @@ import { ShieldCheck, Trash2, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 // ⚠️ IMPORTANT: Update this path to wherever your supabase client is configured!
 // Example: import { supabase } from '@/lib/supabase' OR import { supabase } from '../../utils/supabase'
-import { supabase } from '@/lib/supabase' 
+import { supabase } from "@/lib/supabaseClient";
+
 
 export default function AdminDashboard() {
   const [staffList, setStaffList] = useState([])
