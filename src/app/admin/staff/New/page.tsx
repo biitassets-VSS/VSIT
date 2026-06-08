@@ -9,7 +9,7 @@ export default function AddStaffPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Later, you will save this data to your database here!
+    // Later, you will save this data to your database here
     alert('Staff Member successfully added! They can now log in.');
     router.push('/admin/staff'); // Redirects back to the staff list
   };
@@ -83,7 +83,7 @@ export default function AddStaffPage() {
         <div>
           <div className="mb-5 border-b border-gray-100 pb-2 flex justify-between items-end">
             <h2 className="text-lg font-bold text-gray-900">Portal Login Credentials</h2>
-            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Used for Staff Login</span>
+            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">Used for Staff Login</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
