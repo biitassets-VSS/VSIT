@@ -1,295 +1,170 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import toast, { Toaster } from 'react-hot-toast';
+import { Search, Camera, Laptop, Smartphone, Monitor, CheckCircle } from 'lucide-react';
 
-export default function StaffDashboardPage() {
+// Mock Data (Replace this with your Supabase data fetching)
+const initialAssets = [
+  { id: 1, name: 'MacBook Pro M2', category: 'Laptop', status: 'Active', color: 'bg-blue-100 text-blue-700' },
+  { id: 2, name: 'iPhone 13', category: 'Mobile', status: 'Maintenance', color: 'bg-orange-100 text-orange-700' },
+  { id: 3, name: 'Dell UltraSharp', category: 'Monitor', status: 'Active', color: 'bg-green-100 text-green-700' },
+];
+
+export default function StaffAssetsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Inspection Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeAsset, setActiveAsset] = useState<any>(null);
-  
-  // Verification States
-  const [verificationInput, setVerificationInput] = useState('');
-  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  
-  // Upload States
-  const [note, setNote] = useState('');
+  const [assets, setAssets] = useState(initialAssets);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
-  // Dummy Data (Only assets assigned to this specific logged-in user: John Doe)
-  const myAssets = [
-    { 
-      id: 1, tag: '#AST-042', serial: 'SN-998234', name: 'Dell XPS 15', category: 'Laptop',
-      lastInspection: 'Oct 10, 2022', dueDate: 'Oct 10, 2023', status: 'Overdue' 
-    },
-    { 
-      id: 2, tag: '#AST-105', serial: 'SN-MS881', name: 'Logitech MX Master 3', category: 'Other',
-      lastInspection: 'Oct 20, 2023', dueDate: 'Nov 20, 2023', status: 'Pending' 
-    },
-    { 
-      id: 3, tag: '#AST-150', serial: 'SN-KB992', name: 'Dell Wired Keyboard', category: 'Other',
-      lastInspection: 'Oct 22, 2023', dueDate: 'Nov 22, 2024', status: 'Passed' 
-    },
-  ];
+  // 1. FIX: Input Visibility Issue 
+  // We explicitly set 'text-gray-900 bg-white' so text is always visible when typing.
+  const inputClasses = "w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all dark:bg-gray-800 dark:border-gray-600 dark:text-white";
 
-  // Calculate Alerts
-  const overdueCount = myAssets.filter(a => a.status === 'Overdue').length;
-  const pendingCount = myAssets.filter(a => a.status === 'Pending').length;
+  // 2. SEARCH LOGIC
+  const filteredAssets = assets.filter((asset) =>
+    asset.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  // Modal Handlers
-  const openInspection = (asset: any) => {
-    setActiveAsset(asset);
-    setVerificationInput('');
-    setVerificationStatus('idle');
-    setNote('');
-    setIsModalOpen(true);
-  };
+  // 3. CAMERA & PHOTO LOGIC
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Get current date and time
+      const now = new Date();
+      const timeString = now.toLocaleString();
+      
+      // Create a preview URL
+      const imageUrl = URL.createObjectURL(file);
+      setPhotoPreview(imageUrl);
 
-  const closeInspection = () => {
-    setIsModalOpen(false);
-    setTimeout(() => setActiveAsset(null), 300); // Wait for animation
-  };
+      // Modern Colorful Alert
+      toast.success(
+        <div>
+          <p className="font-bold">Photo Captured Successfully!</p>
+          <p className="text-sm">Saved on: {timeString}</p>
+        </div>,
+        {
+          style: { borderRadius: '10px', background: '#333', color: '#fff' },
+          iconTheme: { primary: '#10B981', secondary: '#fff' },
+        }
+      );
 
-  const handleVerify = () => {
-    // Check if input matches EITHER the tag OR the serial number (case insensitive)
-    const input = verificationInput.trim().toLowerCase();
-    const isMatch = input === activeAsset.tag.toLowerCase() || input === activeAsset.serial.toLowerCase();
-    
-    setVerificationStatus(isMatch ? 'success' : 'error');
+      // TODO: Here you will upload the 'file' to your Supabase storage
+    }
   };
 
   return (
-    <div className="w-full space-y-6 animate-[fadeIn_0.5s_ease-out] relative">
-      
-      {/* 1. WELCOME & ALERT BANNERS */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">Welcome back, John! 👋</h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 lg:p-8 font-sans">
+      {/* Modern Toaster for Alerts */}
+      <Toaster position="top-right" reverseOrder={false} />
+
+      <div className="max-w-6xl mx-auto space-y-8">
         
-        <div className="flex flex-col gap-3">
-          {overdueCount > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm flex items-center justify-between animate-pulse">
-              <div className="flex items-center gap-3">
-                <span className="text-red-500 text-xl">⚠️</span>
-                <div>
-                  <h3 className="text-sm font-bold text-red-800">Action Required: Overdue Inspections</h3>
-                  <p className="text-xs text-red-600">You have {overdueCount} asset(s) that are past their inspection due date. Please inspect them immediately.</p>
-                </div>
-              </div>
-            </div>
-          )}
+        {/* HEADER SECTION */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+        >
+          <div>
+            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600">
+              Staff Assets
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and track your equipment easily.</p>
+          </div>
 
-          {pendingCount > 0 && (
-            <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-r-xl shadow-sm flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-orange-500 text-xl">⏳</span>
-                <div>
-                  <h3 className="text-sm font-bold text-orange-800">Upcoming Inspections</h3>
-                  <p className="text-xs text-orange-600">You have {pendingCount} asset(s) waiting for inspection this month.</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. MY ASSETS TABLE */}
-      <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/40 border border-gray-100 overflow-hidden mt-6">
-        <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="text-lg font-bold text-gray-800">My Assigned Assets</h2>
-          
-          <div className="relative w-full sm:w-64 group">
+          {/* FIX: Search Box with correct visibility classes */}
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="Search my assets..."
+              placeholder="Search assets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className={inputClasses}
             />
-            <svg className="h-4 w-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[600px]">
-            <thead>
-              <tr className="bg-white border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-semibold">Asset Details</th>
-                <th className="px-6 py-4 font-semibold">Inspection Dates</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700 divide-y divide-gray-50">
-              {myAssets.map((asset) => (
-                <tr key={asset.id} className="hover:bg-blue-50/30 transition-colors group">
-                  
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-gray-800">{asset.name}</div>
-                    <div className="text-xs text-gray-500 mt-1 font-mono">Tag: {asset.tag} | SN: {asset.serial}</div>
-                  </td>
+        </motion.div>
 
-                  <td className="px-6 py-4">
-                    <div className="text-sm"><span className="text-gray-400 text-xs mr-2">Last:</span>{asset.lastInspection}</div>
-                    <div className="text-sm mt-1"><span className="text-gray-400 text-xs mr-2">Due:</span>
-                      <span className={asset.status === 'Overdue' ? 'text-red-600 font-bold' : 'text-gray-800'}>{asset.dueDate}</span>
-                    </div>
-                  </td>
-                  
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide border ${
-                      asset.status === 'Passed' ? 'bg-green-50 text-green-700 border-green-200' :
-                      asset.status === 'Pending' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
-                      'bg-red-50 text-red-700 border-red-200 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse'
-                    }`}>
-                      {asset.status}
-                    </span>
-                  </td>
-                  
-                  <td className="px-6 py-4 text-right">
-                    {asset.status === 'Passed' ? (
-                      <span className="text-green-600 text-sm font-semibold flex items-center justify-end gap-1">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        Up to date
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={() => openInspection(asset)}
-                        className={`px-4 py-2 text-xs font-bold text-white rounded-lg shadow-sm transition-transform hover:scale-105 ${
-                          asset.status === 'Overdue' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
-                      >
-                        Start Inspection
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        {/* CAMERA SECTION (Live Photo) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }} 
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+        >
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <label className="cursor-pointer group flex flex-col items-center justify-center w-full sm:w-auto px-8 py-6 border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50 hover:bg-indigo-100 dark:bg-gray-700 dark:border-gray-600 rounded-xl transition-all">
+              <Camera className="text-indigo-500 group-hover:scale-110 transition-transform mb-2" size={32} />
+              <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Open Camera / Upload</span>
+              {/* This input capture="environment" opens the mobile rear camera automatically! */}
+              <input 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                onChange={handlePhotoCapture}
+              />
+            </label>
 
-      {/* 3. INSPECTION MODAL (VERIFICATION & UPLOAD) */}
-      {isModalOpen && activeAsset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            {/* Header */}
-            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-gray-800">Asset Inspection</h3>
-                <p className="text-sm text-gray-500 mt-1">Inspecting: <span className="font-semibold text-blue-600">{activeAsset.name}</span></p>
+            {/* Photo Preview with Date */}
+            {photoPreview && (
+              <div className="relative relative w-32 h-32 rounded-xl overflow-hidden shadow-md border border-gray-200">
+                <img src={photoPreview} alt="Live Capture" className="w-full h-full object-cover" />
+                <div className="absolute bottom-0 inset-x-0 bg-black/50 p-1 text-center">
+                  <span className="text-[10px] text-white font-medium">Captured Today</span>
+                </div>
               </div>
-              <button onClick={closeInspection} className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-gray-200 hover:bg-red-50 rounded-full">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
+            )}
+          </div>
+        </motion.div>
 
-            {/* Body */}
-            <div className="p-6 overflow-y-auto space-y-8">
-              
-              {/* STEP 1: VERIFICATION */}
-              <div className={`p-5 rounded-2xl border transition-all duration-300 ${verificationStatus === 'success' ? 'bg-green-50/50 border-green-200' : 'bg-blue-50/30 border-blue-100'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold ${verificationStatus === 'success' ? 'bg-green-500' : 'bg-blue-600'}`}>1</div>
-                  <h4 className="font-bold text-gray-800">Verify Asset Identity</h4>
+        {/* ASSETS THUMBNAIL GRID */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredAssets.length > 0 ? (
+            filteredAssets.map((asset, index) => (
+              <motion.div
+                key={asset.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ y: -5, scale: 1.02 }}
+                className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm hover:shadow-xl border border-gray-100 dark:border-gray-700 transition-all cursor-pointer flex flex-col relative overflow-hidden"
+              >
+                {/* Decorative Top Gradient Line */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
+                
+                <div className="flex justify-between items-start mb-4 mt-2">
+                  <div className={`p-3 rounded-xl ${asset.color}`}>
+                    {asset.category === 'Laptop' && <Laptop size={24} />}
+                    {asset.category === 'Mobile' && <Smartphone size={24} />}
+                    {asset.category === 'Monitor' && <Monitor size={24} />}
+                  </div>
+                  <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                    <CheckCircle size={12} className={asset.status === 'Active' ? 'text-green-500' : 'text-orange-500'} />
+                    {asset.status}
+                  </span>
                 </div>
                 
-                {verificationStatus === 'success' ? (
-                  <div className="flex items-center gap-3 text-green-700 bg-green-100 p-3 rounded-xl">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <div>
-                      <p className="font-bold text-sm">Asset Verified Successfully!</p>
-                      <p className="text-xs opacity-80">You may now proceed to upload evidence.</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-3">To ensure you are inspecting the correct item, please type the <strong className="text-gray-800">Serial Number</strong> or <strong className="text-gray-800">Asset Tag</strong> printed on the device.</p>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <input
-                        type="text"
-                        className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 ${verificationStatus === 'error' ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-300 focus:ring-blue-200'}`}
-                        placeholder={`e.g. ${activeAsset.tag} or ${activeAsset.serial}`}
-                        value={verificationInput}
-                        onChange={(e) => {
-                          setVerificationInput(e.target.value);
-                          setVerificationStatus('idle'); 
-                        }}
-                      />
-                      <button onClick={handleVerify} className="px-6 py-2.5 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-700 transition-colors">
-                        Verify
-                      </button>
-                    </div>
-                    {verificationStatus === 'error' && (
-                      <p className="text-red-500 text-xs mt-2 font-medium">❌ Incorrect Tag or Serial Number. Please check the physical device and try again.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* STEP 2: EVIDENCE UPLOAD */}
-              <div className={`transition-all duration-500 ${verificationStatus === 'success' ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">2</div>
-                  <h4 className="font-bold text-gray-800">Upload Evidence & Notes</h4>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{asset.name}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{asset.category}</p>
+                
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                  <button className="text-sm text-indigo-600 font-semibold hover:text-indigo-800 transition-colors">
+                    View Details &rarr;
+                  </button>
                 </div>
-
-                {/* Dynamic Photo Grid */}
-                <div className="mb-6">
-                  <div className="flex justify-between items-end mb-3">
-                    <p className="text-sm font-semibold text-gray-700">Required Photos ({activeAsset?.category === 'Laptop' ? '5 Angles' : '2 Angles'})</p>
-                  </div>
-                  
-                  <div className={`grid gap-3 ${activeAsset?.category === 'Laptop' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
-                    {(activeAsset?.category === 'Laptop' ? 
-                      ['Top (Lid)', 'Bottom (Serial)', 'Left Side', 'Right Side', 'Keyboard/Screen'] : 
-                      ['Top View', 'Bottom (Serial)']
-                    ).map((label, idx) => (
-                      <div key={idx} className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:bg-blue-50 hover:border-blue-400 transition-colors cursor-pointer group h-32">
-                        <svg className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        <span className="text-xs font-semibold text-gray-600 group-hover:text-blue-600">{label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Inspection Notes (Optional)</label>
-                  <textarea
-                    rows={3}
-                    className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Describe any scratches, dents, or issues..."
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  ></textarea>
-                </div>
-              </div>
-
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-full py-12 text-center text-gray-500">
+              No assets found matching your search.
             </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-              <button onClick={closeInspection} className="px-5 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors">
-                Cancel
-              </button>
-              <button 
-                disabled={verificationStatus !== 'success'}
-                className={`px-6 py-2.5 text-sm font-bold rounded-xl shadow-lg transition-all ${
-                  verificationStatus === 'success' 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/30' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Submit Inspection
-              </button>
-            </div>
-
-          </div>
+          )}
         </div>
-      )}
 
+      </div>
     </div>
   );
 }
