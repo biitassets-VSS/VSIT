@@ -3,6 +3,32 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 
+// 🚀 EASY TO UPDATE LISTS 🚀
+// If you ever need to add a new department or role in the future, just add it right here!
+const ROLES_LIST = [
+  "Super Admin",
+  "Staff Admin"
+];
+
+const DEPARTMENTS_LIST = [
+  "Adelaide (Student Visa)",
+  "Adelaide (Visitor Visa)",
+  "Adelaide (PR Visa)",
+  "Adelaide (Skill Assessment)",
+  "Adelaide (Calling)",
+  "Melbourne (Student Visa)",
+  "Melbourne (Visitor Visa)",
+  "Melbourne (Skill Assessment)",
+  "Melbourne (Migration Admin)",
+  "Migration (Accounts)",
+  "Migration (Calling)",
+  "Education (Accounts)",
+  "Educations",
+  "Admin Works",
+  "Social Media",
+  "Manager"
+];
+
 export default function AddNewStaffPage() {
   // State to hold form data
   const [formData, setFormData] = useState({
@@ -11,8 +37,8 @@ export default function AddNewStaffPage() {
     dob: '',
     joiningDate: '',
     phone: '',
-    role: 'Staff Admin', // Default from your new list
-    department: 'Adelaide (Student Visa)', // Default from your new list
+    role: ROLES_LIST[1], // Defaults to Staff Admin
+    department: DEPARTMENTS_LIST[0], // Defaults to first item
     email: '',
     password: '',
   });
@@ -29,7 +55,7 @@ export default function AddNewStaffPage() {
     alert('Staff added successfully!');
   };
 
-  // Reusable input class for perfect visibility and consistent "Asset" page design
+  // Reusable input classes for perfect visibility
   const inputClassName = "w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white outline-none transition-all shadow-sm font-medium";
   const labelClassName = "block text-sm font-bold text-gray-700 mb-1.5";
 
@@ -92,8 +118,9 @@ export default function AddNewStaffPage() {
             <div>
               <label className={labelClassName}>Role / Designation *</label>
               <select name="role" value={formData.role} onChange={handleChange} className={inputClassName}>
-                <option value="Super Admin">Super Admin</option>
-                <option value="Staff Admin">Staff Admin</option>
+                {ROLES_LIST.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
               </select>
             </div>
 
@@ -101,22 +128,9 @@ export default function AddNewStaffPage() {
             <div>
               <label className={labelClassName}>Department *</label>
               <select name="department" value={formData.department} onChange={handleChange} className={inputClassName}>
-                <option value="Adelaide (Student Visa)">Adelaide (Student Visa)</option>
-                <option value="Adelaide (Visitor Visa)">Adelaide (Visitor Visa)</option>
-                <option value="Adelaide (PR Visa)">Adelaide (PR Visa)</option>
-                <option value="Adelaide (Skill Assessment)">Adelaide (Skill Assessment)</option>
-                <option value="Adelaide (Calling)">Adelaide (Calling)</option>
-                <option value="Melbourne (Student Visa)">Melbourne (Student Visa)</option>
-                <option value="Melbourne (Visitor Visa)">Melbourne (Visitor Visa)</option>
-                <option value="Melbourne (Skill Assessment)">Melbourne (Skill Assessment)</option>
-                <option value="Melbourne (Migration Admin)">Melbourne (Migration Admin)</option>
-                <option value="Migration (Accounts)">Migration (Accounts)</option>
-                <option value="Migration (Calling)">Migration (Calling)</option>
-                <option value="Education (Accounts)">Education (Accounts)</option>
-                <option value="Educations">Educations</option>
-                <option value="Admin Works">Admin Works</option>
-                <option value="Social Media">Social Media</option>
-                <option value="Manager">Manager</option>
+                {DEPARTMENTS_LIST.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
               </select>
             </div>
           </div>
