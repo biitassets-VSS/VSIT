@@ -90,13 +90,13 @@ export default function AdminStaffPage() {
         </div>
         
         {/* 🔥 UPDATED: Perfectly clean <a> tag, no prefetch error! 🔥 */}
-        <a
-          href="/admin/staff/new" 
+        <Link
+          href="/admin/staff/add" 
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-blue-500/20 transition-all flex items-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Add New Staff
-        </a>
+        </Link>
       </div>
 
       {/* FILTERS & SEARCH */}
