@@ -1,17 +1,36 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-// Exact same categories so they match!
 const CATEGORIES = [
   'Laptop', 'Keyboards', 'Headphones', 'Mobile Phone', 
   'Stand', 'Mouse', 'Mouse Pad', 'Cleaning Kits', 'Others'
 ];
 
+// Define the photo requirements based on the category
+const LAPTOP_PHOTOS = [
+  { id: 'top', shortTitle: 'Top Side', fullTitle: 'Top Side (Lid)' },
+  { id: 'back', shortTitle: 'Back Side', fullTitle: 'Back Side (Base/Serial)' },
+  { id: 'left', shortTitle: 'Left Side', fullTitle: 'Left Side (Ports)' },
+  { id: 'right', shortTitle: 'Right Side', fullTitle: 'Right Side (Ports)' },
+  { id: 'keyboard', shortTitle: 'Keyboard & Screen', fullTitle: 'Keyboard & Screen' },
+];
+
+const DEFAULT_PHOTOS = [
+  { id: 'front', shortTitle: 'Front View', fullTitle: 'Front / Main View' },
+  { id: 'back_serial', shortTitle: 'Back Side', fullTitle: 'Back / Serial Number' },
+];
+
 export default function AddAssetPage() {
   const router = useRouter();
+  
+  // Track the selected category so we know which photos to ask for
+  const [selectedCategory, setSelectedCategory] = useState('');
+  
+  // Track uploaded photo previews
+  const [uploadedPhotos, setUploadedPhotos] = useState<Record<string, string>>({});
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,9 +38,20 @@ export default function AddAssetPage() {
     router.push('/admin/assets');
   };
 
-  // Shared classes for all inputs to ensure perfect readability
+  // Handle file selection and generate a preview URL
+  const handleFileChange = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setUploadedPhotos(prev => ({ ...prev, [id]: previewUrl }));
+    }
+  };
+
   const inputClasses = "w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none shadow-sm transition-all";
   const labelClasses = "text-sm font-bold text-gray-700";
+
+  // Determine which photo array to use based on the selected category
+  const photoRequirements = selectedCategory === 'Laptop' ? LAPTOP_PHOTOS : DEFAULT_PHOTOS;
 
   return (
     <div className="max-w-5xl mx-auto w-full space-y-6 animate-[fadeIn_0.3s_ease-out]">
@@ -41,7 +71,7 @@ export default function AddAssetPage() {
       </div>
 
       {/* FORM */}
-      <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200 space-y-8">
+      <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-200 space-y-10">
         
         {/* SECTION 1: Basic Information */}
         <div>
@@ -65,7 +95,16 @@ export default function AddAssetPage() {
 
             <div className="space-y-2">
               <label className={labelClasses}>Category *</label>
-              <select required className={`${inputClasses} cursor-pointer`}>
+              {/* Added value and onChange to track category state */}
+              <select 
+                required 
+                className={`${inputClasses} cursor-pointer`}
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setUploadedPhotos({}); // Reset photos when category changes
+                }}
+              >
                 <option value="">Select Category...</option>
                 {CATEGORIES.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -81,30 +120,7 @@ export default function AddAssetPage() {
           </div>
         </div>
 
-        {/* SECTION 2: Dates & Lifecycle */}
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 mb-5 border-b border-gray-100 pb-2">Dates & Lifecycle</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            <div className="space-y-2">
-              <label className={labelClasses}>Purchase Date</label>
-              <input type="date" className={inputClasses} />
-            </div>
-
-            <div className="space-y-2">
-              <label className={labelClasses}>Warranty Expiration</label>
-              <input type="date" className={inputClasses} />
-            </div>
-
-            <div className="space-y-2">
-              <label className={labelClasses}>Initial Inspection Date</label>
-              <input type="date" className={inputClasses} />
-            </div>
-
-          </div>
-        </div>
-
-        {/* SECTION 3: Condition & Status */}
+        {/* SECTION 2: Condition & Status */}
         <div>
           <h2 className="text-lg font-bold text-gray-900 mb-5 border-b border-gray-100 pb-2">Condition & Status</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -137,28 +153,66 @@ export default function AddAssetPage() {
                 className={`${inputClasses} resize-none`}
               ></textarea>
             </div>
-
-            {/* Photo Upload */}
-            <div className="space-y-2 md:col-span-2">
-              <label className={labelClasses}>Upload Photos</label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
-                <div className="space-y-1 text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <div className="flex text-sm text-gray-600 justify-center">
-                    <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-1">
-                      <span>Upload files</span>
-                      <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/*" />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                </div>
-              </div>
-            </div>
-
           </div>
+        </div>
+
+        {/* SECTION 3: Dynamic Photo Uploads */}
+        <div>
+          <div className="flex justify-between items-end mb-5 border-b border-gray-100 pb-2">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              📸 Uploaded Photos
+            </h2>
+            {selectedCategory && (
+              <span className="text-sm font-bold text-gray-500">
+                Requirement: {photoRequirements.length} Angles Required
+              </span>
+            )}
+          </div>
+
+          {!selectedCategory ? (
+            <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-8 text-center">
+              <p className="text-gray-500 font-medium">Please select a Category above to see photo requirements.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {photoRequirements.map((photo) => (
+                <div 
+                  key={photo.id} 
+                  className="relative flex flex-col bg-[#e8ecf1] hover:bg-[#dfe4ea] transition-colors rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer aspect-[4/3] group"
+                >
+                  {/* Image Preview OR Placeholder Text */}
+                  <div className="flex-1 flex flex-col items-center justify-center p-4 text-center relative z-10">
+                    {uploadedPhotos[photo.id] ? (
+                      <img 
+                        src={uploadedPhotos[photo.id]} 
+                        alt={photo.shortTitle} 
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-3xl font-bold text-[#4a5568] group-hover:scale-105 transition-transform">
+                        {photo.shortTitle}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dark Footer Label (Matching your screenshot) */}
+                  <div className="bg-[#3d3d42] py-2.5 px-3 text-center relative z-20">
+                    <span className="text-white text-xs font-bold tracking-wide">
+                      {photo.fullTitle}
+                    </span>
+                  </div>
+
+                  {/* Hidden File Input */}
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={(e) => handleFileChange(photo.id, e)}
+                    className="absolute inset-0 opacity-0 cursor-pointer z-30" 
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* BUTTONS */}
