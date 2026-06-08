@@ -107,10 +107,10 @@ export default function LoginPage() {
           <div className="group">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-700">
                 <Mail className="h-5 w-5" />
               </div>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full pl-10 pr-3 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder={loginType === "admin" ? "admin@virtualstaffing.com" : "staff@virtualstaffing.com"} />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full pl-10 pr-3 py-3.5 bg-gray-50 border border-gray-700 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder={loginType === "admin" ? "admin@virtualstaffing.com" : "staff@virtualstaffing.com"} />
             </div>
           </div>
 
@@ -120,7 +120,7 @@ export default function LoginPage() {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                 <Lock className="h-5 w-5" />
               </div>
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full pl-10 pr-3 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder="••••••••" />
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full pl-10 pr-3 py-3.5 bg-gray-50 border border-gray-700 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder="••••••••" />
             </div>
           </div>
 
