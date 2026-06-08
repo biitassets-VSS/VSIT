@@ -89,7 +89,7 @@ export default function AdminStaffPage() {
           <p className="text-sm text-gray-500">Manage employees and their assigned assets.</p>
         </div>
         
-        {/* 🔥 UPDATED: Added prefetch={false} to bypass Next.js 404 cache 🔥 */}
+        {/* 🔥 UPDATED: Perfectly clean <a> tag, no prefetch error! 🔥 */}
         <a
           href="/admin/staff/new" 
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-blue-500/20 transition-all flex items-center gap-2"
