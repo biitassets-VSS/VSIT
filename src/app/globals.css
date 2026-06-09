@@ -1,13 +1,10 @@
 @import "tailwindcss";
-/* Import the modern 'Inter' font for the beautiful Dashboard UI */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Light Mode Colors (Matches your new Dashboard design) */
   --background: #F8F9FA;
-  --foreground: #111827; /* Dark crisp text */
-  
-  /* Input specific variables for guaranteed typing visibility */
+  --foreground: #111827; 
+  /* Inputs will always stay light and highly readable */
   --input-bg: #ffffff;
   --input-text: #111827;
   --input-placeholder: #9CA3AF;
@@ -16,21 +13,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* Set Inter as the primary font, with Geist as a backup */
   --font-sans: 'Inter', var(--font-geist-sans), sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
+/* Force light mode background even if OS is in dark mode (matches your design) */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark Mode Colors */
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    
-    /* Input specific variables for Dark Mode */
-    --input-bg: #1f2937; /* Dark gray background for input */
-    --input-text: #f9fafb; /* White text when typing */
-    --input-placeholder: #6b7280; /* Dimmer text for placeholder */
+    --background: #F8F9FA;
+    --foreground: #111827;
   }
 }
 
@@ -38,14 +29,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: 'Inter', var(--font-geist-sans), Arial, sans-serif;
-  -webkit-font-smoothing: antialiased; /* Makes the font look ultra crisp */
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 
-  =========================================
-  GLOBAL INPUT FIX FOR TYPING VISIBILITY 
-  =========================================
-*/
+/* Force ALL inputs to have a white background and dark text */
 input, textarea, select {
   color: var(--input-text) !important;
   background-color: var(--input-bg) !important;
@@ -53,5 +40,5 @@ input, textarea, select {
 
 input::placeholder, textarea::placeholder {
   color: var(--input-placeholder) !important;
-  opacity: 1; /* Prevents browsers from making the placeholder too invisible */
+  opacity: 1; 
 }
