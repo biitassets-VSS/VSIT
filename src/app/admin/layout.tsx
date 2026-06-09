@@ -7,8 +7,9 @@ import { Menu, X, LogOut, LayoutDashboard, Laptop, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const pathname = usePathname(); // To highlight active links
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const pathname = usePathname();
 
   const navLinks = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -19,95 +20,89 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans">
       
-      {/* BRIGHT & CLEAN RESPONSIVE NAVBAR */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            
-            {/* Logo Section */}
-            <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="VSS" className="h-8 sm:h-10 object-contain rounded" />
-              <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l border-gray-200 pl-3 py-1 hidden sm:block">
-                ADMIN PORTAL
-              </span>
-            </div>
+      {/* GLOBAL TOP NAVBAR */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16 flex items-center px-4 sm:px-6 lg:px-8">
+        <div className="w-full flex justify-between items-center">
+          
+          <div className="flex items-center gap-3">
+            {/* Hamburger Menu for Sidebar */}
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+              <Menu size={24} />
+            </button>
 
-            {/* Desktop Menu */}
-            <div className="hidden md:flex items-center gap-1">
-              {navLinks.map((link) => {
-                const isActive = pathname === link.href;
-                const Icon = link.icon;
-                return (
-                  <Link 
-                    key={link.name} 
-                    href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <Icon size={16} /> {link.name}
-                  </Link>
-                );
-              })}
-              
-              <div className="h-6 w-px bg-gray-200 mx-2"></div>
-              
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
-                <LogOut size={16} /> Logout
-              </button>
-            </div>
+            {/* SMART LOGO (Falls back to text if image is missing) */}
+            {!imgError ? (
+              <img 
+                src="/logo.png" 
+                alt="VSS" 
+                className="h-8 object-contain rounded" 
+                onError={() => setImgError(true)} 
+              />
+            ) : (
+              <div className="bg-blue-600 text-white font-black text-lg px-2.5 py-1 rounded-lg tracking-wider shadow-sm">
+                VSS
+              </div>
+            )}
+            <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l border-gray-200 pl-3 py-1">
+              ADMIN PORTAL
+            </span>
+          </div>
 
-            {/* Mobile Hamburger Button */}
-            <div className="md:hidden flex items-center">
-              <button 
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-2 rounded-lg transition-colors"
-              >
-                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
+          <div className="flex items-center">
+             <div className="h-9 w-9 rounded-full bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center text-gray-700 font-bold text-xs">
+              AD
             </div>
           </div>
         </div>
+      </nav>
 
-        {/* Mobile Dropdown Menu */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
+      {/* VERTICAL SLIDING SIDEBAR (DRAWER) */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            {/* Dark Overlay background */}
             <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden bg-white border-b border-gray-200 overflow-hidden"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
+            />
+            
+            {/* Sliding Sidebar */}
+            <motion.div 
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 flex flex-col border-r border-gray-200"
             >
-              <div className="px-4 pt-2 pb-4 space-y-1">
+              <div className="p-5 flex items-center justify-between border-b border-gray-100">
+                <span className="text-lg font-bold text-gray-900">Admin Menu</span>
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-full text-gray-500 hover:bg-gray-100"><X size={20} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {navLinks.map((link) => {
                   const isActive = pathname === link.href;
                   const Icon = link.icon;
                   return (
                     <Link 
-                      key={link.name} 
-                      href={link.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${
-                        isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                      }`}
+                      key={link.name} href={link.href} onClick={() => setIsSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
-                      <Icon size={18} /> {link.name}
+                      <Icon size={20} /> {link.name}
                     </Link>
                   );
                 })}
-                <div className="border-t border-gray-100 mt-2 pt-2">
-                  <button className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50">
-                    <LogOut size={18} /> Logout
-                  </button>
-                </div>
+              </div>
+
+              <div className="p-4 border-t border-gray-100">
+                <button className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
+                  <LogOut size={20} /> Logout
+                </button>
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
+          </>
+        )}
+      </AnimatePresence>
 
-      {/* ADMIN PAGE CONTENT */}
-      <main className="flex-1">
+      <main className="flex-1 w-full">
         {children}
       </main>
     </div>

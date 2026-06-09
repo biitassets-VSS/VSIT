@@ -1,41 +1,115 @@
-'use client'
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
-import { LayoutDashboard, ClipboardCheck, LogOut, MonitorCheck } from 'lucide-react'
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const STAFF_NAME = "Lakhwinder Singh";
+const STAFF_DEPT = "IT Department";
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const router = useRouter()
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const pathname = usePathname();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
+  const navLinks = [
+    { name: 'Dashboard', href: '/staff/dashboard', icon: LayoutDashboard },
+  ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Top Navigation */}
-      <header className="bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          <MonitorCheck className="w-6 h-6 text-blue-600" />
-          <h1 className="text-lg font-bold text-gray-900">Staff Portal</h1>
-        </div>
-        
-        <nav className="flex space-x-6">
-          <Link href="/staff/dashboard" className={`flex items-center font-medium ${pathname === '/staff/dashboard' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}>
-            <LayoutDashboard className="w-4 h-4 mr-2" /> Dashboard
-          </Link>
-          <button onClick={handleLogout} className="flex items-center text-red-600 font-medium hover:text-red-700">
-            <LogOut className="w-4 h-4 mr-2" /> Logout
-          </button>
-        </nav>
-      </header>
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans">
+      
+      {/* GLOBAL TOP NAVBAR */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16 flex items-center px-4 sm:px-6 lg:px-8">
+        <div className="w-full flex justify-between items-center">
+          
+          <div className="flex items-center gap-3">
+            {/* Hamburger Menu for Sidebar */}
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+              <Menu size={24} />
+            </button>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+            {/* SMART LOGO (Falls back to text if image is missing) */}
+            {!imgError ? (
+              <img 
+                src="/logo.png" 
+                alt="VSS" 
+                className="h-8 object-contain rounded" 
+                onError={() => setImgError(true)} 
+              />
+            ) : (
+              <div className="bg-blue-600 text-white font-black text-lg px-2.5 py-1 rounded-lg tracking-wider shadow-sm">
+                VSS
+              </div>
+            )}
+            <span className="text-gray-400 text-sm border-l border-gray-200 pl-3">
+              Staff Portal
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-sm font-bold text-gray-900">{STAFF_NAME}</span>
+              <span className="text-xs font-semibold text-blue-600">{STAFF_DEPT}</span>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center text-blue-700 font-bold">
+              LS
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* VERTICAL SLIDING SIDEBAR (DRAWER) */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            {/* Dark Overlay background */}
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
+            />
+            
+            {/* Sliding Sidebar */}
+            <motion.div 
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 flex flex-col border-r border-gray-200"
+            >
+              <div className="p-5 flex items-center justify-between border-b border-gray-100">
+                <span className="text-lg font-bold text-gray-900">Menu</span>
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-full text-gray-500 hover:bg-gray-100"><X size={20} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {navLinks.map((link) => {
+                  const isActive = pathname === link.href;
+                  const Icon = link.icon;
+                  return (
+                    <Link 
+                      key={link.name} href={link.href} onClick={() => setIsSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      <Icon size={20} /> {link.name}
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="p-4 border-t border-gray-100">
+                <button className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
+                  <LogOut size={20} /> Logout
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <main className="flex-1 w-full">
         {children}
       </main>
     </div>
-  )
+  );
 }
