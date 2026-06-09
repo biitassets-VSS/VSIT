@@ -1,4 +1,21 @@
 'use client';
+// src/app/layout.tsx
+import './globals.css'; // <-- THIS IS THE MOST IMPORTANT LINE
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata = {
+  title: 'Virtual Staffing Solutions',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
+    </html>
+  );
+}
 
 import React, { useState } from 'react';
 import Link from 'next/link';
