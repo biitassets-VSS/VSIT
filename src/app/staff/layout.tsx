@@ -2,27 +2,21 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Laptop, UserCircle, LogOut, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { UserCircle, LogOut, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const pathname = usePathname();
   const router = useRouter();
 
-  // Mock User Data (Later, fetch this from your database)
+  // Mock User Data (Including Email for the dropdown)
   const staffUser = {
     name: 'Lakhwinder Singh',
     department: 'IT Department',
+    email: 'lakhwinder@virtualstaffing.com', // Login Email added here
     initials: 'LS'
   };
-
-  // Main Navigation Links for Top Menu
-  const navLinks = [
-    { name: 'Dashboard', href: '/staff/dashboard', icon: LayoutDashboard },
-    { name: 'My Assets', href: '/staff/assets', icon: Laptop },
-  ];
 
   const handleLogout = () => {
     router.push('/');
@@ -35,42 +29,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-[72px] px-4 sm:px-6 lg:px-8 flex justify-center">
         <div className="w-full max-w-7xl flex justify-between items-center h-full">
           
-          {/* LEFT SIDE: Logo & Main Navigation */}
-          <div className="flex items-center gap-8">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <img 
-                src="/logo.png" 
-                alt="Virtual Staffing Solutions" 
-                className="h-10 sm:h-12 object-contain rounded"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-              <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l-2 border-gray-200 pl-3 py-1 hidden lg:block">
-                STAFF PORTAL
-              </span>
-            </div>
-
-            {/* Horizontal Links (Top Menu Bar) */}
-            <div className="hidden md:flex items-center gap-1">
-              {navLinks.map((link) => {
-                const isActive = pathname === link.href;
-                const Icon = link.icon;
-                return (
-                  <Link 
-                    key={link.name} 
-                    href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                      isActive 
-                        ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100' 
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} /> 
-                    {link.name}
-                  </Link>
-                );
-              })}
-            </div>
+          {/* LEFT SIDE: Logo & Portal Name ONLY */}
+          <div className="flex items-center gap-3">
+            <img 
+              src="/logo.png" 
+              alt="Virtual Staffing Solutions" 
+              className="h-10 sm:h-12 object-contain rounded"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l-2 border-gray-200 pl-3 py-1 hidden sm:block">
+              STAFF PORTAL
+            </span>
           </div>
 
           {/* RIGHT SIDE: Clickable Profile Dropdown */}
@@ -117,19 +86,30 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
+                  className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
                 >
-                  <div className="p-3">
+                  {/* USER DETAILS HEADER INSIDE DROPDOWN */}
+                  <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100">
+                    <p className="text-sm font-extrabold text-gray-900 truncate">
+                      {staffUser.name}
+                    </p>
+                    <p className="text-xs font-medium text-gray-500 truncate mt-0.5">
+                      {staffUser.email}
+                    </p>
+                  </div>
+
+                  {/* ACTION LINKS */}
+                  <div className="p-2">
                     <Link 
                       href="/staff/profile" 
                       onClick={() => setIsProfileOpen(false)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
                       <UserCircle size={18} />
-                      My Profile
+                      View Profile
                     </Link>
                     
-                    <div className="h-px bg-gray-100 my-2"></div>
+                    <div className="h-px bg-gray-100 my-1 mx-2"></div>
                     
                     <button 
                       onClick={handleLogout}
@@ -147,30 +127,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       </nav>
 
-      {/* MOBILE BOTTOM NAVIGATION (Visible only on very small screens since top menu is hidden) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe">
-        <div className="flex justify-around items-center h-16">
-          {navLinks.map((link) => {
-            const isActive = pathname === link.href;
-            const Icon = link.icon;
-            return (
-              <Link 
-                key={link.name} 
-                href={link.href}
-                className={`flex flex-col items-center justify-center w-full h-full gap-1 text-xs font-bold transition-colors ${
-                  isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'
-                }`}
-              >
-                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                {link.name}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
       {/* PAGE CONTENT */}
-      <main className="flex-1 w-full max-w-7xl mx-auto md:p-6 p-4 pb-24 md:pb-6 relative">
+      <main className="flex-1 w-full max-w-7xl mx-auto md:p-6 p-4 relative">
         {children}
       </main>
     </div>
