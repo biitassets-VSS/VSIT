@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const pathname = usePathname();
 
   const navLinks = [
@@ -30,20 +29,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Menu size={24} />
             </button>
 
-            {/* SMART LOGO (Falls back to text if image is missing) */}
-            {!imgError ? (
-              <img 
-                src="/logo.png" 
-                alt="VSS" 
-                className="h-8 object-contain rounded" 
-                onError={() => setImgError(true)} 
-              />
-            ) : (
-              <div className="bg-blue-600 text-white font-black text-lg px-2.5 py-1 rounded-lg tracking-wider shadow-sm">
-                VSS
-              </div>
-            )}
-            <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l border-gray-200 pl-3 py-1">
+            {/* YOUR ACTUAL COMPANY LOGO */}
+            <img 
+              src="/logo.png" 
+              alt="Virtual Staffing Solutions" 
+              className="h-8 sm:h-10 object-contain rounded" 
+            />
+            
+            <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l border-gray-200 pl-3 py-1 ml-1">
               ADMIN PORTAL
             </span>
           </div>
@@ -60,14 +53,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <AnimatePresence>
         {isSidebarOpen && (
           <>
-            {/* Dark Overlay background */}
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setIsSidebarOpen(false)}
               className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
             />
-            
-            {/* Sliding Sidebar */}
             <motion.div 
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: "spring", bounce: 0, duration: 0.4 }}
               className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 flex flex-col border-r border-gray-200"
