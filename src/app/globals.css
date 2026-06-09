@@ -1,10 +1,9 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
 
 :root {
   --background: #F8F9FA;
   --foreground: #111827; 
-  /* Inputs will always stay light and highly readable */
   --input-bg: #ffffff;
   --input-text: #111827;
   --input-placeholder: #9CA3AF;
@@ -17,7 +16,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Force light mode background even if OS is in dark mode (matches your design) */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #F8F9FA;
@@ -32,7 +30,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Force ALL inputs to have a white background and dark text */
 input, textarea, select {
   color: var(--input-text) !important;
   background-color: var(--input-bg) !important;
