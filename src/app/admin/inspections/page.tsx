@@ -16,7 +16,7 @@ const initialInspections = [
   { id: 4, assetName: 'Logitech MX Master 3', tagId: 'TAG-1004', date: '2024-05-20', inspector: 'John Doe (EMP-001)', status: 'Passed', notes: 'Working perfectly.', photo: '' },
 ];
 
-export default function InspectionPage() {
+export default function InspectionsPage() {
   const [inspections, setInspections] = useState(initialInspections);
   const [activeTab, setActiveTab] = useState<'All' | 'Passed' | 'Needs Repair' | 'Pending'>('All');
   const [searchQuery, setSearchQuery] = useState('');
