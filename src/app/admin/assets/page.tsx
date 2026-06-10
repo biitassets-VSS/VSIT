@@ -26,6 +26,7 @@ export default function AssetsPage() {
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [viewAsset, setViewAsset] = useState<any>(null);
   const [assignAssetModal, setAssignAssetModal] = useState<any>(null); 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Forms
   const [assigneeSearch, setAssigneeSearch] = useState('');
@@ -59,12 +60,17 @@ export default function AssetsPage() {
 
   const handleToggleRepair = (asset: any) => {
     if (asset.status === 'Repair') {
-      // If it was in repair, moving it to stock
       updateAssetInState(asset.id, { status: 'In Stock', condition: 'Refurbished', assignedTo: 'Unassigned' });
     } else {
-      // Send to repair
       updateAssetInState(asset.id, { status: 'Repair', condition: 'Repair', assignedTo: 'Unassigned' });
     }
+  };
+
+  const handleBulkUpload = () => {
+    // In a real app, you would send `selectedFile` to your backend API here
+    alert("Assets imported successfully!");
+    setIsBulkModalOpen(false);
+    setSelectedFile(null);
   };
 
   const downloadSampleCSV = () => {
@@ -161,9 +167,128 @@ export default function AssetsPage() {
         ))}
       </div>
 
+      {/* ALL MODALS COMBINED HERE */}
       <AnimatePresence>
         
-        {/* VIEW & MANAGE ASSET MODAL */}
+        {/* 1. ADD NEW ASSET MODAL */}
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAddModalOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
+            
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Plus size={20} className="text-orange-600"/> Add New Asset</h2>
+                <button onClick={() => setIsAddModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700">Asset Name</label>
+                    <input type="text" name="assetName" value={formData.assetName} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="e.g. MacBook Pro M3" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700">Category</label>
+                    <select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none bg-white">
+                      <option>Laptops</option><option>Monitors</option><option>Accessories</option><option>Phones</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700">TAG ID</label>
+                    <input type="text" name="tagId" value={formData.tagId} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="TAG-0000" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700">Serial Number</label>
+                    <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="S/N..." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 border-t border-gray-100 pt-5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700">Condition</label>
+                    <select name="condition" value={formData.condition} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none bg-white">
+                      <option>New</option><option>Refurbished</option><option>Repair</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700">Status</label>
+                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none bg-white">
+                      <option>In Stock</option><option>Assigned</option><option>Repair</option><option>Discard</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 relative">
+                    <label className="text-sm font-bold text-gray-700">Assigned To</label>
+                    <input list="staffList" name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} placeholder="Search Staff" className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" />
+                    <datalist id="staffList">
+                      <option value="Unassigned" />
+                      <option value="John Doe (EMP-001)" />
+                      <option value="Jane Smith (EMP-002)" />
+                    </datalist>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <button onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
+                <button className="px-5 py-2.5 text-sm font-bold bg-orange-600 text-white hover:bg-orange-700 rounded-xl shadow-sm transition-all">Save Asset</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 2. BULK UPLOAD MODAL (Updated) */}
+        {isBulkModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkModalOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden text-center p-6 space-y-6">
+              <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+                <h2 className="text-xl font-black text-gray-800">Bulk Upload Assets</h2>
+                <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={20}/></button>
+              </div>
+              
+              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                <p className="text-sm text-orange-800 font-semibold mb-3">Ensure your CSV matches the required format including Tags, Condition, and Assignment.</p>
+                <button onClick={downloadSampleCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-orange-200 text-orange-700 text-sm font-bold rounded-xl hover:bg-orange-100 shadow-sm">
+                  <Download size={16} /> Download Sample CSV
+                </button>
+              </div>
+              
+              {/* Interactive File Input */}
+              <div>
+                <input 
+                  type="file" 
+                  accept=".csv" 
+                  className="hidden" 
+                  id="csvUpload" 
+                  onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)} 
+                />
+                <label htmlFor="csvUpload" className={`border-2 border-dashed rounded-2xl p-8 cursor-pointer flex flex-col items-center transition-all ${selectedFile ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:bg-gray-50'}`}>
+                  {selectedFile ? (
+                    <>
+                      <div className="h-12 w-12 bg-white text-orange-500 rounded-full flex items-center justify-center mb-3 shadow-sm border border-orange-200"><FileText size={24} /></div>
+                      <p className="font-bold text-gray-900">{selectedFile.name}</p>
+                      <p className="text-xs text-orange-600 mt-1 font-semibold">Click to change file</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="h-12 w-12 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mb-3"><Upload size={24} /></div>
+                      <p className="font-bold text-gray-700">Click to select CSV file</p>
+                      <p className="text-xs text-gray-500 mt-1">or drag and drop here</p>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {selectedFile && (
+                <button onClick={handleBulkUpload} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-sm transition-all">
+                  Process Data & Import
+                </button>
+              )}
+            </motion.div>
+          </div>
+        )}
+
+        {/* 3. VIEW ASSET MODAL */}
         {viewAsset && !assignAssetModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewAsset(null)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
@@ -204,8 +329,6 @@ export default function AssetsPage() {
 
               {/* ACTION BUTTONS */}
               <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex flex-wrap gap-3 justify-between items-center">
-                
-                {/* Repair Actions */}
                 {viewAsset.status === 'Repair' ? (
                   <button onClick={() => handleToggleRepair(viewAsset)} className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 font-bold rounded-xl hover:bg-green-100 border border-green-200 transition-all text-sm">
                     <CheckCircle2 size={16}/> Mark as Fixed (In Stock)
@@ -216,7 +339,6 @@ export default function AssetsPage() {
                   </button>
                 )}
 
-                {/* Assignment Actions */}
                 {viewAsset.status !== 'Repair' && (
                   <div>
                     {viewAsset.assignedTo !== 'Unassigned' ? (
@@ -235,7 +357,7 @@ export default function AssetsPage() {
           </div>
         )}
 
-        {/* ASSIGN ASSET MODAL (Opens when clicking Assign to Staff) */}
+        {/* 4. ASSIGN ASSET MODAL */}
         {assignAssetModal && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAssignAssetModal(null)} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
