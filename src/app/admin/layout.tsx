@@ -25,7 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navLinks = [
     { name: 'Staff', href: '/admin/staff', icon: Users },
     { name: 'Assets', href: '/admin/assets', icon: Laptop },
-    { name: 'Inspection', href: '/admin/inspection', icon: ClipboardCheck },
+    { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
   ];
 
@@ -187,3 +187,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+  
