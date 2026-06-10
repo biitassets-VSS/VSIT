@@ -2,48 +2,67 @@
 
 import React, { useState } from 'react';
 import { 
-  Plus, Upload, Download, Search, MoreVertical, X, 
-  Eye, EyeOff, Calendar, Lock, User, Mail, Briefcase 
+  Plus, Upload, Download, Search, X, 
+  Eye, EyeOff, Calendar, Lock, User, Mail, Briefcase, Hash, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Mock Data for Staff List
+const initialStaff = [
+  { id: 1, empId: 'EMP-001', name: 'John Doe', email: 'john@virtualstaffing.com', role: 'Staff', department: 'IT Support', joiningDate: '2024-01-15' },
+  { id: 2, empId: 'EMP-002', name: 'Jane Smith', email: 'jane@virtualstaffing.com', role: 'Manager', department: 'Operations', joiningDate: '2023-11-01' },
+  { id: 3, empId: 'EMP-003', name: 'Alex Johnson', email: 'alex@virtualstaffing.com', role: 'Admin', department: 'Human Resources', joiningDate: '2022-08-20' },
+];
+
 export default function StaffPage() {
+  const [staffList, setStaffList] = useState(initialStaff);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Form State
+  // Form State (Added empId)
   const [formData, setFormData] = useState({
+    empId: '',
     fullName: '',
     email: '',
     password: '',
     role: 'Staff',
-    department: 'IT',
+    department: 'IT Support',
     joiningDate: '',
     dob: ''
   });
 
-  // Handle Form Inputs
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Download Sample CSV Function
+  const handleBulkUpload = () => {
+    alert("Staff accounts imported successfully!");
+    setIsBulkModalOpen(false);
+    setSelectedFile(null);
+  };
+
+  // Download Sample CSV Function (Added EmpID)
   const downloadSampleCSV = () => {
-    const csvHeader = "FullName,Email,Password,Role,Department,JoiningDate,DateOfBirth\n";
-    const csvRow = "John Doe,john.doe@example.com,TempPass123!,Software Engineer,IT,2024-01-15,1990-05-20\n";
+    const csvHeader = "EmpID,FullName,Email,Password,Role,Department,JoiningDate,DateOfBirth\n";
+    const csvRow = "EMP-004,Michael Scott,michael@example.com,Pass123!,Manager,Operations,2024-03-01,1985-05-15\n";
     const csvData = csvHeader + csvRow;
     
     const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "Staff_Bulk_Upload_Sample.csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = "Staff_Bulk_Upload_Sample.csv";
     link.click();
-    document.body.removeChild(link);
   };
+
+  // Filter staff based on search query
+  const filteredStaff = staffList.filter(staff => 
+    staff.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    staff.empId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    staff.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -70,18 +89,59 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* SEARCH BAR (UI Only) */}
+      {/* SEARCH BAR */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3">
         <Search size={20} className="text-gray-400" />
         <input 
           type="text" 
-          placeholder="Search staff by name or email..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search staff by Name, Emp ID, or Email..." 
           className="w-full bg-transparent border-none outline-none text-sm font-medium text-gray-700 placeholder:text-gray-400"
         />
       </div>
 
+      {/* STAFF LIST GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredStaff.map((staff) => (
+          <div key={staff.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col relative overflow-hidden">
+            {/* Top accent line */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600"></div>
+            
+            <div className="flex items-start gap-4 mb-4">
+              <div className="h-12 w-12 rounded-full bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 font-black text-lg">
+                {staff.name.charAt(0)}
+              </div>
+              <div>
+                <h3 className="font-black text-gray-900">{staff.name}</h3>
+                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold">
+                  <Hash size={12} /> {staff.empId}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 mt-2">
+              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <Mail size={16} className="text-gray-400" /> {staff.email}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <Briefcase size={16} className="text-gray-400" /> {staff.role} • {staff.department}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <Calendar size={16} className="text-gray-400" /> Joined: {staff.joiningDate}
+              </div>
+            </div>
+            
+            <div className="mt-5 pt-4 border-t border-gray-100 flex justify-end">
+              <button className="text-sm font-bold text-orange-600 hover:text-orange-700">View Full Profile</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* MODALS */}
       <AnimatePresence>
+        
         {/* 1. ADD NEW STAFF MODAL */}
         {isAddModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
@@ -90,33 +150,39 @@ export default function StaffPage() {
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-xl font-black text-gray-800">Add New Staff</h2>
+                <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><User size={20} className="text-orange-600"/> Add New Staff</h2>
                 <button onClick={() => setIsAddModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
               </div>
 
               <div className="p-6 overflow-y-auto space-y-5">
-                {/* Name & Email */}
+                
+                {/* Employee ID & Full Name */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Hash size={16} className="text-orange-500"/> Employee ID</label>
+                    <input type="text" name="empId" value={formData.empId} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all font-bold text-gray-800" placeholder="e.g. EMP-001" />
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><User size={16} className="text-orange-500"/> Full Name</label>
                     <input type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all" placeholder="John Doe" />
                   </div>
+                </div>
+
+                {/* Email & Password */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Mail size={16} className="text-orange-500"/> Email Address</label>
                     <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all" placeholder="john@virtualstaffing.com" />
                   </div>
-                </div>
-
-                {/* Password Input */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Lock size={16} className="text-orange-500"/> Login Password</label>
-                  <div className="relative">
-                    <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all pr-12" placeholder="Create a strong password" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700">
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Lock size={16} className="text-orange-500"/> Login Password</label>
+                    <div className="relative">
+                      <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all pr-12" placeholder="Create password" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700">
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 font-medium">This password will be used by the staff member to log into their portal.</p>
                 </div>
 
                 {/* Role & Department */}
@@ -166,31 +232,50 @@ export default function StaffPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkModalOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
             
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
-              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden text-center p-6 space-y-6">
+              <div className="flex justify-between items-center border-b border-gray-100 pb-4">
                 <h2 className="text-xl font-black text-gray-800">Bulk Upload Staff</h2>
-                <button onClick={() => setIsBulkModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full"><X size={20}/></button>
+                <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={20}/></button>
               </div>
 
-              <div className="p-6 space-y-6 text-center">
-                {/* Download Sample Button */}
-                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                  <p className="text-sm text-orange-800 font-semibold mb-3">Ensure your CSV matches the required format containing Passwords, Joining Date, and DOB.</p>
-                  <button onClick={downloadSampleCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-orange-200 text-orange-700 text-sm font-bold rounded-xl hover:bg-orange-100 transition-all shadow-sm">
-                    <Download size={16} /> Download Sample CSV
-                  </button>
-                </div>
-
-                {/* Upload Area */}
-                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:bg-gray-50 hover:border-orange-400 transition-all cursor-pointer flex flex-col items-center justify-center">
-                  <div className="h-12 w-12 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mb-3">
-                    <Upload size={24} />
-                  </div>
-                  <p className="font-bold text-gray-700">Click to upload CSV file</p>
-                  <p className="text-xs text-gray-500 mt-1">or drag and drop here</p>
-                  <input type="file" accept=".csv" className="hidden" />
-                </div>
+              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                <p className="text-sm text-orange-800 font-semibold mb-3">Ensure your CSV matches the required format containing EmpID, Passwords, and Dates.</p>
+                <button onClick={downloadSampleCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-orange-200 text-orange-700 text-sm font-bold rounded-xl hover:bg-orange-100 shadow-sm transition-all">
+                  <Download size={16} /> Download Sample CSV
+                </button>
               </div>
+
+              {/* Interactive File Input */}
+              <div>
+                <input 
+                  type="file" 
+                  accept=".csv" 
+                  className="hidden" 
+                  id="csvUploadStaff" 
+                  onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)} 
+                />
+                <label htmlFor="csvUploadStaff" className={`border-2 border-dashed rounded-2xl p-8 cursor-pointer flex flex-col items-center transition-all ${selectedFile ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:bg-gray-50'}`}>
+                  {selectedFile ? (
+                    <>
+                      <div className="h-12 w-12 bg-white text-orange-500 rounded-full flex items-center justify-center mb-3 shadow-sm border border-orange-200"><FileText size={24} /></div>
+                      <p className="font-bold text-gray-900">{selectedFile.name}</p>
+                      <p className="text-xs text-orange-600 mt-1 font-semibold">Click to change file</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="h-12 w-12 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mb-3"><Upload size={24} /></div>
+                      <p className="font-bold text-gray-700">Click to select CSV file</p>
+                      <p className="text-xs text-gray-500 mt-1">or drag and drop here</p>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {selectedFile && (
+                <button onClick={handleBulkUpload} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-sm transition-all">
+                  Process Data & Import
+                </button>
+              )}
             </motion.div>
           </div>
         )}
