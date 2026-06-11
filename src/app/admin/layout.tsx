@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   Menu, X, Users, Laptop, ClipboardCheck, BarChart3, 
-  UserCircle, LogOut, ChevronDown, Ticket // <-- Imported Ticket here
+  UserCircle, LogOut, ChevronDown, Ticket, LayoutDashboard 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,12 +22,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     initials: 'AU'
   };
 
-  // 👇 ADDED TICKETS LINK HERE 👇
+  // 👇 ADDED DASHBOARD HERE SO IT SHOWS IN THE MENU 👇
   const navLinks = [
+    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard }, // Fixed missing link
     { name: 'Staff', href: '/admin/staff', icon: Users },
     { name: 'Assets', href: '/admin/assets', icon: Laptop },
     { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
-    { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, // New Tickets Tab
+    { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, 
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
   ];
 
@@ -64,7 +65,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <div className="hidden lg:flex items-center gap-1.5 ml-4">
               {navLinks.map((link) => {
-                const isActive = pathname.startsWith(link.href);
+                // 👇 Fixed logic to highlight menu tabs correctly 👇
+                const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
                 const Icon = link.icon;
                 return (
                   <Link 
@@ -164,7 +166,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {navLinks.map((link) => {
-                  const isActive = pathname.startsWith(link.href);
+                  const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
                   const Icon = link.icon;
                   return (
                     <Link 
