@@ -1,24 +1,52 @@
 'use client';
 
-import React from 'react';
-import Link from 'next/link';
+import React, { useState } from 'react';
 import { 
-  Laptop, Ticket, Monitor, AlertCircle, 
-  CheckCircle2, Clock, PlusCircle, Activity 
+  Ticket, PlusCircle, AlertCircle, CheckCircle2, 
+  Clock, X, UploadCloud, Image as ImageIcon, MessageSquare
 } from 'lucide-react';
 
-export default function StaffDashboard() {
-  // Mock Data for the Staff Member
-  const myStats = [
-    { title: 'My Assets', value: '3', icon: Laptop, color: 'bg-blue-50 text-blue-600', link: '#' },
-    { title: 'Open Tickets', value: '1', icon: Ticket, color: 'bg-orange-50 text-orange-600', link: '/staff/tickets' },
-    { title: 'Resolved Tickets', value: '4', icon: CheckCircle2, color: 'bg-green-50 text-green-600', link: '/staff/tickets' },
-  ];
+export default function StaffTicketsPage() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const myAssets = [
-    { name: 'MacBook Pro M2', tag: 'TAG-1045', type: 'Laptop', status: 'Healthy', icon: Laptop },
-    { name: 'Dell UltraSharp 27"', tag: 'TAG-2099', type: 'Monitor', status: 'Healthy', icon: Monitor },
-  ];
+  // Mock Data: Saved record of all tickets
+  const [tickets, setTickets] = useState([
+    {
+      id: 'TKT-1092',
+      issue: 'Screen flickering occasionally',
+      asset: 'MacBook Pro M2 (TAG-1045)',
+      status: 'Open',
+      date: 'Today, 9:30 AM',
+      notes: 'The screen flashes black for a second when I open heavy applications.',
+      hasAttachment: true
+    },
+    {
+      id: 'TKT-0844',
+      issue: 'Need access to Adobe Creative Cloud',
+      asset: 'Software Request',
+      status: 'Closed',
+      date: 'Oct 12, 2023',
+      notes: 'Required for the new marketing project.',
+      hasAttachment: false
+    },
+    {
+      id: 'TKT-0612',
+      issue: 'Mouse scrolling is broken',
+      asset: 'Logitech MX Master 3',
+      status: 'Closed',
+      date: 'Sep 05, 2023',
+      notes: 'The scroll wheel has stopped registering movement.',
+      hasAttachment: false
+    }
+  ]);
+
+  // Handle Form Submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // In a real app, this sends data to your database
+    alert("Ticket raised successfully! IT Support has been notified.");
+    setIsModalOpen(false);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -26,113 +54,126 @@ export default function StaffDashboard() {
       {/* HEADER */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Welcome back, Lakhwinder 👋</h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Here is the status of your assigned IT equipment and support requests.</p>
+          <h1 className="text-2xl font-black text-gray-900">My IT Tickets</h1>
+          <p className="text-sm font-medium text-gray-500 mt-1">Track your support requests and report new issues.</p>
         </div>
-        <Link 
-          href="/staff/tickets" 
+        <button 
+          onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
         >
           <PlusCircle size={18} />
           Raise New Ticket
-        </Link>
+        </button>
       </div>
 
-      {/* QUICK STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {myStats.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Link key={index} href={stat.link} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-gray-500 mb-1">{stat.title}</p>
-                <h3 className="text-3xl font-black text-gray-900 group-hover:text-blue-600 transition-colors">{stat.value}</h3>
-              </div>
-              <div className={`p-4 rounded-xl ${stat.color}`}>
-                <Icon size={24} />
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* TICKETS LIST */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+            <Ticket size={20} className="text-blue-500"/> Ticket History
+          </h2>
+        </div>
         
-        {/* MY ASSETS LIST */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-              <Laptop size={20} className="text-blue-500"/> My Assigned Assets
-            </h2>
-          </div>
-          <div className="p-4 flex-1 flex flex-col gap-3">
-            {myAssets.map((asset, index) => {
-              const Icon = asset.icon;
-              return (
-                <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
-                      <Icon size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-gray-900">{asset.name}</h3>
-                      <p className="text-xs font-semibold text-gray-500 tracking-wide mt-0.5">{asset.tag}</p>
-                    </div>
+        <div className="divide-y divide-gray-100">
+          {tickets.map((ticket) => (
+            <div key={ticket.id} className="p-6 hover:bg-gray-50 transition-colors flex flex-col md:flex-row gap-4 md:items-center justify-between">
+              
+              <div className="flex items-start gap-4">
+                <div className={`p-3 rounded-full mt-1 ${ticket.status === 'Open' ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-500'}`}>
+                  {ticket.status === 'Open' ? <AlertCircle size={24} /> : <CheckCircle2 size={24} />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-base font-bold text-gray-900">{ticket.issue}</h3>
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-md uppercase tracking-wider ${
+                      ticket.status === 'Open' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {ticket.status}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-100">
-                    <CheckCircle2 size={14} /> {asset.status}
+                  <p className="text-sm font-semibold text-blue-600 mt-1">{ticket.asset}</p>
+                  <div className="flex items-center gap-2 mt-2 text-sm text-gray-600 bg-gray-100/50 p-3 rounded-lg border border-gray-100">
+                    <MessageSquare size={16} className="text-gray-400 min-w-[16px]"/>
+                    <span className="italic">"{ticket.notes}"</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* RECENT TICKETS */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-              <Activity size={20} className="text-orange-500"/> Recent IT Tickets
-            </h2>
-            <Link href="/staff/tickets" className="text-sm font-bold text-blue-600 hover:text-blue-700">View All →</Link>
-          </div>
-          <div className="divide-y divide-gray-100 p-2">
-            
-            {/* Ticket 1 */}
-            <div className="p-4 flex items-start gap-4 hover:bg-gray-50 rounded-xl transition-colors">
-              <div className="bg-orange-50 p-2.5 rounded-full text-orange-500 mt-0.5"><AlertCircle size={18} /></div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <p className="text-sm font-bold text-gray-900">Screen flickering occasionally</p>
-                  <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">Open</span>
-                </div>
-                <p className="text-xs font-medium text-gray-500 mt-1">MacBook Pro M2 (TAG-1045)</p>
-                <div className="flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-gray-400">
-                  <Clock size={12} /> Raised today at 9:30 AM
-                </div>
               </div>
-            </div>
 
-            {/* Ticket 2 */}
-            <div className="p-4 flex items-start gap-4 hover:bg-gray-50 rounded-xl transition-colors">
-              <div className="bg-green-50 p-2.5 rounded-full text-green-500 mt-0.5"><CheckCircle2 size={18} /></div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <p className="text-sm font-bold text-gray-900">Need access to Adobe Creative Cloud</p>
-                  <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">Resolved</span>
+              <div className="flex flex-col items-start md:items-end gap-2 md:pl-4">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400">
+                  <Clock size={14} /> {ticket.date}
                 </div>
-                <p className="text-xs font-medium text-gray-500 mt-1">Software Request</p>
-                <div className="flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-gray-400">
-                  <Clock size={12} /> Resolved on Oct 12, 2023
-                </div>
+                {ticket.hasAttachment && (
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-md">
+                    <ImageIcon size={14} /> Screenshot attached
+                  </div>
+                )}
+                <span className="text-xs font-bold text-gray-300 mt-1">ID: {ticket.id}</span>
               </div>
+
             </div>
-
-          </div>
+          ))}
         </div>
-
       </div>
 
+      {/* RAISE TICKET MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-xl font-black text-gray-900">Raise IT Ticket</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-900 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">What is the issue?</label>
+                <input required type="text" placeholder="E.g. Cannot connect to Wi-Fi" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Select Asset (Optional)</label>
+                <select className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium appearance-none">
+                  <option>MacBook Pro M2 (TAG-1045)</option>
+                  <option>Dell UltraSharp 27" (TAG-2099)</option>
+                  <option>Software / General Issue</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Notes / Description</label>
+                <textarea required rows={3} placeholder="Please provide details about what happened..." className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium resize-none"></textarea>
+              </div>
+
+              {/* FILE UPLOAD DRAG & DROP */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Attach Screenshot (Optional)</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-blue-50 hover:border-blue-400 transition-colors cursor-pointer group">
+                  <div className="bg-blue-100 text-blue-600 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                    <UploadCloud size={24} />
+                  </div>
+                  <p className="text-sm font-bold text-gray-700">Click to upload or drag & drop</p>
+                  <p className="text-xs text-gray-500 mt-1 font-medium">PNG, JPG, or PDF (max 5MB)</p>
+                  <input type="file" className="hidden" />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-5 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200 transition-all">
+                  Submit Ticket
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
