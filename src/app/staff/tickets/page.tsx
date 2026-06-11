@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// STRICT TYPESCRIPT INTERFACE (Added 'Reviewed' status and 'eta')
+// STRICT TYPESCRIPT INTERFACE
 interface TicketRecord {
   id: number;
   token: string;
@@ -20,7 +20,7 @@ interface TicketRecord {
   closedAt: string | null;
   adminNotes: string;
   eta: string | null;
-  imageUrl: string | null;
+  imageUrl: string | null; // Supports Image Attachments
 }
 
 const myAssignedAssets = [
@@ -28,7 +28,7 @@ const myAssignedAssets = [
   { id: 'TAG-1004', name: 'Logitech MX Master 3' }
 ];
 
-// MOCK DATA (With one ticket being reviewed)
+// MOCK DATA 
 const initialMyTickets: TicketRecord[] = [
   {
     id: 1,
@@ -53,7 +53,7 @@ const initialMyTickets: TicketRecord[] = [
     raisedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     closedAt: null,
     adminNotes: '',
-    eta: '30 Minutes', // Admin set this wait time!
+    eta: '30 Minutes', 
     imageUrl: null
   }
 ];
@@ -65,8 +65,13 @@ export default function StaffTicketsPage() {
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [viewTicket, setViewTicket] = useState<TicketRecord | null>(null);
   
-  const [formData, setFormData] = useState({ assetId: '', issue: '', imagePreview: null as string | null });
+  const [formData, setFormData] = useState({ 
+    assetId: '', 
+    issue: '', 
+    imagePreview: null as string | null 
+  });
 
+  // Handle Image Selection
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -74,6 +79,12 @@ export default function StaffTicketsPage() {
     }
   };
 
+  // Remove Selected Image
+  const removeImage = () => {
+    setFormData({ ...formData, imagePreview: null });
+  };
+
+  // Submit Ticket
   const handleRaiseTicket = (e: React.FormEvent) => {
     e.preventDefault();
     const selectedAsset = myAssignedAssets.find(a => a.id === formData.assetId);
@@ -90,7 +101,7 @@ export default function StaffTicketsPage() {
       closedAt: null,
       adminNotes: '',
       eta: null,
-      imageUrl: formData.imagePreview
+      imageUrl: formData.imagePreview // Include image in submission
     };
 
     setTickets([newTicket, ...tickets]);
@@ -109,6 +120,7 @@ export default function StaffTicketsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2"><Ticket className="text-blue-600"/> My IT Tickets</h1>
@@ -119,6 +131,7 @@ export default function StaffTicketsPage() {
         </button>
       </div>
 
+      {/* TABS */}
       <div className="flex bg-white p-2 rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
         {['All', 'Open', 'Reviewed', 'Closed'].map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-1 sm:flex-none sm:w-32 py-2 px-4 text-sm font-bold rounded-xl transition-all ${activeTab === tab ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
@@ -127,6 +140,7 @@ export default function StaffTicketsPage() {
         ))}
       </div>
 
+      {/* TICKET LIST */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="divide-y divide-gray-100">
           {filteredTickets.length === 0 ? (
@@ -148,12 +162,19 @@ export default function StaffTicketsPage() {
                       
                       {/* STATUS BADGES */}
                       {ticket.status === 'Open' && <span className="px-2.5 py-1 text-xs font-black uppercase rounded-lg border flex items-center gap-1.5 bg-blue-50 text-blue-700 border-blue-200"><Clock size={14}/> Open</span>}
-                      {ticket.status === 'Reviewed' && <span className="px-2.5 py-1 text-xs font-black uppercase rounded-lg border flex items-center gap-1.5 bg-purple-50 text-purple-700 border-purple-200 animate-pulse"><Timer size={14}/> Wait Time: {ticket.eta}</span>}
+                      {ticket.status === 'Reviewed' && <span className="px-2.5 py-1 text-xs font-black uppercase rounded-lg border flex items-center gap-1.5 bg-purple-50 text-purple-700 border-purple-200 animate-pulse"><Timer size={14}/> Wait: {ticket.eta}</span>}
                       {ticket.status === 'Closed' && <span className="px-2.5 py-1 text-xs font-black uppercase rounded-lg border flex items-center gap-1.5 bg-green-50 text-green-700 border-green-200"><CheckCircle2 size={14}/> Closed</span>}
                       
+                      {/* IMAGE BADGE */}
+                      {ticket.imageUrl && (
+                        <span className="bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg flex items-center gap-1">
+                          <Paperclip size={12} /> Image attached
+                        </span>
+                      )}
                     </div>
                     
                     <h4 className="font-bold text-gray-800">{ticket.assetName}</h4>
+                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1"><CalendarDays size={12}/> Reported: {formatDateTime(ticket.raisedAt)}</p>
                   </div>
                 </div>
                 
@@ -169,33 +190,62 @@ export default function StaffTicketsPage() {
 
       <AnimatePresence>
         
-        {/* RAISE TICKET MODAL */}
+        {/* RAISE TICKET MODAL WITH SCREENSHOT UPLOAD */}
         {isRaiseModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <h2 className="text-xl font-black text-gray-900">Raise Support Ticket</h2>
                 <button onClick={() => setIsRaiseModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20}/></button>
               </div>
+
               <div className="overflow-y-auto p-6">
                 <form id="raise-ticket-form" onSubmit={handleRaiseTicket} className="space-y-5">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Which Asset has an issue?</label>
-                    <select required value={formData.assetId} onChange={(e) => setFormData({...formData, assetId: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-300 outline-none">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Laptop size={16} className="text-blue-500"/> Which Asset has an issue?</label>
+                    <select required value={formData.assetId} onChange={(e) => setFormData({...formData, assetId: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm">
                       <option value="" disabled>Select an assigned asset...</option>
-                      {myAssignedAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+                      {myAssignedAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name} ({asset.id})</option>)}
                     </select>
                   </div>
+
                   <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Describe the problem</label>
-                    <textarea required value={formData.issue} onChange={(e) => setFormData({...formData, issue: e.target.value})} rows={3} className="w-full px-4 py-3 rounded-xl border border-gray-300 outline-none resize-none"></textarea>
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Describe the problem</label>
+                    <textarea required value={formData.issue} onChange={(e) => setFormData({...formData, issue: e.target.value})} placeholder="e.g. The screen flickers every 10 minutes..." rows={4} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-medium text-sm"></textarea>
                   </div>
+
+                  {/* IMAGE UPLOAD SECTION */}
+                  <div className="space-y-1.5 pt-2">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><ImagePlus size={16} className="text-blue-500"/> Attach Screenshot <span className="text-gray-400 font-normal">(Optional)</span></label>
+                    
+                    {formData.imagePreview ? (
+                      <div className="relative inline-block mt-2">
+                        <img src={formData.imagePreview} alt="Preview" className="h-28 w-auto rounded-lg border border-gray-200 object-cover shadow-sm" />
+                        <button type="button" onClick={removeImage} className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full border border-red-200 hover:bg-red-200 shadow-sm transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors group">
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <Paperclip size={20} className="text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
+                            <p className="text-xs text-gray-500 font-medium">Click to upload a screenshot</p>
+                          </div>
+                          <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
                 </form>
               </div>
+
               <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3">
-                <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold bg-white border border-gray-200 rounded-xl">Cancel</button>
-                <button type="submit" form="raise-ticket-form" className="flex-1 py-3 text-sm font-bold bg-blue-600 text-white rounded-xl">Submit Ticket</button>
+                <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold bg-white border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100">Cancel</button>
+                <button type="submit" form="raise-ticket-form" className="flex-1 py-3 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex items-center justify-center gap-2"><Send size={18}/> Submit Ticket</button>
               </div>
             </motion.div>
           </div>
@@ -204,7 +254,7 @@ export default function StaffTicketsPage() {
         {/* VIEW TICKET DETAILS MODAL */}
         {viewTicket && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewTicket(null)} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
@@ -236,6 +286,14 @@ export default function StaffTicketsPage() {
                 <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl">
                   <p className="text-xs text-gray-500 font-bold mb-1">Your Issue Description:</p>
                   <p className="text-sm font-medium text-gray-800 leading-relaxed">{viewTicket.issue}</p>
+                  
+                  {/* DISPLAY UPLOADED SCREENSHOT */}
+                  {viewTicket.imageUrl && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 font-bold mb-2 flex items-center gap-1"><Paperclip size={12}/> Attached Screenshot:</p>
+                      <img src={viewTicket.imageUrl} alt="Issue Screenshot" className="w-full max-h-64 object-contain rounded-lg border border-gray-200 bg-white shadow-sm" />
+                    </div>
+                  )}
                 </div>
 
                 {viewTicket.status === 'Closed' && (
