@@ -19,20 +19,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const staffUser = {
     name: 'Lakhwinder Singh',
     role: 'Staff Member',
-    email: 'lakhwinder@virtualstaffing.com',
     initials: 'LS'
   };
 
-  // Staff Navigation Links
   const navLinks = [
     { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
     { name: 'My Assets', href: '/staff/assets', icon: Laptop },
     { name: 'My Tickets', href: '/staff/tickets', icon: Ticket },
   ];
 
-  const handleLogout = () => {
-    router.push('/');
-  };
+  const handleLogout = () => router.push('/');
 
   const checkIsActive = (href: string) => {
     if (href === '/staff') return pathname === '/staff'; 
@@ -45,8 +41,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Logo" className="h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          <span className="text-blue-600 font-black text-sm tracking-widest border-l-2 border-gray-200 pl-2 py-0.5">STAFF</span>
+          {/* LOGO FIX HERE */}
+          <img src="/logo.png" alt="VSS" className="h-8 w-8 object-contain" />
+          <div className="flex flex-col">
+            <span className="font-black text-gray-900 text-xs leading-tight">Virtual Staffing Solution</span>
+            <span className="text-blue-600 font-black text-[10px] tracking-widest uppercase">Staff Portal</span>
+          </div>
         </div>
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg">
           <Menu size={24} />
@@ -72,10 +72,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             >
               <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <User size={28} className="text-blue-600" />
+                  {/* LOGO FIX HERE */}
+                  <img src="/logo.png" alt="VSS Logo" className="h-10 w-10 object-contain p-1 bg-gray-50 rounded-xl border border-gray-100" />
                   <div>
-                    <h1 className="font-black text-gray-900 text-lg leading-tight">VSS Portal</h1>
-                    <p className="text-[10px] font-extrabold text-blue-600 tracking-widest uppercase">Staff Panel</p>
+                    <h1 className="font-black text-gray-900 text-sm leading-tight">Virtual Staffing<br/>Solution</h1>
+                    <p className="text-[10px] font-extrabold text-blue-600 tracking-widest uppercase mt-0.5">Staff Portal</p>
                   </div>
                 </div>
                 <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
@@ -102,10 +103,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </nav>
 
               <div className="p-4 border-t border-gray-100 relative">
-                <button 
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}
-                >
+                <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border border-blue-300 flex items-center justify-center text-blue-800 font-black text-sm shadow-sm">
                       {staffUser.initials}
@@ -120,10 +118,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
                 <AnimatePresence>
                   {isProfileOpen && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2"
-                    >
+                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2">
                       <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
                         <LogOut size={18} /> Logout securely
                       </button>
@@ -139,7 +134,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
         {children}
       </main>
-
     </div>
   );
 }

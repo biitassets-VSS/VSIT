@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, Laptop, Ticket, ClipboardCheck,
-  LogOut, Menu, X, ChevronDown, ShieldCheck 
+  LogOut, Menu, X, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,22 +19,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const adminUser = {
     name: 'Admin User',
     role: 'System Administrator',
-    email: 'admin@virtualstaffing.com',
     initials: 'AD'
   };
 
-  // 👇 FIXED: Added Inspections and changed Employees back to Staff 👇
   const navLinks = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Assets', href: '/admin/assets', icon: Laptop },
-    { name: 'Staff', href: '/admin/staff', icon: Users },
+    { name: 'Staff Management', href: '/admin/staff', icon: Users },
+    { name: 'Asset Inventory', href: '/admin/assets', icon: Laptop },
+    { name: 'Support Tickets', href: '/admin/tickets', icon: Ticket },
     { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
-    { name: 'IT Tickets', href: '/admin/tickets', icon: Ticket },
   ];
 
-  const handleLogout = () => {
-    router.push('/');
-  };
+  const handleLogout = () => router.push('/');
 
   const checkIsActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin'; 
@@ -47,8 +43,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Logo" className="h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          <span className="text-orange-600 font-black text-sm tracking-widest border-l-2 border-gray-200 pl-2 py-0.5">ADMIN</span>
+          {/* LOGO FIX HERE */}
+          <img src="/logo.png" alt="VSS" className="h-8 w-8 object-contain" />
+          <div className="flex flex-col">
+            <span className="font-black text-gray-900 text-xs leading-tight">Virtual Staffing Solution</span>
+            <span className="text-orange-600 font-black text-[10px] tracking-widest uppercase">Admin Portal</span>
+          </div>
         </div>
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg">
           <Menu size={24} />
@@ -74,10 +74,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <ShieldCheck size={28} className="text-orange-600" />
+                  {/* LOGO FIX HERE */}
+                  <img src="/logo.png" alt="VSS Logo" className="h-10 w-10 object-contain p-1 bg-gray-50 rounded-xl border border-gray-100" />
                   <div>
-                    <h1 className="font-black text-gray-900 text-lg leading-tight">VSS Portal</h1>
-                    <p className="text-[10px] font-extrabold text-orange-600 tracking-widest uppercase">Admin Panel</p>
+                    <h1 className="font-black text-gray-900 text-sm leading-tight">Virtual Staffing<br/>Solution</h1>
+                    <p className="text-[10px] font-extrabold text-orange-600 tracking-widest uppercase mt-0.5">Admin Portal</p>
                   </div>
                 </div>
                 <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
@@ -104,10 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </nav>
 
               <div className="p-4 border-t border-gray-100 relative">
-                <button 
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-orange-50 ring-2 ring-orange-200' : 'hover:bg-gray-50'}`}
-                >
+                <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-orange-50 ring-2 ring-orange-200' : 'hover:bg-gray-50'}`}>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border border-orange-300 flex items-center justify-center text-orange-800 font-black text-sm shadow-sm">
                       {adminUser.initials}
@@ -122,10 +120,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 <AnimatePresence>
                   {isProfileOpen && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2"
-                    >
+                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2">
                       <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
                         <LogOut size={18} /> Logout securely
                       </button>
@@ -141,7 +136,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
         {children}
       </main>
-
     </div>
   );
 }
