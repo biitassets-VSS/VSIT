@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   Menu, X, Users, Laptop, ClipboardCheck, BarChart3, 
-  UserCircle, LogOut, ChevronDown 
+  UserCircle, LogOut, ChevronDown, Ticket // <-- Imported Ticket here
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,10 +22,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     initials: 'AU'
   };
 
+  // 👇 ADDED TICKETS LINK HERE 👇
   const navLinks = [
     { name: 'Staff', href: '/admin/staff', icon: Users },
     { name: 'Assets', href: '/admin/assets', icon: Laptop },
     { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
+    { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, // New Tickets Tab
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
   ];
 
@@ -187,4 +189,3 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
-  
