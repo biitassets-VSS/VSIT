@@ -42,13 +42,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
-        <div className="flex items-center gap-2">
-          {/* LOGO FIX HERE */}
-          <img src="/logo.png" alt="VSS" className="h-8 w-8 object-contain" />
-          <div className="flex flex-col">
-            <span className="font-black text-gray-900 text-xs leading-tight">Virtual Staffing Solution</span>
-            <span className="text-orange-600 font-black text-[10px] tracking-widest uppercase">Admin Portal</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain" />
+          <span className="text-orange-600 font-black text-[10px] tracking-widest uppercase border-l-2 border-gray-100 pl-3 py-1">Admin</span>
         </div>
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg">
           <Menu size={24} />
@@ -72,14 +68,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none ${!isSidebarOpen ? 'hidden md:flex' : 'flex'}`}
             >
-              <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
+              <div className="h-20 flex items-center px-6 border-b border-gray-100 justify-between">
                 <div className="flex items-center gap-3">
-                  {/* LOGO FIX HERE */}
-                  <img src="/logo.png" alt="VSS Logo" className="h-10 w-10 object-contain p-1 bg-gray-50 rounded-xl border border-gray-100" />
-                  <div>
-                    <h1 className="font-black text-gray-900 text-sm leading-tight">Virtual Staffing<br/>Solution</h1>
-                    <p className="text-[10px] font-extrabold text-orange-600 tracking-widest uppercase mt-0.5">Admin Portal</p>
-                  </div>
+                  <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
+                  <span className="text-[10px] font-extrabold text-orange-600 tracking-widest uppercase border-l-2 border-gray-100 pl-3 py-1">Admin Portal</span>
                 </div>
                 <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
                   <X size={20} />
