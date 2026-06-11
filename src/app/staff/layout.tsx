@@ -22,11 +22,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     initials: 'LS'
   };
 
-  const navLinks = [
+   const navLinks = [
     { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
     { name: 'My Assets', href: '/staff/assets', icon: Laptop },
     { name: 'My Tickets', href: '/staff/tickets', icon: Ticket },
+    // ADD THIS NEW LINE BELOW:
+    { name: 'Inspections', href: '/staff/inspections', icon: ClipboardCheck },
   ];
+
 
   const handleLogout = () => router.push('/');
 
