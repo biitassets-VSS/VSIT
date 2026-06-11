@@ -11,10 +11,12 @@ export default function LoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 👇 CORRECTED ROUTING: Push directly to /admin or /staff
     if (loginType === 'admin') {
-      router.push('/admin/dashboard');
+      router.push('/admin'); 
     } else {
-      router.push('/staff/dashboard');
+      router.push('/staff'); 
     }
   };
 
