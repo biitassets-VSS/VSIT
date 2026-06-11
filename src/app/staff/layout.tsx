@@ -4,196 +4,142 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  UserCircle, LogOut, ChevronDown, 
-  Menu, X, Ticket, LayoutDashboard 
+  LayoutDashboard, Laptop, Ticket, 
+  LogOut, Menu, X, ChevronDown, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  
   const pathname = usePathname();
   const router = useRouter();
 
   const staffUser = {
     name: 'Lakhwinder Singh',
-    department: 'IT Department',
+    role: 'Staff Member',
     email: 'lakhwinder@virtualstaffing.com',
     initials: 'LS'
   };
 
-  // 👇 ADDED DASHBOARD BACK HERE 👇
+  // Staff Navigation Links
   const navLinks = [
     { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
-    { name: 'Support Tickets', href: '/staff/tickets', icon: Ticket },
+    { name: 'My Assets', href: '/staff/assets', icon: Laptop },
+    { name: 'My Tickets', href: '/staff/tickets', icon: Ticket },
   ];
 
   const handleLogout = () => {
     router.push('/');
   };
 
-  // Helper to figure out if a link is active
   const checkIsActive = (href: string) => {
-    if (href === '/staff') {
-      return pathname === '/staff'; // Exact match for dashboard
-    }
-    return pathname.startsWith(href); // Partial match for tickets/other pages
+    if (href === '/staff') return pathname === '/staff'; 
+    return pathname.startsWith(href); 
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-sans">
       
-      {/* TOP MENU BAR */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-[72px] px-4 sm:px-6 lg:px-8 flex justify-center">
-        <div className="w-full max-w-7xl flex justify-between items-center h-full">
-          
-          <div className="flex items-center gap-4 lg:gap-8">
-            <button 
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 -ml-2 rounded-xl text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-            >
-              <Menu size={24} />
-            </button>
+      {/* MOBILE HEADER */}
+      <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Logo" className="h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <span className="text-blue-600 font-black text-sm tracking-widest border-l-2 border-gray-200 pl-2 py-0.5">STAFF</span>
+        </div>
+        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg">
+          <Menu size={24} />
+        </button>
+      </div>
 
-            <div className="flex items-center gap-3">
-              <img 
-                src="/logo.png" 
-                alt="Virtual Staffing Solutions" 
-                className="h-10 sm:h-12 object-contain rounded"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      {/* SIDEBAR NAVIGATION */}
+      <AnimatePresence>
+        {(isSidebarOpen || typeof window !== 'undefined' && window.innerWidth >= 768) && (
+          <>
+            {isSidebarOpen && (
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setIsSidebarOpen(false)}
+                className="fixed inset-0 bg-gray-900/60 z-40 md:hidden backdrop-blur-sm"
               />
-              <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l-2 border-gray-200 pl-3 py-1 hidden sm:block">
-                STAFF PORTAL
-              </span>
-            </div>
-
-            {/* DESKTOP LINKS */}
-            <div className="hidden lg:flex items-center gap-1.5 ml-4">
-              {navLinks.map((link) => {
-                const isActive = checkIsActive(link.href);
-                const Icon = link.icon;
-                return (
-                  <Link 
-                    key={link.name} 
-                    href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                      isActive 
-                        ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' 
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} /> 
-                    {link.name}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* PROFILE DROPDOWN */}
-          <div className="relative">
-            {isProfileOpen && (
-              <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)}></div>
             )}
 
-            <button 
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className={`flex items-center gap-3 p-1.5 pr-3 rounded-2xl transition-all relative z-50 ${
-                isProfileOpen ? 'bg-gray-100 ring-2 ring-gray-200' : 'hover:bg-gray-50'
-              }`}
+            <motion.aside 
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
+              className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none ${!isSidebarOpen ? 'hidden md:flex' : 'flex'}`}
             >
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-sm font-extrabold text-gray-800">{staffUser.name}</span>
-                <span className="text-xs font-semibold text-blue-600">{staffUser.department}</span>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-black text-sm shadow-sm">
-                {staffUser.initials}
-              </div>
-              <ChevronDown size={16} className={`text-gray-500 transition-transform duration-300 ${isProfileOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {isProfileOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
-                >
-                  <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100">
-                    <p className="text-sm font-extrabold text-gray-900 truncate">{staffUser.name}</p>
-                    <p className="text-xs font-medium text-gray-500 truncate mt-0.5">{staffUser.email}</p>
+              <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <User size={28} className="text-blue-600" />
+                  <div>
+                    <h1 className="font-black text-gray-900 text-lg leading-tight">VSS Portal</h1>
+                    <p className="text-[10px] font-extrabold text-blue-600 tracking-widest uppercase">Staff Panel</p>
                   </div>
-                  <div className="p-2">
-                    <Link 
-                      href="/staff/profile" 
-                      onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                    >
-                      <UserCircle size={18} /> View Profile
-                    </Link>
-                    <div className="h-px bg-gray-100 my-1 mx-2"></div>
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
-                    >
-                      <LogOut size={18} /> Logout
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          
-        </div>
-      </nav>
-
-      {/* MOBILE MENU */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-gray-900/60 z-50 lg:hidden backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} 
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 flex flex-col border-r border-gray-200 lg:hidden"
-            >
-              <div className="p-5 flex items-center justify-between border-b border-gray-100 bg-gray-50/50">
-                <span className="text-blue-600 font-extrabold tracking-wider text-sm">STAFF MENU</span>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 rounded-full text-gray-500 hover:bg-gray-200">
+                </div>
+                <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
                   <X size={20} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+
+              <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+                <p className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
                 {navLinks.map((link) => {
                   const isActive = checkIsActive(link.href);
                   const Icon = link.icon;
                   return (
                     <Link 
-                      key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)}
+                      key={link.name} href={link.href} onClick={() => setIsSidebarOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+                        isActive ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                     >
                       <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> {link.name}
                     </Link>
                   );
                 })}
+              </nav>
+
+              <div className="p-4 border-t border-gray-100 relative">
+                <button 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border border-blue-300 flex items-center justify-center text-blue-800 font-black text-sm shadow-sm">
+                      {staffUser.initials}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-extrabold text-gray-900 leading-tight">{staffUser.name}</p>
+                      <p className="text-[11px] font-bold text-blue-600">{staffUser.role}</p>
+                    </div>
+                  </div>
+                  <ChevronDown size={16} className={`text-gray-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2"
+                    >
+                      <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                        <LogOut size={18} /> Logout securely
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </motion.div>
+            </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 w-full max-w-7xl mx-auto md:p-6 p-4 relative">
+      <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
         {children}
       </main>
+
     </div>
   );
 }
