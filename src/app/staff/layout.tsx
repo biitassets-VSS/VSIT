@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   UserCircle, LogOut, ChevronDown, 
-  Menu, X, Ticket 
+  Menu, X, Ticket, LayoutDashboard 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,13 +22,22 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     initials: 'LS'
   };
 
-  // 👇 Removed Dashboard, kept ONLY Support Tickets 👇
+  // 👇 ADDED DASHBOARD BACK HERE 👇
   const navLinks = [
+    { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
     { name: 'Support Tickets', href: '/staff/tickets', icon: Ticket },
   ];
 
   const handleLogout = () => {
     router.push('/');
+  };
+
+  // Helper to figure out if a link is active
+  const checkIsActive = (href: string) => {
+    if (href === '/staff') {
+      return pathname === '/staff'; // Exact match for dashboard
+    }
+    return pathname.startsWith(href); // Partial match for tickets/other pages
   };
 
   return (
@@ -58,9 +67,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </span>
             </div>
 
+            {/* DESKTOP LINKS */}
             <div className="hidden lg:flex items-center gap-1.5 ml-4">
               {navLinks.map((link) => {
-                const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                const isActive = checkIsActive(link.href);
                 const Icon = link.icon;
                 return (
                   <Link 
@@ -80,6 +90,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
 
+          {/* PROFILE DROPDOWN */}
           <div className="relative">
             {isProfileOpen && (
               <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)}></div>
@@ -138,6 +149,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       </nav>
 
+      {/* MOBILE MENU */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -159,7 +171,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {navLinks.map((link) => {
-                  const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                  const isActive = checkIsActive(link.href);
                   const Icon = link.icon;
                   return (
                     <Link 
@@ -178,6 +190,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         )}
       </AnimatePresence>
 
+      {/* MAIN CONTENT AREA */}
       <main className="flex-1 w-full max-w-7xl mx-auto md:p-6 p-4 relative">
         {children}
       </main>
