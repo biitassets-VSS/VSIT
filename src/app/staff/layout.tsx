@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   UserCircle, LogOut, ChevronDown, 
-  Menu, X, LayoutDashboard, Ticket 
+  Menu, X, Ticket 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -15,17 +15,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  // Mock User Data (Including Email for the dropdown)
   const staffUser = {
     name: 'Lakhwinder Singh',
     department: 'IT Department',
-    email: 'lakhwinder@virtualstaffing.com', // Login Email added here
+    email: 'lakhwinder@virtualstaffing.com',
     initials: 'LS'
   };
 
-  // 👇 ADDED NAVIGATION LINKS FOR STAFF 👇
+  // 👇 Removed Dashboard, kept ONLY Support Tickets 👇
   const navLinks = [
-    { name: 'My Dashboard', href: '/staff', icon: LayoutDashboard },
     { name: 'Support Tickets', href: '/staff/tickets', icon: Ticket },
   ];
 
@@ -40,10 +38,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-[72px] px-4 sm:px-6 lg:px-8 flex justify-center">
         <div className="w-full max-w-7xl flex justify-between items-center h-full">
           
-          {/* LEFT SIDE: Mobile Toggle, Logo & Portal Name & Desktop Nav */}
           <div className="flex items-center gap-4 lg:gap-8">
-            
-            {/* Mobile Menu Button */}
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
               className="lg:hidden p-2 -ml-2 rounded-xl text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
@@ -63,7 +58,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </span>
             </div>
 
-            {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center gap-1.5 ml-4">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
@@ -86,7 +80,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
 
-          {/* RIGHT SIDE: Clickable Profile Dropdown */}
           <div className="relative">
             {isProfileOpen && (
               <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)}></div>
@@ -145,7 +138,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       </nav>
 
-      {/* MOBILE MENU (Added for Staff) */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -186,7 +178,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         )}
       </AnimatePresence>
 
-      {/* PAGE CONTENT */}
       <main className="flex-1 w-full max-w-7xl mx-auto md:p-6 p-4 relative">
         {children}
       </main>
