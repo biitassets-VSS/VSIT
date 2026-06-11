@@ -1,13 +1,19 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { 
   ClipboardCheck, Clock, AlertTriangle, Search, 
-  Camera, CheckCircle2, X, Image as ImageIcon, ShieldCheck 
+  Camera, CheckCircle2, X, ShieldCheck 
 } from 'lucide-react';
 
-// Mock Data for Assigned Assets
-const assignedAssets = [
+// 1. Fixed TypeScript: Created a proper interface instead of using "any"
+interface Asset {
+  id: string;
+  name: string;
+  type: string;
+}
+
+const assignedAssets: Asset[] = [
   { id: 'TAG-1045', name: 'MacBook Pro 14" (M2)', type: 'Laptop' },
   { id: 'TAG-2099', name: 'Dell UltraSharp 27" 4K', type: 'Monitor' }
 ];
@@ -16,24 +22,20 @@ export default function StaffInspectionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState(1);
   
-  // Form State
   const [verifyTag, setVerifyTag] = useState('');
-  const [verifiedAsset, setVerifiedAsset] = useState<any>(null);
+  const [verifiedAsset, setVerifiedAsset] = useState<Asset | null>(null);
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
-  // Mock Inspections History
   const [inspections] = useState([
     { id: 'INS-881', asset: 'Dell UltraSharp 27" (TAG-2099)', status: 'Pending Review', date: 'Today, 10:00 AM' },
     { id: 'INS-702', asset: 'MacBook Pro 14" (TAG-1045)', status: 'Approved', date: 'Oct 01, 2023' },
   ]);
 
-  // Define required photos based on asset type
   const requiredPhotos = verifiedAsset?.type === 'Laptop' 
     ? ['Top Side', 'Keyboard & Screen', 'Right Side', 'Left Side', 'Bottom Side']
     : ['Front/Top Side', 'Back Side'];
 
-  // Handle Asset Verification
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
     const found = assignedAssets.find(a => a.id.toUpperCase() === verifyTag.toUpperCase());
@@ -45,7 +47,6 @@ export default function StaffInspectionsPage() {
     }
   };
 
-  // Process image & add Date/Time Watermark
   const handlePhotoCapture = (label: string, file: File | undefined) => {
     if (!file) return;
     
@@ -53,7 +54,6 @@ export default function StaffInspectionsPage() {
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Create a canvas to draw the image and add text
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
@@ -61,25 +61,20 @@ export default function StaffInspectionsPage() {
         
         if (!ctx) return;
         
-        // Draw Original Image
         ctx.drawImage(img, 0, 0);
 
-        // Define Watermark settings
         const dateText = `Captured: ${new Date().toLocaleString()}`;
         const fontSize = Math.max(30, img.width / 25);
         ctx.font = `bold ${fontSize}px Arial`;
         const padding = 20;
         const textWidth = ctx.measureText(dateText).width;
         
-        // Draw semi-transparent black background box for readability
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(0, img.height - (fontSize + padding * 2), textWidth + padding * 2, fontSize + padding * 2);
 
-        // Draw White Text Date/Time Stamp
         ctx.fillStyle = '#FFFFFF';
         ctx.fillText(dateText, padding, img.height - padding);
 
-        // Save watermarked image to state
         const watermarkedImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
         setPhotos(prev => ({ ...prev, [label]: watermarkedImageBase64 }));
       };
@@ -91,7 +86,6 @@ export default function StaffInspectionsPage() {
   const handleFinalSubmit = () => {
     alert("Inspection Submitted successfully! Sent to Admin for review.");
     setIsModalOpen(false);
-    // Reset states
     setStep(1);
     setVerifyTag('');
     setVerifiedAsset(null);
@@ -99,7 +93,6 @@ export default function StaffInspectionsPage() {
     setNotes('');
   };
 
-  // Check if all required photos are taken
   const canSubmit = requiredPhotos.every(label => photos[label]);
 
   return (
@@ -242,8 +235,9 @@ export default function StaffInspectionsPage() {
                       {requiredPhotos.map((label) => (
                         <div key={label} className="relative group">
                           {photos[label] ? (
-                            // Show captured watermarked photo
                             <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-green-500 shadow-sm">
+                              {/* 2. Added rule to ignore Next.js strict Image warning for base64 canvas outputs */}
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={photos[label]} alt={label} className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <label className="cursor-pointer text-white font-bold text-xs bg-black/50 px-3 py-2 rounded-lg hover:bg-black/70">
@@ -256,7 +250,6 @@ export default function StaffInspectionsPage() {
                               </div>
                             </div>
                           ) : (
-                            // Show capture button (Triggers phone camera natively)
                             <label className="cursor-pointer flex flex-col items-center justify-center aspect-video rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-400 transition-colors">
                               <Camera className="text-gray-400 mb-2 group-hover:text-blue-500 transition-colors" size={24} />
                               <span className="text-xs font-bold text-gray-600 group-hover:text-blue-600 text-center px-2">{label}</span>
