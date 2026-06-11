@@ -8,12 +8,27 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// 1. ADDED TYPESCRIPT INTERFACE HERE TO FIX VERCEL BUILD ERROR
+interface TicketRecord {
+  id: number;
+  token: string;
+  assetName: string;
+  tagId: string;
+  issue: string;
+  status: string;
+  raisedAt: string;
+  closedAt: string | null;
+  adminNotes: string;
+  imageUrl: string | null;
+}
+
 const myAssignedAssets = [
   { id: 'TAG-1001', name: 'MacBook Pro M2' },
   { id: 'TAG-1004', name: 'Logitech MX Master 3' }
 ];
 
-const initialMyTickets = [
+// 2. APPLIED THE INTERFACE TO THE MOCK DATA
+const initialMyTickets: TicketRecord[] = [
   {
     id: 1,
     token: 'TKT-8492',
@@ -24,7 +39,7 @@ const initialMyTickets = [
     raisedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(), 
     closedAt: null,
     adminNotes: '',
-    imageUrl: null // New field for images
+    imageUrl: null
   },
   {
     id: 3,
@@ -41,20 +56,18 @@ const initialMyTickets = [
 ];
 
 export default function StaffTicketsPage() {
-  const [tickets, setTickets] = useState(initialMyTickets);
+  const [tickets, setTickets] = useState<TicketRecord[]>(initialMyTickets);
   const [activeTab, setActiveTab] = useState<'All' | 'Open' | 'Closed'>('All');
   
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
-  const [viewTicket, setViewTicket] = useState<any>(null);
+  const [viewTicket, setViewTicket] = useState<TicketRecord | null>(null);
   
-  // Updated Form Data to include Image
   const [formData, setFormData] = useState({ 
     assetId: '', 
     issue: '', 
     imagePreview: null as string | null 
   });
 
-  // Handle Image Upload (Previewing the file locally)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -72,7 +85,7 @@ export default function StaffTicketsPage() {
     const selectedAsset = myAssignedAssets.find(a => a.id === formData.assetId);
     if (!selectedAsset) return;
 
-    const newTicket = {
+    const newTicket: TicketRecord = {
       id: Date.now(),
       token: `TKT-${Math.floor(Math.random() * 9000) + 1000}`,
       assetName: selectedAsset.name,
@@ -82,12 +95,12 @@ export default function StaffTicketsPage() {
       raisedAt: new Date().toISOString(),
       closedAt: null,
       adminNotes: '',
-      imageUrl: formData.imagePreview // Attach the image to the ticket
+      imageUrl: formData.imagePreview
     };
 
     setTickets([newTicket, ...tickets]);
     setIsRaiseModalOpen(false);
-    setFormData({ assetId: '', issue: '', imagePreview: null }); // Reset form completely
+    setFormData({ assetId: '', issue: '', imagePreview: null }); 
   };
 
   const formatDateTime = (dateString: string | null) => {
@@ -153,7 +166,6 @@ export default function StaffTicketsPage() {
                         {ticket.status === 'Open' ? <Clock size={14}/> : <CheckCircle2 size={14}/>} 
                         {ticket.status}
                       </span>
-                      {/* Image Badge indicator */}
                       {ticket.imageUrl && (
                         <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg flex items-center gap-1">
                           <Paperclip size={12} /> Attachment
@@ -304,7 +316,6 @@ export default function StaffTicketsPage() {
                     <p className="text-sm font-medium text-gray-800 leading-relaxed">{viewTicket.issue}</p>
                   </div>
 
-                  {/* SHOW ATTACHED IMAGE IF EXISTS */}
                   {viewTicket.imageUrl && (
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <p className="text-xs text-gray-500 font-bold mb-2 flex items-center gap-1"><Paperclip size={12}/> Attached Screenshot:</p>
