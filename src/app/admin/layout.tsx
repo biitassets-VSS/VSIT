@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, Users, Laptop, Ticket, 
+  LayoutDashboard, Users, Laptop, Ticket, ClipboardCheck,
   LogOut, Menu, X, ChevronDown, ShieldCheck 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +16,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  // Admin User Info
   const adminUser = {
     name: 'Admin User',
     role: 'System Administrator',
@@ -24,31 +23,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     initials: 'AD'
   };
 
-  // 📌 THESE ARE YOUR ADMIN NAVIGATION LINKS
+  // 👇 FIXED: Added Inspections and changed Employees back to Staff 👇
   const navLinks = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Assets', href: '/admin/assets', icon: Laptop },
-    { name: 'Employees', href: '/admin/employees', icon: Users },
+    { name: 'Staff', href: '/admin/staff', icon: Users },
+    { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
     { name: 'IT Tickets', href: '/admin/tickets', icon: Ticket },
   ];
 
-  // Logout Function
   const handleLogout = () => {
     router.push('/');
   };
 
-  // 📌 HELPER TO CHECK WHICH TAB IS ACTIVE
   const checkIsActive = (href: string) => {
-    if (href === '/admin') {
-      return pathname === '/admin'; // Exact match for Dashboard
-    }
-    return pathname.startsWith(href); // Partial match for Tickets/Assets/etc.
+    if (href === '/admin') return pathname === '/admin'; 
+    return pathname.startsWith(href); 
   };
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-sans">
       
-      {/* MOBILE HEADER (Only visible on small screens) */}
+      {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="Logo" className="h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -63,7 +59,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <AnimatePresence>
         {(isSidebarOpen || typeof window !== 'undefined' && window.innerWidth >= 768) && (
           <>
-            {/* Mobile Backdrop */}
             {isSidebarOpen && (
               <motion.div 
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -77,7 +72,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none ${!isSidebarOpen ? 'hidden md:flex' : 'flex'}`}
             >
-              {/* SIDEBAR LOGO */}
               <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
                 <div className="flex items-center gap-3">
                   <ShieldCheck size={28} className="text-orange-600" />
@@ -91,7 +85,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </button>
               </div>
 
-              {/* NAVIGATION LINKS */}
               <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
                 <p className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
                 {navLinks.map((link) => {
@@ -99,23 +92,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   const Icon = link.icon;
                   return (
                     <Link 
-                      key={link.name} 
-                      href={link.href}
-                      onClick={() => setIsSidebarOpen(false)}
+                      key={link.name} href={link.href} onClick={() => setIsSidebarOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${
-                        isActive 
-                          ? 'bg-orange-50 text-orange-700 shadow-sm border border-orange-100/50' 
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        isActive ? 'bg-orange-50 text-orange-700 shadow-sm border border-orange-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                     >
-                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> 
-                      {link.name}
+                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> {link.name}
                     </Link>
                   );
                 })}
               </nav>
 
-              {/* ADMIN PROFILE BUTTON (BOTTOM OF SIDEBAR) */}
               <div className="p-4 border-t border-gray-100 relative">
                 <button 
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -133,17 +120,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <ChevronDown size={16} className={`text-gray-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* PROFILE LOGOUT DROPDOWN */}
                 <AnimatePresence>
                   {isProfileOpen && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
                       className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2"
                     >
-                      <button 
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
-                      >
+                      <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
                         <LogOut size={18} /> Logout securely
                       </button>
                     </motion.div>
@@ -155,7 +138,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
       </AnimatePresence>
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
         {children}
       </main>
