@@ -4,190 +4,162 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  Menu, X, Users, Laptop, ClipboardCheck, BarChart3, 
-  UserCircle, LogOut, ChevronDown, Ticket, LayoutDashboard 
+  LayoutDashboard, Users, Laptop, Ticket, 
+  LogOut, Menu, X, ChevronDown, ShieldCheck 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  
   const pathname = usePathname();
   const router = useRouter();
 
+  // Admin User Info
   const adminUser = {
     name: 'Admin User',
     role: 'System Administrator',
     email: 'admin@virtualstaffing.com',
-    initials: 'AU'
+    initials: 'AD'
   };
 
-  // 👇 ADDED DASHBOARD HERE SO IT SHOWS IN THE MENU 👇
+  // 📌 THESE ARE YOUR ADMIN NAVIGATION LINKS
   const navLinks = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard }, // Fixed missing link
-    { name: 'Staff', href: '/admin/staff', icon: Users },
+    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Assets', href: '/admin/assets', icon: Laptop },
-    { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
-    { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, 
-    { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
+    { name: 'Employees', href: '/admin/employees', icon: Users },
+    { name: 'IT Tickets', href: '/admin/tickets', icon: Ticket },
   ];
 
+  // Logout Function
   const handleLogout = () => {
     router.push('/');
   };
 
+  // 📌 HELPER TO CHECK WHICH TAB IS ACTIVE
+  const checkIsActive = (href: string) => {
+    if (href === '/admin') {
+      return pathname === '/admin'; // Exact match for Dashboard
+    }
+    return pathname.startsWith(href); // Partial match for Tickets/Assets/etc.
+  };
+
   return (
-    <div className="min-h-screen bg-[#F0F4F8] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-sans">
       
-      {/* TOP NAVIGATION BAR */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-[72px] px-4 sm:px-6 lg:px-8 flex justify-center">
-        <div className="w-full max-w-[1400px] flex justify-between items-center h-full">
-          
-          <div className="flex items-center gap-4 lg:gap-8">
-            <button 
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 -ml-2 rounded-xl text-gray-500 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-            >
-              <Menu size={24} />
-            </button>
+      {/* MOBILE HEADER (Only visible on small screens) */}
+      <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Logo" className="h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <span className="text-orange-600 font-black text-sm tracking-widest border-l-2 border-gray-200 pl-2 py-0.5">ADMIN</span>
+        </div>
+        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg">
+          <Menu size={24} />
+        </button>
+      </div>
 
-            <div className="flex items-center gap-3">
-              <img 
-                src="/logo.png" 
-                alt="Virtual Staffing Solutions" 
-                className="h-10 sm:h-12 object-contain rounded"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      {/* SIDEBAR NAVIGATION */}
+      <AnimatePresence>
+        {(isSidebarOpen || typeof window !== 'undefined' && window.innerWidth >= 768) && (
+          <>
+            {/* Mobile Backdrop */}
+            {isSidebarOpen && (
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setIsSidebarOpen(false)}
+                className="fixed inset-0 bg-gray-900/60 z-40 md:hidden backdrop-blur-sm"
               />
-              <span className="text-orange-600 font-extrabold text-xs tracking-widest border-l-2 border-gray-200 pl-3 py-1 hidden sm:block">
-                ADMIN PORTAL
-              </span>
-            </div>
-
-            <div className="hidden lg:flex items-center gap-1.5 ml-4">
-              {navLinks.map((link) => {
-                // 👇 Fixed logic to highlight menu tabs correctly 👇
-                const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
-                const Icon = link.icon;
-                return (
-                  <Link 
-                    key={link.name} 
-                    href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                      isActive 
-                        ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100/50' 
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} /> 
-                    {link.name}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="relative">
-            {isProfileOpen && (
-              <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)}></div>
             )}
 
-            <button 
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className={`flex items-center gap-3 p-1.5 pr-3 rounded-2xl transition-all relative z-50 ${
-                isProfileOpen ? 'bg-gray-100 ring-2 ring-gray-200' : 'hover:bg-gray-50'
-              }`}
+            <motion.aside 
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+              transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
+              className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none ${!isSidebarOpen ? 'hidden md:flex' : 'flex'}`}
             >
-              <div className="hidden md:flex flex-col text-right">
-                <span className="text-sm font-extrabold text-gray-800">{adminUser.name}</span>
-                <span className="text-xs font-semibold text-orange-600">{adminUser.role}</span>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 flex items-center justify-center text-orange-600 font-black text-sm shadow-sm">
-                {adminUser.initials}
-              </div>
-              <ChevronDown size={16} className={`text-gray-500 transition-transform duration-300 hidden sm:block ${isProfileOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            <AnimatePresence>
-              {isProfileOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
-                >
-                  <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100">
-                    <p className="text-sm font-extrabold text-gray-900 truncate">{adminUser.name}</p>
-                    <p className="text-xs font-medium text-gray-500 truncate mt-0.5">{adminUser.email}</p>
+              {/* SIDEBAR LOGO */}
+              <div className="h-20 flex items-center justify-between px-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck size={28} className="text-orange-600" />
+                  <div>
+                    <h1 className="font-black text-gray-900 text-lg leading-tight">VSS Portal</h1>
+                    <p className="text-[10px] font-extrabold text-orange-600 tracking-widest uppercase">Admin Panel</p>
                   </div>
-                  <div className="p-2">
-                    <Link 
-                      href="/admin/profile" 
-                      onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                    >
-                      <UserCircle size={18} /> View Profile
-                    </Link>
-                    <div className="h-px bg-gray-100 my-1 mx-2"></div>
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
-                    >
-                      <LogOut size={18} /> Logout
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          
-        </div>
-      </nav>
-
-      {/* MOBILE MENU */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-gray-900/60 z-50 lg:hidden backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} 
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 flex flex-col border-r border-gray-200 lg:hidden"
-            >
-              <div className="p-5 flex items-center justify-between border-b border-gray-100 bg-gray-50/50">
-                <span className="text-orange-600 font-extrabold tracking-wider text-sm">ADMIN MENU</span>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 rounded-full text-gray-500 hover:bg-gray-200">
+                </div>
+                <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
                   <X size={20} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+
+              {/* NAVIGATION LINKS */}
+              <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+                <p className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
                 {navLinks.map((link) => {
-                  const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
+                  const isActive = checkIsActive(link.href);
                   const Icon = link.icon;
                   return (
                     <Link 
-                      key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)}
+                      key={link.name} 
+                      href={link.href}
+                      onClick={() => setIsSidebarOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'
+                        isActive 
+                          ? 'bg-orange-50 text-orange-700 shadow-sm border border-orange-100/50' 
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                     >
-                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> {link.name}
+                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> 
+                      {link.name}
                     </Link>
                   );
                 })}
+              </nav>
+
+              {/* ADMIN PROFILE BUTTON (BOTTOM OF SIDEBAR) */}
+              <div className="p-4 border-t border-gray-100 relative">
+                <button 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-orange-50 ring-2 ring-orange-200' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border border-orange-300 flex items-center justify-center text-orange-800 font-black text-sm shadow-sm">
+                      {adminUser.initials}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-extrabold text-gray-900 leading-tight">{adminUser.name}</p>
+                      <p className="text-[11px] font-bold text-orange-600">{adminUser.role}</p>
+                    </div>
+                  </div>
+                  <ChevronDown size={16} className={`text-gray-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* PROFILE LOGOUT DROPDOWN */}
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2"
+                    >
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                      >
+                        <LogOut size={18} /> Logout securely
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </motion.div>
+            </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 relative">
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
         {children}
       </main>
+
     </div>
   );
 }
