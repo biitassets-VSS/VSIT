@@ -4,31 +4,29 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  Menu, X, Users, Laptop, ClipboardCheck, BarChart3, 
-  UserCircle, LogOut, ChevronDown, Ticket // <-- Imported Ticket here
+  UserCircle, LogOut, ChevronDown, 
+  Menu, X, LayoutDashboard, Ticket 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
-  const adminUser = {
-    name: 'Admin User',
-    role: 'System Administrator',
-    email: 'admin@virtualstaffing.com',
-    initials: 'AU'
+  // Mock User Data (Including Email for the dropdown)
+  const staffUser = {
+    name: 'Lakhwinder Singh',
+    department: 'IT Department',
+    email: 'lakhwinder@virtualstaffing.com', // Login Email added here
+    initials: 'LS'
   };
 
-  // 👇 ADDED TICKETS LINK HERE 👇
+  // 👇 ADDED NAVIGATION LINKS FOR STAFF 👇
   const navLinks = [
-    { name: 'Staff', href: '/admin/staff', icon: Users },
-    { name: 'Assets', href: '/admin/assets', icon: Laptop },
-    { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
-    { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, // New Tickets Tab
-    { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
+    { name: 'My Dashboard', href: '/staff', icon: LayoutDashboard },
+    { name: 'Support Tickets', href: '/staff/tickets', icon: Ticket },
   ];
 
   const handleLogout = () => {
@@ -36,16 +34,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans">
       
-      {/* TOP NAVIGATION BAR */}
+      {/* TOP MENU BAR */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm h-[72px] px-4 sm:px-6 lg:px-8 flex justify-center">
-        <div className="w-full max-w-[1400px] flex justify-between items-center h-full">
+        <div className="w-full max-w-7xl flex justify-between items-center h-full">
           
+          {/* LEFT SIDE: Mobile Toggle, Logo & Portal Name & Desktop Nav */}
           <div className="flex items-center gap-4 lg:gap-8">
+            
+            {/* Mobile Menu Button */}
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 -ml-2 rounded-xl text-gray-500 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+              className="lg:hidden p-2 -ml-2 rounded-xl text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
             >
               <Menu size={24} />
             </button>
@@ -57,14 +58,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className="h-10 sm:h-12 object-contain rounded"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
-              <span className="text-orange-600 font-extrabold text-xs tracking-widest border-l-2 border-gray-200 pl-3 py-1 hidden sm:block">
-                ADMIN PORTAL
+              <span className="text-blue-600 font-extrabold text-xs tracking-widest border-l-2 border-gray-200 pl-3 py-1 hidden sm:block">
+                STAFF PORTAL
               </span>
             </div>
 
+            {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center gap-1.5 ml-4">
               {navLinks.map((link) => {
-                const isActive = pathname.startsWith(link.href);
+                const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                 const Icon = link.icon;
                 return (
                   <Link 
@@ -72,7 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     href={link.href}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
                       isActive 
-                        ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100/50' 
+                        ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' 
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
@@ -84,6 +86,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
 
+          {/* RIGHT SIDE: Clickable Profile Dropdown */}
           <div className="relative">
             {isProfileOpen && (
               <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)}></div>
@@ -95,14 +98,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 isProfileOpen ? 'bg-gray-100 ring-2 ring-gray-200' : 'hover:bg-gray-50'
               }`}
             >
-              <div className="hidden md:flex flex-col text-right">
-                <span className="text-sm font-extrabold text-gray-800">{adminUser.name}</span>
-                <span className="text-xs font-semibold text-orange-600">{adminUser.role}</span>
+              <div className="hidden sm:flex flex-col text-right">
+                <span className="text-sm font-extrabold text-gray-800">{staffUser.name}</span>
+                <span className="text-xs font-semibold text-blue-600">{staffUser.department}</span>
               </div>
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 flex items-center justify-center text-orange-600 font-black text-sm shadow-sm">
-                {adminUser.initials}
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-black text-sm shadow-sm">
+                {staffUser.initials}
               </div>
-              <ChevronDown size={16} className={`text-gray-500 transition-transform duration-300 hidden sm:block ${isProfileOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={16} className={`text-gray-500 transition-transform duration-300 ${isProfileOpen ? 'rotate-180' : ''}`} />
             </button>
 
             <AnimatePresence>
@@ -115,14 +118,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
                 >
                   <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100">
-                    <p className="text-sm font-extrabold text-gray-900 truncate">{adminUser.name}</p>
-                    <p className="text-xs font-medium text-gray-500 truncate mt-0.5">{adminUser.email}</p>
+                    <p className="text-sm font-extrabold text-gray-900 truncate">{staffUser.name}</p>
+                    <p className="text-xs font-medium text-gray-500 truncate mt-0.5">{staffUser.email}</p>
                   </div>
                   <div className="p-2">
                     <Link 
-                      href="/admin/profile" 
+                      href="/staff/profile" 
                       onClick={() => setIsProfileOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
                       <UserCircle size={18} /> View Profile
                     </Link>
@@ -142,7 +145,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </nav>
 
-      {/* MOBILE MENU */}
+      {/* MOBILE MENU (Added for Staff) */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -157,20 +160,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 flex flex-col border-r border-gray-200 lg:hidden"
             >
               <div className="p-5 flex items-center justify-between border-b border-gray-100 bg-gray-50/50">
-                <span className="text-orange-600 font-extrabold tracking-wider text-sm">ADMIN MENU</span>
+                <span className="text-blue-600 font-extrabold tracking-wider text-sm">STAFF MENU</span>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 rounded-full text-gray-500 hover:bg-gray-200">
                   <X size={20} />
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {navLinks.map((link) => {
-                  const isActive = pathname.startsWith(link.href);
+                  const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                   const Icon = link.icon;
                   return (
                     <Link 
                       key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'
+                        isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
                       }`}
                     >
                       <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> {link.name}
@@ -183,7 +186,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
       </AnimatePresence>
 
-      <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 relative">
+      {/* PAGE CONTENT */}
+      <main className="flex-1 w-full max-w-7xl mx-auto md:p-6 p-4 relative">
         {children}
       </main>
     </div>
