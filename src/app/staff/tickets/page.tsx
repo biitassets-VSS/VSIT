@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { 
   Ticket, Plus, X, Clock, CheckCircle2, 
-  MessageSquare, Laptop, Send, CalendarDays
+  MessageSquare, Laptop, Send, CalendarDays, 
+  ImagePlus, Paperclip, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,7 +23,8 @@ const initialMyTickets = [
     status: 'Open',
     raisedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(), 
     closedAt: null,
-    adminNotes: ''
+    adminNotes: '',
+    imageUrl: null // New field for images
   },
   {
     id: 3,
@@ -33,7 +35,8 @@ const initialMyTickets = [
     status: 'Closed',
     raisedAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(),
     closedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    adminNotes: 'We have approved a replacement. Please pick up the new mouse from IT.'
+    adminNotes: 'We have approved a replacement. Please pick up the new mouse from IT.',
+    imageUrl: null
   }
 ];
 
@@ -43,7 +46,26 @@ export default function StaffTicketsPage() {
   
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [viewTicket, setViewTicket] = useState<any>(null);
-  const [formData, setFormData] = useState({ assetId: '', issue: '' });
+  
+  // Updated Form Data to include Image
+  const [formData, setFormData] = useState({ 
+    assetId: '', 
+    issue: '', 
+    imagePreview: null as string | null 
+  });
+
+  // Handle Image Upload (Previewing the file locally)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const imageUrl = URL.createObjectURL(file);
+      setFormData({ ...formData, imagePreview: imageUrl });
+    }
+  };
+
+  const removeImage = () => {
+    setFormData({ ...formData, imagePreview: null });
+  };
 
   const handleRaiseTicket = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,12 +81,13 @@ export default function StaffTicketsPage() {
       status: 'Open',
       raisedAt: new Date().toISOString(),
       closedAt: null,
-      adminNotes: ''
+      adminNotes: '',
+      imageUrl: formData.imagePreview // Attach the image to the ticket
     };
 
     setTickets([newTicket, ...tickets]);
     setIsRaiseModalOpen(false);
-    setFormData({ assetId: '', issue: '' });
+    setFormData({ assetId: '', issue: '', imagePreview: null }); // Reset form completely
   };
 
   const formatDateTime = (dateString: string | null) => {
@@ -81,7 +104,7 @@ export default function StaffTicketsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      {/* HEADER SECTION (Raise Ticket Button is Here) */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2"><Ticket className="text-blue-600"/> My IT Tickets</h1>
@@ -107,7 +130,7 @@ export default function StaffTicketsPage() {
         ))}
       </div>
 
-      {/* TICKETS LIST (Now showing Date, Time, and Status details) */}
+      {/* TICKETS LIST */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="divide-y divide-gray-100">
           {filteredTickets.length === 0 ? (
@@ -130,11 +153,16 @@ export default function StaffTicketsPage() {
                         {ticket.status === 'Open' ? <Clock size={14}/> : <CheckCircle2 size={14}/>} 
                         {ticket.status}
                       </span>
+                      {/* Image Badge indicator */}
+                      {ticket.imageUrl && (
+                        <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg flex items-center gap-1">
+                          <Paperclip size={12} /> Attachment
+                        </span>
+                      )}
                     </div>
                     
                     <h4 className="font-bold text-gray-800">{ticket.assetName}</h4>
                     
-                    {/* NEW: Explicit Date & Time Layout */}
                     <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 text-xs font-semibold">
                       <div className="flex items-center gap-1.5 text-gray-500">
                         <CalendarDays size={14} className="text-gray-400"/>
@@ -171,48 +199,78 @@ export default function StaffTicketsPage() {
         {isRaiseModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <h2 className="text-xl font-black text-gray-900">Raise Support Ticket</h2>
                 <button onClick={() => setIsRaiseModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20}/></button>
               </div>
 
-              <form onSubmit={handleRaiseTicket} className="p-6 space-y-5">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Laptop size={16} className="text-blue-500"/> Which Asset has an issue?</label>
-                  <select 
-                    required 
-                    value={formData.assetId} 
-                    onChange={(e) => setFormData({...formData, assetId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
-                  >
-                    <option value="" disabled>Select an assigned asset...</option>
-                    {myAssignedAssets.map(asset => (
-                      <option key={asset.id} value={asset.id}>{asset.name} ({asset.id})</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="overflow-y-auto p-6">
+                <form id="raise-ticket-form" onSubmit={handleRaiseTicket} className="space-y-5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Laptop size={16} className="text-blue-500"/> Which Asset has an issue?</label>
+                    <select 
+                      required 
+                      value={formData.assetId} 
+                      onChange={(e) => setFormData({...formData, assetId: e.target.value})}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
+                    >
+                      <option value="" disabled>Select an assigned asset...</option>
+                      {myAssignedAssets.map(asset => (
+                        <option key={asset.id} value={asset.id}>{asset.name} ({asset.id})</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Describe the problem</label>
-                  <textarea 
-                    required 
-                    value={formData.issue}
-                    onChange={(e) => setFormData({...formData, issue: e.target.value})}
-                    placeholder="e.g. The screen flickers every 10 minutes..." 
-                    rows={4} 
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-medium text-sm"
-                  ></textarea>
-                </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Describe the problem</label>
+                    <textarea 
+                      required 
+                      value={formData.issue}
+                      onChange={(e) => setFormData({...formData, issue: e.target.value})}
+                      placeholder="e.g. The screen flickers every 10 minutes..." 
+                      rows={4} 
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-medium text-sm"
+                    ></textarea>
+                  </div>
 
-                <div className="pt-2 flex gap-3">
-                  <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
-                  <button type="submit" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-sm">
-                    <Send size={18} /> Submit Ticket
-                  </button>
-                </div>
-              </form>
+                  {/* IMAGE UPLOAD SECTION */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><ImagePlus size={16} className="text-blue-500"/> Attach Screenshot <span className="text-gray-400 font-normal">(Optional)</span></label>
+                    
+                    {formData.imagePreview ? (
+                      <div className="relative inline-block mt-2">
+                        <img src={formData.imagePreview} alt="Preview" className="h-28 w-auto rounded-lg border border-gray-200 object-cover shadow-sm" />
+                        <button 
+                          type="button" 
+                          onClick={removeImage} 
+                          className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full border border-red-200 hover:bg-red-200 shadow-sm transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors group">
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <Paperclip size={20} className="text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
+                            <p className="text-xs text-gray-500 font-medium">Click to upload a screenshot</p>
+                          </div>
+                          <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3">
+                <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+                <button type="submit" form="raise-ticket-form" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-sm transition-colors">
+                  <Send size={18} /> Submit Ticket
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -221,7 +279,7 @@ export default function StaffTicketsPage() {
         {viewTicket && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewTicket(null)} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <div className="flex items-center gap-3">
@@ -231,7 +289,7 @@ export default function StaffTicketsPage() {
                 <button onClick={() => setViewTicket(null)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20}/></button>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-6 overflow-y-auto space-y-6">
                 <div>
                   <h3 className="font-black text-lg text-gray-900">{viewTicket.assetName}</h3>
                   <p className="text-sm font-medium text-gray-500">Asset Tag: {viewTicket.tagId}</p>
@@ -245,6 +303,18 @@ export default function StaffTicketsPage() {
                     <p className="text-xs text-gray-500 font-bold mb-1">Your Issue Description:</p>
                     <p className="text-sm font-medium text-gray-800 leading-relaxed">{viewTicket.issue}</p>
                   </div>
+
+                  {/* SHOW ATTACHED IMAGE IF EXISTS */}
+                  {viewTicket.imageUrl && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 font-bold mb-2 flex items-center gap-1"><Paperclip size={12}/> Attached Screenshot:</p>
+                      <img 
+                        src={viewTicket.imageUrl} 
+                        alt="Issue Screenshot" 
+                        className="w-full max-h-64 object-contain rounded-lg border border-gray-200 bg-white shadow-sm"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {viewTicket.status === 'Closed' ? (
