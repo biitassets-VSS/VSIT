@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+// FIXED: Added ClipboardCheck and removed unused icons here
 import { 
-  LayoutDashboard, Laptop, Ticket, 
-  LogOut, Menu, X, ChevronDown, User
+  LayoutDashboard, Laptop, Ticket, ClipboardCheck,
+  LogOut, Menu, X, ChevronDown 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,14 +23,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     initials: 'LS'
   };
 
-   const navLinks = [
+  const navLinks = [
     { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
     { name: 'My Assets', href: '/staff/assets', icon: Laptop },
     { name: 'My Tickets', href: '/staff/tickets', icon: Ticket },
-    // ADD THIS NEW LINE BELOW:
     { name: 'Inspections', href: '/staff/inspections', icon: ClipboardCheck },
   ];
-
 
   const handleLogout = () => router.push('/');
 
