@@ -3,74 +3,91 @@
 import React, { useState, useRef } from 'react';
 import { 
   ClipboardCheck, Clock, AlertTriangle, Search, 
-  Camera, CheckCircle2, X, ShieldCheck, Aperture
+  Camera, CheckCircle2, X, ShieldCheck, Aperture, Laptop, Monitor, Mouse
 } from 'lucide-react';
 
+// --- TYPES ---
 interface Asset {
   id: string;
   name: string;
   type: string;
+  assignedTo: string;
+  inspectionStatus: 'Pending' | 'Upcoming' | 'Overdue' | 'Completed';
+  dueDate: string;
 }
 
-const assignedAssets: Asset[] = [
-  { id: 'TAG-1045', name: 'MacBook Pro 14" (M2)', type: 'Laptop' },
-  { id: 'TAG-2099', name: 'Dell UltraSharp 27" 4K', type: 'Monitor' }
+interface InspectionRecord {
+  id: string;
+  assetId: string;
+  assetName: string;
+  status: string;
+  date: string;
+  notes: string;
+  // We store the watermarked photos here now!
+  photos: Record<string, string>;
+}
+
+// --- MOCK DATABASE (Assigned by Admin) ---
+const STAFF_NAME = "Lakhwinder Singh";
+
+const initialAssignedAssets: Asset[] = [
+  { id: 'TAG-1045', name: 'MacBook Pro 14" (M2)', type: 'Laptop', assignedTo: STAFF_NAME, inspectionStatus: 'Pending', dueDate: 'Today' },
+  { id: 'TAG-2099', name: 'Dell UltraSharp 27" 4K', type: 'Monitor', assignedTo: STAFF_NAME, inspectionStatus: 'Overdue', dueDate: 'Oct 20, 2023' },
+  { id: 'TAG-3011', name: 'Logitech MX Master 3', type: 'Accessory', assignedTo: STAFF_NAME, inspectionStatus: 'Upcoming', dueDate: 'Nov 15, 2023' }
 ];
 
 export default function StaffInspectionsPage() {
+  // Main Data States
+  const [myAssets, setMyAssets] = useState<Asset[]>(initialAssignedAssets);
+  const [inspectionHistory, setInspectionHistory] = useState<InspectionRecord[]>([]);
+
+  // Modal & Form States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState(1);
-  
-  // Form State
   const [verifyTag, setVerifyTag] = useState('');
   const [verifiedAsset, setVerifiedAsset] = useState<Asset | null>(null);
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
-  // Live Camera State
+  // Live Camera States
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [currentPhotoLabel, setCurrentPhotoLabel] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const [inspections] = useState([
-    { id: 'INS-881', asset: 'Dell UltraSharp 27" (TAG-2099)', status: 'Pending Review', date: 'Today, 10:00 AM' },
-    { id: 'INS-702', asset: 'MacBook Pro 14" (TAG-1045)', status: 'Approved', date: 'Oct 01, 2023' },
-  ]);
-
   const requiredPhotos = verifiedAsset?.type === 'Laptop' 
     ? ['Top Side', 'Keyboard & Screen', 'Right Side', 'Left Side', 'Bottom Side']
     : ['Front/Top Side', 'Back Side'];
 
+  // --- STATS CALCULATION ---
+  const pendingCount = myAssets.filter(a => a.inspectionStatus === 'Pending').length;
+  const upcomingCount = myAssets.filter(a => a.inspectionStatus === 'Upcoming').length;
+  const overdueCount = myAssets.filter(a => a.inspectionStatus === 'Overdue').length;
+
+  // --- HANDLERS ---
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    const found = assignedAssets.find(a => a.id.toUpperCase() === verifyTag.toUpperCase());
+    const found = myAssets.find(a => a.id.toUpperCase() === verifyTag.toUpperCase());
     if (found) {
       setVerifiedAsset(found);
       setStep(2);
     } else {
-      alert("Asset Tag not found! Try TAG-1045 or TAG-2099");
+      alert(`Asset Tag not found under ${STAFF_NAME}'s assignments! Check the list below.`);
     }
   };
-
-  // --- LIVE CAMERA FUNCTIONS --- //
 
   const openCamera = async (label: string) => {
     setCurrentPhotoLabel(label);
     setIsCameraActive(true);
     try {
-      // Prefer back camera for asset inspections
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }, 
-        audio: false 
+        video: { facingMode: 'environment' }, audio: false 
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      console.error("Camera access denied or error:", err);
-      alert("Unable to access camera. Please allow camera permissions in your browser.");
+      console.error("Camera error:", err);
+      alert("Please allow camera access.");
       closeCamera();
     }
   };
@@ -86,46 +103,58 @@ export default function StaffInspectionsPage() {
 
   const capturePhoto = () => {
     if (!videoRef.current || !currentPhotoLabel) return;
-
     const video = videoRef.current;
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    
     if (!ctx) return;
     
-    // Draw the live video frame to the canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Add Date/Time Watermark
+    // Watermark
     const dateText = `Captured: ${new Date().toLocaleString()}`;
     const fontSize = Math.max(24, canvas.width / 25);
     ctx.font = `bold ${fontSize}px Arial`;
     const padding = 15;
     const textWidth = ctx.measureText(dateText).width;
-    
-    // Position at Bottom Right
     const x = canvas.width - textWidth - (padding * 2) - 10;
     const y = canvas.height - fontSize - (padding * 2) - 10;
 
-    // Draw dark background box for readability
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fillRect(x, y, textWidth + padding * 2, fontSize + padding * 2);
-
-    // Draw white text
     ctx.fillStyle = '#FFFFFF';
     ctx.fillText(dateText, x + padding, y + fontSize + (padding / 2));
 
-    // Save image to state
-    const watermarkedImage = canvas.toDataURL('image/jpeg', 0.85);
-    setPhotos(prev => ({ ...prev, [currentPhotoLabel]: watermarkedImage }));
-    
+    setPhotos(prev => ({ ...prev, [currentPhotoLabel]: canvas.toDataURL('image/jpeg', 0.85) }));
     closeCamera();
   };
 
   const handleFinalSubmit = () => {
-    alert("Inspection Submitted successfully! All live photos have been watermarked.");
+    if (!verifiedAsset) return;
+
+    // 1. Create the new Record
+    const newRecord: InspectionRecord = {
+      id: `INS-${Math.floor(Math.random() * 9000) + 1000}`,
+      assetId: verifiedAsset.id,
+      assetName: verifiedAsset.name,
+      status: 'Pending Admin Review',
+      date: new Date().toLocaleString(),
+      notes: notes,
+      photos: photos
+    };
+
+    // 2. Add to History
+    setInspectionHistory(prev => [newRecord, ...prev]);
+
+    // 3. Update the Asset's status in the assigned list
+    setMyAssets(prev => prev.map(asset => 
+      asset.id === verifiedAsset.id ? { ...asset, inspectionStatus: 'Completed' } : asset
+    ));
+
+    alert("Inspection Submitted successfully! Sent to Admin for review.");
+    
+    // Reset Form
     setIsModalOpen(false);
     setStep(1);
     setVerifyTag('');
@@ -136,6 +165,12 @@ export default function StaffInspectionsPage() {
 
   const canSubmit = requiredPhotos.every(label => photos[label]);
 
+  const getAssetIcon = (type: string) => {
+    if (type === 'Laptop') return <Laptop size={18} className="text-gray-500"/>;
+    if (type === 'Monitor') return <Monitor size={18} className="text-gray-500"/>;
+    return <Mouse size={18} className="text-gray-500"/>;
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
@@ -143,7 +178,9 @@ export default function StaffInspectionsPage() {
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Asset Inspections</h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Verify, document, and submit routine condition checks.</p>
+          <p className="text-sm font-medium text-gray-500 mt-1">
+            Assigned to: <span className="font-bold text-blue-600">{STAFF_NAME}</span>
+          </p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
@@ -156,26 +193,114 @@ export default function StaffInspectionsPage() {
       {/* DASHBOARD STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="bg-blue-50 p-4 rounded-xl text-blue-500"><Clock size={24} /></div>
-          <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pending Review</p><p className="text-2xl font-black text-gray-900">1</p></div>
+          <div className="bg-orange-50 p-4 rounded-xl text-orange-500"><Clock size={24} /></div>
+          <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pending Now</p><p className="text-2xl font-black text-gray-900">{pendingCount}</p></div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="bg-green-50 p-4 rounded-xl text-green-500"><CheckCircle2 size={24} /></div>
-          <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Upcoming</p><p className="text-2xl font-black text-gray-900">1</p></div>
+          <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Upcoming</p><p className="text-2xl font-black text-gray-900">{upcomingCount}</p></div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="bg-red-50 p-4 rounded-xl text-red-500"><AlertTriangle size={24} /></div>
-          <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Overdue</p><p className="text-2xl font-black text-gray-900">0</p></div>
+          <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Overdue</p><p className="text-2xl font-black text-gray-900">{overdueCount}</p></div>
         </div>
       </div>
 
+      {/* TWO COLUMN LAYOUT */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* LEFT: ASSIGNED ASSETS TO INSPECT */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+              <ShieldCheck size={20} className="text-blue-500"/> My Assigned Equipment
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {myAssets.length === 0 && <p className="p-6 text-gray-500 text-sm font-medium">No assets assigned to you.</p>}
+            {myAssets.map((asset) => (
+              <div key={asset.id} className="p-6 flex justify-between items-center gap-4 hover:bg-gray-50 transition-colors">
+                <div className="flex gap-4 items-center">
+                  <div className="bg-gray-100 p-3 rounded-xl">{getAssetIcon(asset.type)}</div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">{asset.name}</h3>
+                    <p className="text-xs text-gray-500 mt-1 font-mono bg-gray-100 inline-block px-2 py-0.5 rounded">{asset.id}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  {asset.inspectionStatus === 'Completed' ? (
+                    <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full flex items-center gap-1">
+                      <CheckCircle2 size={12}/> Done
+                    </span>
+                  ) : (
+                    <>
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${
+                        asset.inspectionStatus === 'Overdue' ? 'text-red-500' : 'text-orange-500'
+                      }`}>{asset.inspectionStatus}</p>
+                      <button 
+                        onClick={() => { setVerifyTag(asset.id); setIsModalOpen(true); }}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Inspect Now
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* RIGHT: INSPECTION HISTORY RECORDS */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-fit">
+          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+              <ClipboardCheck size={20} className="text-green-500"/> Submitted Records
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+            {inspectionHistory.length === 0 ? (
+              <div className="p-8 text-center text-gray-400">
+                <ClipboardCheck size={40} className="mx-auto mb-3 opacity-20"/>
+                <p className="text-sm font-bold">No inspections submitted yet.</p>
+                <p className="text-xs">Complete an inspection to see records here.</p>
+              </div>
+            ) : (
+              inspectionHistory.map((record) => (
+                <div key={record.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-bold text-gray-900">{record.assetName}</h3>
+                      <p className="text-xs text-gray-500 mt-1">{record.date}</p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700">
+                      {record.status}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                    {/* Show thumbnails of captured photos in history */}
+                    {Object.entries(record.photos).map(([label, src]) => (
+                      <div key={label} className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={label} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* THE MODAL AND CAMERA CODE REMAINS EXACTLY THE SAME BELOW */}
       {/* INSPECTION WIZARD MODAL */}
       {isModalOpen && !isCameraActive && (
         <div className="fixed inset-0 bg-gray-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
               <h2 className="text-xl font-black text-gray-900">
-                {step === 1 ? 'Step 1: Verify Asset' : 'Step 2: Condition & Live Capture'}
+                {step === 1 ? 'Step 1: Verify Tag' : 'Step 2: Live Condition Check'}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full">
                 <X size={20} />
@@ -188,7 +313,7 @@ export default function StaffInspectionsPage() {
                 <form onSubmit={handleVerify} className="space-y-6">
                   <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-3 text-blue-800">
                     <ShieldCheck className="shrink-0" />
-                    <p className="text-sm font-semibold">Please enter the exact Asset Tag ID of the equipment you are inspecting.</p>
+                    <p className="text-sm font-semibold">Verify the physical tag ID matches your assigned system records.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Asset Tag ID</label>
@@ -224,7 +349,7 @@ export default function StaffInspectionsPage() {
                     <label className="block text-sm font-bold text-gray-700 mb-2">Condition Notes</label>
                     <textarea 
                       value={notes} onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Describe any issues..." 
+                      placeholder="Describe any scratches, dents, or software issues..." 
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium resize-none h-24"
                     ></textarea>
                   </div>
@@ -302,13 +427,7 @@ export default function StaffInspectionsPage() {
           </div>
           
           <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-black">
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              className="w-full h-full object-cover"
-            />
-            {/* Guide overlay */}
+            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
             <div className="absolute inset-0 border-[4px] border-white/30 m-8 rounded-3xl pointer-events-none"></div>
           </div>
 
