@@ -1,19 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   ClipboardCheck, Clock, AlertTriangle, Search, 
-  Camera, CheckCircle2, X, ShieldCheck 
+  Camera, CheckCircle2, X, ShieldCheck, Aperture
 } from 'lucide-react';
 
-// TypeScript Interface to prevent build errors
 interface Asset {
   id: string;
   name: string;
   type: string;
 }
 
-// Mock Data for Assigned Assets
 const assignedAssets: Asset[] = [
   { id: 'TAG-1045', name: 'MacBook Pro 14" (M2)', type: 'Laptop' },
   { id: 'TAG-2099', name: 'Dell UltraSharp 27" 4K', type: 'Monitor' }
@@ -29,18 +27,21 @@ export default function StaffInspectionsPage() {
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
-  // Mock Inspections History
+  // Live Camera State
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [currentPhotoLabel, setCurrentPhotoLabel] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   const [inspections] = useState([
     { id: 'INS-881', asset: 'Dell UltraSharp 27" (TAG-2099)', status: 'Pending Review', date: 'Today, 10:00 AM' },
     { id: 'INS-702', asset: 'MacBook Pro 14" (TAG-1045)', status: 'Approved', date: 'Oct 01, 2023' },
   ]);
 
-  // RULE: 5 photos for Laptops, 2 for other assets
   const requiredPhotos = verifiedAsset?.type === 'Laptop' 
     ? ['Top Side', 'Keyboard & Screen', 'Right Side', 'Left Side', 'Bottom Side']
     : ['Front/Top Side', 'Back Side'];
 
-  // Handle Asset Verification
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
     const found = assignedAssets.find(a => a.id.toUpperCase() === verifyTag.toUpperCase());
@@ -48,53 +49,83 @@ export default function StaffInspectionsPage() {
       setVerifiedAsset(found);
       setStep(2);
     } else {
-      alert("Asset Tag not found in your assigned inventory! Try TAG-1045 or TAG-2099");
+      alert("Asset Tag not found! Try TAG-1045 or TAG-2099");
     }
   };
 
-  // Process image & add Date/Time Watermark via HTML Canvas
-  const handlePhotoCapture = (label: string, file: File | undefined) => {
-    if (!file) return;
+  // --- LIVE CAMERA FUNCTIONS --- //
+
+  const openCamera = async (label: string) => {
+    setCurrentPhotoLabel(label);
+    setIsCameraActive(true);
+    try {
+      // Prefer back camera for asset inspections
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }, 
+        audio: false 
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access denied or error:", err);
+      alert("Unable to access camera. Please allow camera permissions in your browser.");
+      closeCamera();
+    }
+  };
+
+  const closeCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+    setCurrentPhotoLabel(null);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !currentPhotoLabel) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        
-        if (!ctx) return;
-        
-        ctx.drawImage(img, 0, 0);
+    if (!ctx) return;
+    
+    // Draw the live video frame to the canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Define Watermark Date & Time
-        const dateText = `Captured: ${new Date().toLocaleString()}`;
-        const fontSize = Math.max(30, img.width / 25);
-        ctx.font = `bold ${fontSize}px Arial`;
-        const padding = 20;
-        const textWidth = ctx.measureText(dateText).width;
-        
-        // Draw black background for text readability
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(0, img.height - (fontSize + padding * 2), textWidth + padding * 2, fontSize + padding * 2);
+    // Add Date/Time Watermark
+    const dateText = `Captured: ${new Date().toLocaleString()}`;
+    const fontSize = Math.max(24, canvas.width / 25);
+    ctx.font = `bold ${fontSize}px Arial`;
+    const padding = 15;
+    const textWidth = ctx.measureText(dateText).width;
+    
+    // Position at Bottom Right
+    const x = canvas.width - textWidth - (padding * 2) - 10;
+    const y = canvas.height - fontSize - (padding * 2) - 10;
 
-        // Draw white text
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillText(dateText, padding, img.height - padding);
+    // Draw dark background box for readability
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(x, y, textWidth + padding * 2, fontSize + padding * 2);
 
-        // Save watermarked image
-        const watermarkedImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
-        setPhotos(prev => ({ ...prev, [label]: watermarkedImageBase64 }));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+    // Draw white text
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(dateText, x + padding, y + fontSize + (padding / 2));
+
+    // Save image to state
+    const watermarkedImage = canvas.toDataURL('image/jpeg', 0.85);
+    setPhotos(prev => ({ ...prev, [currentPhotoLabel]: watermarkedImage }));
+    
+    closeCamera();
   };
 
   const handleFinalSubmit = () => {
-    alert("Inspection Submitted successfully! Sent to Admin for review.");
+    alert("Inspection Submitted successfully! All live photos have been watermarked.");
     setIsModalOpen(false);
     setStep(1);
     setVerifyTag('');
@@ -108,7 +139,7 @@ export default function StaffInspectionsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* PAGE HEADER */}
+      {/* HEADER */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Asset Inspections</h1>
@@ -122,7 +153,7 @@ export default function StaffInspectionsPage() {
         </button>
       </div>
 
-      {/* STATUS DASHBOARD */}
+      {/* DASHBOARD STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="bg-blue-50 p-4 rounded-xl text-blue-500"><Clock size={24} /></div>
@@ -138,51 +169,21 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* INSPECTION HISTORY */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
-          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-            <ClipboardCheck size={20} className="text-blue-500"/> Inspection History
-          </h2>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {inspections.map((ins) => (
-            <div key={ins.id} className="p-6 flex flex-col md:flex-row justify-between md:items-center gap-4 hover:bg-gray-50 transition-colors">
-              <div>
-                <h3 className="font-bold text-gray-900">{ins.asset}</h3>
-                <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
-                  <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">{ins.id}</span>
-                  • {ins.date}
-                </p>
-              </div>
-              <div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  ins.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                }`}>
-                  {ins.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* INSPECTION WIZARD MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-8 relative">
-            
+      {isModalOpen && !isCameraActive && (
+        <div className="fixed inset-0 bg-gray-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
               <h2 className="text-xl font-black text-gray-900">
-                {step === 1 ? 'Step 1: Verify Asset' : 'Step 2: Condition & Capture'}
+                {step === 1 ? 'Step 1: Verify Asset' : 'Step 2: Condition & Live Capture'}
               </h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-900 rounded-full transition-colors">
+              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full">
                 <X size={20} />
               </button>
             </div>
 
             <div className="p-6">
-              {/* STEP 1: VERIFICATION */}
+              {/* STEP 1 */}
               {step === 1 && (
                 <form onSubmit={handleVerify} className="space-y-6">
                   <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-3 text-blue-800">
@@ -208,11 +209,9 @@ export default function StaffInspectionsPage() {
                 </form>
               )}
 
-              {/* STEP 2: CAPTURE & NOTES */}
+              {/* STEP 2 */}
               {step === 2 && verifiedAsset && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  
-                  {/* Verified Info */}
+                <div className="space-y-6">
                   <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex justify-between items-center">
                     <div>
                       <p className="text-xs font-bold text-green-600 uppercase">Verified Asset</p>
@@ -221,23 +220,23 @@ export default function StaffInspectionsPage() {
                     <span className="bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-bold">{verifiedAsset.id}</span>
                   </div>
 
-                  {/* Notes Section */}
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Condition Notes</label>
                     <textarea 
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
+                      value={notes} onChange={(e) => setNotes(e.target.value)}
                       placeholder="Describe any issues..." 
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium resize-none h-24"
                     ></textarea>
                   </div>
 
-                  {/* Live Photo Capture Section */}
+                  {/* PHOTO GRID */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="block text-sm font-bold text-gray-700">Live Photo Capture</label>
-                      <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-md">
-                        Requires {requiredPhotos.length} photos
+                      <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+                        <Camera size={18} className="text-red-500" /> Live Capture Required
+                      </label>
+                      <span className="text-xs font-bold bg-red-50 text-red-600 px-2 py-1 rounded-md">
+                        {requiredPhotos.length} photos needed
                       </span>
                     </div>
                     
@@ -245,25 +244,26 @@ export default function StaffInspectionsPage() {
                       {requiredPhotos.map((label) => (
                         <div key={label} className="relative group">
                           {photos[label] ? (
-                            <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-green-500 shadow-sm">
+                            <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-green-500 shadow-sm bg-black">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={photos[label]} alt={label} className="w-full h-full object-cover" />
+                              <img src={photos[label]} alt={label} className="w-full h-full object-contain" />
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <label className="cursor-pointer text-white font-bold text-xs bg-black/50 px-3 py-2 rounded-lg hover:bg-black/70">
-                                  Retake
-                                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handlePhotoCapture(label, e.target.files?.[0])} />
-                                </label>
+                                <button onClick={() => openCamera(label)} className="text-white font-bold text-xs bg-red-600 px-3 py-2 rounded-lg hover:bg-red-700 shadow-md">
+                                  Retake Live
+                                </button>
                               </div>
-                              <div className="absolute bottom-0 left-0 right-0 bg-green-500 text-white text-[10px] font-bold py-1 text-center">
+                              <div className="absolute top-0 left-0 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-br-lg z-10">
                                 {label} ✓
                               </div>
                             </div>
                           ) : (
-                            <label className="cursor-pointer flex flex-col items-center justify-center aspect-video rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-400 transition-colors">
-                              <Camera className="text-gray-400 mb-2 group-hover:text-blue-500 transition-colors" size={24} />
-                              <span className="text-xs font-bold text-gray-600 group-hover:text-blue-600 text-center px-2">{label}</span>
-                              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handlePhotoCapture(label, e.target.files?.[0])} />
-                            </label>
+                            <button 
+                              onClick={() => openCamera(label)}
+                              className="w-full flex flex-col items-center justify-center aspect-video rounded-xl border-2 border-dashed border-red-300 bg-red-50 hover:bg-red-100 hover:border-red-400 transition-colors"
+                            >
+                              <Aperture className="text-red-400 mb-2" size={24} />
+                              <span className="text-xs font-bold text-red-700 text-center px-2">Tap to capture<br/>{label}</span>
+                            </button>
                           )}
                         </div>
                       ))}
@@ -281,16 +281,48 @@ export default function StaffInspectionsPage() {
                         canSubmit ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'
                       }`}
                     >
-                      {canSubmit ? 'Submit Inspection to Admin' : 'Complete All Required Photos'}
+                      {canSubmit ? 'Submit Inspection' : 'Complete All Live Photos'}
                     </button>
                   </div>
                 </div>
               )}
-
             </div>
           </div>
         </div>
       )}
+
+      {/* FULL-SCREEN LIVE CAMERA OVERLAY */}
+      {isCameraActive && (
+        <div className="fixed inset-0 bg-black z-[100] flex flex-col">
+          <div className="p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent absolute top-0 w-full z-10">
+            <h3 className="text-white font-bold text-lg drop-shadow-md">Capturing: {currentPhotoLabel}</h3>
+            <button onClick={closeCamera} className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-full backdrop-blur-md transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-black">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+            {/* Guide overlay */}
+            <div className="absolute inset-0 border-[4px] border-white/30 m-8 rounded-3xl pointer-events-none"></div>
+          </div>
+
+          <div className="h-32 bg-black flex items-center justify-center pb-8 pt-4">
+            <button 
+              onClick={capturePhoto} 
+              className="h-16 w-16 bg-white rounded-full border-4 border-gray-400 hover:bg-gray-200 hover:border-gray-500 transition-all flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+            >
+              <div className="h-12 w-12 bg-white rounded-full border border-gray-200"></div>
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
