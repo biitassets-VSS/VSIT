@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link'; // IMPORTED NEXT.JS LINK
 import { 
   Laptop, Monitor, Search, Plus, UserCheck, 
   Settings2, Wrench, Package, Box, CheckCircle2, X, AlertCircle, Trash2
@@ -90,7 +91,6 @@ export default function AdminAssetsPage() {
   const handleStatusChange = (newStatus: UsageStatus) => {
     setFormData(prev => {
       const updated = { ...prev, status: newStatus };
-      // If it's not assigned, clear the staff data automatically
       if (newStatus !== 'Assigned') {
         updated.assignedToEmpId = '';
         updated.assignedToName = '';
@@ -104,7 +104,7 @@ export default function AdminAssetsPage() {
       ...prev,
       assignedToEmpId: staff.empId,
       assignedToName: staff.name,
-      status: 'Assigned' // Auto-update status to Assigned!
+      status: 'Assigned' 
     }));
     setIsStaffDropdownOpen(false);
     setStaffSearchQuery('');
@@ -129,13 +129,11 @@ export default function AdminAssetsPage() {
     alert("Asset successfully added to inventory!");
   };
 
-  // Filter staff for Combobox
   const filteredStaff = mockStaff.filter(s => 
     s.name.toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
     s.empId.toLowerCase().includes(staffSearchQuery.toLowerCase())
   );
 
-  // Filter Assets for Table
   const filteredAssets = assets.filter(a => 
     a.tagId.toLowerCase().includes(searchAssetQuery.toLowerCase()) || 
     a.serialNumber.toLowerCase().includes(searchAssetQuery.toLowerCase()) ||
@@ -211,7 +209,7 @@ export default function AdminAssetsPage() {
         </div>
       </div>
 
-      {/* 🔍 SEARCH & TABLE */}
+      {/* 🔍 SEARCH & TABLE WITH HYPERLINKS */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
           <div className="relative max-w-md">
@@ -238,7 +236,10 @@ export default function AdminAssetsPage() {
               {filteredAssets.map((asset) => (
                 <tr key={asset.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="p-4 pl-6">
-                    <p className="font-bold text-gray-900">{asset.name}</p>
+                    {/* HERE IS THE HYPERLINK TO ASSET DETAILS */}
+                    <Link href={`/admin/assets/${asset.id}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer block">
+                      {asset.name}
+                    </Link>
                     <div className="flex gap-2 mt-1">
                       <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{asset.tagId}</span>
                       <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{asset.serialNumber}</span>
@@ -250,10 +251,11 @@ export default function AdminAssetsPage() {
                       <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(asset.status)}`}>
                         {asset.status}
                       </span>
-                      {asset.status === 'Assigned' && (
-                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                      {asset.status === 'Assigned' && asset.assignedToEmpId && (
+                        /* HERE IS THE HYPERLINK TO STAFF PROFILE */
+                        <Link href={`/admin/staff/${asset.assignedToEmpId}`} className="text-xs font-bold text-gray-600 hover:text-blue-600 hover:underline flex items-center gap-1 cursor-pointer mt-1">
                           <UserCheck size={12} className="text-blue-500"/> {asset.assignedToName}
-                        </span>
+                        </Link>
                       )}
                     </div>
                   </td>
