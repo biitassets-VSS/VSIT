@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, Laptop, Ticket, ClipboardCheck,
-  LogOut, Menu, X, ChevronDown
+  LogOut, Menu, X, ChevronDown, FileText // <-- ADDED FileText HERE
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,12 +22,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     initials: 'AD'
   };
 
+  // 👇 ADDED REPORTS TAB TO THE BOTTOM OF THIS LIST 👇
   const navLinks = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Staff Management', href: '/admin/staff', icon: Users },
     { name: 'Asset Inventory', href: '/admin/assets', icon: Laptop },
     { name: 'Support Tickets', href: '/admin/tickets', icon: Ticket },
     { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
+    { name: 'Reports', href: '/admin/reports', icon: FileText }, // <-- NEW REPORTS LINK
   ];
 
   const handleLogout = () => router.push('/');
