@@ -6,13 +6,14 @@ import {
   Camera, CheckCircle2, X, ShieldCheck 
 } from 'lucide-react';
 
-// 1. Fixed TypeScript: Created a proper interface instead of using "any"
+// TypeScript Interface to prevent build errors
 interface Asset {
   id: string;
   name: string;
   type: string;
 }
 
+// Mock Data for Assigned Assets
 const assignedAssets: Asset[] = [
   { id: 'TAG-1045', name: 'MacBook Pro 14" (M2)', type: 'Laptop' },
   { id: 'TAG-2099', name: 'Dell UltraSharp 27" 4K', type: 'Monitor' }
@@ -22,20 +23,24 @@ export default function StaffInspectionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState(1);
   
+  // Form State
   const [verifyTag, setVerifyTag] = useState('');
   const [verifiedAsset, setVerifiedAsset] = useState<Asset | null>(null);
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
+  // Mock Inspections History
   const [inspections] = useState([
     { id: 'INS-881', asset: 'Dell UltraSharp 27" (TAG-2099)', status: 'Pending Review', date: 'Today, 10:00 AM' },
     { id: 'INS-702', asset: 'MacBook Pro 14" (TAG-1045)', status: 'Approved', date: 'Oct 01, 2023' },
   ]);
 
+  // RULE: 5 photos for Laptops, 2 for other assets
   const requiredPhotos = verifiedAsset?.type === 'Laptop' 
     ? ['Top Side', 'Keyboard & Screen', 'Right Side', 'Left Side', 'Bottom Side']
     : ['Front/Top Side', 'Back Side'];
 
+  // Handle Asset Verification
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
     const found = assignedAssets.find(a => a.id.toUpperCase() === verifyTag.toUpperCase());
@@ -47,6 +52,7 @@ export default function StaffInspectionsPage() {
     }
   };
 
+  // Process image & add Date/Time Watermark via HTML Canvas
   const handlePhotoCapture = (label: string, file: File | undefined) => {
     if (!file) return;
     
@@ -63,18 +69,22 @@ export default function StaffInspectionsPage() {
         
         ctx.drawImage(img, 0, 0);
 
+        // Define Watermark Date & Time
         const dateText = `Captured: ${new Date().toLocaleString()}`;
         const fontSize = Math.max(30, img.width / 25);
         ctx.font = `bold ${fontSize}px Arial`;
         const padding = 20;
         const textWidth = ctx.measureText(dateText).width;
         
+        // Draw black background for text readability
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(0, img.height - (fontSize + padding * 2), textWidth + padding * 2, fontSize + padding * 2);
 
+        // Draw white text
         ctx.fillStyle = '#FFFFFF';
         ctx.fillText(dateText, padding, img.height - padding);
 
+        // Save watermarked image
         const watermarkedImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
         setPhotos(prev => ({ ...prev, [label]: watermarkedImageBase64 }));
       };
@@ -98,7 +108,7 @@ export default function StaffInspectionsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* HEADER */}
+      {/* PAGE HEADER */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Asset Inspections</h1>
@@ -112,7 +122,7 @@ export default function StaffInspectionsPage() {
         </button>
       </div>
 
-      {/* STATS CARDS */}
+      {/* STATUS DASHBOARD */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="bg-blue-50 p-4 rounded-xl text-blue-500"><Clock size={24} /></div>
@@ -128,7 +138,7 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* HISTORY TABLE */}
+      {/* INSPECTION HISTORY */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
           <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -157,7 +167,7 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* INSPECTION MODAL / WIZARD */}
+      {/* INSPECTION WIZARD MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-8 relative">
@@ -177,7 +187,7 @@ export default function StaffInspectionsPage() {
                 <form onSubmit={handleVerify} className="space-y-6">
                   <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-3 text-blue-800">
                     <ShieldCheck className="shrink-0" />
-                    <p className="text-sm font-semibold">Please enter the exact Asset Tag ID of the equipment you are inspecting to verify it is assigned to you.</p>
+                    <p className="text-sm font-semibold">Please enter the exact Asset Tag ID of the equipment you are inspecting.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Asset Tag ID</label>
@@ -187,7 +197,7 @@ export default function StaffInspectionsPage() {
                         required 
                         value={verifyTag}
                         onChange={(e) => setVerifyTag(e.target.value)}
-                        placeholder="e.g., TAG-1045" 
+                        placeholder="Try: TAG-1045 or TAG-2099" 
                         className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold" 
                       />
                     </div>
@@ -217,12 +227,12 @@ export default function StaffInspectionsPage() {
                     <textarea 
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Describe any scratches, dents, or operational issues..." 
+                      placeholder="Describe any issues..." 
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium resize-none h-24"
                     ></textarea>
                   </div>
 
-                  {/* Photo Capture Section */}
+                  {/* Live Photo Capture Section */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="block text-sm font-bold text-gray-700">Live Photo Capture</label>
@@ -236,7 +246,6 @@ export default function StaffInspectionsPage() {
                         <div key={label} className="relative group">
                           {photos[label] ? (
                             <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-green-500 shadow-sm">
-                              {/* 2. Added rule to ignore Next.js strict Image warning for base64 canvas outputs */}
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={photos[label]} alt={label} className="w-full h-full object-cover" />
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
