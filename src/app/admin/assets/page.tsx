@@ -1,389 +1,420 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
-  Plus, Upload, Download, Search, X, 
-  Laptop, Tag, QrCode, Calendar, AlertCircle, 
-  User, Clipboard, FileText, Image as ImageIcon, Eye,
-  UserPlus, UserMinus, Wrench, CheckCircle2
+  Laptop, Monitor, Search, Plus, UserCheck, 
+  Settings2, Wrench, Package, Box, CheckCircle2, X, AlertCircle, Trash2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
-// Initial Mock Data (Now dynamic)
-const initialAssets = [
-  { id: 1, name: 'MacBook Pro M2', category: 'Laptops', tagId: 'TAG-1001', serialNumber: 'C02HG123QW', purchaseDate: '2023-05-10', condition: 'New', status: 'Assigned', assignedTo: 'John Doe (EMP-001)', lastInspectionDate: '2024-01-15', notes: 'Perfect condition.', photo: '' },
-  { id: 2, name: 'Dell UltraSharp 27"', category: 'Monitors', tagId: 'TAG-1002', serialNumber: 'CN-0XV3X2', purchaseDate: '2022-11-20', condition: 'Refurbished', status: 'In Stock', assignedTo: 'Unassigned', lastInspectionDate: '2024-02-01', notes: 'Slight scratch on stand.', photo: '' },
-  { id: 3, name: 'ThinkPad T14', category: 'Laptops', tagId: 'TAG-1003', serialNumber: 'PF-34X98A', purchaseDate: '2021-08-15', condition: 'Repair', status: 'Repair', assignedTo: 'Unassigned', lastInspectionDate: '2024-03-05', notes: 'Keyboard keys sticky. Sent to IT.', photo: '' },
-  { id: 4, name: 'Logitech MX Master 3', category: 'Accessories', tagId: 'TAG-1004', serialNumber: 'LZ-99932', purchaseDate: '2023-10-05', condition: 'New', status: 'Assigned', assignedTo: 'Jane Smith (EMP-002)', lastInspectionDate: '2024-03-05', notes: 'Working fine.', photo: '' },
+// --- TYPES ---
+type UsageStatus = 'Assigned' | 'Unassigned' | 'Demo Use' | 'Under Repair' | 'Discarded';
+
+interface Asset {
+  id: string;
+  tagId: string;
+  serialNumber: string;
+  name: string;
+  category: string;
+  status: UsageStatus;
+  assignedToName?: string;
+  assignedToEmpId?: string;
+  lastInspection?: string;
+}
+
+interface Staff {
+  empId: string;
+  name: string;
+  department: string;
+}
+
+// --- MOCK DATABASE ---
+const mockStaff: Staff[] = [
+  { empId: 'EMP-001', name: 'Lakhwinder Singh', department: 'IT Department' },
+  { empId: 'EMP-002', name: 'Sarah Connor', department: 'Migrations' },
+  { empId: 'EMP-003', name: 'John Doe', department: 'Accounts' },
+  { empId: 'EMP-004', name: 'Jane Smith', department: 'Edu Calling' },
 ];
 
-export default function AssetsPage() {
-  const [assets, setAssets] = useState(initialAssets); // Live state
-  const [activeTab, setActiveTab] = useState<'category' | 'staff'>('category');
+const initialAssets: Asset[] = [
+  { id: '1', tagId: 'TAG-1045', serialNumber: 'SN-MAC-001', name: 'MacBook Pro 14"', category: 'Laptops', status: 'Assigned', assignedToName: 'Lakhwinder Singh', assignedToEmpId: 'EMP-001', lastInspection: '2023-10-01' },
+  { id: '2', tagId: 'TAG-2099', serialNumber: 'SN-DEL-442', name: 'Dell UltraSharp 27"', category: 'Monitors', status: 'Unassigned', lastInspection: '2023-09-15' },
+  { id: '3', tagId: 'TAG-3011', serialNumber: 'SN-LOG-991', name: 'Logitech MX Master 3', category: 'Mouse', status: 'Demo Use', lastInspection: '2023-10-10' },
+  { id: '4', tagId: 'TAG-1088', serialNumber: 'SN-MAC-002', name: 'MacBook Air M1', category: 'Laptops', status: 'Under Repair', lastInspection: '2023-08-20' },
+];
 
-  // Modal States
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [viewAsset, setViewAsset] = useState<any>(null);
-  const [assignAssetModal, setAssignAssetModal] = useState<any>(null); 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+const CATEGORIES = ['Laptops', 'Monitors', 'Keyboards', 'Mouse', 'Headphones', 'Stands', 'Cleaning Kits', 'Others'];
 
-  // Forms
-  const [assigneeSearch, setAssigneeSearch] = useState('');
+export default function AdminAssetsPage() {
+  const [assets, setAssets] = useState<Asset[]>(initialAssets);
+  const [searchAssetQuery, setSearchAssetQuery] = useState('');
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // New Asset Form State
   const [formData, setFormData] = useState({
-    assetName: '', category: 'Laptops', tagId: '', serialNumber: '',
-    purchaseDate: '', condition: 'New', status: 'In Stock', 
-    assignedTo: 'Unassigned', lastInspectionDate: '', inspectionNotes: ''
+    tagId: '',
+    serialNumber: '',
+    name: '',
+    category: 'Laptops',
+    status: 'Unassigned' as UsageStatus,
+    assignedToEmpId: '',
+    assignedToName: '',
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // Staff Combobox Search State
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [isStaffDropdownOpen, setIsStaffDropdownOpen] = useState(false);
+
+  // --- DASHBOARD CALCULATIONS ---
+  const stats = useMemo(() => {
+    return {
+      total: assets.length,
+      assigned: assets.filter(a => a.status === 'Assigned').length,
+      inStock: assets.filter(a => a.status === 'Unassigned' || a.status === 'Demo Use').length,
+      repair: assets.filter(a => a.status === 'Under Repair').length,
+      discarded: assets.filter(a => a.status === 'Discarded').length,
+    };
+  }, [assets]);
+
+  const categoryStats = useMemo(() => {
+    return CATEGORIES.map(cat => ({
+      name: cat,
+      total: assets.filter(a => a.category === cat).length,
+      assigned: assets.filter(a => a.category === cat && a.status === 'Assigned').length,
+      inStock: assets.filter(a => a.category === cat && (a.status === 'Unassigned' || a.status === 'Demo Use')).length,
+    }));
+  }, [assets]);
+
+  // --- AUTO STATUS LOGIC (THE MAGIC) ---
+  const handleStatusChange = (newStatus: UsageStatus) => {
+    setFormData(prev => {
+      const updated = { ...prev, status: newStatus };
+      // If it's not assigned, clear the staff data automatically
+      if (newStatus !== 'Assigned') {
+        updated.assignedToEmpId = '';
+        updated.assignedToName = '';
+      }
+      return updated;
+    });
   };
 
-  // --- ACTIONS LOGIC ---
-  const updateAssetInState = (id: number, updates: any) => {
-    const updatedAssets = assets.map(asset => asset.id === id ? { ...asset, ...updates } : asset);
-    setAssets(updatedAssets);
-    if (viewAsset && viewAsset.id === id) setViewAsset({ ...viewAsset, ...updates });
+  const handleStaffSelect = (staff: Staff) => {
+    setFormData(prev => ({
+      ...prev,
+      assignedToEmpId: staff.empId,
+      assignedToName: staff.name,
+      status: 'Assigned' // Auto-update status to Assigned!
+    }));
+    setIsStaffDropdownOpen(false);
+    setStaffSearchQuery('');
   };
 
-  const handleUnassign = (id: number) => {
-    updateAssetInState(id, { status: 'In Stock', assignedTo: 'Unassigned' });
+  // --- HANDLERS ---
+  const handleOpenModal = () => {
+    const randomTag = `TAG-${Math.floor(Math.random() * 9000) + 1000}`;
+    setFormData({ tagId: randomTag, serialNumber: '', name: '', category: 'Laptops', status: 'Unassigned', assignedToEmpId: '', assignedToName: '' });
+    setIsModalOpen(true);
   };
 
-  const handleAssign = () => {
-    if (!assigneeSearch.trim()) return;
-    updateAssetInState(assignAssetModal.id, { status: 'Assigned', assignedTo: assigneeSearch });
-    setAssignAssetModal(null);
-    setAssigneeSearch('');
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newAsset: Asset = {
+      id: `AST-${Date.now()}`,
+      ...formData,
+      lastInspection: 'Pending'
+    };
+    setAssets([newAsset, ...assets]);
+    setIsModalOpen(false);
+    alert("Asset successfully added to inventory!");
   };
 
-  const handleToggleRepair = (asset: any) => {
-    if (asset.status === 'Repair') {
-      updateAssetInState(asset.id, { status: 'In Stock', condition: 'Refurbished', assignedTo: 'Unassigned' });
-    } else {
-      updateAssetInState(asset.id, { status: 'Repair', condition: 'Repair', assignedTo: 'Unassigned' });
+  // Filter staff for Combobox
+  const filteredStaff = mockStaff.filter(s => 
+    s.name.toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
+    s.empId.toLowerCase().includes(staffSearchQuery.toLowerCase())
+  );
+
+  // Filter Assets for Table
+  const filteredAssets = assets.filter(a => 
+    a.tagId.toLowerCase().includes(searchAssetQuery.toLowerCase()) || 
+    a.serialNumber.toLowerCase().includes(searchAssetQuery.toLowerCase()) ||
+    a.name.toLowerCase().includes(searchAssetQuery.toLowerCase())
+  );
+
+  const getStatusColor = (status: UsageStatus) => {
+    switch(status) {
+      case 'Assigned': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'Unassigned': return 'bg-green-100 text-green-700 border-green-200';
+      case 'Demo Use': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'Under Repair': return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'Discarded': return 'bg-red-100 text-red-700 border-red-200';
+      default: return 'bg-gray-100 text-gray-700';
     }
   };
 
-  const handleBulkUpload = () => {
-    // In a real app, you would send `selectedFile` to your backend API here
-    alert("Assets imported successfully!");
-    setIsBulkModalOpen(false);
-    setSelectedFile(null);
-  };
-
-  const downloadSampleCSV = () => {
-    const csvData = "AssetName,Category,TagID,SerialNumber,PurchaseDate,Condition,Status,AssignedTo,LastInspectionDate,InspectionNotes\nMacBook Pro M2,Laptops,TAG-1001,C02HG123QW,2023-05-10,New,Assigned,John Doe (EMP-001),2024-01-15,Perfect condition\n";
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "Assets_Bulk_Upload_Sample.csv";
-    link.click();
-  };
-
-  // Grouping Logic for Tabs
-  const groupedAssets = assets.reduce((acc: any, asset) => {
-    const key = activeTab === 'category' ? asset.category : asset.assignedTo;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(asset);
-    return acc;
-  }, {});
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      {/* TOP HEADER */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Assets Management</h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Track hardware, assignment, and status</p>
+          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+            <Package className="text-blue-600" /> Asset Inventory
+          </h1>
+          <p className="text-sm font-medium text-gray-500 mt-1">Manage stock, track assignments, and view office usage.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 text-gray-700 font-bold rounded-xl hover:bg-gray-100 border border-gray-200 transition-all">
-            <Upload size={18} /> Bulk Upload
-          </button>
-          <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-sm transition-all">
-            <Plus size={18} /> Add New Asset
-          </button>
+        <button onClick={handleOpenModal} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm">
+          <Plus size={18} /> Add New Asset
+        </button>
+      </div>
+
+      {/* 📊 KPI DASHBOARD */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-center">
+          <span className="text-gray-500 font-bold text-xs uppercase tracking-wider mb-1">Total Assets</span>
+          <span className="text-3xl font-black text-gray-900">{stats.total}</span>
+        </div>
+        <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex flex-col justify-center">
+          <span className="text-blue-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1"><UserCheck size={14}/> Assigned</span>
+          <span className="text-3xl font-black text-blue-900">{stats.assigned}</span>
+        </div>
+        <div className="bg-green-50 p-5 rounded-2xl border border-green-100 flex flex-col justify-center">
+          <span className="text-green-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1"><Box size={14}/> In Stock / Demo</span>
+          <span className="text-3xl font-black text-green-900">{stats.inStock}</span>
+        </div>
+        <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 flex flex-col justify-center">
+          <span className="text-orange-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1"><Wrench size={14}/> Repair</span>
+          <span className="text-3xl font-black text-orange-900">{stats.repair}</span>
+        </div>
+        <div className="bg-red-50 p-5 rounded-2xl border border-red-100 flex flex-col justify-center">
+          <span className="text-red-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1"><Trash2 size={14}/> Discarded</span>
+          <span className="text-3xl font-black text-red-900">{stats.discarded}</span>
         </div>
       </div>
 
-      {/* FILTER & TABS */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-2 pl-4 rounded-2xl shadow-sm border border-gray-100">
-        <div className="flex items-center gap-3 w-full md:w-96">
-          <Search size={20} className="text-gray-400" />
-          <input type="text" placeholder="Search by TAG ID, Name, or Serial..." className="w-full bg-transparent border-none outline-none text-sm font-medium text-gray-700 placeholder:text-gray-400" />
-        </div>
-        <div className="flex bg-gray-100 p-1 rounded-xl w-full md:w-auto">
-          <button onClick={() => setActiveTab('category')} className={`flex-1 md:w-36 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'category' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Category Wise</button>
-          <button onClick={() => setActiveTab('staff')} className={`flex-1 md:w-36 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'staff' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Staff Wise</button>
-        </div>
-      </div>
-
-      {/* ASSET LIST */}
-      <div className="space-y-8">
-        {Object.keys(groupedAssets).map(groupName => (
-          <div key={groupName} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100">
-              <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                {activeTab === 'category' ? <Laptop className="text-orange-500" size={20} /> : <User className="text-orange-500" size={20} />}
-                {groupName} <span className="text-sm text-gray-400 font-semibold ml-2">({groupedAssets[groupName].length} items)</span>
-              </h3>
+      {/* 📂 CATEGORY BREAKDOWN */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Category Breakdown</h3>
+        <div className="flex flex-wrap gap-3">
+          {categoryStats.filter(c => c.total > 0).map(cat => (
+            <div key={cat.name} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex flex-col min-w-[120px]">
+              <span className="text-xs font-bold text-gray-500">{cat.name}</span>
+              <div className="flex items-end justify-between mt-1">
+                <span className="text-lg font-black text-gray-900">{cat.total}</span>
+                <span className="text-[10px] font-bold text-gray-400 bg-white px-1.5 py-0.5 rounded border border-gray-100">
+                  {cat.assigned} Assg
+                </span>
+              </div>
             </div>
-            
-            <div className="divide-y divide-gray-100">
-              {groupedAssets[groupName].map((asset: any) => (
-                <div key={asset.id} className="p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-orange-50/30 transition-all">
-                  <div className="flex gap-4 items-center">
-                    <div className="h-12 w-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 font-bold border border-gray-200">
-                      {asset.category === 'Laptops' ? <Laptop size={24}/> : <Tag size={24}/>}
+          ))}
+        </div>
+      </div>
+
+      {/* 🔍 SEARCH & TABLE */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+          <div className="relative max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search by Serial Number, Tag ID, or Name..." 
+              value={searchAssetQuery} onChange={(e) => setSearchAssetQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+            />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-white border-b border-gray-100 text-[11px] uppercase tracking-wider text-gray-400 font-black">
+                <th className="p-4 pl-6">Asset Details</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">Status & Assignment</th>
+                <th className="p-4">Last Inspection</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredAssets.map((asset) => (
+                <tr key={asset.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="p-4 pl-6">
+                    <p className="font-bold text-gray-900">{asset.name}</p>
+                    <div className="flex gap-2 mt-1">
+                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{asset.tagId}</span>
+                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{asset.serialNumber}</span>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900">{asset.name}</h4>
-                      <div className="flex items-center gap-3 text-xs font-semibold text-gray-500 mt-1">
-                        <span className="flex items-center gap-1"><QrCode size={12}/> {asset.tagId}</span>
-                        <span className="flex items-center gap-1"><AlertCircle size={12}/> {asset.condition}</span>
-                      </div>
+                  </td>
+                  <td className="p-4 text-sm font-bold text-gray-600">{asset.category}</td>
+                  <td className="p-4">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(asset.status)}`}>
+                        {asset.status}
+                      </span>
+                      {asset.status === 'Assigned' && (
+                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                          <UserCheck size={12} className="text-blue-500"/> {asset.assignedToName}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                    <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${
-                      asset.status === 'Assigned' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                      asset.status === 'In Stock' ? 'bg-green-50 text-green-600 border-green-200' :
-                      'bg-red-50 text-red-600 border-red-200'
-                    }`}>
-                      {asset.status}
-                    </span>
-                    <button onClick={() => setViewAsset(asset)} className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-orange-600 hover:text-white rounded-xl transition-all font-bold text-sm flex items-center gap-2">
-                      Manage <Eye size={16} />
-                    </button>
-                  </div>
-                </div>
+                  </td>
+                  <td className="p-4 text-sm font-medium text-gray-500">{asset.lastInspection}</td>
+                </tr>
               ))}
-            </div>
-          </div>
-        ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* ALL MODALS COMBINED HERE */}
-      <AnimatePresence>
-        
-        {/* 1. ADD NEW ASSET MODAL */}
-        {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAddModalOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
+      {/* 🚀 THE "ADD NEW ASSET" MODAL WITH COMBOBOX */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-8 animate-in zoom-in-95 duration-200">
             
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><Plus size={20} className="text-orange-600"/> Add New Asset</h2>
-                <button onClick={() => setIsAddModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
-              </div>
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
+              <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                <Plus className="text-blue-600"/> Add New Asset
+              </h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
 
-              <div className="p-6 overflow-y-auto space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Asset Name</label>
-                    <input type="text" name="assetName" value={formData.assetName} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="e.g. MacBook Pro M3" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Category</label>
-                    <select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none bg-white">
-                      <option>Laptops</option><option>Monitors</option><option>Accessories</option><option>Phones</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">TAG ID</label>
-                    <input type="text" name="tagId" value={formData.tagId} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="TAG-0000" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Serial Number</label>
-                    <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="S/N..." />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 border-t border-gray-100 pt-5">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Condition</label>
-                    <select name="condition" value={formData.condition} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none bg-white">
-                      <option>New</option><option>Refurbished</option><option>Repair</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-gray-700">Status</label>
-                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none bg-white">
-                      <option>In Stock</option><option>Assigned</option><option>Repair</option><option>Discard</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5 relative">
-                    <label className="text-sm font-bold text-gray-700">Assigned To</label>
-                    <input list="staffList" name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} placeholder="Search Staff" className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" />
-                    <datalist id="staffList">
-                      <option value="Unassigned" />
-                      <option value="John Doe (EMP-001)" />
-                      <option value="Jane Smith (EMP-002)" />
-                    </datalist>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                <button onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
-                <button className="px-5 py-2.5 text-sm font-bold bg-orange-600 text-white hover:bg-orange-700 rounded-xl shadow-sm transition-all">Save Asset</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* 2. BULK UPLOAD MODAL (Updated) */}
-        {isBulkModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkModalOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden text-center p-6 space-y-6">
-              <div className="flex justify-between items-center border-b border-gray-100 pb-4">
-                <h2 className="text-xl font-black text-gray-800">Bulk Upload Assets</h2>
-                <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={20}/></button>
-              </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
               
-              <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                <p className="text-sm text-orange-800 font-semibold mb-3">Ensure your CSV matches the required format including Tags, Condition, and Assignment.</p>
-                <button onClick={downloadSampleCSV} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-orange-200 text-orange-700 text-sm font-bold rounded-xl hover:bg-orange-100 shadow-sm">
-                  <Download size={16} /> Download Sample CSV
-                </button>
-              </div>
-              
-              {/* Interactive File Input */}
-              <div>
-                <input 
-                  type="file" 
-                  accept=".csv" 
-                  className="hidden" 
-                  id="csvUpload" 
-                  onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)} 
-                />
-                <label htmlFor="csvUpload" className={`border-2 border-dashed rounded-2xl p-8 cursor-pointer flex flex-col items-center transition-all ${selectedFile ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:bg-gray-50'}`}>
-                  {selectedFile ? (
-                    <>
-                      <div className="h-12 w-12 bg-white text-orange-500 rounded-full flex items-center justify-center mb-3 shadow-sm border border-orange-200"><FileText size={24} /></div>
-                      <p className="font-bold text-gray-900">{selectedFile.name}</p>
-                      <p className="text-xs text-orange-600 mt-1 font-semibold">Click to change file</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="h-12 w-12 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center mb-3"><Upload size={24} /></div>
-                      <p className="font-bold text-gray-700">Click to select CSV file</p>
-                      <p className="text-xs text-gray-500 mt-1">or drag and drop here</p>
-                    </>
-                  )}
-                </label>
-              </div>
-
-              {selectedFile && (
-                <button onClick={handleBulkUpload} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-sm transition-all">
-                  Process Data & Import
-                </button>
-              )}
-            </motion.div>
-          </div>
-        )}
-
-        {/* 3. VIEW ASSET MODAL */}
-        {viewAsset && !assignAssetModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewAsset(null)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-              
-              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-xl font-black text-gray-800">Asset Details</h2>
-                <button onClick={() => setViewAsset(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
-              </div>
-
-              <div className="p-6 overflow-y-auto space-y-6">
-                <div className="flex gap-6 items-start">
-                  <div className="w-32 h-32 bg-gray-100 border border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 shrink-0 overflow-hidden">
-                    {viewAsset.photo ? <img src={viewAsset.photo} alt="Asset" className="w-full h-full object-cover"/> : <><ImageIcon size={32} className="mb-2"/> <span className="text-xs font-bold">No Photo</span></>}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <h3 className="text-2xl font-black text-gray-900">{viewAsset.name}</h3>
-                    <p className="text-sm font-semibold text-gray-500">Category: {viewAsset.category}</p>
-                    <div className="flex gap-2 mt-2">
-                      <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold">{viewAsset.tagId}</span>
-                      <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold">SN: {viewAsset.serialNumber}</span>
-                    </div>
-                  </div>
+              {/* Asset Identifiers */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Asset Tag ID</label>
+                  <input required type="text" value={formData.tagId} onChange={(e) => setFormData({...formData, tagId: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 pt-5">
-                  <div><p className="text-xs text-gray-500 font-bold mb-1">Condition</p><p className="text-sm font-semibold text-gray-900">{viewAsset.condition}</p></div>
-                  <div><p className="text-xs text-gray-500 font-bold mb-1">Status</p><p className="text-sm font-semibold text-gray-900">{viewAsset.status}</p></div>
-                  <div><p className="text-xs text-gray-500 font-bold mb-1">Purchase Date</p><p className="text-sm font-semibold text-gray-900">{viewAsset.purchaseDate}</p></div>
-                  <div><p className="text-xs text-gray-500 font-bold mb-1">Last Inspection</p><p className="text-sm font-semibold text-gray-900">{viewAsset.lastInspectionDate}</p></div>
-                </div>
-
-                <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
-                  <p className="text-xs text-orange-600 font-bold mb-1 flex items-center gap-1"><User size={14}/> Currently Assigned To</p>
-                  <p className="text-sm font-black text-gray-900">{viewAsset.assignedTo}</p>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number (S/N)</label>
+                  <input required type="text" value={formData.serialNumber} onChange={(e) => setFormData({...formData, serialNumber: e.target.value})} placeholder="e.g. C02XG1..." className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
 
-              {/* ACTION BUTTONS */}
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex flex-wrap gap-3 justify-between items-center">
-                {viewAsset.status === 'Repair' ? (
-                  <button onClick={() => handleToggleRepair(viewAsset)} className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 font-bold rounded-xl hover:bg-green-100 border border-green-200 transition-all text-sm">
-                    <CheckCircle2 size={16}/> Mark as Fixed (In Stock)
-                  </button>
-                ) : (
-                  <button onClick={() => handleToggleRepair(viewAsset)} className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-700 font-bold rounded-xl hover:bg-red-100 border border-red-200 transition-all text-sm">
-                    <Wrench size={16}/> Send to Repair
-                  </button>
-                )}
+              {/* Hardware Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Hardware Name/Model</label>
+                  <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g. MacBook Pro 16 M2" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category</label>
+                  <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold cursor-pointer">
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
 
-                {viewAsset.status !== 'Repair' && (
+              {/* USAGE TYPE & AUTO ASSIGNMENT LOGIC */}
+              <div className="border-t border-gray-100 pt-6">
+                <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Settings2 size={16} className="text-blue-500"/> Usage & Assignment Status
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Status Dropdown */}
                   <div>
-                    {viewAsset.assignedTo !== 'Unassigned' ? (
-                      <button onClick={() => handleUnassign(viewAsset.id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-100 border border-gray-200 transition-all text-sm">
-                        <UserMinus size={16}/> Unassign Asset
-                      </button>
-                    ) : (
-                      <button onClick={() => setAssignAssetModal(viewAsset)} className="flex items-center gap-2 px-6 py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 shadow-sm transition-all text-sm">
-                        <UserPlus size={16}/> Assign to Staff
+                    <label className="block text-xs font-bold text-gray-500 mb-2">Current Status</label>
+                    <select 
+                      value={formData.status} 
+                      onChange={(e) => handleStatusChange(e.target.value as UsageStatus)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold cursor-pointer"
+                    >
+                      <option value="Unassigned">Unassigned (In Stock)</option>
+                      <option value="Demo Use">Demo Use (Office Only)</option>
+                      <option value="Assigned">Assigned (To Staff)</option>
+                      <option value="Under Repair">Under Repair</option>
+                      <option value="Discarded">Discarded</option>
+                    </select>
+                    {formData.status === 'Demo Use' && (
+                      <p className="text-[10px] text-purple-600 font-bold mt-2 bg-purple-50 p-2 rounded-lg">* Demo items are kept in office and NOT assigned to a specific employee ID.</p>
+                    )}
+                  </div>
+
+                  {/* SEARCHABLE STAFF COMBOBOX */}
+                  <div className="relative">
+                    <label className="block text-xs font-bold text-gray-500 mb-2">Assign To Employee</label>
+                    
+                    {/* The Visual Input/Button */}
+                    <div 
+                      onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)}
+                      className={`w-full px-4 py-3 rounded-xl border text-sm font-bold cursor-pointer flex justify-between items-center transition-all ${
+                        formData.assignedToEmpId 
+                          ? 'border-blue-300 bg-blue-50 text-blue-900' 
+                          : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+                      }`}
+                    >
+                      {formData.assignedToEmpId 
+                        ? `${formData.assignedToName} (${formData.assignedToEmpId})` 
+                        : 'Select Staff Member...'}
+                      <Search size={16} className="text-gray-400"/>
+                    </div>
+
+                    {/* The Dropdown List */}
+                    {isStaffDropdownOpen && (
+                      <div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-h-60 flex flex-col">
+                        <div className="p-2 border-b border-gray-100 bg-gray-50 sticky top-0">
+                          <input 
+                            autoFocus
+                            type="text" 
+                            placeholder="Search Name or EMP ID..." 
+                            value={staffSearchQuery}
+                            onChange={(e) => setStaffSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-500"
+                          />
+                        </div>
+                        <div className="overflow-y-auto overflow-x-hidden">
+                          {filteredStaff.length === 0 ? (
+                            <p className="p-4 text-center text-xs text-gray-500 font-bold">No staff found.</p>
+                          ) : (
+                            filteredStaff.map(staff => (
+                              <div 
+                                key={staff.empId} 
+                                onClick={() => handleStaffSelect(staff)}
+                                className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 flex justify-between items-center group"
+                              >
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 group-hover:text-blue-700">{staff.name}</p>
+                                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">{staff.empId} • {staff.department}</p>
+                                </div>
+                                <Plus size={14} className="text-blue-400 opacity-0 group-hover:opacity-100"/>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {formData.assignedToEmpId && (
+                      <button 
+                        type="button"
+                        onClick={() => handleStatusChange('Unassigned')}
+                        className="text-[10px] font-bold text-red-500 mt-2 hover:underline flex items-center gap-1"
+                      >
+                        <X size={10}/> Clear Assignment
                       </button>
                     )}
                   </div>
-                )}
+                </div>
               </div>
-            </motion.div>
+
+              {/* Actions */}
+              <div className="pt-6 border-t border-gray-100 flex gap-3 mt-6">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md shadow-blue-200 flex items-center justify-center gap-2">
+                  <CheckCircle2 size={18}/> Save to Inventory
+                </button>
+              </div>
+
+            </form>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* 4. ASSIGN ASSET MODAL */}
-        {assignAssetModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAssignAssetModal(null)} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-6">
-              <h2 className="text-xl font-black text-gray-900 mb-2">Assign Asset</h2>
-              <p className="text-sm font-medium text-gray-500 mb-6">Assigning <span className="font-bold text-gray-800">{assignAssetModal.name} ({assignAssetModal.tagId})</span> to a staff member.</p>
-              
-              <div className="space-y-2 mb-6">
-                <label className="text-sm font-bold text-gray-700">Search Staff</label>
-                <input list="assignStaffList" value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} placeholder="Type name or Emp ID..." className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 outline-none" />
-                <datalist id="assignStaffList">
-                  <option value="John Doe (EMP-001)" />
-                  <option value="Jane Smith (EMP-002)" />
-                  <option value="Alex Johnson (EMP-003)" />
-                </datalist>
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => setAssignAssetModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-all">Cancel</button>
-                <button onClick={handleAssign} className="px-5 py-2.5 text-sm font-bold bg-orange-600 text-white hover:bg-orange-700 rounded-xl shadow-sm transition-all">Confirm Assignment</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-      </AnimatePresence>
     </div>
   );
 }
