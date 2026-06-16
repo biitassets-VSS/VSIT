@@ -140,6 +140,31 @@ export default function AdminAssetsPage() {
     }
   };
 
+  // THE NEW TEMPLATE DOWNLOADER FUNCTION
+  const handleDownloadTemplate = () => {
+    // 1. Create CSV formatting (headers + 2 sample rows)
+    const csvContent = [
+      "Tag ID,Serial Number,Hardware Name,Category,Status",
+      "TAG-9001,SN-BULK-001,ThinkPad T14,Laptops,Unassigned",
+      "TAG-9002,SN-BULK-002,Dell 24 inch Monitor,Monitors,Demo Use"
+    ].join("\n");
+
+    // 2. Create a Blob from the text
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // 3. Create a download link and trigger it
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Asset_Upload_Template.csv');
+    document.body.appendChild(link);
+    link.click();
+    
+    // 4. Clean up
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleBulkUploadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
@@ -196,7 +221,7 @@ export default function AdminAssetsPage() {
           <p className="text-sm font-medium text-gray-500 mt-1">Manage stock, track assignments, and view office usage.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {/* 🌟 NEW BULK UPLOAD BUTTON */}
+          {/* BULK UPLOAD BUTTON */}
           <button onClick={() => setIsBulkModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 hover:text-blue-700 px-5 py-2.5 rounded-xl shadow-sm transition-all font-bold text-sm">
             <Upload size={18} /> Bulk Upload
           </button>
@@ -328,8 +353,9 @@ export default function AdminAssetsPage() {
                   <h3 className="font-bold text-blue-900 text-sm">Need the CSV Template?</h3>
                   <p className="text-xs text-blue-700 mt-1">Download our formatted template to ensure a smooth upload.</p>
                 </div>
-                <button type="button" onClick={() => alert("Downloading CSV Template...")} className="flex items-center gap-2 bg-white text-blue-700 font-bold text-xs px-4 py-2 rounded-lg shadow-sm border border-blue-200 hover:bg-blue-100 transition-colors">
-                  <Download size={14}/> Template
+                {/* 🌟 DOWNLOAD TRIGGER FIXED HERE 🌟 */}
+                <button type="button" onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white text-blue-700 font-bold text-xs px-4 py-2 rounded-lg shadow-sm border border-blue-200 hover:bg-blue-100 transition-colors">
+                  <Download size={14}/> Download Template
                 </button>
               </div>
 
