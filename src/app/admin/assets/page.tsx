@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import Link from 'next/link'; // IMPORTED NEXT.JS LINK
+import Link from 'next/link'; 
 import { 
-  Laptop, Monitor, Search, Plus, UserCheck, 
-  Settings2, Wrench, Package, Box, CheckCircle2, X, AlertCircle, Trash2
+  Search, Plus, UserCheck, Settings2, Wrench, Package, Box, CheckCircle2, 
+  X, Trash2, Upload, Download, FileUp, Loader2
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -49,9 +49,14 @@ export default function AdminAssetsPage() {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [searchAssetQuery, setSearchAssetQuery] = useState('');
   
-  // Modal State
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   
+  // Bulk Upload States
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   // New Asset Form State
   const [formData, setFormData] = useState({
     tagId: '',
@@ -87,7 +92,7 @@ export default function AdminAssetsPage() {
     }));
   }, [assets]);
 
-  // --- AUTO STATUS LOGIC (THE MAGIC) ---
+  // --- HANDLERS ---
   const handleStatusChange = (newStatus: UsageStatus) => {
     setFormData(prev => {
       const updated = { ...prev, status: newStatus };
@@ -110,7 +115,6 @@ export default function AdminAssetsPage() {
     setStaffSearchQuery('');
   };
 
-  // --- HANDLERS ---
   const handleOpenModal = () => {
     const randomTag = `TAG-${Math.floor(Math.random() * 9000) + 1000}`;
     setFormData({ tagId: randomTag, serialNumber: '', name: '', category: 'Laptops', status: 'Unassigned', assignedToEmpId: '', assignedToName: '' });
@@ -127,6 +131,35 @@ export default function AdminAssetsPage() {
     setAssets([newAsset, ...assets]);
     setIsModalOpen(false);
     alert("Asset successfully added to inventory!");
+  };
+
+  // --- BULK UPLOAD HANDLERS ---
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleBulkUploadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    
+    // Simulate API delay for upload
+    setTimeout(() => {
+      // Create some fake items that were "uploaded" from the CSV
+      const mockBulkItems: Asset[] = [
+        { id: `AST-${Date.now()}-1`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-001', name: 'ThinkPad T14', category: 'Laptops', status: 'Unassigned', lastInspection: 'Pending' },
+        { id: `AST-${Date.now()}-2`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-002', name: 'Dell 24" Monitor', category: 'Monitors', status: 'Unassigned', lastInspection: 'Pending' }
+      ];
+      
+      setAssets(prev => [...mockBulkItems, ...prev]);
+      setIsUploading(false);
+      setIsBulkModalOpen(false);
+      setSelectedFile(null);
+      alert(`Successfully uploaded ${selectedFile.name} and imported ${mockBulkItems.length} assets!`);
+    }, 2000); // 2 second mock delay
   };
 
   const filteredStaff = mockStaff.filter(s => 
@@ -162,9 +195,16 @@ export default function AdminAssetsPage() {
           </h1>
           <p className="text-sm font-medium text-gray-500 mt-1">Manage stock, track assignments, and view office usage.</p>
         </div>
-        <button onClick={handleOpenModal} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm">
-          <Plus size={18} /> Add New Asset
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          {/* 🌟 NEW BULK UPLOAD BUTTON */}
+          <button onClick={() => setIsBulkModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 hover:text-blue-700 px-5 py-2.5 rounded-xl shadow-sm transition-all font-bold text-sm">
+            <Upload size={18} /> Bulk Upload
+          </button>
+          {/* Add Single Asset Button */}
+          <button onClick={handleOpenModal} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm">
+            <Plus size={18} /> Add New
+          </button>
+        </div>
       </div>
 
       {/* 📊 KPI DASHBOARD */}
@@ -209,7 +249,7 @@ export default function AdminAssetsPage() {
         </div>
       </div>
 
-      {/* 🔍 SEARCH & TABLE WITH HYPERLINKS */}
+      {/* 🔍 SEARCH & TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
           <div className="relative max-w-md">
@@ -236,7 +276,6 @@ export default function AdminAssetsPage() {
               {filteredAssets.map((asset) => (
                 <tr key={asset.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="p-4 pl-6">
-                    {/* HERE IS THE HYPERLINK TO ASSET DETAILS */}
                     <Link href={`/admin/assets/${asset.id}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer block">
                       {asset.name}
                     </Link>
@@ -252,7 +291,6 @@ export default function AdminAssetsPage() {
                         {asset.status}
                       </span>
                       {asset.status === 'Assigned' && asset.assignedToEmpId && (
-                        /* HERE IS THE HYPERLINK TO STAFF PROFILE */
                         <Link href={`/admin/staff/${asset.assignedToEmpId}`} className="text-xs font-bold text-gray-600 hover:text-blue-600 hover:underline flex items-center gap-1 cursor-pointer mt-1">
                           <UserCheck size={12} className="text-blue-500"/> {asset.assignedToName}
                         </Link>
@@ -267,7 +305,96 @@ export default function AdminAssetsPage() {
         </div>
       </div>
 
-      {/* 🚀 THE "ADD NEW ASSET" MODAL WITH COMBOBOX */}
+      {/* ========================================= */}
+      {/* 🚀 BULK UPLOAD MODAL */}
+      {/* ========================================= */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden my-8 animate-in zoom-in-95 duration-200">
+            
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                <Upload className="text-blue-600"/> Bulk Upload Assets
+              </h2>
+              <button onClick={() => { setIsBulkModalOpen(false); setSelectedFile(null); }} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkUploadSubmit} className="p-6 space-y-6">
+              
+              <div className="flex justify-between items-center bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                <div>
+                  <h3 className="font-bold text-blue-900 text-sm">Need the CSV Template?</h3>
+                  <p className="text-xs text-blue-700 mt-1">Download our formatted template to ensure a smooth upload.</p>
+                </div>
+                <button type="button" onClick={() => alert("Downloading CSV Template...")} className="flex items-center gap-2 bg-white text-blue-700 font-bold text-xs px-4 py-2 rounded-lg shadow-sm border border-blue-200 hover:bg-blue-100 transition-colors">
+                  <Download size={14}/> Template
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload File (CSV or Excel)</label>
+                
+                {/* Drag and Drop Zone Area */}
+                <div className="relative border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors p-8 flex flex-col items-center justify-center text-center">
+                  <input 
+                    type="file" 
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    onChange={handleFileChange}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  
+                  {!selectedFile ? (
+                    <>
+                      <div className="h-12 w-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3">
+                        <FileUp className="text-blue-500" size={24}/>
+                      </div>
+                      <p className="font-bold text-gray-700">Click or drag file to this area</p>
+                      <p className="text-xs text-gray-500 mt-1">Support for a single or bulk upload. Strictly CSV or XLSX formats.</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
+                        <CheckCircle2 className="text-green-600" size={24}/>
+                      </div>
+                      <p className="font-bold text-gray-900 text-sm">{selectedFile.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">{(selectedFile.size / 1024).toFixed(2)} KB</p>
+                      <p className="text-xs font-bold text-blue-600 mt-4 hover:underline">Click to change file</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-4 border-t border-gray-100 flex gap-3">
+                <button type="button" onClick={() => { setIsBulkModalOpen(false); setSelectedFile(null); }} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={!selectedFile || isUploading}
+                  className={`flex-1 py-3 rounded-xl font-bold text-white shadow-md flex items-center justify-center gap-2 transition-all ${
+                    !selectedFile || isUploading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+                  }`}
+                >
+                  {isUploading ? (
+                    <><Loader2 size={18} className="animate-spin" /> Uploading & Parsing...</>
+                  ) : (
+                    <><Upload size={18}/> Process Upload</>
+                  )}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+
+      {/* ========================================= */}
+      {/* 🚀 SINGLE "ADD NEW ASSET" MODAL (Existing)*/}
+      {/* ========================================= */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-8 animate-in zoom-in-95 duration-200">
@@ -339,7 +466,6 @@ export default function AdminAssetsPage() {
                   <div className="relative">
                     <label className="block text-xs font-bold text-gray-500 mb-2">Assign To Employee</label>
                     
-                    {/* The Visual Input/Button */}
                     <div 
                       onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)}
                       className={`w-full px-4 py-3 rounded-xl border text-sm font-bold cursor-pointer flex justify-between items-center transition-all ${
@@ -354,7 +480,6 @@ export default function AdminAssetsPage() {
                       <Search size={16} className="text-gray-400"/>
                     </div>
 
-                    {/* The Dropdown List */}
                     {isStaffDropdownOpen && (
                       <div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-h-60 flex flex-col">
                         <div className="p-2 border-b border-gray-100 bg-gray-50 sticky top-0">
