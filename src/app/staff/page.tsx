@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Package, CheckCircle2, AlertCircle, Camera, 
   ArrowLeft, UploadCloud, Trash2, ImagePlus, 
-  MessageSquare, Info, ShieldAlert, Send
+  MessageSquare, Info, ShieldAlert, Send,
+  Ticket, PlusCircle // Added new icons for Quick Actions
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -209,8 +210,37 @@ export default function StaffDashboardPage() {
             </div>
           </div>
 
+          {/* QUICK ACTIONS ROW */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button 
+              onClick={() => alert("Redirecting to Support Desk to Raise a Ticket...")}
+              className="flex items-center gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100 hover:border-red-200 hover:bg-red-50 transition-colors text-left group"
+            >
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-sm">
+                <Ticket size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-gray-900 text-[15px]">Raise IT Ticket</h3>
+                <p className="text-xs font-bold text-gray-500 mt-0.5">Report a broken device or software issue</p>
+              </div>
+            </button>
+
+            <button 
+              onClick={() => alert("Opening Asset Request Form...")}
+              className="flex items-center gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-colors text-left group"
+            >
+              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-sm">
+                <PlusCircle size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-gray-900 text-[15px]">Request New Asset</h3>
+                <p className="text-xs font-bold text-gray-500 mt-0.5">Need a mouse, keyboard, or monitor?</p>
+              </div>
+            </button>
+          </div>
+
           {/* ASSET LIST WIDGET */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mt-2">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                 <Package size={20} className="text-teal-600" /> My Assigned Assets ({assets.length})
