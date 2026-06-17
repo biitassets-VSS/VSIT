@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Link href="/admin" className="flex items-center gap-2">
           {/* Logo - Original Colors */}
           <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
-          <span className="font-black text-lg tracking-tight text-gray-900">VSIT<span className="text-teal-600">.</span></span>
+          //<span className="font-black text-lg tracking-tight text-gray-900">VSIT<span className="text-teal-600">.</span></span>//
         </Link>
         <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -mr-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
           <Menu size={24} />
