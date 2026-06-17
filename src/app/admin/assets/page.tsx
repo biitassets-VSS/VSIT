@@ -16,8 +16,8 @@ interface Asset {
   serialNumber: string;
   name: string;
   category: string;
-  brand?: string; // 🌟 ADDED BRAND
-  vendor?: string; // 🌟 ADDED VENDOR
+  brand?: string;
+  vendor?: string;
   status: UsageStatus;
   assignedToName?: string;
   assignedToEmpId?: string;
@@ -65,8 +65,8 @@ export default function AdminAssetsPage() {
     serialNumber: '',
     name: '',
     category: 'Laptops',
-    brand: '', // 🌟 ADDED BRAND
-    vendor: '', // 🌟 ADDED VENDOR
+    brand: '', 
+    vendor: '', 
     status: 'Unassigned' as UsageStatus,
     assignedToEmpId: '',
     assignedToName: '',
@@ -145,7 +145,6 @@ export default function AdminAssetsPage() {
   };
 
   const handleDownloadTemplate = () => {
-    // 🌟 ADDED BRAND AND VENDOR TO THE CSV TEMPLATE COLUMNS
     const csvContent = [
       "Tag ID,Serial Number,Hardware Name,Category,Brand,Vendor,Status",
       "TAG-9001,SN-BULK-001,ThinkPad T14,Laptops,Lenovo,Amazon Business,Unassigned",
@@ -163,26 +162,75 @@ export default function AdminAssetsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // 🌟 ACTUAL CSV PARSING LOGIC HERE 🌟
   const handleBulkUploadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
 
     setIsUploading(true);
     
-    // Simulate API delay for upload
-    setTimeout(() => {
-      // 🌟 INCLUDED BRAND AND VENDOR IN THE MOCK BULK ITEMS
-      const mockBulkItems: Asset[] = [
-        { id: `AST-${Date.now()}-1`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-001', name: 'ThinkPad T14', category: 'Laptops', brand: 'Lenovo', vendor: 'Amazon Business', status: 'Unassigned', lastInspection: 'Pending' },
-        { id: `AST-${Date.now()}-2`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-002', name: 'Dell 24" Monitor', category: 'Monitors', brand: 'Dell', vendor: 'BestBuy', status: 'Unassigned', lastInspection: 'Pending' }
-      ];
-      
-      setAssets(prev => [...mockBulkItems, ...prev]);
-      setIsUploading(false);
-      setIsBulkModalOpen(false);
-      setSelectedFile(null);
-      alert(`Successfully uploaded ${selectedFile.name} and imported ${mockBulkItems.length} assets!`);
-    }, 2000); 
+    // Create a new FileReader to read the contents of the uploaded file
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      try {
+        const csvText = event.target?.result as string;
+        if (!csvText) throw new Error("Empty file");
+
+        // Split by new line to get rows
+        const lines = csvText.split('\n');
+        const newAssets: Asset[] = [];
+
+        // Loop starting from 1 to skip the Header row
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue; // Skip empty lines
+
+          // Split by comma (ignoring commas inside quotes if any exist)
+          const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(val => val.replace(/^"|"$/g, '').trim());
+
+          // We need at least the basic details to save it
+          if (values.length >= 3) {
+            const newAsset: Asset = {
+              id: `AST-${Date.now()}-${i}`,
+              tagId: values[0] || `TAG-AUTO-${Math.floor(Math.random() * 9000)}`,
+              serialNumber: values[1] || 'UNKNOWN-SN',
+              name: values[2] || 'Unknown Device',
+              category: values[3] || 'Others',
+              brand: values[4] || '',
+              vendor: values[5] || '',
+              // Ensure status matches our strict types, default to Unassigned
+              status: (['Assigned', 'Unassigned', 'Demo Use', 'Under Repair', 'Discarded'].includes(values[6]) 
+                ? values[6] 
+                : 'Unassigned') as UsageStatus,
+              lastInspection: 'Pending'
+            };
+            newAssets.push(newAsset);
+          }
+        }
+
+        // Simulate a tiny delay for smooth UI transition
+        setTimeout(() => {
+          if (newAssets.length > 0) {
+            setAssets(prev => [...newAssets, ...prev]);
+            alert(`Successfully parsed file and imported ${newAssets.length} real assets!`);
+          } else {
+            alert("No valid assets found in the file. Please check the template format.");
+          }
+          setIsUploading(false);
+          setIsBulkModalOpen(false);
+          setSelectedFile(null);
+        }, 1000);
+
+      } catch (error) {
+        console.error("Error reading file:", error);
+        alert("Failed to read the file. Ensure it is a valid CSV.");
+        setIsUploading(false);
+      }
+    };
+
+    // Read the file as plain text so we can parse it
+    reader.readAsText(selectedFile);
   };
 
   const filteredStaff = mockStaff.filter(s => 
@@ -368,7 +416,7 @@ export default function AdminAssetsPage() {
                 <div className="relative border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors p-8 flex flex-col items-center justify-center text-center">
                   <input 
                     type="file" 
-                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    accept=".csv"
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
@@ -379,7 +427,7 @@ export default function AdminAssetsPage() {
                         <FileUp className="text-blue-500" size={24}/>
                       </div>
                       <p className="font-bold text-gray-700">Click or drag file to this area</p>
-                      <p className="text-xs text-gray-500 mt-1">Support for a single or bulk upload. Strictly CSV or XLSX formats.</p>
+                      <p className="text-xs text-gray-500 mt-1">Ensure the file is a CSV format matching the template.</p>
                     </>
                   ) : (
                     <>
@@ -464,7 +512,7 @@ export default function AdminAssetsPage() {
                 </div>
               </div>
 
-              {/* 🌟 ADDED BRAND AND VENDOR FIELDS */}
+              {/* 🌟 BRAND AND VENDOR FIELDS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Brand</label>
