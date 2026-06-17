@@ -46,7 +46,7 @@ export default function StaffDashboardPage() {
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
   const [activeTickets, setActiveTickets] = useState<StaffTicket[]>([]);
   
-  // View Controller: Added 'raising_ticket' and 'requesting_asset'
+  // View Controller
   const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset'>('dashboard');
   
   const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
@@ -113,7 +113,26 @@ export default function StaffDashboardPage() {
     }, 1000);
   };
 
-  // --- Photo Upload Logic ---
+  const handleSubmitInspection = () => {
+    if (!selectedAsset) return;
+    const requiredLabels = selectedAsset.category.toLowerCase().includes('laptop') ? laptopPhotoRequirements : standardPhotoRequirements;
+    const missingPhotos = requiredLabels.filter(label => !photos[label]);
+    
+    if (missingPhotos.length > 0) {
+      alert(`Please upload the following missing photos:\n- ${missingPhotos.join('\n- ')}`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      setAssets(prev => prev.map(a => a.id === selectedAsset.id ? { ...a, inspectionStatus: 'Pending Approval' } : a));
+      alert('Inspection submitted successfully!');
+      setIsSubmitting(false);
+      setViewState('dashboard');
+    }, 1000);
+  };
+
+  // --- Photo Upload Logic with Watermark ---
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -153,7 +172,7 @@ export default function StaffDashboardPage() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto px-4 sm:px-0">
       
       {/* ========================================== */}
-      {/* VIEW: STAFF DASHBOARD (OVERVIEW)           */}
+      {/* 1. VIEW: STAFF DASHBOARD (OVERVIEW)        */}
       {/* ========================================== */}
       {viewState === 'dashboard' && (
         <>
@@ -256,11 +275,231 @@ export default function StaffDashboardPage() {
       )}
 
       {/* ========================================== */}
-      {/* VIEW: RAISE IT TICKET FORM                 */}
+      {/* 2. VIEW: RAISE IT TICKET FORM              */}
       {/* ========================================== */}
       {viewState === 'raising_ticket' && (
         <div className="space-y-6">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
             <ArrowLeft size={16} /> Back to Dashboard
           </button>
-          <div className="bg-white p-6 sm:p
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 max-w-2xl">
+            <div className="mb-6 border-b border-gray-100 pb-4">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-4">
+                <Ticket size={24} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900">Raise IT Ticket</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Describe the issue you are facing so Admin can help.</p>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Issue Title</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Laptop screen flickering" 
+                  value={ticketForm.title}
+                  onChange={(e) => setTicketForm({...ticketForm, title: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Category</label>
+                  <select 
+                    value={ticketForm.category}
+                    onChange={(e) => setTicketForm({...ticketForm, category: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="Hardware">Hardware Issue</option>
+                    <option value="Software">Software / Access</option>
+                    <option value="Network">Network / Internet</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Priority</label>
+                  <select 
+                    value={ticketForm.priority}
+                    onChange={(e) => setTicketForm({...ticketForm, priority: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High (Urgent)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Description</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Provide more details..." 
+                  value={ticketForm.description}
+                  onChange={(e) => setTicketForm({...ticketForm, description: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+
+              <button 
+                onClick={handleSubmitTicket}
+                disabled={isSubmitting}
+                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+              >
+                {isSubmitting ? 'Submitting...' : <><Send size={18} /> Submit Ticket</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* 3. VIEW: REQUEST NEW ASSET FORM            */}
+      {/* ========================================== */}
+      {viewState === 'requesting_asset' && (
+        <div className="space-y-6">
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 max-w-2xl">
+            <div className="mb-6 border-b border-gray-100 pb-4">
+              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
+                <MonitorUp size={24} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900">Request New Asset</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Submit a request to Admin for new hardware.</p>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">What do you need?</label>
+                <select 
+                  value={assetRequestForm.category}
+                  onChange={(e) => setAssetRequestForm({...assetRequestForm, category: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                >
+                  <option value="Mouse">Mouse</option>
+                  <option value="Keyboard">Keyboard</option>
+                  <option value="Monitor">Monitor</option>
+                  <option value="Headphones">Headphones</option>
+                  <option value="Laptop Replacement">Laptop Replacement</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason for Request</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Why do you need this asset? (e.g. Current mouse is broken, need a secondary monitor for design work...)" 
+                  value={assetRequestForm.reason}
+                  onChange={(e) => setAssetRequestForm({...assetRequestForm, reason: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+
+              <button 
+                onClick={handleSubmitAssetRequest}
+                disabled={isSubmitting}
+                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+              >
+                {isSubmitting ? 'Submitting...' : <><Send size={18} /> Send Request to Admin</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* 4. VIEW: INSPECTION UPLOAD FORM            */}
+      {/* ========================================== */}
+      {viewState === 'inspecting' && selectedAsset && (
+        <div className="space-y-6">
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start mb-6 border-b border-gray-100 pb-6">
+              <div>
+                <span className="text-xs font-black text-teal-600 bg-teal-50 px-2 py-1 rounded-lg border border-teal-100 uppercase tracking-wider mb-2 inline-block">New Inspection</span>
+                <h2 className="text-2xl sm:text-3xl font-black text-gray-900">{selectedAsset.name}</h2>
+                <p className="text-sm font-bold text-gray-500 mt-1 uppercase">
+                  {selectedAsset.tagId} &bull; Category: {selectedAsset.category}
+                </p>
+              </div>
+            </div>
+
+            {selectedAsset.inspectionStatus === 'Re-inspection' && selectedAsset.adminFeedback && (
+              <div className="mb-8 bg-orange-50 border border-orange-200 rounded-2xl p-5">
+                <h3 className="text-sm font-black text-orange-900 flex items-center gap-2 mb-2">
+                  <ShieldAlert size={18} className="text-orange-600" /> Admin requested a Re-inspection
+                </h3>
+                <p className="text-sm font-bold text-orange-800 leading-relaxed">
+                  "{selectedAsset.adminFeedback}"
+                </p>
+              </div>
+            )}
+
+            <div className="mb-8">
+              <h3 className="text-lg font-black text-gray-900 mb-2 flex items-center gap-2">
+                <Camera size={20} className="text-teal-600" /> Upload Photos
+              </h3>
+              <p className="text-sm font-bold text-teal-800 bg-teal-50 p-3 sm:p-4 rounded-xl border border-teal-100 mb-6">
+                {isLaptop ? 'Laptop Rules: All 5 angles required.' : 'Standard Rules: 2 angles required.'} Photos are watermarked.
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {requiredLabels.map((label, index) => (
+                  <div key={index} className="flex flex-col">
+                    <label className="text-[11px] sm:text-xs uppercase font-black text-gray-500 mb-2 h-8 flex items-end break-words leading-tight">
+                      {label} *
+                    </label>
+                    {photos[label] ? (
+                      <div className="relative w-full aspect-square rounded-2xl border border-gray-200 shadow-sm overflow-hidden group">
+                        <img src={photos[label]} alt={label} className="w-full h-full object-cover" />
+                        <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-sm"><CheckCircle2 size={12} /></div>
+                        <button type="button" onClick={() => removePhoto(label)} className="absolute bottom-2 right-2 bg-red-600 hover:bg-red-700 text-white p-2 rounded-xl shadow-md transition-colors z-20">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative w-full aspect-square rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-teal-50 hover:border-teal-400 transition-colors flex flex-col items-center justify-center cursor-pointer overflow-hidden">
+                        <input type="file" accept="image/*" capture="environment" onChange={(e) => handlePhotoUpload(e, label)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"/>
+                        <Camera size={28} className="text-gray-400 mb-2" />
+                        <span className="text-[11px] font-bold text-gray-500 text-center px-2">Tap to Add</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <h3 className="text-lg font-black text-gray-900 mb-3 flex items-center gap-2">
+                <MessageSquare size={20} className="text-teal-600" /> Condition Notes
+              </h3>
+              <textarea 
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Describe current condition..."
+                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl text-sm font-medium text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500"
+                rows={4}
+              />
+            </div>
+
+            <div className="flex justify-end pt-6 border-t border-gray-100">
+              <button 
+                onClick={handleSubmitInspection}
+                disabled={isSubmitting} 
+                className="w-full sm:w-auto px-8 py-4 bg-teal-600 hover:bg-teal-700 text-white text-[15px] font-black rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 min-w-[200px]"
+              >
+                {isSubmitting ? 'Submitting...' : <><Send size={18}/> Submit to Admin</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
