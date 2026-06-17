@@ -16,6 +16,8 @@ interface Asset {
   serialNumber: string;
   name: string;
   category: string;
+  brand?: string; // 🌟 ADDED BRAND
+  vendor?: string; // 🌟 ADDED VENDOR
   status: UsageStatus;
   assignedToName?: string;
   assignedToEmpId?: string;
@@ -37,10 +39,10 @@ const mockStaff: Staff[] = [
 ];
 
 const initialAssets: Asset[] = [
-  { id: '1', tagId: 'TAG-1045', serialNumber: 'SN-MAC-001', name: 'MacBook Pro 14"', category: 'Laptops', status: 'Assigned', assignedToName: 'Lakhwinder Singh', assignedToEmpId: 'EMP-001', lastInspection: '2023-10-01' },
-  { id: '2', tagId: 'TAG-2099', serialNumber: 'SN-DEL-442', name: 'Dell UltraSharp 27"', category: 'Monitors', status: 'Unassigned', lastInspection: '2023-09-15' },
-  { id: '3', tagId: 'TAG-3011', serialNumber: 'SN-LOG-991', name: 'Logitech MX Master 3', category: 'Mouse', status: 'Demo Use', lastInspection: '2023-10-10' },
-  { id: '4', tagId: 'TAG-1088', serialNumber: 'SN-MAC-002', name: 'MacBook Air M1', category: 'Laptops', status: 'Under Repair', lastInspection: '2023-08-20' },
+  { id: '1', tagId: 'TAG-1045', serialNumber: 'SN-MAC-001', name: 'MacBook Pro 14"', category: 'Laptops', brand: 'Apple', vendor: 'Imagine Store', status: 'Assigned', assignedToName: 'Lakhwinder Singh', assignedToEmpId: 'EMP-001', lastInspection: '2023-10-01' },
+  { id: '2', tagId: 'TAG-2099', serialNumber: 'SN-DEL-442', name: 'Dell UltraSharp 27"', category: 'Monitors', brand: 'Dell', vendor: 'Amazon Business', status: 'Unassigned', lastInspection: '2023-09-15' },
+  { id: '3', tagId: 'TAG-3011', serialNumber: 'SN-LOG-991', name: 'Logitech MX Master 3', category: 'Mouse', brand: 'Logitech', vendor: 'BestBuy', status: 'Demo Use', lastInspection: '2023-10-10' },
+  { id: '4', tagId: 'TAG-1088', serialNumber: 'SN-MAC-002', name: 'MacBook Air M1', category: 'Laptops', brand: 'Apple', vendor: 'Imagine Store', status: 'Under Repair', lastInspection: '2023-08-20' },
 ];
 
 const CATEGORIES = ['Laptops', 'Monitors', 'Keyboards', 'Mouse', 'Headphones', 'Stands', 'Cleaning Kits', 'Others'];
@@ -63,6 +65,8 @@ export default function AdminAssetsPage() {
     serialNumber: '',
     name: '',
     category: 'Laptops',
+    brand: '', // 🌟 ADDED BRAND
+    vendor: '', // 🌟 ADDED VENDOR
     status: 'Unassigned' as UsageStatus,
     assignedToEmpId: '',
     assignedToName: '',
@@ -117,7 +121,7 @@ export default function AdminAssetsPage() {
 
   const handleOpenModal = () => {
     const randomTag = `TAG-${Math.floor(Math.random() * 9000) + 1000}`;
-    setFormData({ tagId: randomTag, serialNumber: '', name: '', category: 'Laptops', status: 'Unassigned', assignedToEmpId: '', assignedToName: '' });
+    setFormData({ tagId: randomTag, serialNumber: '', name: '', category: 'Laptops', brand: '', vendor: '', status: 'Unassigned', assignedToEmpId: '', assignedToName: '' });
     setIsModalOpen(true);
   };
 
@@ -140,27 +144,21 @@ export default function AdminAssetsPage() {
     }
   };
 
-  // THE NEW TEMPLATE DOWNLOADER FUNCTION
   const handleDownloadTemplate = () => {
-    // 1. Create CSV formatting (headers + 2 sample rows)
+    // 🌟 ADDED BRAND AND VENDOR TO THE CSV TEMPLATE COLUMNS
     const csvContent = [
-      "Tag ID,Serial Number,Hardware Name,Category,Status",
-      "TAG-9001,SN-BULK-001,ThinkPad T14,Laptops,Unassigned",
-      "TAG-9002,SN-BULK-002,Dell 24 inch Monitor,Monitors,Demo Use"
+      "Tag ID,Serial Number,Hardware Name,Category,Brand,Vendor,Status",
+      "TAG-9001,SN-BULK-001,ThinkPad T14,Laptops,Lenovo,Amazon Business,Unassigned",
+      "TAG-9002,SN-BULK-002,Dell 24 inch Monitor,Monitors,Dell,BestBuy,Demo Use"
     ].join("\n");
 
-    // 2. Create a Blob from the text
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    
-    // 3. Create a download link and trigger it
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', 'Asset_Upload_Template.csv');
     document.body.appendChild(link);
     link.click();
-    
-    // 4. Clean up
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
@@ -173,10 +171,10 @@ export default function AdminAssetsPage() {
     
     // Simulate API delay for upload
     setTimeout(() => {
-      // Create some fake items that were "uploaded" from the CSV
+      // 🌟 INCLUDED BRAND AND VENDOR IN THE MOCK BULK ITEMS
       const mockBulkItems: Asset[] = [
-        { id: `AST-${Date.now()}-1`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-001', name: 'ThinkPad T14', category: 'Laptops', status: 'Unassigned', lastInspection: 'Pending' },
-        { id: `AST-${Date.now()}-2`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-002', name: 'Dell 24" Monitor', category: 'Monitors', status: 'Unassigned', lastInspection: 'Pending' }
+        { id: `AST-${Date.now()}-1`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-001', name: 'ThinkPad T14', category: 'Laptops', brand: 'Lenovo', vendor: 'Amazon Business', status: 'Unassigned', lastInspection: 'Pending' },
+        { id: `AST-${Date.now()}-2`, tagId: `TAG-${Math.floor(Math.random() * 9000) + 1000}`, serialNumber: 'SN-BULK-002', name: 'Dell 24" Monitor', category: 'Monitors', brand: 'Dell', vendor: 'BestBuy', status: 'Unassigned', lastInspection: 'Pending' }
       ];
       
       setAssets(prev => [...mockBulkItems, ...prev]);
@@ -184,7 +182,7 @@ export default function AdminAssetsPage() {
       setIsBulkModalOpen(false);
       setSelectedFile(null);
       alert(`Successfully uploaded ${selectedFile.name} and imported ${mockBulkItems.length} assets!`);
-    }, 2000); // 2 second mock delay
+    }, 2000); 
   };
 
   const filteredStaff = mockStaff.filter(s => 
@@ -195,7 +193,8 @@ export default function AdminAssetsPage() {
   const filteredAssets = assets.filter(a => 
     a.tagId.toLowerCase().includes(searchAssetQuery.toLowerCase()) || 
     a.serialNumber.toLowerCase().includes(searchAssetQuery.toLowerCase()) ||
-    a.name.toLowerCase().includes(searchAssetQuery.toLowerCase())
+    a.name.toLowerCase().includes(searchAssetQuery.toLowerCase()) ||
+    (a.brand && a.brand.toLowerCase().includes(searchAssetQuery.toLowerCase()))
   );
 
   const getStatusColor = (status: UsageStatus) => {
@@ -281,7 +280,7 @@ export default function AdminAssetsPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search by Serial Number, Tag ID, or Name..." 
+              placeholder="Search by Serial Number, Tag ID, Name, or Brand..." 
               value={searchAssetQuery} onChange={(e) => setSearchAssetQuery(e.target.value)}
               className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
             />
@@ -304,9 +303,13 @@ export default function AdminAssetsPage() {
                     <Link href={`/admin/assets/${asset.id}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer block">
                       {asset.name}
                     </Link>
-                    <div className="flex gap-2 mt-1">
-                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{asset.tagId}</span>
-                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{asset.serialNumber}</span>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded" title="Tag ID">{asset.tagId}</span>
+                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded" title="Serial Number">{asset.serialNumber}</span>
+                      {/* 🌟 BRAND BADGE IN TABLE */}
+                      {asset.brand && (
+                        <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded" title="Brand">{asset.brand}</span>
+                      )}
                     </div>
                   </td>
                   <td className="p-4 text-sm font-bold text-gray-600">{asset.category}</td>
@@ -353,7 +356,6 @@ export default function AdminAssetsPage() {
                   <h3 className="font-bold text-blue-900 text-sm">Need the CSV Template?</h3>
                   <p className="text-xs text-blue-700 mt-1">Download our formatted template to ensure a smooth upload.</p>
                 </div>
-                {/* 🌟 DOWNLOAD TRIGGER FIXED HERE 🌟 */}
                 <button type="button" onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white text-blue-700 font-bold text-xs px-4 py-2 rounded-lg shadow-sm border border-blue-200 hover:bg-blue-100 transition-colors">
                   <Download size={14}/> Download Template
                 </button>
@@ -459,6 +461,18 @@ export default function AdminAssetsPage() {
                   <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold cursor-pointer">
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                </div>
+              </div>
+
+              {/* 🌟 ADDED BRAND AND VENDOR FIELDS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Brand</label>
+                  <input type="text" value={formData.brand} onChange={(e) => setFormData({...formData, brand: e.target.value})} placeholder="e.g. Apple, Dell, Lenovo" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Vendor/Supplier</label>
+                  <input type="text" value={formData.vendor} onChange={(e) => setFormData({...formData, vendor: e.target.value})} placeholder="e.g. Amazon, Local IT Store" className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" />
                 </div>
               </div>
 
