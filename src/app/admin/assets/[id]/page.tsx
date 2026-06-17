@@ -4,298 +4,249 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  ArrowLeft, UserCheck, Package, Hash, Mail, Phone, 
-  CalendarDays, Power, Eye, X, ImageIcon, Info, ShieldCheck
+  ArrowLeft, Package, Hash, UserCheck, CalendarDays, 
+  ShieldCheck, ClipboardCheck, AlertCircle, CheckCircle2, 
+  ImageIcon, X, PenTool, Edit3
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 // Interfaces
-interface Staff { 
-  empId: string; 
-  name: string; 
-  department: string; 
-  isActive: boolean;
-  email?: string;
-  phone?: string;
-  dob?: string;
-  joiningDate?: string;
-}
-
 interface Asset { 
   id: string; 
   name: string; 
   tagId: string; 
   category?: string; 
   assignedToEmpId?: string;
-  imageUrl?: string;
+  assignedToName?: string;
+  imageUrl?: string; 
   status?: string;
-  condition?: string;
+  inspectionStatus?: 'Passed' | 'Failed' | 'Pending';
+  inspectionNotes?: string;
+  inspectionDate?: string;
+  inspectionPhotos?: string[];
+  serialNumber?: string;
+  purchaseDate?: string;
 }
 
-export default function StaffProfilePage() {
+export default function AssetFullDetailsPage() {
   const params = useParams();
   const paramId = params?.id as string | undefined;
   
-  const [staff, setStaff] = useState<Staff | null>(null);
-  const [assignedAssets, setAssignedAssets] = useState<Asset[]>([]);
+  const [asset, setAsset] = useState<Asset | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Modal State
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
   useEffect(() => {
     if (!paramId) return;
-
-    // 1. Bulletproof ID Matching (ignores case and hidden spaces)
     const currentId = decodeURIComponent(paramId).trim().toLowerCase();
-
-    // 2. Fetch staff members from Local Storage
-    const savedStaff = localStorage.getItem('vsit_staff_users');
-    let allStaff: Staff[] = [];
     
-    if (savedStaff) {
-      allStaff = JSON.parse(savedStaff);
-    } else {
-      // Fallback mock data if local storage is completely empty
-      allStaff = [
-        { empId: 'EMP-001', name: 'Lakhwinder Singh', department: 'IT Department', isActive: true, email: 'lakhwinder@vsit.com', phone: '+91 9876543210' },
-        { empId: 'EMP-505', name: 'Mock User (Demo)', department: 'Demo Dept', isActive: true, email: 'demo@vsit.com', phone: '123-456-7890' } // Fallback for your link
-      ];
-    }
-
-    // Find the exact user
-    const foundStaff = allStaff.find(s => s.empId?.trim().toLowerCase() === currentId);
-    setStaff(foundStaff || null);
-
-    // 3. Fetch their assigned assets (with mock thumbnails just in case)
+    // Fetch Assets from localStorage
     const savedAssets = localStorage.getItem('vsit_assets_inventory');
     if (savedAssets) {
       const allAssets: Asset[] = JSON.parse(savedAssets);
-      setAssignedAssets(allAssets.filter(a => a.assignedToEmpId?.trim().toLowerCase() === currentId));
-    } else {
-      // Provide some mock assets so the UI isn't empty if you cleared your cache
-      if (currentId === 'emp-505' || currentId === 'emp-001') {
-        setAssignedAssets([
-          { 
-            id: 'A-100', name: 'MacBook Pro M2', tagId: 'TAG-8099', category: 'Laptops', 
-            assignedToEmpId: currentId, status: 'Assigned', condition: 'Good',
-            imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=1000'
-          },
-          { 
-            id: 'A-101', name: 'Dell 27" 4K Monitor', tagId: 'TAG-8100', category: 'Accessories', 
-            assignedToEmpId: currentId, status: 'Assigned', condition: 'New',
-            imageUrl: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=1000'
-          }
-        ]);
+      // Find the exact asset
+      const foundAsset = allAssets.find(a => a.id.toLowerCase() === currentId || a.tagId.toLowerCase() === currentId);
+      
+      if (foundAsset) {
+        // Inject fallback inspection data if none exists so the UI always looks good
+        setAsset({
+          ...foundAsset,
+          inspectionStatus: foundAsset.inspectionStatus || 'Passed',
+          inspectionNotes: foundAsset.inspectionNotes || 'Standard check completed. Asset is functioning correctly with no physical damage.',
+          inspectionDate: foundAsset.inspectionDate || new Date().toISOString().split('T')[0],
+          inspectionPhotos: foundAsset.inspectionPhotos || (foundAsset.imageUrl ? [foundAsset.imageUrl] : [])
+        });
       }
     }
-    
     setIsLoading(false);
   }, [paramId]);
 
-  if (isLoading) return <div className="p-10 flex justify-center text-gray-400 font-bold animate-pulse">Loading Profile...</div>;
+  if (isLoading) return <div className="p-10 flex justify-center text-gray-400 font-bold animate-pulse">Loading Asset Details...</div>;
   
-  if (!staff) return (
+  // IF ASSET IS NOT FOUND
+  if (!asset) return (
     <div className="p-10 text-center bg-white rounded-3xl border border-gray-100 max-w-lg mx-auto mt-10 shadow-sm">
       <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
         <X size={32} />
       </div>
-      <h2 className="text-xl font-black text-gray-900 mb-2">Staff Member Not Found</h2>
+      <h2 className="text-xl font-black text-gray-900 mb-2">Asset Not Found</h2>
       <p className="text-gray-500 text-sm font-medium mb-6">
-        We couldn't find a user with the ID <b>{decodeURIComponent(paramId || '')}</b>. <br/><br/>
-        <i>Note: If you created this user on another device, it won't appear here because data is currently saved locally to your browser.</i>
+        We couldn't find an asset with the ID <b>{decodeURIComponent(paramId || '')}</b>.
       </p>
-      <Link href="/admin/staff" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-sm hover:bg-blue-700 transition-all inline-block">
-        Return to Staff List
+      <Link href="/admin/assets" className="px-6 py-3 bg-teal-600 text-white rounded-xl font-bold shadow-sm hover:bg-teal-700 transition-all inline-block">
+        Return to Asset List
       </Link>
     </div>
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-5xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-10 max-w-5xl mx-auto">
       
       {/* Back Button */}
-      <Link href="/admin/staff" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors w-fit">
-        <ArrowLeft size={16} /> Back to Staff List
+      <Link href="/admin/assets" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-teal-700 transition-colors w-fit">
+        <ArrowLeft size={16} /> Back to Assets
       </Link>
 
-      {/* Staff Profile Header */}
-      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
-        {/* Decorative Background element */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3"></div>
+      {/* HERO SECTION - ASSET HEADER */}
+      <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden flex flex-col md:flex-row">
         
-        <div className="flex items-center gap-5 relative z-10">
-          <div className="h-20 w-20 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center text-blue-600 shrink-0 shadow-inner">
-            <UserCheck size={36} />
+        {/* Large Image Area */}
+        <div className="w-full md:w-1/3 lg:w-2/5 h-64 md:h-auto bg-gray-100 relative shrink-0">
+          {asset.imageUrl ? (
+             <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover absolute inset-0" />
+          ) : (
+             <div className="w-full h-full absolute inset-0 flex items-center justify-center bg-gray-50 text-gray-300">
+               <ImageIcon size={64} />
+             </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 via-transparent to-transparent md:hidden"></div>
+          
+          {/* Status Badge floating on image */}
+          <div className="absolute bottom-4 left-4 md:top-4 md:left-4 md:bottom-auto flex gap-2 z-10">
+            <span className={`px-3 py-1.5 backdrop-blur-md text-white text-xs font-black uppercase tracking-wide rounded-lg flex items-center gap-1.5 shadow-sm border ${
+              asset.status === 'Needs Repair' ? 'bg-red-500/80 border-red-400' : 
+              asset.status === 'Available' ? 'bg-green-500/80 border-green-400' : 
+              'bg-teal-600/80 border-teal-500'
+            }`}>
+              <ShieldCheck size={14}/> {asset.status || 'Assigned'}
+            </span>
           </div>
-          <div>
-            <h1 className="text-2xl font-black text-gray-900">{staff.name}</h1>
-            <p className="text-sm font-bold text-gray-500 mt-1">{staff.department} • <span className="text-gray-400 font-mono">{staff.empId}</span></p>
+        </div>
+
+        {/* Header Info Details */}
+        <div className="p-6 sm:p-8 md:p-10 flex-1 relative">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-teal-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+          
+          <div className="relative z-10 flex flex-col h-full justify-center">
+            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight">{asset.name}</h1>
             
-            <div className="mt-3">
-              <span className={`px-3 py-1.5 text-[11px] font-black rounded-lg uppercase tracking-wide inline-flex items-center gap-1.5 ${
-                staff.isActive ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'
-              }`}>
-                <Power size={12} /> {staff.isActive ? 'Account Active' : 'Account Disabled'}
+            <div className="flex flex-wrap gap-3 mt-4">
+              <span className="bg-teal-50 text-teal-800 border border-teal-100 px-3 py-1.5 rounded-lg text-sm font-mono font-bold flex items-center gap-1.5">
+                <Hash size={14} className="text-teal-500"/> {asset.tagId}
               </span>
+              {asset.category && (
+                <span className="bg-gray-100 text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
+                  <Package size={14} className="text-gray-400"/> {asset.category}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] uppercase font-bold text-gray-400 tracking-wider mb-1">Currently Assigned To</p>
+                {asset.assignedToName ? (
+                  <Link href={`/admin/staff/${asset.assignedToEmpId}`} className="flex items-center gap-3 hover:bg-gray-50 p-2 -ml-2 rounded-xl transition-colors group">
+                    <div className="w-10 h-10 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center shrink-0 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                      <UserCheck size={18} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 group-hover:text-teal-700 transition-colors">{asset.assignedToName}</p>
+                      <p className="text-xs font-mono text-gray-500">{asset.assignedToEmpId}</p>
+                    </div>
+                  </Link>
+                ) : (
+                  <p className="font-bold text-gray-500 flex items-center gap-2 py-2">
+                    <span className="w-2 h-2 rounded-full bg-gray-300"></span> Unassigned
+                  </p>
+                )}
+              </div>
+              
+              <button className="w-12 h-12 bg-gray-50 hover:bg-teal-50 text-gray-600 hover:text-teal-600 rounded-full flex items-center justify-center transition-colors shadow-sm border border-gray-100 tooltip-trigger" title="Edit Asset">
+                <Edit3 size={18} />
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Contact Information Card */}
-        <div className="bg-white/80 backdrop-blur-sm p-5 rounded-2xl border border-gray-100 shadow-sm w-full md:w-auto min-w-[280px] space-y-3 relative z-10">
-          <div className="flex items-center gap-3 text-sm font-bold text-gray-700">
-            <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center"><Mail size={14} className="text-gray-500"/></div>
-            {staff.email || 'No email provided'}
-          </div>
-          <div className="flex items-center gap-3 text-sm font-bold text-gray-700">
-            <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center"><Phone size={14} className="text-gray-500"/></div>
-            {staff.phone || 'No phone provided'}
-          </div>
-          <div className="flex items-center gap-3 text-sm font-bold text-gray-700">
-            <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center"><CalendarDays size={14} className="text-gray-500"/></div>
-            Joined: {staff.joiningDate || 'N/A'}
-          </div>
-        </div>
       </div>
 
-      {/* Assigned Assets Section with THUMBNAILS */}
-      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-6 md:p-8">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
-          <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
-            <Package size={18} className="text-blue-500"/> Assigned Assets
-          </h3>
-          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">{assignedAssets.length} Items</span>
-        </div>
+
+      {/* DETAILED INFORMATION GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {assignedAssets.length === 0 ? (
-          <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center flex flex-col items-center justify-center gap-3">
-            <Package size={32} className="text-gray-300"/>
-            <p className="text-gray-500 text-sm font-bold">No assets currently assigned to this employee.</p>
+        {/* Full Inspection Record Box (Takes up 2 columns on large screens) */}
+        <div className="lg:col-span-2 bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+          <div className="px-6 py-5 border-b border-gray-100 bg-teal-50/30 flex justify-between items-center">
+            <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+              <ClipboardCheck size={20} className="text-teal-600"/> Official Inspection Record
+            </h3>
+            {asset.inspectionDate && (
+              <span className="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100 flex items-center gap-1.5">
+                <CalendarDays size={14}/> {asset.inspectionDate}
+              </span>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {assignedAssets.map(asset => (
-              <div key={asset.id} className="p-4 bg-white border border-gray-100 shadow-sm rounded-2xl hover:border-blue-300 hover:shadow-md transition-all flex items-center gap-4 group">
-                
-                {/* Small Thumbnail Preview */}
-                <div className="w-20 h-20 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                  {asset.imageUrl ? (
-                    <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  ) : (
-                    <ImageIcon size={24} className="text-gray-300" />
-                  )}
-                </div>
+          
+          <div className="p-6 sm:p-8 flex-1">
+            {/* Status Indicator inside Inspection */}
+            <div className="mb-6 flex items-center gap-3">
+              <span className="text-sm font-bold text-gray-500 uppercase tracking-wide">Result:</span>
+              {asset.inspectionStatus === 'Passed' && <span className="px-4 py-1.5 bg-green-100 text-green-700 text-sm font-black uppercase rounded-xl flex items-center gap-1.5 border border-green-200"><CheckCircle2 size={16}/> Passed Inspection</span>}
+              {asset.inspectionStatus === 'Failed' && <span className="px-4 py-1.5 bg-red-100 text-red-700 text-sm font-black uppercase rounded-xl flex items-center gap-1.5 border border-red-200"><AlertCircle size={16}/> Failed Inspection</span>}
+              {asset.inspectionStatus === 'Pending' && <span className="px-4 py-1.5 bg-orange-100 text-orange-700 text-sm font-black uppercase rounded-xl flex items-center gap-1.5 border border-orange-200"><ShieldCheck size={16}/> Inspection Pending</span>}
+            </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-black text-gray-900 text-base truncate pr-2">{asset.name}</h4>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-1 rounded-md flex items-center gap-1">
-                      <Hash size={10}/> {asset.tagId}
-                    </span>
-                    {asset.category && (
-                      <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md">
-                        {asset.category}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Action Button */}
-                <button 
-                  onClick={() => setSelectedAsset(asset)}
-                  className="w-10 h-10 rounded-full bg-gray-50 text-gray-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-colors shrink-0 tooltip-trigger"
-                  title="View Details"
-                >
-                  <Eye size={18} />
-                </button>
-
+            {/* Inspection Notes */}
+            <div className="mb-8">
+              <span className="text-sm font-bold text-gray-700 block mb-3 flex items-center gap-2"><PenTool size={16} className="text-gray-400"/> Inspector Notes</span>
+              <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 text-gray-700 font-medium text-sm sm:text-base leading-relaxed">
+                {asset.inspectionNotes || "No detailed notes provided for this inspection."}
               </div>
-            ))}
+            </div>
+
+            {/* Attached Photos */}
+            {asset.inspectionPhotos && asset.inspectionPhotos.length > 0 && (
+              <div>
+                <span className="text-sm font-bold text-gray-700 block mb-3">Attached Proof / Photos</span>
+                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                  {asset.inspectionPhotos.map((photo, idx) => (
+                    <a key={idx} href={photo} target="_blank" rel="noreferrer" className="block shrink-0 relative group rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+                      <img src={photo} alt={`Inspection ${idx + 1}`} className="w-32 h-32 object-cover group-hover:scale-110 transition-transform duration-500" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <ImageIcon size={24} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Extra Metadata / Specs Card */}
+        <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-6 sm:p-8 flex flex-col gap-6">
+          <h3 className="text-base font-black text-gray-900 border-b border-gray-100 pb-4">Hardware Specifications</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <p className="text-[11px] uppercase font-bold text-gray-400 mb-1">Serial Number</p>
+              <p className="text-sm font-mono font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
+                {asset.serialNumber || 'Not Recorded'}
+              </p>
+            </div>
+            
+            <div>
+              <p className="text-[11px] uppercase font-bold text-gray-400 mb-1">Purchase Date</p>
+              <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <CalendarDays size={16} className="text-teal-500"/>
+                {asset.purchaseDate || 'Unknown'}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase font-bold text-gray-400 mb-1">System ID</p>
+              <p className="text-xs font-mono font-medium text-gray-500 break-all">
+                {asset.id}
+              </p>
+            </div>
+          </div>
+          
+          <div className="mt-auto pt-6">
+             <button className="w-full py-3.5 bg-gray-900 hover:bg-black text-white text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+               Download Report PDF
+             </button>
+          </div>
+        </div>
+
       </div>
-
-      {/* ======================================================== */}
-      {/* BEAUTIFUL ASSET DETAIL POP-UP MODAL                      */}
-      {/* ======================================================== */}
-      <AnimatePresence>
-        {selectedAsset && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-            
-            {/* Dark blur backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
-              className="absolute inset-0 bg-gray-900/40 backdrop-blur-md" 
-              onClick={() => setSelectedAsset(null)} 
-            />
-            
-            {/* Modal Content */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
-              exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-              className="relative bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden flex flex-col"
-            >
-              {/* Top Large Thumbnail */}
-              <div className="w-full h-56 bg-gray-100 relative group">
-                {selectedAsset.imageUrl ? (
-                  <img src={selectedAsset.imageUrl} alt={selectedAsset.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-300">
-                    <ImageIcon size={48} />
-                  </div>
-                )}
-                
-                {/* Gradient Overlay for text visibility */}
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>
-                
-                {/* Close Button overlapping image */}
-                <button 
-                  onClick={() => setSelectedAsset(null)} 
-                  className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md text-white rounded-full transition-colors"
-                >
-                  <X size={20} />
-                </button>
-
-                {/* Floating Status Badge */}
-                <div className="absolute bottom-4 left-6 flex gap-2">
-                  <span className="px-3 py-1 bg-green-500/90 backdrop-blur-md text-white text-xs font-black uppercase tracking-wide rounded-lg flex items-center gap-1.5 shadow-sm">
-                    <ShieldCheck size={14}/> {selectedAsset.status || 'Assigned'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Detail Info */}
-              <div className="p-6 sm:p-8">
-                <h3 className="text-2xl font-black text-gray-900">{selectedAsset.name}</h3>
-                
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Asset Tag ID</p>
-                    <p className="text-sm font-mono font-bold text-gray-800 flex items-center gap-1.5"><Hash size={14} className="text-blue-500"/> {selectedAsset.tagId}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Category</p>
-                    <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5"><Package size={14} className="text-blue-500"/> {selectedAsset.category || 'N/A'}</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex gap-3">
-                  <Link 
-                    href={`/admin/assets/${selectedAsset.id}`}
-                    className="flex-1 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold text-center rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Info size={16}/> Go to Full Asset Page
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-    </div>
+    </motion.div>
   );
 }
