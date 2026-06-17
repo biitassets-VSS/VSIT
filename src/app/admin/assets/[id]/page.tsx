@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, UserCheck, Package, Hash, Mail, Phone, CalendarDays, Power } from 'lucide-react';
 
-// Updated interface to match the new Staff Data
 interface Staff { 
   empId: string; 
   name: string; 
@@ -20,32 +19,40 @@ interface Asset { id: string; name: string; tagId: string; category?: string; as
 
 export default function StaffProfilePage() {
   const params = useParams();
-  const empId = params.id as string;
+  const paramId = params?.id as string | undefined;
   
   const [staff, setStaff] = useState<Staff | null>(null);
   const [assignedAssets, setAssignedAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Get the staff member from the updated Local Storage list
+    // Wait until Next.js router passes the ID
+    if (!paramId) return;
+
+    // 1. Decode URL and convert to lowercase for bulletproof matching
+    const currentId = decodeURIComponent(paramId).toLowerCase();
+
+    // 2. Fetch staff members
     const savedStaff = localStorage.getItem('vsit_staff_users');
     if (savedStaff) {
       const allStaff: Staff[] = JSON.parse(savedStaff);
-      const foundStaff = allStaff.find(s => s.empId === empId);
+      
+      // CASE-INSENSITIVE SEARCH (Fixes the "Not found" bug!)
+      const foundStaff = allStaff.find(s => s.empId?.toLowerCase() === currentId);
       setStaff(foundStaff || null);
     }
 
-    // 2. Get their assigned assets
+    // 3. Fetch their assigned assets
     const savedAssets = localStorage.getItem('vsit_assets_inventory');
     if (savedAssets) {
       const allAssets: Asset[] = JSON.parse(savedAssets);
-      setAssignedAssets(allAssets.filter(a => a.assignedToEmpId === empId));
+      setAssignedAssets(allAssets.filter(a => a.assignedToEmpId?.toLowerCase() === currentId));
     }
     
     setIsLoading(false);
-  }, [empId]);
+  }, [paramId]);
 
-  if (isLoading) return <div className="p-10 flex justify-center text-gray-400 animate-pulse">Loading Profile...</div>;
+  if (isLoading) return <div className="p-10 flex justify-center text-gray-400 animate-pulse font-bold">Loading Profile...</div>;
   if (!staff) return <div className="p-10 text-center font-bold text-red-500 bg-red-50 rounded-2xl border border-red-100 max-w-lg mx-auto mt-10">Staff member not found. Please ensure they exist in the Staff & Users list.</div>;
 
   return (
@@ -106,7 +113,7 @@ export default function StaffProfilePage() {
             {assignedAssets.map(asset => (
               <li key={asset.id} className="p-5 bg-gray-50 border border-gray-100 rounded-xl hover:border-blue-200 transition-colors flex flex-col gap-3">
                 
-                {/* 🔗 Clickable Link to the Asset */}
+                {/* Clickable Link to the Asset */}
                 <Link href={`/admin/assets/${asset.id}`} className="font-black text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2 text-base w-fit">
                   {asset.name}
                 </Link>
