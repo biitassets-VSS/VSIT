@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   PackageSearch, Plus, UploadCloud, Search, 
   Filter, Tag, User, ArrowLeft, Download, 
-  FileSpreadsheet, CheckCircle2, AlertCircle, Trash2, Save
+  FileSpreadsheet, CheckCircle2, AlertCircle, Trash2, Save,
+  Camera, ImagePlus
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -26,12 +27,18 @@ export default function AdminAssetsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Add Single Asset State
+  // Add Single Asset State (Updated to match new design)
   const [singleAssetForm, setSingleAssetForm] = useState({
     tagId: '',
+    serialNumber: '',
     name: '',
-    category: 'Laptop',
-    status: 'Available'
+    category: '',
+    price: '',
+    purchaseDate: '',
+    warrantyExpiry: '',
+    condition: '',
+    status: 'In Stock (Available)',
+    notes: ''
   });
 
   // Mock Asset Data
@@ -42,11 +49,10 @@ export default function AdminAssetsPage() {
     { id: '4', tagId: 'AST-3005', name: 'Dell 27" 4K Monitor', category: 'Monitor', status: 'Maintenance' },
   ]);
 
-  // --- NEW: Listen for URL Parameters from Quick Actions ---
+  // --- Listen for URL Parameters from Quick Actions ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
-      // If the dashboard quick action links to /admin/assets?action=add
       if (urlParams.get('action') === 'add') {
         setViewState('add_single');
       }
@@ -54,7 +60,6 @@ export default function AdminAssetsPage() {
   }, []);
 
   // --- Handlers ---
-  
   const handleDownloadSample = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Tag ID,Asset Name,Category,Status,Assigned Employee Code\n"
@@ -89,8 +94,8 @@ export default function AdminAssetsPage() {
   };
 
   const handleAddSingleSubmit = () => {
-    if (!singleAssetForm.tagId || !singleAssetForm.name) {
-      return alert("Please fill in the Tag ID and Asset Name.");
+    if (!singleAssetForm.tagId || !singleAssetForm.name || !singleAssetForm.category) {
+      return alert("Please fill in all the required fields (*).");
     }
     
     setIsUploading(true);
@@ -100,11 +105,14 @@ export default function AdminAssetsPage() {
         tagId: singleAssetForm.tagId,
         name: singleAssetForm.name,
         category: singleAssetForm.category,
-        status: singleAssetForm.status as any
+        status: singleAssetForm.status.includes('Available') ? 'Available' : 'Maintenance'
       }, ...prev]);
       
       setIsUploading(false);
-      setSingleAssetForm({ tagId: '', name: '', category: 'Laptop', status: 'Available' });
+      setSingleAssetForm({
+        tagId: '', serialNumber: '', name: '', category: '', price: '',
+        purchaseDate: '', warrantyExpiry: '', condition: '', status: 'In Stock (Available)', notes: ''
+      });
       alert('Asset successfully added to inventory!');
       setViewState('list');
     }, 800);
@@ -121,7 +129,7 @@ export default function AdminAssetsPage() {
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-5xl mx-auto">
       
       {/* ========================================== */}
       {/* 1. ASSET LIST VIEW                         */}
@@ -136,7 +144,6 @@ export default function AdminAssetsPage() {
               <p className="text-sm font-medium text-gray-500 mt-1">Manage, track, and upload company hardware.</p>
             </div>
             <div className="flex gap-3 w-full sm:w-auto">
-              {/* BUG FIX: Added type="button" to prevent default form behaviors */}
               <button 
                 type="button"
                 onClick={() => setViewState('bulk_upload')}
@@ -241,10 +248,10 @@ export default function AdminAssetsPage() {
       {viewState === 'bulk_upload' && (
         <div className="space-y-6">
           <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to Inventory
+            <ArrowLeft size={16} /> Back to Assets
           </button>
 
-          <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-100 max-w-3xl mx-auto">
+          <div className="bg-white p-6 sm:p-10 rounded-[24px] shadow-sm border border-gray-100 max-w-3xl mx-auto">
             <div className="text-center mb-8">
               <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-teal-100">
                 <FileSpreadsheet size={32} />
@@ -317,90 +324,186 @@ export default function AdminAssetsPage() {
       )}
 
       {/* ========================================== */}
-      {/* 3. ADD SINGLE ASSET VIEW                   */}
+      {/* 3. ADD NEW ASSET VIEW (MATCHING THE IMAGE) */}
       {/* ========================================== */}
       {viewState === 'add_single' && (
         <div className="space-y-6">
-          <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to Inventory
-          </button>
           
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
-            <div className="mb-6 border-b border-gray-100 pb-5 flex items-center gap-3">
-              <div className="w-12 h-12 bg-teal-100 text-teal-600 rounded-2xl flex items-center justify-center">
-                <Plus size={24} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-gray-900">Add Single Asset</h2>
-                <p className="text-sm font-medium text-gray-500 mt-1">Manually register a new device into the system.</p>
-              </div>
-            </div>
+          {/* Header Row */}
+          <div className="flex justify-between items-center mb-2">
+            <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+              <ArrowLeft size={16} /> Back to Assets
+            </button>
+            <h2 className="text-2xl sm:text-3xl font-black text-gray-900">Add New Asset</h2>
+          </div>
 
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <form onSubmit={(e) => { e.preventDefault(); handleAddSingleSubmit(); }} className="space-y-6">
+            
+            {/* Section 1: Basic Information */}
+            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
+              <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 border-b border-gray-100">Basic Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Asset Tag ID <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Asset Tag <span className="text-red-500">*</span></label>
                   <input 
                     type="text" 
-                    placeholder="e.g. AST-5001" 
+                    placeholder="e.g. AST-1042" 
                     value={singleAssetForm.tagId}
                     onChange={(e) => setSingleAssetForm({...singleAssetForm, tagId: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Asset Name <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Serial Number</label>
                   <input 
                     type="text" 
-                    placeholder="e.g. Dell XPS 15" 
-                    value={singleAssetForm.name}
-                    onChange={(e) => setSingleAssetForm({...singleAssetForm, name: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                    placeholder="e.g. SN-9982348X" 
+                    value={singleAssetForm.serialNumber}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, serialNumber: e.target.value})}
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Category</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Asset Name <span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Dell XPS 15 Laptop" 
+                    value={singleAssetForm.name}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, name: e.target.value})}
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Category <span className="text-red-500">*</span></label>
                   <select 
                     value={singleAssetForm.category}
                     onChange={(e) => setSingleAssetForm({...singleAssetForm, category: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                    className={`w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none ${!singleAssetForm.category ? 'text-gray-400' : 'text-gray-700'}`}
                   >
+                    <option value="" disabled>Select Category...</option>
                     <option value="Laptop">Laptop</option>
                     <option value="Desktop">Desktop</option>
                     <option value="Monitor">Monitor</option>
                     <option value="Keyboard">Keyboard</option>
                     <option value="Mouse">Mouse</option>
-                    <option value="Headphones">Headphones</option>
-                    <option value="Mobile">Mobile Device</option>
-                    <option value="Other">Other Accessories</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Initial Status</label>
-                  <select 
-                    value={singleAssetForm.status}
-                    onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
-                  >
-                    <option value="Available">Available (Ready to Assign)</option>
-                    <option value="Maintenance">Maintenance (Under Repair)</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
               </div>
+            </div>
 
+            {/* Section 2: Purchase & Warranty */}
+            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
+              <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 border-b border-gray-100">Purchase & Warranty</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Price / Cost <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
+                    <input 
+                      type="number" 
+                      placeholder="0.00" 
+                      value={singleAssetForm.price}
+                      onChange={(e) => setSingleAssetForm({...singleAssetForm, price: e.target.value})}
+                      className="w-full bg-white border border-gray-200 pl-8 pr-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Purchase Date <span className="text-red-500">*</span></label>
+                  <input 
+                    type="date" 
+                    value={singleAssetForm.purchaseDate}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, purchaseDate: e.target.value})}
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Warranty Expiry</label>
+                  <input 
+                    type="date" 
+                    value={singleAssetForm.warrantyExpiry}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, warrantyExpiry: e.target.value})}
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Condition & Status */}
+            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
+              <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 border-b border-gray-100">Condition & Status</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Asset Condition <span className="text-red-500">*</span></label>
+                  <select 
+                    value={singleAssetForm.condition}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, condition: e.target.value})}
+                    className={`w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none ${!singleAssetForm.condition ? 'text-gray-400' : 'text-gray-700'}`}
+                  >
+                    <option value="" disabled>Select Condition...</option>
+                    <option value="New">New</option>
+                    <option value="Good">Good</option>
+                    <option value="Fair">Fair</option>
+                    <option value="Poor">Poor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Current Status <span className="text-red-500">*</span></label>
+                  <select 
+                    value={singleAssetForm.status}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value})}
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                  >
+                    <option value="In Stock (Available)">In Stock (Available)</option>
+                    <option value="Maintenance">Maintenance / Repair</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">Condition Notes</label>
+                <textarea 
+                  rows={3}
+                  placeholder="Describe any physical issues..." 
+                  value={singleAssetForm.notes}
+                  onChange={(e) => setSingleAssetForm({...singleAssetForm, notes: e.target.value})}
+                  className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none placeholder-gray-400 resize-y"
+                />
+              </div>
+            </div>
+
+            {/* Section 4: Upload Photos */}
+            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 mb-6">
+              <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 flex items-center gap-2 border-b border-gray-100">
+                <Camera size={20} className="text-teal-600" /> Upload Photos
+              </h3>
+              <div className="border-2 border-dashed border-gray-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-gray-50/50">
+                <ImagePlus size={32} className="text-gray-300 mb-3" />
+                <p className="text-sm font-bold text-gray-500">
+                  {singleAssetForm.category ? 'Click here to upload photos.' : 'Select a Category above to enable uploads.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-4 border-t border-gray-200 pt-6">
               <button 
-                type="button"
-                onClick={handleAddSingleSubmit}
-                disabled={isUploading}
-                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-4"
+                type="button" 
+                onClick={() => setViewState('list')} 
+                className="px-6 py-3.5 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm"
               >
-                {isUploading ? 'Saving Asset...' : <><Save size={18} /> Save Asset to Inventory</>}
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                disabled={isUploading}
+                className="px-8 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex items-center gap-2 text-sm"
+              >
+                {isUploading ? 'Saving...' : <><Save size={18} /> Save Asset</>}
               </button>
             </div>
-          </div>
+          </form>
+
         </div>
       )}
 
