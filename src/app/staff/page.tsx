@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Package, CheckCircle2, AlertCircle, Camera, 
   ArrowLeft, Trash2, MessageSquare, ShieldAlert, Send,
-  Ticket, PlusCircle, Timer, PauseCircle, MonitorUp
+  Ticket, PlusCircle, Timer, PauseCircle, MonitorUp, ImagePlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -57,6 +57,8 @@ export default function StaffDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [ticketForm, setTicketForm] = useState({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
+  const [ticketPhoto, setTicketPhoto] = useState<string | null>(null); // NEW: Screenshot state for Tickets
+
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
   useEffect(() => {
@@ -98,8 +100,20 @@ export default function StaffDashboardPage() {
       setIsSubmitting(false);
       setViewState('dashboard');
       setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
+      setTicketPhoto(null); // Reset photo
       alert('Ticket raised successfully!');
     }, 1000);
+  };
+
+  // NEW: Ticket Screenshot Upload Handler
+  const handleTicketPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setTicketPhoto(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmitAssetRequest = () => {
@@ -132,7 +146,7 @@ export default function StaffDashboardPage() {
     }, 1000);
   };
 
-  // --- Photo Upload Logic with Watermark ---
+  // --- Photo Upload Logic with Watermark (For Inspections) ---
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -341,10 +355,38 @@ export default function StaffDashboardPage() {
                 />
               </div>
 
+              {/* NEW: SCREENSHOT UPLOAD SECTION */}
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Attach Screenshot (Optional)</label>
+                {ticketPhoto ? (
+                  <div className="relative w-32 h-32 rounded-2xl border border-gray-200 shadow-sm overflow-hidden group">
+                    <img src={ticketPhoto} alt="Screenshot" className="w-full h-full object-cover" />
+                    <button 
+                      type="button" 
+                      onClick={() => setTicketPhoto(null)} 
+                      className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-lg shadow-md transition-colors z-20"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative w-full sm:w-64 h-32 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-teal-50 hover:border-teal-400 transition-colors flex flex-col items-center justify-center cursor-pointer overflow-hidden">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleTicketPhotoUpload} 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+                    />
+                    <ImagePlus size={24} className="text-gray-400 mb-2" />
+                    <span className="text-xs font-bold text-gray-500">Upload Image</span>
+                  </div>
+                )}
+              </div>
+
               <button 
                 onClick={handleSubmitTicket}
                 disabled={isSubmitting}
-                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-4"
               >
                 {isSubmitting ? 'Submitting...' : <><Send size={18} /> Submit Ticket</>}
               </button>
