@@ -4,9 +4,8 @@ import React, { useState } from 'react';
 import { 
   PackageSearch, Plus, UploadCloud, Search, 
   Filter, Tag, User, ArrowLeft, Download, 
-  FileSpreadsheet, CheckCircle2, AlertCircle, Trash2
+  FileSpreadsheet, CheckCircle2, AlertCircle, Trash2, Save
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 // --- Interfaces ---
 interface Asset {
@@ -22,8 +21,18 @@ interface Asset {
 export default function AdminAssetsPage() {
   const [viewState, setViewState] = useState<'list' | 'add_single' | 'bulk_upload'>('list');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Bulk Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Add Single Asset State
+  const [singleAssetForm, setSingleAssetForm] = useState({
+    tagId: '',
+    name: '',
+    category: 'Laptop',
+    status: 'Available'
+  });
 
   // Mock Asset Data
   const [assets, setAssets] = useState<Asset[]>([
@@ -37,7 +46,6 @@ export default function AdminAssetsPage() {
   
   // 1. Download Sample CSV Format
   const handleDownloadSample = () => {
-    // Define the CSV Headers and Sample Rows
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Tag ID,Asset Name,Category,Status,Assigned Employee Code\n"
       + "AST-5001,Dell Latitude 7420,Laptop,Available,\n"
@@ -63,7 +71,6 @@ export default function AdminAssetsPage() {
   // 3. Handle Bulk Upload Submit
   const handleBulkUploadSubmit = () => {
     if (!selectedFile) return alert("Please select a file first.");
-    
     setIsUploading(true);
     setTimeout(() => {
       setIsUploading(false);
@@ -71,6 +78,29 @@ export default function AdminAssetsPage() {
       alert("Assets uploaded successfully!");
       setViewState('list');
     }, 1500);
+  };
+
+  // 4. Handle Add Single Asset Submit
+  const handleAddSingleSubmit = () => {
+    if (!singleAssetForm.tagId || !singleAssetForm.name) {
+      return alert("Please fill in the Tag ID and Asset Name.");
+    }
+    
+    setIsUploading(true);
+    setTimeout(() => {
+      setAssets(prev => [{
+        id: Date.now().toString(),
+        tagId: singleAssetForm.tagId,
+        name: singleAssetForm.name,
+        category: singleAssetForm.category,
+        status: singleAssetForm.status as any
+      }, ...prev]);
+      
+      setIsUploading(false);
+      setSingleAssetForm({ tagId: '', name: '', category: 'Laptop', status: 'Available' });
+      alert('Asset successfully added to inventory!');
+      setViewState('list');
+    }, 800);
   };
 
   // Stats
@@ -91,7 +121,6 @@ export default function AdminAssetsPage() {
       {/* ========================================== */}
       {viewState === 'list' && (
         <>
-          {/* Header & Stats */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
             <div>
               <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
@@ -214,7 +243,6 @@ export default function AdminAssetsPage() {
               <p className="text-sm font-medium text-gray-500 mt-2">Upload a CSV file to add multiple assets to the inventory at once.</p>
             </div>
 
-            {/* DOWNLOAD SAMPLE BUTTON */}
             <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-start gap-3">
                 <AlertCircle size={20} className="text-blue-600 shrink-0 mt-0.5" />
@@ -231,7 +259,6 @@ export default function AdminAssetsPage() {
               </button>
             </div>
 
-            {/* DRAG AND DROP ZONE */}
             <div className="mb-8">
               <label className="block text-xs font-black text-gray-500 uppercase mb-2">Upload CSV File</label>
               <div className={`relative w-full h-48 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${selectedFile ? 'border-teal-400 bg-teal-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}>
@@ -257,7 +284,6 @@ export default function AdminAssetsPage() {
                 )}
               </div>
               
-              {/* Remove selected file button */}
               {selectedFile && (
                 <div className="flex justify-end mt-2">
                   <button onClick={() => setSelectedFile(null)} className="text-xs font-bold text-red-500 flex items-center gap-1 hover:underline">
@@ -288,9 +314,78 @@ export default function AdminAssetsPage() {
           </button>
           
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
-            <h2 className="text-2xl font-black text-gray-900 mb-6 border-b border-gray-100 pb-4">Add Single Asset</h2>
-            <div className="text-center py-10">
-               <p className="text-gray-500 font-bold">Single add form UI goes here...</p>
+            <div className="mb-6 border-b border-gray-100 pb-5 flex items-center gap-3">
+              <div className="w-12 h-12 bg-teal-100 text-teal-600 rounded-2xl flex items-center justify-center">
+                <Plus size={24} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-gray-900">Add Single Asset</h2>
+                <p className="text-sm font-medium text-gray-500 mt-1">Manually register a new device into the system.</p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Asset Tag ID <span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. AST-5001" 
+                    value={singleAssetForm.tagId}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, tagId: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Asset Name <span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Dell XPS 15" 
+                    value={singleAssetForm.name}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, name: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Category</label>
+                  <select 
+                    value={singleAssetForm.category}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, category: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="Laptop">Laptop</option>
+                    <option value="Desktop">Desktop</option>
+                    <option value="Monitor">Monitor</option>
+                    <option value="Keyboard">Keyboard</option>
+                    <option value="Mouse">Mouse</option>
+                    <option value="Headphones">Headphones</option>
+                    <option value="Mobile">Mobile Device</option>
+                    <option value="Other">Other Accessories</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Initial Status</label>
+                  <select 
+                    value={singleAssetForm.status}
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="Available">Available (Ready to Assign)</option>
+                    <option value="Maintenance">Maintenance (Under Repair)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleAddSingleSubmit}
+                disabled={isUploading}
+                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-4"
+              >
+                {isUploading ? 'Saving Asset...' : <><Save size={18} /> Save Asset to Inventory</>}
+              </button>
             </div>
           </div>
         </div>
