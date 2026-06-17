@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ClipboardCheck, Eye, ArrowLeft, CheckCircle2, 
   XCircle, Maximize2, MessageSquare, Search, 
-  User, Calendar, AlertCircle, RefreshCcw
+  User, Calendar, AlertCircle, RefreshCcw, CameraOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,12 +13,26 @@ interface InspectionReview {
   id: string;
   assetTag: string;
   assetName: string;
+  category: string; // Used to determine photo rules
   submittedBy: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Re-inspection';
   notes: string;
-  photos: string[];
+  photos: Record<string, string>; // Maps "Label" -> "Photo URL"
 }
+
+// --- Photo Rules ---
+const laptopPhotoRequirements = [
+  "Top side", 
+  "Display and Keyboard", 
+  "Right Side port", 
+  "Left Side port", 
+  "Back side with Tag id Sticker"
+];
+const standardPhotoRequirements = [
+  "Front View / Main Photo", 
+  "Back side with Tag id Sticker"
+];
 
 export default function InspectionsPage() {
   const [inspections, setInspections] = useState<InspectionReview[]>([]);
@@ -26,38 +40,43 @@ export default function InspectionsPage() {
   const [selectedItem, setSelectedItem] = useState<InspectionReview | null>(null);
   
   // Modals & Forms
-  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null);
+  const [enlargedPhoto, setEnlargedPhoto] = useState<{url: string, label: string} | null>(null);
   const [actionState, setActionState] = useState<'none' | 'reinspect' | 'reject'>('none');
   const [actionNote, setActionNote] = useState('');
 
   useEffect(() => {
-    // Simulated Data: In a real app, you would fetch items with 'Pending' status
+    // Simulated Data with Correct Labeled Photos
     setInspections([
       {
         id: 'INSP-001',
         assetTag: 'AST-1042',
         assetName: 'Dell XPS 15 Laptop',
+        category: 'Laptop',
         submittedBy: 'Rahul Sharma',
         date: new Date().toISOString().split('T')[0],
         status: 'Pending',
         notes: 'Screen and keyboard are in good condition. Ports are working fine. Found a minor scratch on the back panel but no major damage.',
-        photos: [
-          'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80'
-        ]
+        photos: {
+          "Top side": "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80",
+          "Display and Keyboard": "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=80",
+          "Right Side port": "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80",
+          "Left Side port": "https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=80",
+          "Back side with Tag id Sticker": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"
+        }
       },
       {
         id: 'INSP-002',
         assetTag: 'AST-2099',
         assetName: 'Logitech Wireless Mouse',
+        category: 'Mouse',
         submittedBy: 'Priya Desai',
         date: new Date().toISOString().split('T')[0],
         status: 'Pending',
         notes: 'Scroll wheel is slightly loose, but it works. Battery compartment is clean.',
-        photos: [
-          'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=80'
-        ]
+        photos: {
+          "Front View / Main Photo": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=80",
+          "Back side with Tag id Sticker": "https://images.unsplash.com/photo-1615663245857-ac1eeb536fcb?auto=format&fit=crop&w=800&q=80" // Simulated tag photo
+        }
       }
     ]);
   }, []);
@@ -93,6 +112,10 @@ export default function InspectionsPage() {
     
     setViewState('list');
   };
+
+  // Determine which labels to show based on category
+  const isLaptop = selectedItem?.category?.toLowerCase().includes('laptop');
+  const requiredLabels = isLaptop ? laptopPhotoRequirements : standardPhotoRequirements;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -192,7 +215,9 @@ export default function InspectionsPage() {
                   <div>
                     <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 uppercase tracking-wider mb-2 inline-block">Reviewing Submission</span>
                     <h2 className="text-2xl font-black text-gray-900">{selectedItem.assetName}</h2>
-                    <p className="text-sm font-bold text-gray-500 mt-1 uppercase">{selectedItem.assetTag}</p>
+                    <p className="text-sm font-bold text-gray-500 mt-1 uppercase">
+                      {selectedItem.assetTag} &bull; Category: {selectedItem.category}
+                    </p>
                   </div>
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-bold text-gray-400">Submitted By</p>
@@ -212,20 +237,46 @@ export default function InspectionsPage() {
                 </div>
               </div>
 
-              {/* Photo Gallery */}
+              {/* Labeled Photo Gallery (Strictly checks expected slots) */}
               <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-black text-gray-900 mb-4">Uploaded Photos ({selectedItem.photos.length})</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {selectedItem.photos.map((photo, index) => (
-                    <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200 group bg-gray-50">
-                      <img src={photo} alt="Inspection" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <button onClick={() => setEnlargedPhoto(photo)} className="bg-white text-gray-900 px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg transform scale-95 group-hover:scale-100 transition-all">
-                          <Maximize2 size={16} /> View Clear
-                        </button>
+                <h3 className="text-lg font-black text-gray-900 mb-2">
+                  Photo Verification
+                </h3>
+                <p className="text-sm font-bold text-gray-500 mb-6">
+                  {isLaptop ? 'Laptop rules active: 5 angles required.' : 'Standard rules active: 2 angles required.'}
+                </p>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  {requiredLabels.map((label, index) => {
+                    const photoUrl = selectedItem.photos[label];
+                    
+                    return (
+                      <div key={index} className="flex flex-col">
+                        <label className="text-[11px] uppercase font-black text-teal-800 mb-2 leading-tight min-h-[28px] flex items-end">
+                          {label}
+                        </label>
+                        
+                        {photoUrl ? (
+                          <div className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200 group bg-gray-50 shadow-sm">
+                            <img src={photoUrl} alt={label} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gray-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                              <button 
+                                onClick={() => setEnlargedPhoto({ url: photoUrl, label: label })} 
+                                className="bg-white text-gray-900 px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg transform scale-95 group-hover:scale-100 transition-all"
+                              >
+                                <Maximize2 size={16} /> View Clear
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative aspect-square rounded-2xl border-2 border-dashed border-red-300 bg-red-50 flex flex-col items-center justify-center text-center p-4">
+                            <CameraOff size={28} className="text-red-400 mb-2" />
+                            <span className="text-xs font-black text-red-600">Missing Photo</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -237,22 +288,14 @@ export default function InspectionsPage() {
                 
                 {actionState === 'none' ? (
                   <div className="space-y-4">
-                    {/* 1. APPROVE */}
                     <button onClick={handleApprove} className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-black rounded-2xl shadow-sm transition-all flex justify-center items-center gap-2 text-lg">
-                      <CheckCircle2 size={22} />
-                      Approve & Mark Inspected
+                      <CheckCircle2 size={22} /> Approve & Mark Inspected
                     </button>
-                    
-                    {/* 2. REQUEST RE-INSPECTION */}
                     <button onClick={() => setActionState('reinspect')} className="w-full py-4 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-[15px]">
-                      <RefreshCcw size={20} />
-                      Request Re-inspection
+                      <RefreshCcw size={20} /> Request Re-inspection
                     </button>
-
-                    {/* 3. REJECT */}
                     <button onClick={() => setActionState('reject')} className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-[15px]">
-                      <XCircle size={20} />
-                      Reject & Close
+                      <XCircle size={20} /> Reject & Close
                     </button>
                   </div>
                 ) : (
@@ -272,7 +315,7 @@ export default function InspectionsPage() {
                         onChange={(e) => setActionNote(e.target.value)}
                         placeholder={
                           actionState === 'reinspect' 
-                            ? "E.g. Photos are too blurry, please retake the back side photo showing the tag." 
+                            ? "E.g. The 'Left Side port' photo is missing, please retake..." 
                             : "Explain why this submission is being completely rejected..."
                         }
                         className={`w-full bg-white border p-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 ${
@@ -310,22 +353,32 @@ export default function InspectionsPage() {
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
-            className="fixed inset-0 z-[100] bg-gray-900/95 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+            className="fixed inset-0 z-[100] bg-gray-900/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8"
           >
             <button 
               onClick={() => setEnlargedPhoto(null)}
-              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-10"
             >
               <XCircle size={32} />
             </button>
+            
             <motion.img 
               initial={{ scale: 0.9 }} 
               animate={{ scale: 1 }} 
               exit={{ scale: 0.9 }}
-              src={enlargedPhoto} 
+              src={enlargedPhoto.url} 
               alt="Enlarged" 
-              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-gray-800"
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-gray-800"
             />
+            
+            {/* Context Label at bottom of Lightbox */}
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }} 
+              animate={{ y: 0, opacity: 1 }} 
+              className="mt-6 px-6 py-3 bg-gray-800 text-white rounded-full text-sm font-black tracking-wider uppercase shadow-lg border border-gray-700"
+            >
+              {enlargedPhoto.label}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
