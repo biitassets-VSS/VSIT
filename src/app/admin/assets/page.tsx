@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link'; 
 import { 
   Search, Plus, UserCheck, Settings2, Wrench, Package, Box, CheckCircle2, 
@@ -49,6 +49,7 @@ const CATEGORIES = ['Laptops', 'Monitors', 'Keyboards', 'Mouse', 'Headphones', '
 
 export default function AdminAssetsPage() {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
+  const [isLoaded, setIsLoaded] = useState(false); // Tracks if LocalStorage is loaded
   const [searchAssetQuery, setSearchAssetQuery] = useState('');
   
   // Modal States
@@ -73,9 +74,24 @@ export default function AdminAssetsPage() {
     assignedToName: '',
   });
 
-  // Staff Combobox Search State
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
   const [isStaffDropdownOpen, setIsStaffDropdownOpen] = useState(false);
+
+  // 🌟 LOCAL STORAGE LOGIC: Load data when page opens
+  useEffect(() => {
+    const savedAssets = localStorage.getItem('vsit_assets_inventory');
+    if (savedAssets) {
+      setAssets(JSON.parse(savedAssets));
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // 🌟 LOCAL STORAGE LOGIC: Save data whenever 'assets' changes
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('vsit_assets_inventory', JSON.stringify(assets));
+    }
+  }, [assets, isLoaded]);
 
   // --- DASHBOARD CALCULATIONS ---
   const stats = useMemo(() => {
@@ -143,14 +159,11 @@ export default function AdminAssetsPage() {
     setUploadError(null);
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      
-      // Strict Check for CSV
       if (!file.name.toLowerCase().endsWith('.csv')) {
         setUploadError("Invalid file type! Please upload a .csv file. If you are using Excel, choose 'Save As > CSV'.");
         setSelectedFile(null);
         return;
       }
-      
       setSelectedFile(file);
     }
   };
@@ -176,8 +189,6 @@ export default function AdminAssetsPage() {
   const handleBulkUploadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
-
-    // Double check to prevent the gibberish issue
     if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
       setUploadError("Cannot process Excel (.xlsx) files. Please save your file as a CSV.");
       return;
@@ -196,7 +207,6 @@ export default function AdminAssetsPage() {
         const lines = csvText.split('\n');
         const newAssets: Asset[] = [];
 
-        // Loop starting from 1 to skip the Header row
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i].trim();
           if (!line) continue; 
@@ -243,6 +253,14 @@ export default function AdminAssetsPage() {
     reader.readAsText(selectedFile);
   };
 
+  // CLEAR ALL MOCK DATA UTILITY (Handy for testing)
+  const handleResetData = () => {
+    if(confirm("Are you sure you want to delete all uploaded assets and reset to default?")) {
+      setAssets(initialAssets);
+      localStorage.setItem('vsit_assets_inventory', JSON.stringify(initialAssets));
+    }
+  };
+
   const filteredStaff = mockStaff.filter(s => 
     s.name.toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
     s.empId.toLowerCase().includes(staffSearchQuery.toLowerCase())
@@ -266,6 +284,9 @@ export default function AdminAssetsPage() {
     }
   };
 
+  // Prevent hydration mismatch layout jump
+  if (!isLoaded) return <div className="p-10 flex justify-center text-gray-400 animate-pulse">Loading Inventory...</div>;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
@@ -278,6 +299,13 @@ export default function AdminAssetsPage() {
           <p className="text-sm font-medium text-gray-500 mt-1">Manage stock, track assignments, and view office usage.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
+          {/* RESET MOCK DATA BUTTON */}
+          {assets.length > initialAssets.length && (
+            <button onClick={handleResetData} className="text-xs font-bold text-red-500 hover:text-red-700 underline px-2">
+              Reset Data
+            </button>
+          )}
+
           {/* BULK UPLOAD BUTTON */}
           <button onClick={() => setIsBulkModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 hover:text-blue-700 px-5 py-2.5 rounded-xl shadow-sm transition-all font-bold text-sm">
             <Upload size={18} /> Bulk Upload
@@ -484,7 +512,6 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
-
       {/* ========================================= */}
       {/* 🚀 SINGLE "ADD NEW ASSET" MODAL (Existing)*/}
       {/* ========================================= */}
@@ -529,7 +556,7 @@ export default function AdminAssetsPage() {
                 </div>
               </div>
 
-              {/* 🌟 BRAND AND VENDOR FIELDS */}
+              {/* BRAND AND VENDOR FIELDS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Brand</label>
