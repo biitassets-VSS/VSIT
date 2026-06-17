@@ -1,350 +1,311 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
 import { 
-  Search, X, CheckCircle2, AlertTriangle, 
-  Tag, Calendar, User, FileText, 
-  ImageIcon, Eye, Clock, ShieldCheck, ThumbsDown, 
-  RefreshCcw, MessageSquare, Send, Plus, Camera, ClipboardEdit
+  ClipboardCheck, Eye, ArrowLeft, CheckCircle2, 
+  XCircle, Maximize2, MessageSquare, Search, 
+  User, Calendar, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Mock Data
-const initialInspections = [
-  { 
-    id: 1, assetId: '1', empId: 'EMP-001',
-    assetName: 'MacBook Pro M2', tagId: 'TAG-1001', date: '2024-06-10', 
-    inspector: 'John Doe (EMP-001)', status: 'Pending Review', 
-    notes: 'Everything looks good. Cleaned the screen and formatted the drive.', 
-    photo: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=1000',
-    adminFeedback: ''
-  },
-  { 
-    id: 2, assetId: '3', empId: 'EMP-002',
-    assetName: 'ThinkPad T14', tagId: 'TAG-1003', date: '2024-06-09', 
-    inspector: 'Jane Smith (EMP-002)', status: 'Pending Review', 
-    notes: 'The "Enter" key is slightly sticky, but working.', 
-    photo: '', adminFeedback: ''
-  },
-];
-
-type StatusType = 'Pending Review' | 'Passed' | 'Rejected' | 'Needs Re-inspection';
+// --- Interfaces ---
+interface InspectionReview {
+  id: string;
+  assetTag: string;
+  assetName: string;
+  submittedBy: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  notes: string;
+  photos: string[];
+}
 
 export default function InspectionsPage() {
-  const [inspections, setInspections] = useState(initialInspections);
-  const [activeTab, setActiveTab] = useState<'All' | StatusType>('Pending Review');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [inspections, setInspections] = useState<InspectionReview[]>([]);
+  const [viewState, setViewState] = useState<'list' | 'review'>('list');
+  const [selectedItem, setSelectedItem] = useState<InspectionReview | null>(null);
   
-  // Modals State
-  const [viewInspection, setViewInspection] = useState<any>(null);
-  const [showReinspectForm, setShowReinspectForm] = useState(false);
-  const [reinspectNote, setReinspectNote] = useState('');
-  
-  // --- NEW: Submit Inspection State ---
-  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
-  const [submitForm, setSubmitForm] = useState({
-    assetName: '', tagId: '', notes: '', photo: ''
-  });
+  // Modals & Forms
+  const [enlargedPhoto, setEnlargedPhoto] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
-  // --- ACTIONS ---
+  useEffect(() => {
+    // Simulated Data: In a real app, you would fetch items with 'Pending' status from localStorage or DB
+    // Here we generate 2 realistic mock inspections for you to test the UI immediately.
+    setInspections([
+      {
+        id: 'INSP-001',
+        assetTag: 'AST-1042',
+        assetName: 'Dell XPS 15 Laptop',
+        submittedBy: 'Rahul Sharma',
+        date: new Date().toISOString().split('T')[0],
+        status: 'Pending',
+        notes: 'Screen and keyboard are in good condition. Ports are working fine. Found a minor scratch on the back panel but no major damage.',
+        photos: [
+          'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80'
+        ]
+      },
+      {
+        id: 'INSP-002',
+        assetTag: 'AST-2099',
+        assetName: 'Logitech Wireless Mouse',
+        submittedBy: 'Priya Desai',
+        date: new Date().toISOString().split('T')[0],
+        status: 'Pending',
+        notes: 'Scroll wheel is slightly loose, but it works. Battery compartment is clean.',
+        photos: [
+          'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=80'
+        ]
+      }
+    ]);
+  }, []);
 
-  // Handle Admin Decision
-  const handleStatusUpdate = (id: number, newStatus: StatusType, feedback: string = '') => {
-    setInspections(inspections.map(insp => 
-      insp.id === id ? { ...insp, status: newStatus, adminFeedback: feedback } : insp
-    ));
-    setViewInspection(null);
-    setShowReinspectForm(false);
-    setReinspectNote('');
+  const openReview = (item: InspectionReview) => {
+    setSelectedItem(item);
+    setViewState('review');
+    setIsRejecting(false);
+    setRejectReason('');
   };
 
-  // Submit NEW Inspection (Staff Side)
-  const handleSubmitInspection = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newInsp = {
-      id: Date.now(), // Random ID
-      assetId: '100', // Mock link ID
-      empId: 'EMP-999', // Mock user
-      assetName: submitForm.assetName,
-      tagId: submitForm.tagId,
-      date: new Date().toISOString().split('T')[0],
-      inspector: 'Current User (EMP-999)',
-      status: 'Pending Review' as StatusType,
-      notes: submitForm.notes,
-      photo: submitForm.photo,
-      adminFeedback: ''
-    };
-    
-    // Add to top of list and switch to Pending tab
-    setInspections([newInsp, ...inspections]);
-    setIsSubmitModalOpen(false);
-    setSubmitForm({ assetName: '', tagId: '', notes: '', photo: '' });
-    setActiveTab('Pending Review');
+  const handleApprove = () => {
+    if (!selectedItem) return;
+    // Update List
+    setInspections(prev => prev.filter(i => i.id !== selectedItem.id));
+    alert(`${selectedItem.assetTag} has been Approved and marked Inspected.`);
+    setViewState('list');
   };
 
-  const closeAndResetModal = () => {
-    setViewInspection(null);
-    setShowReinspectForm(false);
-    setReinspectNote('');
-  };
-
-  const filteredInspections = inspections.filter(insp => {
-    const matchesSearch = insp.assetName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          insp.tagId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          insp.inspector.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTab = activeTab === 'All' ? true : insp.status === activeTab;
-    return matchesSearch && matchesTab;
-  });
-
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case 'Passed': return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: <CheckCircle2 size={16} /> };
-      case 'Rejected': return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <AlertTriangle size={16} /> };
-      case 'Needs Re-inspection': return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: <RefreshCcw size={16} /> };
-      case 'Pending Review': return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: <Clock size={16} /> };
-      default: return { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', icon: <FileText size={16} /> };
+  const submitRejection = () => {
+    if (!rejectReason.trim()) {
+      alert("Please provide a reason for rejection.");
+      return;
     }
+    if (!selectedItem) return;
+    
+    // Update List
+    setInspections(prev => prev.filter(i => i.id !== selectedItem.id));
+    alert(`${selectedItem.assetTag} rejected. Reason: ${rejectReason}. Notification sent to staff.`);
+    setViewState('list');
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* HEADER SECTION */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Inspection Approvals</h1>
+          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+            <ClipboardCheck size={28} className="text-teal-600" />
+            Inspection Approvals
+          </h1>
           <p className="text-sm font-medium text-gray-500 mt-1">Review staff submissions, approve assets, or request re-inspections.</p>
         </div>
-        
-        {/* NEW: Mark Inspected Button */}
-        <button 
-          onClick={() => setIsSubmitModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors"
-        >
-          <ClipboardEdit size={18} /> Mark Inspected
-        </button>
       </div>
 
-      {/* FILTERS & TABS */}
-      <div className="flex flex-col xl:flex-row gap-4 justify-between items-center bg-white p-2 pl-4 rounded-2xl shadow-sm border border-gray-100">
-        <div className="flex items-center gap-3 w-full xl:w-96">
-          <Search size={20} className="text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search by Asset, TAG ID, or Inspector..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent border-none outline-none text-sm font-medium text-gray-700 placeholder:text-gray-400" 
-          />
-        </div>
-        
-        <div className="flex bg-gray-100 p-1 rounded-xl w-full xl:w-auto overflow-x-auto">
-          {['Pending Review', 'All', 'Needs Re-inspection', 'Passed', 'Rejected'].map((tab) => {
-            const count = tab === 'All' ? inspections.length : inspections.filter(i => i.status === tab).length;
-            return (
-              <button 
-                key={tab} onClick={() => setActiveTab(tab as any)} 
-                className={`flex-1 min-w-[140px] py-2 px-3 text-sm font-bold rounded-lg transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === tab ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                {tab} 
-                <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab ? 'bg-orange-100 text-orange-600' : 'bg-gray-200 text-gray-600'}`}>{count}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* INSPECTIONS LIST */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="divide-y divide-gray-100">
-          {filteredInspections.length === 0 ? (
-            <div className="p-12 text-center flex flex-col items-center justify-center">
-              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle2 size={32} className="text-gray-300" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">All caught up!</h3>
-              <p className="text-gray-500 font-medium mt-1">No inspections matching this criteria right now.</p>
+      {/* ========================================== */}
+      {/* VIEW: LIST PENDING INSPECTIONS             */}
+      {/* ========================================== */}
+      {viewState === 'list' && (
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-lg font-black text-gray-900">Pending Reviews ({inspections.length})</h2>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+              <input type="text" placeholder="Search Tag..." className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-teal-500" />
             </div>
-          ) : (
-            filteredInspections.map((insp) => {
-              const statusStyle = getStatusConfig(insp.status);
-              return (
-                <div key={insp.id} className={`p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all ${insp.status === 'Pending Review' ? 'hover:bg-orange-50/50 bg-white' : 'hover:bg-gray-50 bg-white'}`}>
-                  
-                  <div className="flex gap-4 items-start w-full md:w-auto">
-                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center font-bold border shrink-0 ${statusStyle.bg} ${statusStyle.border} ${statusStyle.text}`}>
-                      {statusStyle.icon}
-                    </div>
-                    <div>
-                      <Link href={`/admin/assets/${insp.assetId}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors block w-fit">
-                        {insp.assetName}
-                      </Link>
-                      <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-500 mt-1">
-                        <span className="flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded-md"><Tag size={12}/> {insp.tagId}</span>
-                        <span className="flex items-center gap-1"><Calendar size={12}/> {insp.date}</span>
-                        <span className="flex items-center gap-1">
-                          <User size={12}/> 
-                          <Link href={`/admin/staff/${insp.empId}`} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors">{insp.inspector}</Link>
-                        </span>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="p-4 text-xs font-black text-gray-500 uppercase">Asset Details</th>
+                  <th className="p-4 text-xs font-black text-gray-500 uppercase hidden sm:table-cell">Submitted By</th>
+                  <th className="p-4 text-xs font-black text-gray-500 uppercase hidden md:table-cell">Date</th>
+                  <th className="p-4 text-xs font-black text-gray-500 uppercase text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inspections.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-gray-400 font-bold">
+                      <CheckCircle2 size={32} className="mx-auto mb-3 text-gray-300" />
+                      All caught up! No pending inspections.
+                    </td>
+                  </tr>
+                ) : (
+                  inspections.map((item) => (
+                    <tr key={item.id} className="border-b border-gray-50 hover:bg-teal-50/30 transition-colors group">
+                      <td className="p-4">
+                        <div className="font-black text-sm text-gray-900">{item.assetName}</div>
+                        <div className="text-xs font-bold text-teal-600 bg-teal-50 inline-block px-2 py-0.5 rounded-md mt-1 border border-teal-100">
+                          {item.assetTag}
+                        </div>
+                      </td>
+                      <td className="p-4 hidden sm:table-cell">
+                        <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                          <User size={14} className="text-gray-400"/> {item.submittedBy}
+                        </div>
+                      </td>
+                      <td className="p-4 hidden md:table-cell text-sm font-bold text-gray-500">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={14} className="text-gray-400"/> {item.date}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button onClick={() => openReview(item)} className="px-4 py-2 bg-gray-900 hover:bg-teal-600 text-white text-xs font-black rounded-lg transition-colors inline-flex items-center gap-2 shadow-sm">
+                          <Eye size={14} /> Review
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* VIEW: DETAILED REVIEW MODE                 */}
+      {/* ========================================== */}
+      {viewState === 'review' && selectedItem && (
+        <div className="space-y-6">
+          <button onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Pending List
+          </button>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* LEFT COLUMN: DETAILS & PHOTOS */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Asset Header Info */}
+              <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+                <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
+                  <div>
+                    <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100 uppercase tracking-wider mb-2 inline-block">Pending Review</span>
+                    <h2 className="text-2xl font-black text-gray-900">{selectedItem.assetName}</h2>
+                    <p className="text-sm font-bold text-gray-500 mt-1 uppercase">{selectedItem.assetTag}</p>
+                  </div>
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-bold text-gray-400">Submitted By</p>
+                    <p className="text-sm font-black text-gray-800">{selectedItem.submittedBy}</p>
+                    <p className="text-xs font-bold text-gray-500 mt-0.5">{selectedItem.date}</p>
+                  </div>
+                </div>
+
+                {/* Staff Notes */}
+                <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
+                  <h3 className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
+                    <MessageSquare size={16} className="text-blue-500"/> Staff Inspection Notes
+                  </h3>
+                  <p className="text-sm font-medium text-gray-700 leading-relaxed">
+                    "{selectedItem.notes}"
+                  </p>
+                </div>
+              </div>
+
+              {/* Photo Gallery */}
+              <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-black text-gray-900 mb-4">Uploaded Photos ({selectedItem.photos.length})</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {selectedItem.photos.map((photo, index) => (
+                    <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200 group bg-gray-50">
+                      <img src={photo} alt="Inspection" className="w-full h-full object-cover" />
+                      {/* Hover Overlay for clear view */}
+                      <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button onClick={() => setEnlargedPhoto(photo)} className="bg-white text-gray-900 px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg transform scale-95 group-hover:scale-100 transition-all">
+                          <Maximize2 size={16} /> View Clear
+                        </button>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0 border-gray-100">
-                    <span className={`px-3 py-1 text-xs font-bold rounded-lg border flex items-center gap-1.5 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
-                      {statusStyle.icon} {insp.status}
-                    </span>
-                    <button onClick={() => setViewInspection(insp)} className={`px-4 py-2 rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-sm ${insp.status === 'Pending Review' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                      {insp.status === 'Pending Review' ? 'Review Form' : 'View Details'}
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: ACTION PANEL */}
+            <div className="space-y-6">
+              <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 sticky top-6">
+                <h3 className="text-lg font-black text-gray-900 mb-6 border-b border-gray-100 pb-3">Admin Decision</h3>
+                
+                {!isRejecting ? (
+                  <div className="space-y-4">
+                    <button onClick={handleApprove} className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-black rounded-2xl shadow-sm transition-all flex justify-center items-center gap-2 text-lg">
+                      <CheckCircle2 size={22} />
+                      Approve & Mark Inspected
+                    </button>
+                    <button onClick={() => setIsRejecting(true)} className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-lg">
+                      <XCircle size={22} />
+                      Reject Inspection
                     </button>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-
-      {/* ================================================== */}
-      {/* 1. NEW MODAL: SUBMIT "MARK INSPECTED" FORM (STAFF) */}
-      {/* ================================================== */}
-      <AnimatePresence>
-        {isSubmitModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsSubmitModalOpen(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
-              
-              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-xl font-black text-gray-800 flex items-center gap-2"><ClipboardEdit size={20} className="text-blue-600"/> Submit Inspection</h2>
-                <button onClick={() => setIsSubmitModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20}/></button>
-              </div>
-
-              <form onSubmit={handleSubmitInspection} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Asset Name</label>
-                    <input type="text" required placeholder="e.g. Dell Monitor" value={submitForm.assetName} onChange={(e) => setSubmitForm({...submitForm, assetName: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">TAG ID</label>
-                    <input type="text" required placeholder="TAG-1005" value={submitForm.tagId} onChange={(e) => setSubmitForm({...submitForm, tagId: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Inspection Notes / Condition</label>
-                  <textarea required placeholder="Describe the current condition of the asset..." rows={3} value={submitForm.notes} onChange={(e) => setSubmitForm({...submitForm, notes: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium resize-none"></textarea>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Camera size={14}/> Photo Proof (URL)</label>
-                  <input type="url" placeholder="Paste image link here (optional)" value={submitForm.photo} onChange={(e) => setSubmitForm({...submitForm, photo: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <button type="button" onClick={() => setIsSubmitModalOpen(false)} className="flex-1 px-4 py-3 text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-sm transition-all flex justify-center items-center gap-2"><Send size={16}/> Submit for Review</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-
-      {/* ======================================================= */}
-      {/* 2. EXISTING MODAL: ADMIN REVIEWS FORM & VERIFIES ACTION */}
-      {/* ======================================================= */}
-      <AnimatePresence>
-        {viewInspection && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeAndResetModal} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              
-              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
-                  {viewInspection.status === 'Pending Review' ? 'Review Inspection Form' : 'Inspection Record'}
-                </h2>
-                <button onClick={closeAndResetModal} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20}/></button>
-              </div>
-
-              <div className="p-6 overflow-y-auto space-y-6">
-                <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-                  <div>
-                    <Link href={`/admin/assets/${viewInspection.assetId}`} className="text-xl font-black text-blue-600 hover:underline block">{viewInspection.assetName}</Link>
-                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-sm font-bold"><Tag size={14} /> {viewInspection.tagId}</span>
-                  </div>
-                  <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${getStatusConfig(viewInspection.status).bg} ${getStatusConfig(viewInspection.status).text} ${getStatusConfig(viewInspection.status).border}`}>
-                    <span className="text-xs font-bold uppercase opacity-80 mb-0.5">Status</span>
-                    <span className="font-black text-sm flex items-center gap-1">{getStatusConfig(viewInspection.status).icon} {viewInspection.status}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="border border-gray-100 p-3 rounded-xl">
-                    <p className="text-xs text-gray-500 font-bold mb-1 flex items-center gap-1"><User size={12}/> Submitted By</p>
-                    <Link href={`/admin/staff/${viewInspection.empId}`} className="text-sm font-bold text-blue-600 hover:underline">{viewInspection.inspector}</Link>
-                  </div>
-                  <div className="border border-gray-100 p-3 rounded-xl">
-                    <p className="text-xs text-gray-500 font-bold mb-1 flex items-center gap-1"><Calendar size={12}/> Date</p>
-                    <p className="text-sm font-bold text-gray-900">{viewInspection.date}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm text-gray-700 font-bold mb-2 flex items-center gap-1.5"><FileText size={16} className="text-orange-500"/> Inspector's Notes</p>
-                  <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 text-gray-800 font-medium text-sm leading-relaxed">{viewInspection.notes}</div>
-                </div>
-
-                {viewInspection.adminFeedback && (
-                  <div>
-                    <p className="text-sm text-blue-700 font-bold mb-2 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Admin Feedback</p>
-                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-blue-900 font-bold text-sm leading-relaxed">{viewInspection.adminFeedback}</div>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-sm text-gray-700 font-bold mb-2 flex items-center gap-1.5"><ImageIcon size={16} className="text-orange-500"/> Uploaded Photo</p>
-                  {viewInspection.photo ? (
-                    <img src={viewInspection.photo} alt="Asset" className="w-full h-64 object-cover rounded-2xl border border-gray-200 shadow-sm" />
-                  ) : (
-                    <div className="bg-gray-50 border-dashed border border-gray-300 rounded-2xl p-8 flex flex-col items-center justify-center text-gray-400">
-                      <ImageIcon size={32} className="mb-2" />
-                      <p className="text-sm font-bold">No photos attached.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ADMIN DECISION FOOTER */}
-              {viewInspection.status === 'Pending Review' ? (
-                showReinspectForm ? (
-                  <div className="px-6 py-4 border-t border-gray-100 bg-blue-50 flex flex-col gap-3">
-                    <label className="text-sm font-bold text-blue-900 flex items-center gap-1.5"><MessageSquare size={16}/> Why does this need re-inspection?</label>
-                    <textarea value={reinspectNote} onChange={(e) => setReinspectNote(e.target.value)} placeholder="e.g. Please attach a clear photo of the screen..." className="w-full px-4 py-3 rounded-xl border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none" rows={2}></textarea>
-                    <div className="flex justify-end gap-3 mt-1">
-                      <button onClick={() => setShowReinspectForm(false)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl">Cancel</button>
-                      <button onClick={() => handleStatusUpdate(viewInspection.id, 'Needs Re-inspection', reinspectNote)} disabled={!reinspectNote.trim()} className="px-5 py-2 flex items-center gap-2 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-sm"><Send size={16} /> Send Request</button>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row gap-3">
-                    <button onClick={() => setShowReinspectForm(true)} className="flex-1 flex justify-center items-center gap-2 px-4 py-3 text-sm font-bold bg-white text-blue-600 border-2 border-blue-100 hover:border-blue-500 hover:bg-blue-50 rounded-xl"><RefreshCcw size={18} /> Request Re-inspection</button>
-                    <div className="flex flex-1 gap-3">
-                      <button onClick={() => handleStatusUpdate(viewInspection.id, 'Rejected')} className="flex-1 flex justify-center items-center gap-2 px-4 py-3 text-sm font-bold bg-white text-red-600 border-2 border-red-100 hover:border-red-600 hover:bg-red-50 rounded-xl"><ThumbsDown size={18} /> Reject</button>
-                      <button onClick={() => handleStatusUpdate(viewInspection.id, 'Passed')} className="flex-1 flex justify-center items-center gap-2 px-4 py-3 text-sm font-bold bg-green-600 text-white hover:bg-green-700 shadow-sm rounded-xl"><ShieldCheck size={18} /> Approve</button>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                    <div className="bg-red-50 p-4 rounded-2xl border border-red-100">
+                      <label className="block text-sm font-black text-red-900 flex items-center gap-2 mb-2">
+                        <AlertCircle size={16} /> Reason for Rejection *
+                      </label>
+                      <textarea 
+                        autoFocus
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Explain why this inspection failed (e.g. Blurry photos, didn't report screen crack...)"
+                        className="w-full bg-white border border-red-200 p-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-400"
+                        rows={4}
+                      />
                     </div>
-                  </div>
-                )
-              ) : (
-                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                   <button onClick={closeAndResetModal} className="px-6 py-2.5 text-sm font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl">Close Record</button>
-                </div>
-              )}
-            </motion.div>
+                    
+                    <div className="flex gap-3">
+                      <button onClick={() => setIsRejecting(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">
+                        Cancel
+                      </button>
+                      <button onClick={submitRejection} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-sm transition-colors">
+                        Submit Rejection
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
           </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* FULL SCREEN PHOTO LIGHTBOX                 */}
+      {/* ========================================== */}
+      <AnimatePresence>
+        {enlargedPhoto && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-[100] bg-gray-900/95 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+          >
+            {/* Close Button */}
+            <button 
+              onClick={() => setEnlargedPhoto(null)}
+              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+            >
+              <XCircle size={32} />
+            </button>
+            
+            {/* The Image */}
+            <motion.img 
+              initial={{ scale: 0.9 }} 
+              animate={{ scale: 1 }} 
+              exit={{ scale: 0.9 }}
+              src={enlargedPhoto} 
+              alt="Enlarged" 
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-gray-800"
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 
