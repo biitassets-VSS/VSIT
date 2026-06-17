@@ -3,7 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Settings2, UserCheck, Search, X, Package, Trash2, CheckCircle2 } from 'lucide-react';
+import { 
+  ArrowLeft, Search, X, Trash2, 
+  Hash, Barcode, Monitor, LayoutGrid, Tag, Store, UserCheck
+} from 'lucide-react';
 
 type UsageStatus = 'Assigned' | 'Unassigned' | 'Demo Use' | 'Under Repair' | 'Discarded';
 
@@ -15,6 +18,8 @@ interface Staff { empId: string; name: string; department: string; }
 const mockStaff: Staff[] = [
   { empId: 'EMP-001', name: 'Lakhwinder Singh', department: 'IT Department' },
   { empId: 'EMP-002', name: 'Sarah Connor', department: 'Migrations' },
+  { empId: 'EMP-003', name: 'John Doe', department: 'Accounts' },
+  { empId: 'EMP-004', name: 'Jane Smith', department: 'Edu Calling' },
 ];
 const CATEGORIES = ['Laptops', 'Monitors', 'Keyboards', 'Mouse', 'Headphones', 'Stands', 'Cleaning Kits', 'Others'];
 
@@ -80,64 +85,142 @@ export default function EditAssetPage() {
   if (!asset) return <div className="p-10 text-center text-red-500 font-bold">Asset not found.</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-4xl mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-3xl mx-auto">
+      
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/assets" className="p-2 bg-white rounded-full border border-gray-200 shadow-sm"><ArrowLeft size={20} className="text-gray-600" /></Link>
-          <div><h1 className="text-2xl font-black text-gray-900">Edit Asset</h1><p className="text-sm text-gray-500 mt-1">ID: {asset.id}</p></div>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={handleDelete} className="flex gap-2 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl text-sm font-bold"><Trash2 size={16} /> Delete</button>
-          <button onClick={handleSaveChanges} className="flex gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl text-sm font-bold"><Save size={16} /> Save</button>
-        </div>
+        <Link href="/admin/assets" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors">
+          <ArrowLeft size={16} /> Back to Inventory
+        </Link>
+        <button onClick={handleDelete} className="flex gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-all">
+          <Trash2 size={16} /> Delete Asset
+        </button>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 space-y-8">
-        <div>
-          <h3 className="text-sm font-black uppercase mb-4 flex items-center gap-2 border-b pb-2"><Package size={16} className="text-blue-500"/> Core Identifiers</h3>
-          <div className="grid grid-cols-2 gap-5">
-            <div><label className="block text-xs font-bold mb-2">Tag ID</label><input type="text" value={asset.tagId} onChange={(e) => handleChange('tagId', e.target.value)} className="w-full px-4 py-2.5 rounded-xl border font-mono font-bold" /></div>
-            <div><label className="block text-xs font-bold mb-2">Serial Number</label><input type="text" value={asset.serialNumber} onChange={(e) => handleChange('serialNumber', e.target.value)} className="w-full px-4 py-2.5 rounded-xl border font-mono font-bold" /></div>
+      <div className="bg-white rounded-[24px] w-full shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white">
+          <div>
+            <h2 className="text-xl font-black text-gray-900">Edit Asset Details</h2>
+            <p className="text-xs font-bold text-gray-400 mt-1">ID: {asset.id}</p>
           </div>
         </div>
 
-        <div>
-          <h3 className="text-sm font-black uppercase mb-4 flex items-center gap-2 border-b pb-2"><Settings2 size={16} className="text-blue-500"/> Hardware Specs</h3>
-          <div className="grid grid-cols-2 gap-5 mb-5">
-            <div><label className="block text-xs font-bold mb-2">Name</label><input type="text" value={asset.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-4 py-2.5 rounded-xl border text-sm font-bold" /></div>
-            <div><label className="block text-xs font-bold mb-2">Category</label><select value={asset.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-2.5 rounded-xl border text-sm font-bold">{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-          </div>
-          <div className="grid grid-cols-2 gap-5">
-            <div><label className="block text-xs font-bold mb-2">Brand</label><input type="text" value={asset.brand || ''} onChange={(e) => handleChange('brand', e.target.value)} className="w-full px-4 py-2.5 rounded-xl border text-sm font-bold" /></div>
-            <div><label className="block text-xs font-bold mb-2">Vendor</label><input type="text" value={asset.vendor || ''} onChange={(e) => handleChange('vendor', e.target.value)} className="w-full px-4 py-2.5 rounded-xl border text-sm font-bold" /></div>
-          </div>
-        </div>
-
-        <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
-          <h3 className="text-sm font-black uppercase mb-4 flex items-center gap-2"><UserCheck size={16} className="text-blue-500"/> Assignment</h3>
-          <div className="grid grid-cols-2 gap-6">
+        <div className="p-8 space-y-8">
+          
+          {/* Row 1: Tag & Serial */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold mb-2">Status</label>
-              <select value={asset.status} onChange={(e) => handleStatusChange(e.target.value as UsageStatus)} className="w-full px-4 py-3 rounded-xl border text-sm font-bold bg-white">
-                <option value="Unassigned">Unassigned</option><option value="Demo Use">Demo Use</option><option value="Assigned">Assigned</option><option value="Under Repair">Under Repair</option><option value="Discarded">Discarded</option>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                <Hash size={14} className="text-gray-400"/> Asset Tag ID
+              </label>
+              <input type="text" value={asset.tagId} onChange={(e) => handleChange('tagId', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                <Barcode size={14} className="text-gray-400"/> Serial Number
+              </label>
+              <input type="text" value={asset.serialNumber} onChange={(e) => handleChange('serialNumber', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
+            </div>
+          </div>
+
+          {/* Row 2: Name & Category */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                <Monitor size={14} className="text-gray-400"/> Hardware Name
+              </label>
+              <input type="text" value={asset.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                <LayoutGrid size={14} className="text-gray-400"/> Category
+              </label>
+              <select value={asset.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all">
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div className="relative">
-              <label className="block text-xs font-bold mb-2">Assigned Employee</label>
-              <div onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)} className={`w-full px-4 py-3 rounded-xl border text-sm font-bold cursor-pointer flex justify-between bg-white ${asset.assignedToEmpId ? 'border-blue-300 bg-blue-100 text-blue-900' : 'border-gray-200 text-gray-400'}`}>
-                {asset.assignedToEmpId ? `${asset.assignedToName} (${asset.assignedToEmpId})` : 'Click to assign staff...'}<Search size={16}/>
-              </div>
-              {isStaffDropdownOpen && (
-                <div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border overflow-hidden max-h-60 flex flex-col">
-                  <div className="p-2 border-b bg-gray-50"><input autoFocus type="text" placeholder="Search..." value={staffSearchQuery} onChange={(e) => setStaffSearchQuery(e.target.value)} className="w-full px-3 py-2 rounded-lg border text-sm" /></div>
-                  <div className="overflow-y-auto">{filteredStaff.map(staff => (
-                    <div key={staff.empId} onClick={() => handleStaffSelect(staff)} className="p-3 hover:bg-blue-50 cursor-pointer border-b"><p className="text-sm font-bold">{staff.name}</p></div>
-                  ))}</div>
-                </div>
-              )}
-              {asset.assignedToEmpId && <button type="button" onClick={() => handleStatusChange('Unassigned')} className="text-xs font-bold text-red-500 mt-3 hover:underline flex items-center gap-1"><X size={14}/> Remove Assignment</button>}
+          </div>
+
+          {/* Gray Group block for Brand & Vendor */}
+          <div className="bg-gray-50 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6 border border-gray-100">
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                <Tag size={14} className="text-gray-400"/> Brand
+              </label>
+              <input type="text" value={asset.brand || ''} onChange={(e) => handleChange('brand', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                <Store size={14} className="text-gray-400"/> Vendor
+              </label>
+              <input type="text" value={asset.vendor || ''} onChange={(e) => handleChange('vendor', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
             </div>
           </div>
+
+          {/* Blue Highlight block for Assignment */}
+          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-4">
+              <UserCheck size={14} /> Usage & Assignment Status
+            </label>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Current Status</label>
+                <select 
+                  value={asset.status} 
+                  onChange={(e) => handleStatusChange(e.target.value as UsageStatus)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all shadow-sm"
+                >
+                  <option value="Unassigned">Unassigned</option>
+                  <option value="Demo Use">Demo Use</option>
+                  <option value="Assigned">Assigned (To Staff)</option>
+                  <option value="Under Repair">Under Repair</option>
+                  <option value="Discarded">Discarded</option>
+                </select>
+              </div>
+
+              <div className="relative">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Assigned Employee</label>
+                <div 
+                  onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer flex justify-between items-center transition-all shadow-sm bg-white ${
+                    asset.assignedToEmpId ? 'border-blue-300 text-blue-900' : 'border-gray-200 text-gray-400'
+                  }`}
+                >
+                  {asset.assignedToEmpId ? `${asset.assignedToName}` : 'Select Staff...'}
+                  <Search size={16} className={asset.assignedToEmpId ? 'text-blue-500' : 'text-gray-400'}/>
+                </div>
+
+                {isStaffDropdownOpen && (
+                  <div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-h-60 flex flex-col">
+                    <div className="p-2 border-b border-gray-100 bg-gray-50 sticky top-0">
+                      <input autoFocus type="text" placeholder="Search Name..." value={staffSearchQuery} onChange={(e) => setStaffSearchQuery(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-500" />
+                    </div>
+                    <div className="overflow-y-auto">
+                      {filteredStaff.map(staff => (
+                        <div key={staff.empId} onClick={() => handleStaffSelect(staff)} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50"><p className="text-sm font-bold text-gray-900">{staff.name}</p></div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {asset.assignedToEmpId && (
+                  <button type="button" onClick={() => handleStatusChange('Unassigned')} className="text-[10px] font-bold text-red-500 mt-2 hover:underline flex items-center gap-1">
+                    <X size={12}/> Remove Assignment
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="pt-2 flex gap-4">
+            <Link href="/admin/assets" className="flex items-center justify-center px-6 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
+              Cancel
+            </Link>
+            <button onClick={handleSaveChanges} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md shadow-blue-200">
+              Save Changes
+            </button>
+          </div>
+
         </div>
       </div>
     </div>
