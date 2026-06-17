@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Save, UploadCloud, ImagePlus, 
-  CheckCircle2, AlertCircle, Camera 
+  CheckCircle2, Camera, Trash2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -28,7 +28,7 @@ export default function AddNewAssetPage() {
     notes: ''
   });
 
-  // Photos State (Keyed by the specific label requirement)
+  // Photos State
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
   // Dynamic Photo Rules
@@ -44,145 +44,153 @@ export default function AddNewAssetPage() {
     "Back side with Tag id Sticker"
   ];
 
-  // Determine current requirements based on category
   const isLaptop = formData.category.toLowerCase().includes('laptop');
   const currentPhotoRequirements = formData.category 
     ? (isLaptop ? laptopPhotoRequirements : standardPhotoRequirements) 
     : [];
 
-  // Handle Input Changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear photos if category changes drastically to prevent mismatched labels
-    if (name === 'category') {
-      setPhotos({});
-    }
+    if (name === 'category') setPhotos({});
   };
 
   // =========================================================================
-  // WATERMARK & UPLOAD LOGIC
+  // OPTIMIZED WATERMARK & UPLOAD LOGIC (FIXED FOR MOBILE)
   // =========================================================================
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Read the file as a data URL
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Create a canvas to draw the image and watermark
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Draw original image
-        ctx.drawImage(img, 0, 0);
+        // Scale down huge mobile images to prevent browser crashing
+        let width = img.width;
+        let height = img.height;
+        const MAX_DIMENSION = 1200; // Safe size for quality & performance
 
-        // Configure Watermark Text (Current Date & Time)
+        if (width > height && width > MAX_DIMENSION) {
+          height = Math.round((height * MAX_DIMENSION) / width);
+          width = MAX_DIMENSION;
+        } else if (height > MAX_DIMENSION) {
+          width = Math.round((width * MAX_DIMENSION) / height);
+          height = MAX_DIMENSION;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw Resized Image
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Watermark: Date & Time
         const watermarkText = new Date().toLocaleString();
         
-        // Dynamic font size based on image dimensions
-        const fontSize = Math.max(24, img.height * 0.03); 
+        // Font size scales with image
+        const fontSize = Math.max(20, height * 0.035); 
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
 
-        const paddingX = 30;
-        const paddingY = 30;
-        const x = canvas.width - paddingX;
-        const y = canvas.height - paddingY;
+        const paddingX = Math.max(15, width * 0.02);
+        const paddingY = Math.max(15, height * 0.02);
+        const x = width - paddingX;
+        const y = height - paddingY;
 
-        // Draw Black Outline for visibility on bright photos
+        // Draw Black Outline for visibility
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = Math.max(3, fontSize * 0.1);
+        ctx.lineWidth = Math.max(3, fontSize * 0.15);
         ctx.strokeText(watermarkText, x, y);
 
-        // Draw White Text inside
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        // Draw Solid White Text inside
+        ctx.fillStyle = 'rgba(255, 255, 255, 1)';
         ctx.fillText(watermarkText, x, y);
 
-        // Get final watermarked image
+        // Output as highly compatible JPEG
         const watermarkedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-        // Save to state under the specific label
         setPhotos(prev => ({ ...prev, [label]: watermarkedDataUrl }));
+        
+        // Clear input to allow re-uploading the same file if needed
+        e.target.value = '';
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
 
+  const removePhoto = (label: string) => {
+    setPhotos(prev => {
+      const newPhotos = { ...prev };
+      delete newPhotos[label];
+      return newPhotos;
+    });
+  };
 
-  // Handle Form Submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Prepare new asset object
     const newAsset = {
       id: `AST-${Date.now()}`,
       ...formData,
-      inspectionPhotos: currentPhotoRequirements.map(req => photos[req]).filter(Boolean), // Array of uploaded photos
+      inspectionPhotos: currentPhotoRequirements.map(req => photos[req]).filter(Boolean),
       inspectionNotes: formData.notes,
       assignedToEmpId: '',
       assignedToName: '',
-      imageUrl: currentPhotoRequirements.length > 0 ? photos[currentPhotoRequirements[0]] : '', // Set first photo as thumbnail
+      imageUrl: currentPhotoRequirements.length > 0 ? photos[currentPhotoRequirements[0]] : '',
+      lastInspectionDate: new Date().toISOString().split('T')[0]
     };
 
-    // Save to LocalStorage
     const savedAssets = JSON.parse(localStorage.getItem('vsit_assets_inventory') || '[]');
-    savedAssets.unshift(newAsset); // Add to beginning of array
+    savedAssets.unshift(newAsset);
     localStorage.setItem('vsit_assets_inventory', JSON.stringify(savedAssets));
 
-    // Redirect back to list
     setTimeout(() => {
       router.push('/admin/assets');
     }, 800);
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto space-y-6 pb-12 px-4 sm:px-0 animate-in fade-in duration-500">
       
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mt-4 sm:mt-0">
         <Link href="/admin/assets" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-teal-600 transition-colors">
-          <ArrowLeft size={16} /> Back to Assets
+          <ArrowLeft size={16} /> <span className="hidden sm:inline">Back to Assets</span>
         </Link>
-        <h1 className="text-2xl font-black text-gray-900">Add New Asset</h1>
+        <h1 className="text-xl sm:text-2xl font-black text-gray-900">Add New Asset</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
         
-        {/* ========================================== */}
-        {/* 1. BASIC INFORMATION                       */}
-        {/* ========================================== */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black text-gray-900 mb-6 pb-4 border-b border-gray-100">Basic Information</h2>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+        {/* 1. BASIC INFORMATION */}
+        <div className="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-black text-gray-900 mb-5 pb-3 border-b border-gray-100">Basic Information</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Asset Tag *</label>
-              <input required type="text" name="tagId" value={formData.tagId} onChange={handleInputChange} placeholder="e.g. AST-1042" className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Asset Tag *</label>
+              <input required type="text" name="tagId" value={formData.tagId} onChange={handleInputChange} placeholder="e.g. AST-1042" className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Serial Number</label>
-              <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} placeholder="e.g. SN-9982348X" className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Serial Number</label>
+              <input type="text" name="serialNumber" value={formData.serialNumber} onChange={handleInputChange} placeholder="e.g. SN-9982348X" className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Asset Name / Description *</label>
-              <input required type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="e.g. Dell XPS 15 Laptop" className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Asset Name *</label>
+              <input required type="text" name="name" value={formData.name} onChange={handleInputChange} placeholder="e.g. Dell XPS 15 Laptop" className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Category *</label>
-              <select required name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all">
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Category *</label>
+              <select required name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all">
                 <option value="">Select Category...</option>
                 <option value="Laptops">Laptops</option>
                 <option value="Desktops">Desktops</option>
@@ -192,48 +200,37 @@ export default function AddNewAssetPage() {
               </select>
             </div>
           </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Vendor / Supplier</label>
-            <input type="text" name="vendor" value={formData.vendor} onChange={handleInputChange} placeholder="e.g. Dell Store, Amazon" className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
-          </div>
         </div>
 
-        {/* ========================================== */}
-        {/* 2. PURCHASE & WARRANTY DETAILS             */}
-        {/* ========================================== */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black text-gray-900 mb-6 pb-4 border-b border-gray-100">Purchase & Financial</h2>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Price / Cost *</label>
+        {/* 2. PURCHASE & WARRANTY DETAILS */}
+        <div className="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-black text-gray-900 mb-5 pb-3 border-b border-gray-100">Purchase & Warranty</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+            <div className="sm:col-span-2 md:col-span-1">
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Price / Cost *</label>
               <div className="relative">
-                <span className="absolute left-4 top-3 text-gray-500 font-bold">₹</span>
-                <input required type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="0.00" className="w-full bg-white border border-gray-200 pl-8 pr-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+                <span className="absolute left-4 top-3.5 sm:top-4 text-gray-500 font-bold">₹</span>
+                <input required type="number" name="price" value={formData.price} onChange={handleInputChange} placeholder="0.00" className="w-full bg-gray-50 border border-gray-200 pl-8 pr-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Purchase Date *</label>
-              <input required type="date" name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Purchase Date *</label>
+              <input required type="date" name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Warranty Expiry</label>
-              <input type="date" name="warranty" value={formData.warranty} onChange={handleInputChange} className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Warranty Expiry</label>
+              <input type="date" name="warranty" value={formData.warranty} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all" />
             </div>
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* 3. CONDITION & STATUS                      */}
-        {/* ========================================== */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black text-gray-900 mb-6 pb-4 border-b border-gray-100">Condition & Status</h2>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+        {/* 3. CONDITION & STATUS */}
+        <div className="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-black text-gray-900 mb-5 pb-3 border-b border-gray-100">Condition & Status</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Asset Condition *</label>
-              <select required name="condition" value={formData.condition} onChange={handleInputChange} className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all">
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Asset Condition *</label>
+              <select required name="condition" value={formData.condition} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all">
                 <option value="">Select Condition...</option>
                 <option value="Brand New">Brand New</option>
                 <option value="Good">Good</option>
@@ -242,8 +239,8 @@ export default function AddNewAssetPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Current Status *</label>
-              <select required name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all">
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Current Status *</label>
+              <select required name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all">
                 <option value="In Stock">In Stock (Available)</option>
                 <option value="Assigned">Assigned</option>
                 <option value="Repair">Needs Repair</option>
@@ -251,68 +248,66 @@ export default function AddNewAssetPage() {
               </select>
             </div>
           </div>
-
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Notes for Current Condition</label>
-            <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={3} placeholder="Describe any scratches, dents, or specific conditions..." className="w-full bg-white border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all"></textarea>
+            <label className="block text-sm font-bold text-gray-700 mb-1.5">Condition Notes</label>
+            <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={3} placeholder="Describe any physical issues..." className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"></textarea>
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* 4. UPLOADED PHOTOS (DYNAMIC & WATERMARKED) */}
-        {/* ========================================== */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2 mb-6 pb-4 border-b border-gray-100">
-            <Camera size={20} className="text-teal-600"/> Uploaded Photos (Watermarked)
+        {/* 4. PHOTOS WITH MOBILE-FRIENDLY UPLOAD */}
+        <div className="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2 mb-5 pb-3 border-b border-gray-100">
+            <Camera size={20} className="text-teal-600"/> Upload Photos
           </h2>
           
           {!formData.category ? (
             <div className="p-8 border-2 border-dashed border-gray-200 bg-gray-50 rounded-2xl flex flex-col items-center justify-center text-center">
               <ImagePlus size={32} className="text-gray-300 mb-3" />
-              <p className="text-gray-500 font-bold text-sm">Please select a Category above to see photo requirements.</p>
+              <p className="text-gray-500 font-bold text-sm">Select a Category above to enable uploads.</p>
             </div>
           ) : (
             <div>
-              <p className="text-sm font-bold text-gray-500 mb-4 bg-teal-50 text-teal-800 p-3 rounded-xl border border-teal-100">
-                Rule: {isLaptop ? 'Laptop Selected. 5 photos required.' : 'Standard Asset. 2 photos required.'} Photos will be automatically watermarked with date and time.
+              <p className="text-xs sm:text-sm font-bold text-teal-800 bg-teal-50 p-3 sm:p-4 rounded-xl border border-teal-100 mb-6">
+                {isLaptop ? 'Laptop Selected: 5 photos required.' : 'Standard Asset: 2 photos required.'} Photos are auto-watermarked with Date/Time.
               </p>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {currentPhotoRequirements.map((label, index) => (
-                  <div key={index} className="flex flex-col relative group">
-                    <label className="text-[10px] uppercase font-black text-gray-500 mb-1.5 h-6 flex items-end line-clamp-1" title={label}>
+                  <div key={index} className="flex flex-col">
+                    <label className="text-[10px] sm:text-xs uppercase font-black text-gray-500 mb-2 h-8 flex items-end break-words leading-tight" title={label}>
                       {label} *
                     </label>
                     
-                    <div className="relative w-full aspect-square rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 overflow-hidden hover:border-teal-400 hover:bg-teal-50 transition-colors flex flex-col items-center justify-center cursor-pointer">
-                      
-                      {/* Hidden File Input */}
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={(e) => handlePhotoUpload(e, label)}
-                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                        required={!photos[label]} // Required if photo hasn't been uploaded
-                      />
-                      
-                      {/* Show Uploaded Photo OR Placeholder */}
-                      {photos[label] ? (
-                        <>
-                          <img src={photos[label]} alt={label} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                            <span className="text-white text-xs font-bold flex items-center gap-1"><UploadCloud size={14}/> Change</span>
-                          </div>
-                          <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-sm">
-                            <CheckCircle2 size={12} />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-gray-400 flex flex-col items-center">
-                          <UploadCloud size={24} className="mb-2" />
-                          <span className="text-[10px] font-bold text-gray-500">Tap to Upload</span>
+                    {photos[label] ? (
+                      // Photo Uploaded View
+                      <div className="relative w-full aspect-square rounded-2xl border border-gray-200 shadow-sm overflow-hidden group">
+                        <img src={photos[label]} alt={label} className="w-full h-full object-cover" />
+                        <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-sm">
+                          <CheckCircle2 size={12} />
                         </div>
-                      )}
-                    </div>
+                        {/* Remove Button for Mobile/Desktop */}
+                        <button type="button" onClick={() => removePhoto(label)} className="absolute bottom-2 right-2 bg-red-600 hover:bg-red-700 text-white p-2 rounded-xl shadow-md transition-colors z-20">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      // Upload Target View (Highly tap-friendly for mobile)
+                      <div className="relative w-full aspect-square rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-teal-50 hover:border-teal-400 transition-colors flex flex-col items-center justify-center cursor-pointer overflow-hidden">
+                        
+                        {/* THE INPUT: Hidden visually, covers entire box securely */}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          capture="environment"
+                          onChange={(e) => handlePhotoUpload(e, label)}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+                          required={true}
+                        />
+                        
+                        <Camera size={28} className="text-gray-400 mb-2" />
+                        <span className="text-[11px] font-bold text-gray-500 text-center px-2">Tap to Add</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -320,14 +315,12 @@ export default function AddNewAssetPage() {
           )}
         </div>
 
-        {/* ========================================== */}
-        {/* SUBMIT BUTTON                              */}
-        {/* ========================================== */}
-        <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
-          <Link href="/admin/assets" className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors">
+        {/* SUBMIT BUTTON (LOGO COLOR - TEAL) */}
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
+          <Link href="/admin/assets" className="w-full sm:w-auto px-6 py-4 sm:py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors text-center">
             Cancel
           </Link>
-          <button type="submit" disabled={isSubmitting} className="px-8 py-3.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 min-w-[160px]">
+          <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-8 py-4 sm:py-3.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 min-w-[160px]">
             {isSubmitting ? (
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
             ) : (
