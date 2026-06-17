@@ -55,7 +55,11 @@ export default function AdminAssetsPage() {
   }, []);
 
   useEffect(() => {
-    if (isLoaded) localStorage.setItem('vsit_assets_inventory', JSON.stringify(assets));
+    if (isLoaded) {
+      localStorage.setItem('vsit_assets_inventory', JSON.stringify(assets));
+      // 🚀 REAL-TIME UPDATE TRIGGER FOR SIDEBAR
+      window.dispatchEvent(new Event('inventoryUpdated'));
+    }
   }, [assets, isLoaded]);
 
   const stats = useMemo(() => {
@@ -153,6 +157,12 @@ export default function AdminAssetsPage() {
     reader.readAsText(selectedFile);
   };
 
+  const handleResetData = () => {
+    if(confirm("Are you sure you want to clear inventory?")) {
+      setAssets(initialAssets); 
+    }
+  };
+
   const filteredStaff = mockStaff.filter(s => s.name.toLowerCase().includes(staffSearchQuery.toLowerCase()) || s.empId.toLowerCase().includes(staffSearchQuery.toLowerCase()));
   const filteredAssets = assets.filter(a => a.tagId.toLowerCase().includes(searchAssetQuery.toLowerCase()) || a.serialNumber.toLowerCase().includes(searchAssetQuery.toLowerCase()) || a.name.toLowerCase().includes(searchAssetQuery.toLowerCase()) || (a.brand && a.brand.toLowerCase().includes(searchAssetQuery.toLowerCase())));
   const getStatusColor = (status: UsageStatus) => {
@@ -171,19 +181,20 @@ export default function AdminAssetsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* HEADER */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2"><Package className="text-blue-600" /> Asset Inventory</h1>
           <p className="text-sm font-medium text-gray-500 mt-1">Manage stock, track assignments, and view office usage.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
+          {assets.length > initialAssets.length && (
+            <button onClick={handleResetData} className="text-xs font-bold text-red-500 hover:text-red-700 underline px-2">Reset Data</button>
+          )}
           <button onClick={() => setIsBulkModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-gray-700 hover:text-blue-700 px-5 py-2.5 rounded-xl shadow-sm transition-all font-bold text-sm"><Upload size={18} /> Bulk Upload</button>
           <button onClick={handleOpenModal} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm"><Plus size={18} /> Add New</button>
         </div>
       </div>
 
-      {/* DASHBOARD WIDGETS */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-center"><span className="text-gray-500 font-bold text-xs uppercase tracking-wider mb-1">Total Assets</span><span className="text-3xl font-black text-gray-900">{stats.total}</span></div>
         <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex flex-col justify-center"><span className="text-blue-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1"><UserCheck size={14}/> Assigned</span><span className="text-3xl font-black text-blue-900">{stats.assigned}</span></div>
@@ -192,7 +203,6 @@ export default function AdminAssetsPage() {
         <div className="bg-red-50 p-5 rounded-2xl border border-red-100 flex flex-col justify-center"><span className="text-red-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1"><Trash2 size={14}/> Discarded</span><span className="text-3xl font-black text-red-900">{stats.discarded}</span></div>
       </div>
 
-      {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
           <div className="relative max-w-md"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="Search by Serial Number, Tag ID, Name..." value={searchAssetQuery} onChange={(e) => setSearchAssetQuery(e.target.value)} className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/></div>
@@ -209,7 +219,11 @@ export default function AdminAssetsPage() {
                   </td>
                   <td className="p-4 text-sm font-bold text-gray-600">{asset.category}</td>
                   <td className="p-4"><div className="flex flex-col items-start gap-1"><span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(asset.status)}`}>{asset.status}</span>{asset.status === 'Assigned' && asset.assignedToEmpId && <span className="text-xs font-bold text-gray-600 flex items-center gap-1 mt-1"><UserCheck size={12} className="text-blue-500"/> {asset.assignedToName}</span>}</div></td>
-                  <td className="p-4 text-sm font-medium text-gray-500">{asset.lastInspection}</td>
+                  <td className="p-4 text-sm font-medium text-gray-500">
+                    <span className={asset.lastInspection === 'Pending' ? 'text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded' : ''}>
+                      {asset.lastInspection}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -217,139 +231,38 @@ export default function AdminAssetsPage() {
         </div>
       </div>
 
-      {/* 🚀 ADD NEW ASSET MODAL (NEW DESIGN) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-[24px] w-full max-w-2xl shadow-2xl overflow-hidden my-8">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                <Plus className="text-blue-600" size={20}/> Add New Asset
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center"><h2 className="text-lg font-black text-gray-900 flex items-center gap-2"><Plus className="text-blue-600" size={20}/> Add New Asset</h2><button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              
-              {/* Row 1: Tag & Serial */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                    <Hash size={14} className="text-gray-400"/> Asset Tag ID
-                  </label>
-                  <input required type="text" value={formData.tagId} onChange={(e) => setFormData({...formData, tagId: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
-                </div>
-                <div>
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                    <Barcode size={14} className="text-gray-400"/> Serial Number
-                  </label>
-                  <input required type="text" value={formData.serialNumber} onChange={(e) => setFormData({...formData, serialNumber: e.target.value})} placeholder="e.g. C02XG1..." className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
-                </div>
+                <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Hash size={14} className="text-gray-400"/> Asset Tag ID</label><input required type="text" value={formData.tagId} onChange={(e) => setFormData({...formData, tagId: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
+                <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Barcode size={14} className="text-gray-400"/> Serial Number</label><input required type="text" value={formData.serialNumber} onChange={(e) => setFormData({...formData, serialNumber: e.target.value})} placeholder="e.g. C02XG1..." className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm" /></div>
               </div>
-
-              {/* Row 2: Name & Category */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                    <Monitor size={14} className="text-gray-400"/> Hardware Name
-                  </label>
-                  <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g. MacBook Pro" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
-                </div>
-                <div>
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                    <LayoutGrid size={14} className="text-gray-400"/> Category
-                  </label>
-                  <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Monitor size={14} className="text-gray-400"/> Hardware Name</label><input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g. MacBook Pro" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium" /></div>
+                <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><LayoutGrid size={14} className="text-gray-400"/> Category</label><select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer">{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               </div>
-
-              {/* Gray Group block for Brand & Vendor */}
               <div className="bg-gray-50 rounded-2xl p-5 grid grid-cols-1 md:grid-cols-2 gap-5 border border-gray-100">
-                <div>
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                    <Tag size={14} className="text-gray-400"/> Brand
-                  </label>
-                  <input type="text" value={formData.brand} onChange={(e) => setFormData({...formData, brand: e.target.value})} placeholder="e.g. Apple, Dell" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
-                </div>
-                <div>
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                    <Store size={14} className="text-gray-400"/> Vendor
-                  </label>
-                  <input type="text" value={formData.vendor} onChange={(e) => setFormData({...formData, vendor: e.target.value})} placeholder="e.g. Amazon" className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
-                </div>
+                <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Tag size={14} className="text-gray-400"/> Brand</label><input type="text" value={formData.brand} onChange={(e) => setFormData({...formData, brand: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium" /></div>
+                <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Store size={14} className="text-gray-400"/> Vendor</label><input type="text" value={formData.vendor} onChange={(e) => setFormData({...formData, vendor: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium" /></div>
               </div>
-
-              {/* Blue Highlight block for Assignment */}
               <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
-                <label className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-4">
-                  <UserCheck size={14} /> Usage & Assignment Status
-                </label>
-                
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-4"><UserCheck size={14} /> Usage & Assignment Status</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Status</label>
-                    <select 
-                      value={formData.status} 
-                      onChange={(e) => handleStatusChange(e.target.value as UsageStatus)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all shadow-sm"
-                    >
-                      <option value="Unassigned">Unassigned</option>
-                      <option value="Demo Use">Demo Use</option>
-                      <option value="Assigned">Assigned (To Staff)</option>
-                      <option value="Under Repair">Under Repair</option>
-                      <option value="Discarded">Discarded</option>
-                    </select>
-                  </div>
-
-                  <div className="relative">
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Assign Employee</label>
-                    <div 
-                      onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)}
-                      className={`w-full px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer flex justify-between items-center transition-all shadow-sm bg-white ${
-                        formData.assignedToEmpId ? 'border-blue-300 text-blue-900' : 'border-gray-200 text-gray-400'
-                      }`}
-                    >
-                      {formData.assignedToEmpId ? `${formData.assignedToName}` : 'Select Staff...'}
-                      <Search size={16} className={formData.assignedToEmpId ? 'text-blue-500' : 'text-gray-400'}/>
-                    </div>
-
-                    {isStaffDropdownOpen && (
-                      <div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-h-60 flex flex-col">
-                        <div className="p-2 border-b border-gray-100 bg-gray-50 sticky top-0">
-                          <input autoFocus type="text" placeholder="Search Name..." value={staffSearchQuery} onChange={(e) => setStaffSearchQuery(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-500" />
-                        </div>
-                        <div className="overflow-y-auto">
-                          {filteredStaff.map(staff => (
-                            <div key={staff.empId} onClick={() => handleStaffSelect(staff)} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50"><p className="text-sm font-bold text-gray-900">{staff.name}</p></div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  <div><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Status</label><select value={formData.status} onChange={(e) => handleStatusChange(e.target.value as UsageStatus)} className="w-full px-4 py-3 rounded-xl border bg-white text-sm font-medium shadow-sm"><option value="Unassigned">Unassigned</option><option value="Demo Use">Demo Use</option><option value="Assigned">Assigned (To Staff)</option><option value="Under Repair">Under Repair</option><option value="Discarded">Discarded</option></select></div>
+                  <div className="relative"><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Assign Employee</label><div onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)} className={`w-full px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer flex justify-between bg-white shadow-sm ${formData.assignedToEmpId ? 'border-blue-300 text-blue-900' : 'border-gray-200 text-gray-400'}`}>{formData.assignedToEmpId ? `${formData.assignedToName}` : 'Select Staff...'}<Search size={16} className={formData.assignedToEmpId ? 'text-blue-500' : 'text-gray-400'}/></div>
+                    {isStaffDropdownOpen && (<div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border overflow-hidden max-h-60 flex flex-col"><div className="p-2 border-b bg-gray-50"><input autoFocus type="text" placeholder="Search..." value={staffSearchQuery} onChange={(e) => setStaffSearchQuery(e.target.value)} className="w-full px-3 py-2 rounded-lg border text-sm outline-none" /></div><div className="overflow-y-auto">{filteredStaff.map(staff => (<div key={staff.empId} onClick={() => handleStaffSelect(staff)} className="p-3 hover:bg-blue-50 cursor-pointer border-b"><p className="text-sm font-bold">{staff.name}</p></div>))}</div></div>)}
                   </div>
                 </div>
               </div>
-
-              {/* Actions */}
-              <div className="pt-2 flex gap-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
-                  Cancel
-                </button>
-                <button type="submit" className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md shadow-blue-200">
-                  Save New Asset
-                </button>
-              </div>
-
+              <div className="pt-2 flex gap-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 w-1/3">Cancel</button><button type="submit" className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md">Save New Asset</button></div>
             </form>
           </div>
         </div>
       )}
 
-      {/* BULK UPLOAD MODAL (Kept Functional) */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl p-6"><div className="flex justify-between items-center mb-6"><h2 className="text-lg font-black flex items-center gap-2"><Upload className="text-blue-600"/> Bulk Upload</h2><button onClick={() => setIsBulkModalOpen(false)}><X size={20} className="text-gray-400"/></button></div><form onSubmit={handleBulkUploadSubmit}><input type="file" accept=".csv" onChange={handleFileChange} className="mb-4 block w-full text-sm"/><div className="flex gap-4"><button type="button" onClick={() => setIsBulkModalOpen(false)} className="px-6 py-3.5 bg-gray-100 rounded-xl font-bold w-1/3 text-gray-600">Cancel</button><button type="submit" disabled={!selectedFile} className="flex-1 py-3.5 bg-blue-600 text-white rounded-xl font-bold disabled:bg-blue-300 shadow-md">Process Upload</button></div></form></div></div>
       )}

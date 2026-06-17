@@ -66,6 +66,10 @@ export default function EditAssetPage() {
     if (asset) {
       const updatedAssets = allAssets.map(a => a.id === asset.id ? asset : a);
       localStorage.setItem('vsit_assets_inventory', JSON.stringify(updatedAssets));
+      
+      // 🚀 REAL-TIME UPDATE TRIGGER FOR SIDEBAR
+      window.dispatchEvent(new Event('inventoryUpdated')); 
+      
       alert("Asset details updated!");
       router.push('/admin/assets');
     }
@@ -75,6 +79,10 @@ export default function EditAssetPage() {
     if (confirm("Permanently delete this asset?")) {
       const updatedAssets = allAssets.filter(a => a.id !== assetId);
       localStorage.setItem('vsit_assets_inventory', JSON.stringify(updatedAssets));
+      
+      // 🚀 REAL-TIME UPDATE TRIGGER FOR SIDEBAR
+      window.dispatchEvent(new Event('inventoryUpdated')); 
+      
       router.push('/admin/assets');
     }
   };
@@ -106,119 +114,35 @@ export default function EditAssetPage() {
 
         <div className="p-8 space-y-8">
           
-          {/* Row 1: Tag & Serial */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                <Hash size={14} className="text-gray-400"/> Asset Tag ID
-              </label>
-              <input type="text" value={asset.tagId} onChange={(e) => handleChange('tagId', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
-            </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                <Barcode size={14} className="text-gray-400"/> Serial Number
-              </label>
-              <input type="text" value={asset.serialNumber} onChange={(e) => handleChange('serialNumber', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
-            </div>
+            <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Hash size={14} className="text-gray-400"/> Asset Tag ID</label><input type="text" value={asset.tagId} onChange={(e) => handleChange('tagId', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" /></div>
+            <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Barcode size={14} className="text-gray-400"/> Serial Number</label><input type="text" value={asset.serialNumber} onChange={(e) => handleChange('serialNumber', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white font-mono uppercase font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" /></div>
           </div>
 
-          {/* Row 2: Name & Category */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                <Monitor size={14} className="text-gray-400"/> Hardware Name
-              </label>
-              <input type="text" value={asset.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
-            </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                <LayoutGrid size={14} className="text-gray-400"/> Category
-              </label>
-              <select value={asset.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all">
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
+            <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Monitor size={14} className="text-gray-400"/> Hardware Name</label><input type="text" value={asset.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" /></div>
+            <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><LayoutGrid size={14} className="text-gray-400"/> Category</label><select value={asset.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all">{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
           </div>
 
-          {/* Gray Group block for Brand & Vendor */}
           <div className="bg-gray-50 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6 border border-gray-100">
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                <Tag size={14} className="text-gray-400"/> Brand
-              </label>
-              <input type="text" value={asset.brand || ''} onChange={(e) => handleChange('brand', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
-            </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                <Store size={14} className="text-gray-400"/> Vendor
-              </label>
-              <input type="text" value={asset.vendor || ''} onChange={(e) => handleChange('vendor', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" />
-            </div>
+            <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Tag size={14} className="text-gray-400"/> Brand</label><input type="text" value={asset.brand || ''} onChange={(e) => handleChange('brand', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" /></div>
+            <div><label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2"><Store size={14} className="text-gray-400"/> Vendor</label><input type="text" value={asset.vendor || ''} onChange={(e) => handleChange('vendor', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium transition-all" /></div>
           </div>
 
-          {/* Blue Highlight block for Assignment */}
           <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
-            <label className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-4">
-              <UserCheck size={14} /> Usage & Assignment Status
-            </label>
-            
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-4"><UserCheck size={14} /> Usage & Assignment Status</label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Current Status</label>
-                <select 
-                  value={asset.status} 
-                  onChange={(e) => handleStatusChange(e.target.value as UsageStatus)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all shadow-sm"
-                >
-                  <option value="Unassigned">Unassigned</option>
-                  <option value="Demo Use">Demo Use</option>
-                  <option value="Assigned">Assigned (To Staff)</option>
-                  <option value="Under Repair">Under Repair</option>
-                  <option value="Discarded">Discarded</option>
-                </select>
-              </div>
-
-              <div className="relative">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Assigned Employee</label>
-                <div 
-                  onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)}
-                  className={`w-full px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer flex justify-between items-center transition-all shadow-sm bg-white ${
-                    asset.assignedToEmpId ? 'border-blue-300 text-blue-900' : 'border-gray-200 text-gray-400'
-                  }`}
-                >
-                  {asset.assignedToEmpId ? `${asset.assignedToName}` : 'Select Staff...'}
-                  <Search size={16} className={asset.assignedToEmpId ? 'text-blue-500' : 'text-gray-400'}/>
-                </div>
-
-                {isStaffDropdownOpen && (
-                  <div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-h-60 flex flex-col">
-                    <div className="p-2 border-b border-gray-100 bg-gray-50 sticky top-0">
-                      <input autoFocus type="text" placeholder="Search Name..." value={staffSearchQuery} onChange={(e) => setStaffSearchQuery(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-500" />
-                    </div>
-                    <div className="overflow-y-auto">
-                      {filteredStaff.map(staff => (
-                        <div key={staff.empId} onClick={() => handleStaffSelect(staff)} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50"><p className="text-sm font-bold text-gray-900">{staff.name}</p></div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {asset.assignedToEmpId && (
-                  <button type="button" onClick={() => handleStatusChange('Unassigned')} className="text-[10px] font-bold text-red-500 mt-2 hover:underline flex items-center gap-1">
-                    <X size={12}/> Remove Assignment
-                  </button>
-                )}
+              <div><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Current Status</label><select value={asset.status} onChange={(e) => handleStatusChange(e.target.value as UsageStatus)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium cursor-pointer transition-all shadow-sm"><option value="Unassigned">Unassigned</option><option value="Demo Use">Demo Use</option><option value="Assigned">Assigned (To Staff)</option><option value="Under Repair">Under Repair</option><option value="Discarded">Discarded</option></select></div>
+              <div className="relative"><label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Assigned Employee</label><div onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)} className={`w-full px-4 py-3 rounded-xl border text-sm font-medium cursor-pointer flex justify-between items-center transition-all shadow-sm bg-white ${asset.assignedToEmpId ? 'border-blue-300 text-blue-900' : 'border-gray-200 text-gray-400'}`}>{asset.assignedToEmpId ? `${asset.assignedToName}` : 'Select Staff...'}<Search size={16} className={asset.assignedToEmpId ? 'text-blue-500' : 'text-gray-400'}/></div>
+                {isStaffDropdownOpen && (<div className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-h-60 flex flex-col"><div className="p-2 border-b border-gray-100 bg-gray-50 sticky top-0"><input autoFocus type="text" placeholder="Search Name..." value={staffSearchQuery} onChange={(e) => setStaffSearchQuery(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-blue-500" /></div><div className="overflow-y-auto">{filteredStaff.map(staff => (<div key={staff.empId} onClick={() => handleStaffSelect(staff)} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50"><p className="text-sm font-bold text-gray-900">{staff.name}</p></div>))}</div></div>)}
+                {asset.assignedToEmpId && (<button type="button" onClick={() => handleStatusChange('Unassigned')} className="text-[10px] font-bold text-red-500 mt-2 hover:underline flex items-center gap-1"><X size={12}/> Remove Assignment</button>)}
               </div>
             </div>
           </div>
 
-          {/* Actions */}
           <div className="pt-2 flex gap-4">
-            <Link href="/admin/assets" className="flex items-center justify-center px-6 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
-              Cancel
-            </Link>
-            <button onClick={handleSaveChanges} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md shadow-blue-200">
-              Save Changes
-            </button>
+            <Link href="/admin/assets" className="flex items-center justify-center px-6 py-3.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">Cancel</Link>
+            <button onClick={handleSaveChanges} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md shadow-blue-200">Save Changes</button>
           </div>
 
         </div>

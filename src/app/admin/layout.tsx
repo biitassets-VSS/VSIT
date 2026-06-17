@@ -1,133 +1,107 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { 
-  LayoutDashboard, Users, Laptop, Ticket, ClipboardCheck,
-  LogOut, Menu, X, ChevronDown, FileText // <-- ADDED FileText HERE
+  LayoutDashboard, Package, Users, ClipboardCheck, Settings, LogOut 
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  
   const pathname = usePathname();
-  const router = useRouter();
+  const [pendingCount, setPendingCount] = useState(0);
 
-  const adminUser = {
-    name: 'Admin User',
-    role: 'System Administrator',
-    initials: 'AD'
-  };
+  useEffect(() => {
+    const calculatePending = () => {
+      const savedData = localStorage.getItem('vsit_assets_inventory');
+      if (savedData) {
+        const assets = JSON.parse(savedData);
+        // Count assets where lastInspection is exactly "Pending"
+        const count = assets.filter((asset: any) => asset.lastInspection === 'Pending').length;
+        setPendingCount(count);
+      }
+    };
 
-  // 👇 ADDED REPORTS TAB TO THE BOTTOM OF THIS LIST 👇
+    // Run once on load
+    calculatePending();
+
+    // Listen for custom event whenever we add/edit/delete an asset
+    window.addEventListener('inventoryUpdated', calculatePending);
+    return () => window.removeEventListener('inventoryUpdated', calculatePending);
+  }, []);
+
   const navLinks = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Staff Management', href: '/admin/staff', icon: Users },
-    { name: 'Asset Inventory', href: '/admin/assets', icon: Laptop },
-    { name: 'Support Tickets', href: '/admin/tickets', icon: Ticket },
-    { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
-    { name: 'Reports', href: '/admin/reports', icon: FileText }, // <-- NEW REPORTS LINK
+    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+    { name: 'Assets Inventory', href: '/admin/assets', icon: Package },
+    { name: 'Staff & Users', href: '/admin/staff', icon: Users },
   ];
 
-  const handleLogout = () => router.push('/');
-
-  const checkIsActive = (href: string) => {
-    if (href === '/admin') return pathname === '/admin'; 
-    return pathname.startsWith(href); 
-  };
-
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-sans">
-      
-      {/* MOBILE HEADER */}
-      <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain" />
-          <span className="text-orange-600 font-black text-[10px] tracking-widest uppercase border-l-2 border-gray-100 pl-3 py-1">Admin</span>
+    <div className="flex h-screen bg-gray-50 font-sans">
+      {/* SIDEBAR */}
+      <aside className="w-64 bg-white border-r border-gray-100 flex flex-col shadow-sm z-10">
+        <div className="p-6 border-b border-gray-100">
+          <h1 className="text-xl font-black text-blue-600 flex items-center gap-2">
+            <Package size={24} /> IT Admin
+          </h1>
         </div>
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg">
-          <Menu size={24} />
-        </button>
-      </div>
 
-      {/* SIDEBAR NAVIGATION */}
-      <AnimatePresence>
-        {(isSidebarOpen || typeof window !== 'undefined' && window.innerWidth >= 768) && (
-          <>
-            {isSidebarOpen && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                onClick={() => setIsSidebarOpen(false)}
-                className="fixed inset-0 bg-gray-900/60 z-40 md:hidden backdrop-blur-sm"
-              />
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {navLinks.map((link) => {
+            const isActive = pathname.startsWith(link.href);
+            const Icon = link.icon;
+            return (
+              <Link 
+                key={link.name} 
+                href={link.href}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold ${
+                  isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <Icon size={18} className={isActive ? 'text-blue-600' : 'text-gray-400'}/>
+                {link.name}
+              </Link>
+            );
+          })}
+
+          {/* INSPECTIONS LINK WITH BADGE */}
+          <Link 
+            href="/admin/inspections" 
+            className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all text-sm font-bold ${
+              pathname.startsWith('/admin/inspections') ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <ClipboardCheck size={18} className={pathname.startsWith('/admin/inspections') ? 'text-blue-600' : 'text-gray-400'} />
+              <span>Inspections</span>
+            </div>
+            {/* 🔴 THE PENDING NOTIFICATION BADGE */}
+            {pendingCount > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                {pendingCount}
+              </span>
             )}
+          </Link>
 
-            <motion.aside 
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-              transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
-              className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none ${!isSidebarOpen ? 'hidden md:flex' : 'flex'}`}
-            >
-              <div className="h-20 flex items-center px-6 border-b border-gray-100 justify-between">
-                <div className="flex items-center gap-3">
-                  <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
-                  <span className="text-[10px] font-extrabold text-orange-600 tracking-widest uppercase border-l-2 border-gray-100 pl-3 py-1">Admin Portal</span>
-                </div>
-                <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
-                  <X size={20} />
-                </button>
-              </div>
+          <Link 
+            href="/admin/settings" 
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold ${
+              pathname.startsWith('/admin/settings') ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <Settings size={18} className={pathname.startsWith('/admin/settings') ? 'text-blue-600' : 'text-gray-400'}/> Settings
+          </Link>
+        </nav>
 
-              <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
-                <p className="px-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
-                {navLinks.map((link) => {
-                  const isActive = checkIsActive(link.href);
-                  const Icon = link.icon;
-                  return (
-                    <Link 
-                      key={link.name} href={link.href} onClick={() => setIsSidebarOpen(false)}
-                      className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${
-                        isActive ? 'bg-orange-50 text-orange-700 shadow-sm border border-orange-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
-                    >
-                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> {link.name}
-                    </Link>
-                  );
-                })}
-              </nav>
+        <div className="p-4 border-t border-gray-100">
+          <button className="flex items-center gap-3 w-full px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+            <LogOut size={18} /> Logout
+          </button>
+        </div>
+      </aside>
 
-              <div className="p-4 border-t border-gray-100 relative">
-                <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-orange-50 ring-2 ring-orange-200' : 'hover:bg-gray-50'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border border-orange-300 flex items-center justify-center text-orange-800 font-black text-sm shadow-sm">
-                      {adminUser.initials}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-extrabold text-gray-900 leading-tight">{adminUser.name}</p>
-                      <p className="text-[11px] font-bold text-orange-600">{adminUser.role}</p>
-                    </div>
-                  </div>
-                  <ChevronDown size={16} className={`text-gray-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                <AnimatePresence>
-                  {isProfileOpen && (
-                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2">
-                      <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
-                        <LogOut size={18} /> Logout securely
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 overflow-y-auto p-8">
         {children}
       </main>
     </div>
