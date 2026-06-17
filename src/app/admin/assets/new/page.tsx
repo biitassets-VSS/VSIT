@@ -192,11 +192,17 @@ export default function AddNewAssetPage() {
               <label className="block text-sm font-bold text-gray-700 mb-1.5">Category *</label>
               <select required name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 sm:py-3.5 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all">
                 <option value="">Select Category...</option>
-                <option value="Laptops">Laptops</option>
-                <option value="Desktops">Desktops</option>
-                <option value="Monitors">Monitors</option>
-                <option value="Peripherals">Peripherals</option>
-                <option value="Networking">Networking</option>
+                {/* --- YOUR RESTORED CATEGORY LIST --- */}
+                <option value="Laptop">Laptop</option>
+                <option value="Mouse">Mouse</option>
+                <option value="Keyboards">Keyboards</option>
+                <option value="Wire Combo Kits">Wire Combo Kits</option>
+                <option value="Wireless Combo Kits">Wireless Combo Kits</option>
+                <option value="Headphone">Headphone</option>
+                <option value="Stand">Stand</option>
+                <option value="Mobile Phone">Mobile Phone</option>
+                <option value="Cleaning Kits">Cleaning Kits</option>
+                <option value="EXT Ports">EXT Ports</option>
               </select>
             </div>
           </div>
