@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, Users, PackageSearch, Settings, 
-  LogOut, Menu, X, Bell 
+  LogOut, Menu, X, ClipboardCheck, BarChart3 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,11 +13,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Professional Navigation Links
+  // Professional Navigation Links - Inspections & Reports Restored!
   const navLinks = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Staff / Users', href: '/admin/staff', icon: Users },
     { name: 'Asset Inventory', href: '/admin/assets', icon: PackageSearch },
+    { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
+    { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
 
@@ -30,12 +32,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden lg:flex flex-col w-72 bg-white border-r border-gray-100 shadow-sm z-10">
         {/* LOGO SECTION */}
         <div className="h-20 flex items-center px-8 border-b border-gray-50">
-          {/* Replaced VSIT Text with logo.png */}
-          <img src="/logo.png" alt="Company Logo" className="h-10 w-auto object-contain" onError={(e) => {
-            // Fallback if logo.png is missing
-            e.currentTarget.style.display = 'none';
-            e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<span class="text-2xl font-black text-teal-600">Logo Error</span>');
-          }} />
+          <img 
+            src="/logo.png" 
+            alt="Company Logo" 
+            className="h-10 w-auto object-contain" 
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<span class="text-2xl font-black text-teal-600">Logo Error</span>');
+            }} 
+          />
         </div>
 
         {/* NAVIGATION LINKS */}
