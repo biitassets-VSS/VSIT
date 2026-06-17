@@ -5,15 +5,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, Package, Users, ClipboardCheck, 
-  Settings, LogOut, Menu, X 
+  BarChart, Settings, LogOut, Menu, X 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// RESTORED REPORTS TAB HERE
 const sidebarLinks = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Assets', href: '/admin/assets', icon: Package },
   { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
   { name: 'Staff & Users', href: '/admin/staff', icon: Users },
+  { name: 'Reports', href: '/admin/reports', icon: BarChart }, 
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
