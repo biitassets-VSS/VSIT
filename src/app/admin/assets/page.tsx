@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import Link from 'next/link'; 
 import { 
   Search, Plus, UserCheck, Settings2, Wrench, Package, Box, CheckCircle2, 
-  X, Trash2, Upload, Download, FileUp, Loader2
+  X, Trash2, Upload, Download, FileUp, Loader2, AlertCircle
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -58,6 +58,7 @@ export default function AdminAssetsPage() {
   // Bulk Upload States
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // New Asset Form State
   const [formData, setFormData] = useState({
@@ -139,8 +140,18 @@ export default function AdminAssetsPage() {
 
   // --- BULK UPLOAD HANDLERS ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
     if (e.target.files && e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      
+      // Strict Check for CSV
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        setUploadError("Invalid file type! Please upload a .csv file. If you are using Excel, choose 'Save As > CSV'.");
+        setSelectedFile(null);
+        return;
+      }
+      
+      setSelectedFile(file);
     }
   };
 
@@ -162,14 +173,19 @@ export default function AdminAssetsPage() {
     URL.revokeObjectURL(url);
   };
 
-  // 🌟 ACTUAL CSV PARSING LOGIC HERE 🌟
   const handleBulkUploadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
 
+    // Double check to prevent the gibberish issue
+    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
+      setUploadError("Cannot process Excel (.xlsx) files. Please save your file as a CSV.");
+      return;
+    }
+
     setIsUploading(true);
+    setUploadError(null);
     
-    // Create a new FileReader to read the contents of the uploaded file
     const reader = new FileReader();
 
     reader.onload = (event) => {
@@ -177,19 +193,16 @@ export default function AdminAssetsPage() {
         const csvText = event.target?.result as string;
         if (!csvText) throw new Error("Empty file");
 
-        // Split by new line to get rows
         const lines = csvText.split('\n');
         const newAssets: Asset[] = [];
 
         // Loop starting from 1 to skip the Header row
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i].trim();
-          if (!line) continue; // Skip empty lines
+          if (!line) continue; 
 
-          // Split by comma (ignoring commas inside quotes if any exist)
           const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(val => val.replace(/^"|"$/g, '').trim());
 
-          // We need at least the basic details to save it
           if (values.length >= 3) {
             const newAsset: Asset = {
               id: `AST-${Date.now()}-${i}`,
@@ -199,7 +212,6 @@ export default function AdminAssetsPage() {
               category: values[3] || 'Others',
               brand: values[4] || '',
               vendor: values[5] || '',
-              // Ensure status matches our strict types, default to Unassigned
               status: (['Assigned', 'Unassigned', 'Demo Use', 'Under Repair', 'Discarded'].includes(values[6]) 
                 ? values[6] 
                 : 'Unassigned') as UsageStatus,
@@ -209,27 +221,25 @@ export default function AdminAssetsPage() {
           }
         }
 
-        // Simulate a tiny delay for smooth UI transition
         setTimeout(() => {
           if (newAssets.length > 0) {
             setAssets(prev => [...newAssets, ...prev]);
             alert(`Successfully parsed file and imported ${newAssets.length} real assets!`);
+            setIsBulkModalOpen(false);
+            setSelectedFile(null);
           } else {
-            alert("No valid assets found in the file. Please check the template format.");
+            setUploadError("No valid data found. Did you use the correct template?");
           }
           setIsUploading(false);
-          setIsBulkModalOpen(false);
-          setSelectedFile(null);
         }, 1000);
 
       } catch (error) {
         console.error("Error reading file:", error);
-        alert("Failed to read the file. Ensure it is a valid CSV.");
+        setUploadError("Failed to read the file. Ensure it is a valid CSV.");
         setIsUploading(false);
       }
     };
 
-    // Read the file as plain text so we can parse it
     reader.readAsText(selectedFile);
   };
 
@@ -354,7 +364,6 @@ export default function AdminAssetsPage() {
                     <div className="flex flex-wrap gap-2 mt-1">
                       <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded" title="Tag ID">{asset.tagId}</span>
                       <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded" title="Serial Number">{asset.serialNumber}</span>
-                      {/* 🌟 BRAND BADGE IN TABLE */}
                       {asset.brand && (
                         <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded" title="Brand">{asset.brand}</span>
                       )}
@@ -392,7 +401,7 @@ export default function AdminAssetsPage() {
               <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                 <Upload className="text-blue-600"/> Bulk Upload Assets
               </h2>
-              <button onClick={() => { setIsBulkModalOpen(false); setSelectedFile(null); }} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full transition-colors">
+              <button onClick={() => { setIsBulkModalOpen(false); setSelectedFile(null); setUploadError(null); }} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -409,14 +418,22 @@ export default function AdminAssetsPage() {
                 </button>
               </div>
 
+              {/* Error Message Display */}
+              {uploadError && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-200 text-sm font-bold flex items-start gap-2">
+                  <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                  <p>{uploadError}</p>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload File (CSV or Excel)</label>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload File (CSV ONLY)</label>
                 
                 {/* Drag and Drop Zone Area */}
                 <div className="relative border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-colors p-8 flex flex-col items-center justify-center text-center">
                   <input 
                     type="file" 
-                    accept=".csv"
+                    accept=".csv" // STRICTLY CSV ONLY
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
@@ -427,7 +444,7 @@ export default function AdminAssetsPage() {
                         <FileUp className="text-blue-500" size={24}/>
                       </div>
                       <p className="font-bold text-gray-700">Click or drag file to this area</p>
-                      <p className="text-xs text-gray-500 mt-1">Ensure the file is a CSV format matching the template.</p>
+                      <p className="text-xs text-red-500 font-bold mt-1">Strictly .csv formats. Excel (.xlsx) will not work.</p>
                     </>
                   ) : (
                     <>
@@ -444,7 +461,7 @@ export default function AdminAssetsPage() {
 
               {/* Actions */}
               <div className="pt-4 border-t border-gray-100 flex gap-3">
-                <button type="button" onClick={() => { setIsBulkModalOpen(false); setSelectedFile(null); }} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
+                <button type="button" onClick={() => { setIsBulkModalOpen(false); setSelectedFile(null); setUploadError(null); }} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors w-1/3">
                   Cancel
                 </button>
                 <button 
