@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, Users, PackageSearch, Settings, 
-  LogOut, Menu, X, ClipboardCheck, BarChart3 
+  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,12 +13,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Professional Navigation Links - Inspections & Reports Restored!
+  // Professional Navigation Links - Inspections, Tickets & Reports Restored!
   const navLinks = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Staff / Users', href: '/admin/staff', icon: Users },
     { name: 'Asset Inventory', href: '/admin/assets', icon: PackageSearch },
     { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
+    { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, // Restored Tickets Tab
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
