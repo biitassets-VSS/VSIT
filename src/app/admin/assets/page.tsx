@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   Package, Search, Plus, Hash, UserCheck, Eye, X, 
   ImageIcon, Info, ShieldCheck, ClipboardCheck, 
-  AlertCircle, CheckCircle2, CalendarDays, Filter
+  AlertCircle, CheckCircle2, CalendarDays, Filter, Edit3, AlignLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,28 +40,35 @@ export default function AssetsPage() {
     if (savedAssets) {
       setAssets(JSON.parse(savedAssets));
     } else {
-      // Fallback Demo Data (so you can see the beautiful popup immediately)
+      // Detailed Demo Data with Inspection Photos and Notes for the List View
       setAssets([
         { 
           id: 'A-100', name: 'MacBook Pro M2', tagId: 'TAG-8099', category: 'Laptops', 
           assignedToEmpId: 'EMP-001', assignedToName: 'Lakhwinder Singh', status: 'Assigned',
           imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=1000',
-          inspectionStatus: 'Passed', inspectionDate: '2024-05-12',
-          inspectionNotes: 'Asset is in excellent working condition. No physical damage reported on the screen or chassis.',
-          inspectionPhotos: ['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=200']
+          inspectionStatus: 'Passed', inspectionDate: 'May 12, 2024 - 10:30 AM',
+          inspectionNotes: 'Asset is in excellent working condition. Battery health is at 98%.',
+          inspectionPhotos: [
+            'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=200',
+            'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=200'
+          ]
         },
         { 
           id: 'A-101', name: 'Dell 27" 4K Monitor', tagId: 'TAG-8100', category: 'Accessories', 
           status: 'Available',
           imageUrl: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=1000',
-          inspectionStatus: 'Pending', inspectionDate: '2024-05-10',
-          inspectionNotes: 'Awaiting standard quarterly inspection.'
+          inspectionStatus: 'Pending', inspectionDate: 'Awaiting Inspection',
+          inspectionNotes: 'Quarterly check required before reassignment.',
+          inspectionPhotos: []
         },
         { 
           id: 'A-102', name: 'Logitech MX Master 3', tagId: 'TAG-8105', category: 'Peripherals', 
           assignedToEmpId: 'EMP-505', assignedToName: 'Demo Staff', status: 'Needs Repair',
-          inspectionStatus: 'Failed', inspectionDate: '2024-05-14',
-          inspectionNotes: 'Scroll wheel is sticking and Bluetooth connection drops intermittently. Needs replacement.'
+          inspectionStatus: 'Failed', inspectionDate: 'May 14, 2024 - 02:15 PM',
+          inspectionNotes: 'Scroll wheel sticking. Bluetooth drops intermittently.',
+          inspectionPhotos: [
+            'https://images.unsplash.com/photo-1585565804112-f201f68c48b4?auto=format&fit=crop&q=80&w=200'
+          ]
         }
       ]);
     }
@@ -106,63 +113,102 @@ export default function AssetsPage() {
         </button>
       </div>
 
-      {/* ASSET LIST */}
-      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
+      {/* DETAILED ASSET LIST (Redesigned Row Style) */}
+      <div className="space-y-4">
         {isLoading ? (
-          <div className="p-10 text-center font-bold text-gray-400">Loading Assets...</div>
+          <div className="p-10 text-center font-bold text-gray-400 bg-white rounded-3xl border border-gray-100">Loading Assets...</div>
         ) : filteredAssets.length === 0 ? (
-          <div className="p-10 text-center text-gray-500 text-sm font-bold bg-gray-50">No assets found. Try adjusting your search.</div>
+          <div className="p-10 text-center text-gray-500 text-sm font-bold bg-white rounded-3xl border border-gray-100">No assets found. Try adjusting your search.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-0 sm:gap-4 sm:p-4 divide-y divide-gray-100 sm:divide-y-0">
-            {filteredAssets.map(asset => (
+          filteredAssets.map(asset => (
+            
+            // RESPONSIVE DETAILED ROW CARD
+            <div key={asset.id} className="bg-white border border-gray-100 shadow-sm rounded-3xl hover:border-teal-300 transition-all flex flex-col lg:flex-row p-5 gap-5 group relative overflow-hidden">
               
-              // RESPONSIVE ASSET CARD
-              <div key={asset.id} className="p-4 sm:p-5 sm:bg-white sm:border sm:border-gray-100 sm:shadow-sm sm:rounded-2xl hover:border-teal-200 transition-all flex items-center gap-4 group">
-                
-                {/* Thumbnail */}
-                <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl bg-gray-100 overflow-hidden flex items-center justify-center relative">
-                  {asset.imageUrl ? <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" /> : <ImageIcon size={20} className="text-gray-400" />}
+              {/* SECTION 1: Asset Core Details */}
+              <div className="flex gap-4 lg:w-1/3 lg:border-r border-gray-100 lg:pr-5">
+                <div className="w-20 h-20 shrink-0 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center relative shadow-sm border border-gray-200">
+                  {asset.imageUrl ? <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-gray-400" />}
                   {/* Status Indicator Dot */}
-                  <div className={`absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full border-2 border-white ${asset.status === 'Needs Repair' ? 'bg-red-500' : asset.status === 'Available' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                  <div className={`absolute top-1.5 right-1.5 w-3 h-3 rounded-full border-2 border-white ${asset.status === 'Needs Repair' ? 'bg-red-500' : asset.status === 'Available' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
                 </div>
 
-                <div className="flex-1 min-w-0 flex flex-col items-start">
-                  
-                  {/* CLICKABLE ASSET NAME -> OPENS POPUP */}
-                  <button 
-                    onClick={() => setSelectedAsset(asset)} 
-                    className="font-black text-sm sm:text-base text-gray-900 text-left hover:text-teal-600 truncate w-full transition-colors mb-1"
-                  >
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <button onClick={() => setSelectedAsset(asset)} className="font-black text-lg text-gray-900 text-left hover:text-teal-600 truncate w-full transition-colors leading-tight">
                     {asset.name}
                   </button>
-                  
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-[10px] font-mono bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className="text-[10px] font-mono bg-teal-50 text-teal-800 px-2 py-0.5 rounded-md border border-teal-100 flex items-center gap-1">
                       <Hash size={10}/> {asset.tagId}
                     </span>
                     {asset.assignedToName && (
-                      <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md flex items-center gap-1 truncate max-w-[120px]">
+                      <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md flex items-center gap-1 truncate max-w-[140px]">
                         <UserCheck size={10}/> {asset.assignedToName}
                       </span>
                     )}
                   </div>
                 </div>
+              </div>
 
+              {/* SECTION 2: Inspection Data (Notes, Date, Photos) */}
+              <div className="flex-1 flex flex-col justify-center bg-gray-50/50 p-4 rounded-2xl border border-gray-50 relative">
+                
+                {/* Status & Date */}
+                <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    {asset.inspectionStatus === 'Passed' && <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-black uppercase rounded-md flex items-center gap-1"><CheckCircle2 size={12}/> Passed</span>}
+                    {asset.inspectionStatus === 'Failed' && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-black uppercase rounded-md flex items-center gap-1"><AlertCircle size={12}/> Failed</span>}
+                    {asset.inspectionStatus === 'Pending' && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded-md flex items-center gap-1"><ShieldCheck size={12}/> Pending</span>}
+                  </div>
+                  <div className="text-[11px] font-bold text-gray-500 flex items-center gap-1 bg-white px-2 py-1 rounded-md shadow-sm border border-gray-100">
+                    <CalendarDays size={12} className="text-teal-500"/> {asset.inspectionDate}
+                  </div>
+                </div>
+
+                {/* Inspection Notes */}
+                <p className="text-xs font-medium text-gray-600 line-clamp-2 mb-3 flex items-start gap-1.5">
+                   <AlignLeft size={14} className="text-gray-400 shrink-0 mt-0.5"/>
+                   {asset.inspectionNotes || "No inspection notes available."}
+                </p>
+
+                {/* Inspection Attached Photos Thumbnails */}
+                {asset.inspectionPhotos && asset.inspectionPhotos.length > 0 && (
+                  <div className="flex gap-2">
+                    {asset.inspectionPhotos.map((photo, idx) => (
+                      <div key={idx} className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shadow-sm shrink-0">
+                        <img src={photo} alt="Proof" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 3: Action Buttons (Edit & View) */}
+              <div className="flex flex-row lg:flex-col items-center justify-center gap-3 lg:border-l border-gray-100 lg:pl-5 pt-4 lg:pt-0 border-t lg:border-t-0">
+                <button 
+                  onClick={() => alert(`Edit mode for ${asset.name} (Redirects to Edit Page)`)}
+                  className="flex-1 lg:flex-none w-full lg:w-12 h-10 lg:h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center hover:bg-teal-600 hover:text-white transition-colors gap-2 lg:gap-0 font-bold text-sm"
+                  title="Edit Asset"
+                >
+                  <Edit3 size={18} /> <span className="lg:hidden">Edit</span>
+                </button>
                 <button 
                   onClick={() => setSelectedAsset(asset)}
-                  className="w-10 h-10 shrink-0 rounded-full bg-gray-50 text-gray-600 flex items-center justify-center hover:bg-teal-600 hover:text-white transition-colors"
+                  className="flex-1 lg:flex-none w-full lg:w-12 h-10 lg:h-12 rounded-xl bg-gray-50 text-gray-600 flex items-center justify-center hover:bg-gray-900 hover:text-white transition-colors gap-2 lg:gap-0 font-bold text-sm border border-gray-100"
+                  title="View Details Popup"
                 >
-                  <Eye size={18} />
+                  <Eye size={18} /> <span className="lg:hidden">View</span>
                 </button>
               </div>
-            ))}
-          </div>
+
+            </div>
+          ))
         )}
       </div>
 
 
       {/* ========================================================================= */}
-      {/* ASSET DETAILS POP-UP MODAL (WITH INSPECTION DATA)                         */}
+      {/* ASSET DETAILS POP-UP MODAL (Kept for detailed viewing)                    */}
       {/* ========================================================================= */}
       <AnimatePresence>
         {selectedAsset && (
@@ -175,7 +221,6 @@ export default function AssetsPage() {
               {/* IMAGE HEADER */}
               <div className="w-full h-48 sm:h-56 bg-gray-100 relative shrink-0">
                 {selectedAsset.imageUrl ? <img src={selectedAsset.imageUrl} alt={selectedAsset.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-300"><ImageIcon size={48} /></div>}
-                
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>
                 <button onClick={() => setSelectedAsset(null)} className="absolute top-4 right-4 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full"><X size={20} /></button>
                 <span className="absolute bottom-4 left-4 px-3 py-1 bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-black uppercase rounded-lg shadow-sm flex items-center gap-1.5">
@@ -199,33 +244,22 @@ export default function AssetsPage() {
                 </div>
 
                 {/* INSPECTION RECORD SECTION */}
-                <div className="bg-teal-50/50 rounded-2xl p-4 border border-teal-100">
+                <div className="bg-teal-50/50 rounded-2xl p-4 border border-teal-100 mb-5">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-xs font-black uppercase text-teal-800 flex items-center gap-2">
                       <ClipboardCheck size={16}/> Inspection Record
                     </h4>
-                    {/* Date */}
                     {selectedAsset.inspectionDate && (
-                      <span className="text-[10px] font-bold text-teal-600 flex items-center gap-1">
+                      <span className="text-[10px] font-bold text-teal-600 flex items-center gap-1 bg-white px-2 py-1 rounded-md">
                         <CalendarDays size={10}/> {selectedAsset.inspectionDate}
                       </span>
                     )}
                   </div>
                   
-                  {/* Status Tags */}
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-600">Latest Status:</span>
-                    {selectedAsset.inspectionStatus === 'Passed' && <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-black uppercase rounded-md flex items-center gap-1"><CheckCircle2 size={12}/> Passed</span>}
-                    {selectedAsset.inspectionStatus === 'Failed' && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-black uppercase rounded-md flex items-center gap-1"><AlertCircle size={12}/> Failed</span>}
-                    {selectedAsset.inspectionStatus === 'Pending' && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded-md flex items-center gap-1"><ShieldCheck size={12}/> Pending</span>}
-                    {!selectedAsset.inspectionStatus && <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-[10px] font-black uppercase rounded-md">No Record</span>}
-                  </div>
-
                   {/* Notes */}
                   <div className="mb-4">
-                    <span className="text-xs font-bold text-gray-600 block mb-1">Inspector Notes:</span>
-                    <p className="text-sm font-medium text-gray-700 bg-white p-3 rounded-xl border border-teal-100">
-                      {selectedAsset.inspectionNotes || "No inspection notes have been recorded for this asset yet."}
+                    <p className="text-sm font-medium text-gray-700 bg-white p-3 rounded-xl border border-teal-100 shadow-sm">
+                      {selectedAsset.inspectionNotes || "No inspection notes have been recorded."}
                     </p>
                   </div>
 
@@ -242,10 +276,14 @@ export default function AssetsPage() {
                   )}
                 </div>
 
-                {/* View Full Page Button */}
-                <Link href={`/admin/assets/${selectedAsset.id}`} className="mt-5 w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold text-center rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
-                  <Info size={16}/> Go To Full Asset Page
-                </Link>
+                <div className="flex gap-3">
+                  <button className="flex-1 py-3.5 bg-teal-50 hover:bg-teal-100 text-teal-700 text-sm font-bold text-center rounded-xl flex items-center justify-center gap-2 transition-colors">
+                    <Edit3 size={16}/> Edit Asset
+                  </button>
+                  <Link href={`/admin/assets/${selectedAsset.id}`} className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold text-center rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
+                    <Info size={16}/> Full Page
+                  </Link>
+                </div>
               </div>
             </motion.div>
           </div>
