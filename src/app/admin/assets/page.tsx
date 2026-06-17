@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PackageSearch, Plus, UploadCloud, Search, 
   Filter, Tag, User, ArrowLeft, Download, 
@@ -42,9 +42,19 @@ export default function AdminAssetsPage() {
     { id: '4', tagId: 'AST-3005', name: 'Dell 27" 4K Monitor', category: 'Monitor', status: 'Maintenance' },
   ]);
 
+  // --- NEW: Listen for URL Parameters from Quick Actions ---
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      // If the dashboard quick action links to /admin/assets?action=add
+      if (urlParams.get('action') === 'add') {
+        setViewState('add_single');
+      }
+    }
+  }, []);
+
   // --- Handlers ---
   
-  // 1. Download Sample CSV Format
   const handleDownloadSample = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Tag ID,Asset Name,Category,Status,Assigned Employee Code\n"
@@ -61,14 +71,12 @@ export default function AdminAssetsPage() {
     document.body.removeChild(link);
   };
 
-  // 2. Handle File Selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setSelectedFile(e.target.files[0]);
     }
   };
 
-  // 3. Handle Bulk Upload Submit
   const handleBulkUploadSubmit = () => {
     if (!selectedFile) return alert("Please select a file first.");
     setIsUploading(true);
@@ -80,7 +88,6 @@ export default function AdminAssetsPage() {
     }, 1500);
   };
 
-  // 4. Handle Add Single Asset Submit
   const handleAddSingleSubmit = () => {
     if (!singleAssetForm.tagId || !singleAssetForm.name) {
       return alert("Please fill in the Tag ID and Asset Name.");
@@ -129,13 +136,16 @@ export default function AdminAssetsPage() {
               <p className="text-sm font-medium text-gray-500 mt-1">Manage, track, and upload company hardware.</p>
             </div>
             <div className="flex gap-3 w-full sm:w-auto">
+              {/* BUG FIX: Added type="button" to prevent default form behaviors */}
               <button 
+                type="button"
                 onClick={() => setViewState('bulk_upload')}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-gray-200 hover:border-teal-300 hover:bg-teal-50 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm"
               >
                 <UploadCloud size={18} /> Bulk Upload
               </button>
               <button 
+                type="button"
                 onClick={() => setViewState('add_single')}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm"
               >
@@ -172,7 +182,7 @@ export default function AdminAssetsPage() {
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-teal-500"
                 />
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">
+              <button type="button" className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">
                 <Filter size={16} /> Filter
               </button>
             </div>
@@ -230,7 +240,7 @@ export default function AdminAssetsPage() {
       {/* ========================================== */}
       {viewState === 'bulk_upload' && (
         <div className="space-y-6">
-          <button onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+          <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
             <ArrowLeft size={16} /> Back to Inventory
           </button>
 
@@ -252,6 +262,7 @@ export default function AdminAssetsPage() {
                 </div>
               </div>
               <button 
+                type="button"
                 onClick={handleDownloadSample}
                 className="shrink-0 flex items-center gap-2 bg-white hover:bg-blue-600 hover:text-white text-blue-700 border border-blue-200 px-4 py-2.5 rounded-xl text-xs font-black transition-colors shadow-sm"
               >
@@ -286,7 +297,7 @@ export default function AdminAssetsPage() {
               
               {selectedFile && (
                 <div className="flex justify-end mt-2">
-                  <button onClick={() => setSelectedFile(null)} className="text-xs font-bold text-red-500 flex items-center gap-1 hover:underline">
+                  <button type="button" onClick={() => setSelectedFile(null)} className="text-xs font-bold text-red-500 flex items-center gap-1 hover:underline">
                     <Trash2 size={12}/> Remove File
                   </button>
                 </div>
@@ -294,6 +305,7 @@ export default function AdminAssetsPage() {
             </div>
 
             <button 
+              type="button"
               onClick={handleBulkUploadSubmit}
               disabled={isUploading || !selectedFile}
               className={`w-full py-4 rounded-xl font-black text-sm shadow-md transition-all flex justify-center items-center gap-2 ${selectedFile ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
@@ -309,7 +321,7 @@ export default function AdminAssetsPage() {
       {/* ========================================== */}
       {viewState === 'add_single' && (
         <div className="space-y-6">
-          <button onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+          <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
             <ArrowLeft size={16} /> Back to Inventory
           </button>
           
@@ -380,6 +392,7 @@ export default function AdminAssetsPage() {
               </div>
 
               <button 
+                type="button"
                 onClick={handleAddSingleSubmit}
                 disabled={isUploading}
                 className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-4"
