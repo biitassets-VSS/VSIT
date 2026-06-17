@@ -1,123 +1,376 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { ClipboardCheck, Search, CheckCircle2, UserCheck, Package } from 'lucide-react';
+import { 
+  Search, X, CheckCircle2, AlertTriangle, 
+  Tag, Calendar, User, FileText, 
+  ImageIcon, Eye, Clock, ShieldCheck, ThumbsDown, 
+  RefreshCcw, MessageSquare, Send
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface Asset {
-  id: string; tagId: string; name: string; category: string; status: string;
-  assignedToName?: string; assignedToEmpId?: string; lastInspection?: string;
-}
+// Mock Data: Added 'assetId' and 'empId' so the hyperlinks can route correctly
+const initialInspections = [
+  { 
+    id: 1, 
+    assetId: '1',
+    empId: 'EMP-001',
+    assetName: 'MacBook Pro M2', 
+    tagId: 'TAG-1001', 
+    date: '2024-06-10', 
+    inspector: 'John Doe (EMP-001)', 
+    status: 'Pending Review', 
+    notes: 'Everything looks good. Cleaned the screen and formatted the drive.', 
+    photo: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=1000',
+    adminFeedback: ''
+  },
+  { 
+    id: 2, 
+    assetId: '3',
+    empId: 'EMP-002',
+    assetName: 'ThinkPad T14', 
+    tagId: 'TAG-1003', 
+    date: '2024-06-09', 
+    inspector: 'Jane Smith (EMP-002)', 
+    status: 'Pending Review', 
+    notes: 'The "Enter" key is slightly sticky, but working.', 
+    photo: '',
+    adminFeedback: ''
+  },
+  { 
+    id: 3, 
+    assetId: '2',
+    empId: 'EMP-003',
+    assetName: 'Dell UltraSharp 27"', 
+    tagId: 'TAG-1002', 
+    date: '2024-06-05', 
+    inspector: 'Alex Johnson (EMP-003)', 
+    status: 'Needs Re-inspection', 
+    notes: 'Monitor turns on but looks a bit dim.', 
+    photo: '',
+    adminFeedback: 'Admin (You): Please attach a photo of the screen while it is turned on so I can check the brightness level.'
+  },
+  { 
+    id: 4, 
+    assetId: '4',
+    empId: 'EMP-002',
+    assetName: 'Logitech MX Master 3', 
+    tagId: 'TAG-1004', 
+    date: '2024-06-01', 
+    inspector: 'Jane Smith (EMP-002)', 
+    status: 'Passed', 
+    notes: 'Working perfectly.', 
+    photo: '',
+    adminFeedback: ''
+  },
+];
+
+type StatusType = 'Pending Review' | 'Passed' | 'Rejected' | 'Needs Re-inspection';
 
 export default function InspectionsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [inspections, setInspections] = useState(initialInspections);
+  const [activeTab, setActiveTab] = useState<'All' | StatusType>('Pending Review');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // View/Approval Modal State
+  const [viewInspection, setViewInspection] = useState<any>(null);
+  
+  // Re-inspection State
+  const [showReinspectForm, setShowReinspectForm] = useState(false);
+  const [reinspectNote, setReinspectNote] = useState('');
 
-  useEffect(() => {
-    const savedAssets = localStorage.getItem('vsit_assets_inventory');
-    if (savedAssets) setAssets(JSON.parse(savedAssets));
-  }, []);
-
-  const handleMarkInspected = (assetId: string) => {
-    const today = new Date().toISOString().split('T')[0]; // Gets YYYY-MM-DD
-    const updatedAssets = assets.map(a => 
-      a.id === assetId ? { ...a, lastInspection: today } : a
-    );
-    
-    setAssets(updatedAssets);
-    localStorage.setItem('vsit_assets_inventory', JSON.stringify(updatedAssets));
-    
-    // 🚀 Update the Sidebar Notification Badge
-    window.dispatchEvent(new Event('inventoryUpdated')); 
+  // Handle Admin Approval, Rejection, or Re-inspection
+  const handleStatusUpdate = (id: number, newStatus: StatusType, feedback: string = '') => {
+    setInspections(inspections.map(insp => 
+      insp.id === id ? { ...insp, status: newStatus, adminFeedback: feedback } : insp
+    ));
+    setViewInspection(null); // Close modal after action
+    setShowReinspectForm(false);
+    setReinspectNote('');
   };
 
-  const filteredAssets = assets.filter(a => 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    a.tagId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (a.assignedToName && a.assignedToName.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const closeAndResetModal = () => {
+    setViewInspection(null);
+    setShowReinspectForm(false);
+    setReinspectNote('');
+  };
+
+  // Filter Logic
+  const filteredInspections = inspections.filter(insp => {
+    const matchesSearch = insp.assetName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          insp.tagId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          insp.inspector.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTab = activeTab === 'All' ? true : insp.status === activeTab;
+    return matchesSearch && matchesTab;
+  });
+
+  // Dynamic Status Configurations
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'Passed': return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: <CheckCircle2 size={16} /> };
+      case 'Rejected': return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <AlertTriangle size={16} /> };
+      case 'Needs Re-inspection': return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: <RefreshCcw size={16} /> };
+      case 'Pending Review': return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: <Clock size={16} /> };
+      default: return { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', icon: <FileText size={16} /> };
+    }
+  };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <ClipboardCheck className="text-blue-600" /> Asset Inspections
-          </h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Track physical condition and audit assigned inventory.</p>
-        </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      
+      {/* HEADER SECTION */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h1 className="text-2xl font-black text-gray-900">Inspection Approvals</h1>
+        <p className="text-sm font-medium text-gray-500 mt-1">Review staff submissions, approve assets, or request re-inspections.</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-          <div className="relative max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input type="text" placeholder="Search Asset or Staff Name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
-          </div>
+      {/* FILTERS & TABS */}
+      <div className="flex flex-col xl:flex-row gap-4 justify-between items-center bg-white p-2 pl-4 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex items-center gap-3 w-full xl:w-96">
+          <Search size={20} className="text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Search by Asset, TAG ID, or Inspector..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent border-none outline-none text-sm font-medium text-gray-700 placeholder:text-gray-400" 
+          />
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white border-b border-gray-100 text-[11px] uppercase tracking-wider text-gray-400 font-black">
-                <th className="p-4 pl-6">Asset Details</th>
-                <th className="p-4">Assigned To</th>
-                <th className="p-4">Inspection Status</th>
-                <th className="p-4">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredAssets.map((asset) => (
-                <tr key={asset.id} className="hover:bg-gray-50/50 transition-colors">
-                  
-                  <td className="p-4 pl-6">
-                    {/* 🔗 LINK TO ASSET */}
-                    <Link href={`/admin/assets/${asset.id}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1.5">
-                      <Package size={14} className="text-blue-400"/> {asset.name}
-                    </Link>
-                    <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mt-1 inline-block">{asset.tagId}</span>
-                  </td>
-
-                  <td className="p-4">
-                    {asset.status === 'Assigned' && asset.assignedToEmpId ? (
-                      // 🔗 LINK TO STAFF
-                      <Link href={`/admin/staff/${asset.assignedToEmpId}`} className="text-sm font-bold text-gray-700 hover:text-blue-600 hover:underline flex items-center gap-1.5">
-                        <UserCheck size={14} className="text-gray-400"/> {asset.assignedToName}
-                      </Link>
-                    ) : (
-                      <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-md">In Office / Unassigned</span>
-                    )}
-                  </td>
-
-                  <td className="p-4">
-                    {asset.lastInspection === 'Pending' ? (
-                      <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border bg-red-50 text-red-600 border-red-200">
-                        Pending Audit
-                      </span>
-                    ) : (
-                      <span className="text-sm font-bold text-gray-600 flex items-center gap-1">
-                        <CheckCircle2 size={14} className="text-green-500"/> {asset.lastInspection}
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="p-4">
-                    {asset.lastInspection === 'Pending' && (
-                      <button 
-                        onClick={() => handleMarkInspected(asset.id)}
-                        className="text-xs font-bold bg-white border border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg transition-all shadow-sm"
-                      >
-                        Mark Inspected
-                      </button>
-                    )}
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex bg-gray-100 p-1 rounded-xl w-full xl:w-auto overflow-x-auto">
+          {['Pending Review', 'All', 'Needs Re-inspection', 'Passed', 'Rejected'].map((tab) => {
+            const count = tab === 'All' ? inspections.length : inspections.filter(i => i.status === tab).length;
+            
+            return (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab as any)} 
+                className={`flex-1 min-w-[140px] py-2 px-3 text-sm font-bold rounded-lg transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === tab ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                {tab} 
+                <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab ? 'bg-orange-100 text-orange-600' : 'bg-gray-200 text-gray-600'}`}>
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
+
+      {/* INSPECTIONS LIST */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="divide-y divide-gray-100">
+          {filteredInspections.length === 0 ? (
+            <div className="p-12 text-center flex flex-col items-center justify-center">
+              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle2 size={32} className="text-gray-300" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">All caught up!</h3>
+              <p className="text-gray-500 font-medium mt-1">No inspections matching this criteria right now.</p>
+            </div>
+          ) : (
+            filteredInspections.map((insp) => {
+              const statusStyle = getStatusConfig(insp.status);
+              
+              return (
+                <div key={insp.id} className={`p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all ${insp.status === 'Pending Review' ? 'hover:bg-orange-50/50 bg-white' : 'hover:bg-gray-50 bg-white'}`}>
+                  
+                  <div className="flex gap-4 items-start w-full md:w-auto">
+                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center font-bold border shrink-0 ${statusStyle.bg} ${statusStyle.border} ${statusStyle.text}`}>
+                      {statusStyle.icon}
+                    </div>
+                    <div>
+                      {/* 🔗 LINK: Asset Name */}
+                      <Link href={`/admin/assets/${insp.assetId}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors block w-fit">
+                        {insp.assetName}
+                      </Link>
+                      
+                      <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-500 mt-1">
+                        <span className="flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded-md"><Tag size={12}/> {insp.tagId}</span>
+                        <span className="flex items-center gap-1"><Calendar size={12}/> {insp.date}</span>
+                        <span className="flex items-center gap-1">
+                          <User size={12}/> 
+                          {/* 🔗 LINK: Staff Name */}
+                          <Link href={`/admin/staff/${insp.empId}`} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors">
+                            {insp.inspector}
+                          </Link>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0 border-gray-100">
+                    <span className={`px-3 py-1 text-xs font-bold rounded-lg border flex items-center gap-1.5 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                      {statusStyle.icon} {insp.status}
+                    </span>
+                    
+                    <button 
+                      onClick={() => setViewInspection(insp)} 
+                      className={`px-4 py-2 rounded-xl transition-all font-bold text-sm flex items-center gap-2 shadow-sm ${insp.status === 'Pending Review' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      {insp.status === 'Pending Review' ? 'Review Form' : 'View Details'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* REVIEW / DETAILS MODAL */}
+      <AnimatePresence>
+        {viewInspection && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeAndResetModal} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
+            
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
+                  {viewInspection.status === 'Pending Review' ? 'Review Inspection Form' : 'Inspection Record'}
+                </h2>
+                <button onClick={closeAndResetModal} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"><X size={20}/></button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6">
+                
+                {/* Asset Info Card */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                  <div>
+                    {/* 🔗 LINK: Asset Name inside Modal */}
+                    <Link href={`/admin/assets/${viewInspection.assetId}`} className="text-xl font-black text-blue-600 hover:text-blue-800 hover:underline block w-fit">
+                      {viewInspection.assetName}
+                    </Link>
+                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-sm font-bold">
+                      <Tag size={14} /> {viewInspection.tagId}
+                    </span>
+                  </div>
+                  <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${getStatusConfig(viewInspection.status).bg} ${getStatusConfig(viewInspection.status).text} ${getStatusConfig(viewInspection.status).border}`}>
+                    <span className="text-xs font-bold uppercase tracking-wide opacity-80 mb-0.5">Status</span>
+                    <span className="font-black text-sm flex items-center gap-1">{getStatusConfig(viewInspection.status).icon} {viewInspection.status}</span>
+                  </div>
+                </div>
+
+                {/* Staff & Date */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="border border-gray-100 p-3 rounded-xl">
+                    <p className="text-xs text-gray-500 font-bold mb-1 flex items-center gap-1"><User size={12}/> Submitted By</p>
+                    {/* 🔗 LINK: Staff Name inside Modal */}
+                    <Link href={`/admin/staff/${viewInspection.empId}`} className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline">
+                      {viewInspection.inspector}
+                    </Link>
+                  </div>
+                  <div className="border border-gray-100 p-3 rounded-xl">
+                    <p className="text-xs text-gray-500 font-bold mb-1 flex items-center gap-1"><Calendar size={12}/> Date Submitted</p>
+                    <p className="text-sm font-bold text-gray-900">{viewInspection.date}</p>
+                  </div>
+                </div>
+
+                {/* Staff Notes */}
+                <div>
+                  <p className="text-sm text-gray-700 font-bold mb-2 flex items-center gap-1.5"><FileText size={16} className="text-orange-500"/> Inspector's Notes</p>
+                  <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 text-gray-800 font-medium text-sm leading-relaxed">
+                    {viewInspection.notes}
+                  </div>
+                </div>
+
+                {/* Admin Feedback Display (If it was sent back) */}
+                {viewInspection.adminFeedback && (
+                  <div>
+                    <p className="text-sm text-blue-700 font-bold mb-2 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Admin Instructions (Reason for return)</p>
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-blue-900 font-bold text-sm leading-relaxed">
+                      {viewInspection.adminFeedback}
+                    </div>
+                  </div>
+                )}
+
+                {/* Uploaded Photo Preview */}
+                <div>
+                  <p className="text-sm text-gray-700 font-bold mb-2 flex items-center gap-1.5"><ImageIcon size={16} className="text-orange-500"/> Uploaded Photo</p>
+                  {viewInspection.photo ? (
+                    <div className="relative rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-gray-100 group">
+                      <img src={viewInspection.photo} alt="Asset condition" className="w-full h-64 object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                        <span className="bg-white/90 text-gray-900 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"><Eye size={16}/> View Image</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 border border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center justify-center text-gray-400">
+                      <ImageIcon size={32} className="mb-2" />
+                      <p className="text-sm font-bold text-gray-500">No photos attached by inspector.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ACTION FOOTER */}
+              {viewInspection.status === 'Pending Review' ? (
+                
+                showReinspectForm ? (
+                  // State 2: Request Re-inspection Form
+                  <div className="px-6 py-4 border-t border-gray-100 bg-blue-50 flex flex-col gap-3">
+                    <label className="text-sm font-bold text-blue-900 flex items-center gap-1.5"><MessageSquare size={16}/> Why does this need re-inspection?</label>
+                    <textarea 
+                      value={reinspectNote}
+                      onChange={(e) => setReinspectNote(e.target.value)}
+                      placeholder="e.g. Please attach a clear photo of the screen..." 
+                      className="w-full px-4 py-3 rounded-xl border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+                      rows={2}
+                    ></textarea>
+                    <div className="flex justify-end gap-3 mt-1">
+                      <button onClick={() => setShowReinspectForm(false)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
+                      <button 
+                        onClick={() => handleStatusUpdate(viewInspection.id, 'Needs Re-inspection', reinspectNote)}
+                        disabled={!reinspectNote.trim()}
+                        className="px-5 py-2 flex items-center gap-2 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all"
+                      >
+                        <Send size={16} /> Send Request to Staff
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // State 1: Default Action Buttons
+                  <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row gap-3">
+                    
+                    {/* Re-inspect Button */}
+                    <button 
+                      onClick={() => setShowReinspectForm(true)}
+                      className="flex-1 flex justify-center items-center gap-2 px-4 py-3 text-sm font-bold bg-white text-blue-600 border-2 border-blue-100 hover:border-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                    >
+                      <RefreshCcw size={18} /> Request Re-inspection
+                    </button>
+
+                    <div className="flex flex-1 gap-3">
+                      <button 
+                        onClick={() => handleStatusUpdate(viewInspection.id, 'Rejected')}
+                        className="flex-1 flex justify-center items-center gap-2 px-4 py-3 text-sm font-bold bg-white text-red-600 border-2 border-red-100 hover:border-red-600 hover:bg-red-50 rounded-xl transition-all"
+                      >
+                        <ThumbsDown size={18} /> Reject
+                      </button>
+                      <button 
+                        onClick={() => handleStatusUpdate(viewInspection.id, 'Passed')}
+                        className="flex-1 flex justify-center items-center gap-2 px-4 py-3 text-sm font-bold bg-green-600 text-white hover:bg-green-700 shadow-sm rounded-xl transition-all"
+                      >
+                        <ShieldCheck size={18} /> Approve
+                      </button>
+                    </div>
+
+                  </div>
+                )
+
+              ) : (
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                   <button onClick={closeAndResetModal} className="px-6 py-2.5 text-sm font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl transition-all">Close Record</button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

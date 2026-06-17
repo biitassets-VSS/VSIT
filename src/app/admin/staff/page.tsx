@@ -43,7 +43,13 @@ export default function StaffPage() {
         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
           <div className="relative max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input type="text" placeholder="Search Staff Name or ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
+            <input 
+              type="text" 
+              placeholder="Search Staff Name or ID..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+            />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -63,19 +69,29 @@ export default function StaffPage() {
                 return (
                   <tr key={staff.empId} className="hover:bg-gray-50/50 transition-colors">
                     <td className="p-4 pl-6">
-                      {/* 🔗 LINK TO STAFF PROFILE */}
-                      <Link href={`/admin/staff/${staff.empId}`} className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer block flex items-center gap-2">
+                      {/* 🔗 FIXED: Link to Staff Profile (Removed conflicting CSS) */}
+                      <Link 
+                        href={`/admin/staff/${staff.empId}`} 
+                        className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer inline-flex items-center gap-2"
+                      >
                         <UserCheck size={16} className="text-blue-400" /> {staff.name}
                       </Link>
-                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mt-1 inline-block">{staff.empId}</span>
+                      <br/>
+                      <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mt-1 inline-block">
+                        {staff.empId}
+                      </span>
                     </td>
                     <td className="p-4 text-sm font-bold text-gray-600">{staff.department}</td>
                     <td className="p-4">
                       {assignedAssets.length > 0 ? (
                         <div className="flex flex-col gap-1">
                           {assignedAssets.map(asset => (
-                            // 🔗 LINK TO ASSET DETAILS
-                            <Link key={asset.id} href={`/admin/assets/${asset.id}`} className="text-xs font-bold text-gray-700 hover:text-blue-600 hover:underline flex items-center gap-1">
+                            // 🔗 FIXED: Link to Asset Details
+                            <Link 
+                              key={asset.id} 
+                              href={`/admin/assets/${asset.id}`} 
+                              className="text-xs font-bold text-gray-700 hover:text-blue-600 hover:underline inline-flex items-center gap-1 w-fit"
+                            >
                               <Package size={12} className="text-gray-400"/> {asset.name} ({asset.tagId})
                             </Link>
                           ))}

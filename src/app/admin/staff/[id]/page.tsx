@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { ArrowLeft, UserCheck, Package, Hash } from 'lucide-react';
 
 interface Staff { empId: string; name: string; department: string; }
-interface Asset { id: string; name: string; tagId: string; serialNumber: string; category: string; assignedToEmpId?: string; }
+interface Asset { id: string; name: string; tagId: string; category?: string; assignedToEmpId?: string; }
 
+// Your same mock staff list
 const mockStaff: Staff[] = [
   { empId: 'EMP-001', name: 'Lakhwinder Singh', department: 'IT Department' },
   { empId: 'EMP-002', name: 'Sarah Connor', department: 'Migrations' },
@@ -21,28 +22,37 @@ export default function StaffProfilePage() {
   
   const [staff, setStaff] = useState<Staff | null>(null);
   const [assignedAssets, setAssignedAssets] = useState<Asset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Find the specific staff member
     const foundStaff = mockStaff.find(s => s.empId === empId);
     setStaff(foundStaff || null);
 
+    // Get their assigned assets
     const savedAssets = localStorage.getItem('vsit_assets_inventory');
     if (savedAssets) {
       const allAssets: Asset[] = JSON.parse(savedAssets);
       setAssignedAssets(allAssets.filter(a => a.assignedToEmpId === empId));
     }
+    
+    setIsLoading(false);
   }, [empId]);
 
+  if (isLoading) return <div className="p-10 flex justify-center text-gray-400 animate-pulse">Loading Profile...</div>;
   if (!staff) return <div className="p-10 text-center font-bold text-red-500">Staff member not found.</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-4xl mx-auto">
-      <Link href="/admin/staff" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-3xl mx-auto">
+      
+      {/* Back Button */}
+      <Link href="/admin/staff" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors w-fit">
         <ArrowLeft size={16} /> Back to Staff List
       </Link>
 
-      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden p-8 flex items-center gap-4">
-        <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+      {/* Staff Profile Header */}
+      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-8 flex items-center gap-5">
+        <div className="h-16 w-16 bg-blue-50 border border-blue-100 rounded-full flex items-center justify-center text-blue-600">
           <UserCheck size={32} />
         </div>
         <div>
@@ -51,30 +61,41 @@ export default function StaffProfilePage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden p-8">
-        <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-4">
-          <Package size={16} className="text-blue-500"/> Assets Currently Assigned to {staff.name}
+      {/* Assigned Assets Section */}
+      <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-8">
+        <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-6 border-b border-gray-100 pb-4 flex items-center gap-2">
+          <Package size={18} className="text-blue-500"/> Assigned Assets
         </h3>
-
+        
         {assignedAssets.length === 0 ? (
-          <p className="text-gray-400 font-medium text-sm">This employee has no assets assigned right now.</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {assignedAssets.map(asset => (
-              <div key={asset.id} className="p-4 border border-gray-100 rounded-xl bg-gray-50 flex justify-between items-center hover:border-blue-200 transition-colors">
-                <div>
-                  {/* 🔗 LINK TO ASSET DETAILS */}
-                  <Link href={`/admin/assets/${asset.id}`} className="font-bold text-blue-600 hover:underline text-base">
-                    {asset.name}
-                  </Link>
-                  <div className="flex gap-2 mt-1">
-                    <span className="text-[10px] font-mono bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded flex items-center gap-1"><Hash size={10}/> {asset.tagId}</span>
-                    <span className="text-[10px] font-bold bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded">{asset.category}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 text-center">
+            <p className="text-gray-500 text-sm font-bold">No assets currently assigned to this employee.</p>
           </div>
+        ) : (
+          <ul className="space-y-3">
+            {assignedAssets.map(asset => (
+              <li key={asset.id} className="p-4 bg-gray-50 border border-gray-100 rounded-xl hover:border-blue-200 transition-colors flex flex-col gap-2">
+                
+                {/* 🔗 Clickable Link to the Asset */}
+                <Link href={`/admin/assets/${asset.id}`} className="font-black text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2 text-base w-fit">
+                  {asset.name}
+                </Link>
+                
+                {/* Badges for Tag ID and Category */}
+                <div className="flex gap-2">
+                  <span className="text-[10px] font-mono bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                    <Hash size={10} className="text-gray-400"/> {asset.tagId}
+                  </span>
+                  {asset.category && (
+                    <span className="text-[10px] font-bold bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded shadow-sm">
+                      {asset.category}
+                    </span>
+                  )}
+                </div>
+
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>
