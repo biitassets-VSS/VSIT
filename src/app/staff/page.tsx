@@ -81,11 +81,11 @@ export default function StaffDashboardPage() {
         if (profileError) console.error("Profile Fetch Error:", profileError.message);
 
         // Setup Current User safely by checking all possible column names
-        const currentUser = { 
-          name: profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member', 
-          empCode: profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A', 
-          email: profile?.email || userEmail 
-        };
+       const currentUser = { 
+  name: profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member', 
+  empCode: profile?.id || profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A', 
+  email: profile?.email || userEmail 
+};
         
         setStaffUser(currentUser);
 
