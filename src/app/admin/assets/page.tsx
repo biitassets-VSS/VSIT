@@ -9,6 +9,10 @@ import {
   DollarSign, Wrench, Hash, Trash2, UserMinus, X, Pencil
 } from 'lucide-react';
 
+// Import your Supabase client
+// Adjust the path if your lib is located differently
+import { supabase } from '@/lib/supabaseClient';
+
 // --- Interfaces ---
 interface Asset {
   id: string;
@@ -49,30 +53,6 @@ const MOCK_STAFF = [
   { empCode: 'EMP-3015', name: 'Neha Verma' },
 ];
 
-// Default Mock Data (used only on first load)
-const DEFAULT_MOCK_ASSETS: Asset[] = [
-  { 
-    id: '1', tagId: 'VS-LAP-104291', name: 'Dell XPS 15 Laptop', category: 'Laptop', status: 'Assigned', 
-    assignedTo: 'Rahul Sharma', empCode: 'EMP-1042', serialNumber: 'SN-9982348X', price: '125000', 
-    purchaseDate: '2023-01-15', warrantyExpiry: '2026-01-15', condition: 'Good', 
-    notes: 'Handed over with charger and wireless mouse.', photos: [] 
-  },
-  { 
-    id: '2', tagId: 'VS-WMC-209932', name: 'Logitech Wireless Combo', category: 'Wireless Keyboard Combo', 
-    status: 'Assigned', assignedTo: 'Rahul Sharma', empCode: 'EMP-1042', serialNumber: 'SN-112233', 
-    price: '3500', purchaseDate: '2023-02-10', warrantyExpiry: '2024-02-10', condition: 'Good', photos: []
-  },
-  { 
-    id: '3', tagId: 'VS-LAP-300188', name: 'Apple MacBook Pro M2', category: 'Laptop', status: 'In Stock (Available)',
-    serialNumber: 'C02F3983QQQ', price: '185000', purchaseDate: '2023-11-05', warrantyExpiry: '2026-11-05', condition: 'New', photos: []
-  },
-  { 
-    id: '4', tagId: 'VS-OTH-300511', name: 'Dell 27" 4K Monitor', category: 'Other', status: 'Maintenance',
-    serialNumber: 'DELL-MON-4K-99', price: '32000', purchaseDate: '2022-06-12', warrantyExpiry: '2025-06-12', condition: 'Poor',
-    notes: 'Screen flickering issue reported. Sent to service center.', photos: []
-  },
-];
-
 export default function AdminAssetsPage() {
   const [viewState, setViewState] = useState<'list' | 'add_single' | 'edit_asset' | 'bulk_upload' | 'print_tags' | 'view_details'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,32 +78,50 @@ export default function AdminAssetsPage() {
   };
   const [singleAssetForm, setSingleAssetForm] = useState(emptyFormState);
 
-  // --- Persistent Storage Logic ---
+  // --- Supabase Database Logic ---
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from localStorage on initial render
+  // Fetch Assets from Supabase on Load
   useEffect(() => {
-    const savedAssets = localStorage.getItem('vs_assets_inventory');
-    if (savedAssets) {
+    const fetchAssets = async () => {
       try {
-        setAssets(JSON.parse(savedAssets));
-      } catch (e) {
-        setAssets(DEFAULT_MOCK_ASSETS);
+        const { data, error } = await supabase
+          .from('assets')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          // Map snake_case DB columns to camelCase frontend interface
+          const mappedAssets: Asset[] = data.map((dbAsset: any) => ({
+            id: dbAsset.id,
+            tagId: dbAsset.tag_id,
+            name: dbAsset.name,
+            category: dbAsset.category,
+            status: dbAsset.status,
+            assignedTo: dbAsset.assigned_to,
+            empCode: dbAsset.emp_code,
+            serialNumber: dbAsset.serial_number,
+            price: dbAsset.price,
+            purchaseDate: dbAsset.purchase_date,
+            warrantyExpiry: dbAsset.warranty_expiry,
+            condition: dbAsset.condition,
+            notes: dbAsset.notes,
+            photos: dbAsset.photos || []
+          }));
+          setAssets(mappedAssets);
+        }
+      } catch (error) {
+        console.error('Error fetching assets from Supabase:', error);
+      } finally {
+        setIsLoaded(true);
       }
-    } else {
-      setAssets(DEFAULT_MOCK_ASSETS);
-    }
-    setIsLoaded(true);
+    };
+
+    fetchAssets();
   }, []);
-
-  // Save to localStorage whenever assets change
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('vs_assets_inventory', JSON.stringify(assets));
-    }
-  }, [assets, isLoaded]);
-
 
   // Tag ID Generator
   const generateTagId = (category: string) => {
@@ -138,7 +136,7 @@ export default function AdminAssetsPage() {
     }
   }, [singleAssetForm.category, viewState]);
 
-  // --- Form Handlers (Add & Edit) ---
+  // --- Form Handlers (Add & Edit via Supabase) ---
   const handleEditClick = () => {
     if (selectedAsset) {
       setSingleAssetForm({
@@ -168,32 +166,74 @@ export default function AdminAssetsPage() {
     setIsEditingId(null);
   };
 
-  const handleAssetFormSubmit = () => {
+  const handleAssetFormSubmit = async () => {
     if (!singleAssetForm.tagId || !singleAssetForm.name || !singleAssetForm.category) {
       return alert("Please fill in all the required fields (*).");
     }
     setIsUploading(true);
-    setTimeout(() => {
+
+    const dbPayload = {
+      tag_id: singleAssetForm.tagId,
+      name: singleAssetForm.name,
+      category: singleAssetForm.category,
+      serial_number: singleAssetForm.serialNumber,
+      price: singleAssetForm.price,
+      purchase_date: singleAssetForm.purchaseDate,
+      warranty_expiry: singleAssetForm.warrantyExpiry,
+      condition: singleAssetForm.condition,
+      status: singleAssetForm.status,
+      notes: singleAssetForm.notes
+    };
+
+    try {
       if (isEditingId && selectedAsset) {
-        // Update Existing
+        // Update Existing in Supabase
+        const { error } = await supabase
+          .from('assets')
+          .update(dbPayload)
+          .eq('id', isEditingId);
+
+        if (error) throw error;
+
+        // Update Local State
         const updatedAsset: Asset = { ...selectedAsset, ...singleAssetForm, status: singleAssetForm.status as Asset['status'] };
         setAssets(assets.map(a => a.id === isEditingId ? updatedAsset : a));
         setSelectedAsset(updatedAsset);
-        alert('Asset updated successfully!');
+        alert('Asset updated successfully in database!');
         setViewState('view_details');
       } else {
-        // Add New
-        setAssets(prev => [{ id: Date.now().toString(), ...singleAssetForm, status: singleAssetForm.status as Asset['status'], photos: [] }, ...prev]);
-        alert('Asset successfully added to inventory!');
+        // Add New to Supabase
+        const { data, error } = await supabase
+          .from('assets')
+          .insert([{ ...dbPayload, photos: [] }])
+          .select();
+
+        if (error) throw error;
+
+        // Update Local State with DB returned data
+        if (data && data.length > 0) {
+          const newAsset = {
+             id: data[0].id,
+             ...singleAssetForm, 
+             status: singleAssetForm.status as Asset['status'], 
+             photos: [] 
+          };
+          setAssets(prev => [newAsset, ...prev]);
+        }
+        alert('Asset successfully added to database!');
         setViewState('list');
       }
-      setIsUploading(false);
       setSingleAssetForm(emptyFormState);
       setIsEditingId(null);
-    }, 800);
+    } catch (error: any) {
+      console.error("Error saving asset:", error.message);
+      alert("Failed to save asset to the database.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  // --- Bulk Upload & CSV Logic ---
+  // --- Bulk Upload & CSV Logic (Supabase Insert) ---
   const handleDownloadSample = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Category,Asset Tag,Asset Name,Serial Number,Price / Cost,Purchase Date,Warranty Expiry,Asset Condition,Current Status\n"
@@ -212,45 +252,67 @@ export default function AdminAssetsPage() {
     if (e.target.files && e.target.files.length > 0) setSelectedFile(e.target.files[0]);
   };
 
-  const handleBulkUploadSubmit = () => {
+  const handleBulkUploadSubmit = async () => {
     if (!selectedFile) return alert("Please select a file first.");
     setIsUploading(true);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       if (text) {
         const rows = text.split('\n').slice(1);
-        const newAssets: Asset[] = [];
+        const newAssetsDB: any[] = [];
         
-        rows.forEach((row, index) => {
+        rows.forEach((row) => {
           if (!row.trim()) return;
           const cols = row.split(',');
           const category = cols[0] || 'Other';
           const tagId = cols[1] ? cols[1] : generateTagId(category); 
 
-          newAssets.push({
-            id: Date.now().toString() + index,
+          newAssetsDB.push({
             category: category,
-            tagId: tagId,
+            tag_id: tagId,
             name: cols[2] || 'Unknown Asset',
-            serialNumber: cols[3],
+            serial_number: cols[3],
             price: cols[4],
-            purchaseDate: cols[5],
-            warrantyExpiry: cols[6],
+            purchase_date: cols[5],
+            warranty_expiry: cols[6],
             condition: cols[7],
-            status: (cols[8]?.trim() as Asset['status']) || 'In Stock (Available)',
+            status: cols[8]?.trim() || 'In Stock (Available)',
             photos: []
           });
         });
 
-        setTimeout(() => {
-          setAssets(prev => [...newAssets, ...prev]);
+        try {
+          // Bulk Insert into Supabase
+          const { data, error } = await supabase
+            .from('assets')
+            .insert(newAssetsDB)
+            .select();
+
+          if (error) throw error;
+
+          if (data) {
+             // Map DB data back to Local Frontend State format
+             const mappedData = data.map((dbAsset: any) => ({
+              id: dbAsset.id, tagId: dbAsset.tag_id, name: dbAsset.name, category: dbAsset.category,
+              status: dbAsset.status, assignedTo: dbAsset.assigned_to, empCode: dbAsset.emp_code,
+              serialNumber: dbAsset.serial_number, price: dbAsset.price, purchaseDate: dbAsset.purchase_date,
+              warrantyExpiry: dbAsset.warranty_expiry, condition: dbAsset.condition, notes: dbAsset.notes,
+              photos: dbAsset.photos || []
+             }));
+
+            setAssets(prev => [...mappedData, ...prev]);
+            alert(`${data.length} Assets uploaded successfully to database!`);
+            setSelectedFile(null);
+            setViewState('list');
+          }
+        } catch (error: any) {
+          console.error("Error bulk uploading assets:", error.message);
+          alert("Failed to bulk upload assets to database.");
+        } finally {
           setIsUploading(false);
-          setSelectedFile(null);
-          alert(`${newAssets.length} Assets uploaded successfully!`);
-          setViewState('list');
-        }, 1000);
+        }
       }
     };
     reader.readAsText(selectedFile);
@@ -264,7 +326,7 @@ export default function AdminAssetsPage() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
@@ -292,37 +354,70 @@ export default function AdminAssetsPage() {
 
         const watermarkedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-        const updatedAsset = { ...selectedAsset, photos: [...(selectedAsset.photos || []), watermarkedDataUrl] };
-        setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
-        setSelectedAsset(updatedAsset);
+        const newPhotos = [...(selectedAsset.photos || []), watermarkedDataUrl];
+
+        try {
+          // Update Supabase DB 
+          // Note: Saving Base64 to DB is okay for small prototypes, but for production, 
+          // consider uploading the File to Supabase Storage Buckets and saving the URL here instead.
+          const { error } = await supabase
+            .from('assets')
+            .update({ photos: newPhotos })
+            .eq('id', selectedAsset.id);
+
+          if (error) throw error;
+
+          // Update State
+          const updatedAsset = { ...selectedAsset, photos: newPhotos };
+          setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
+          setSelectedAsset(updatedAsset);
+        } catch (error: any) {
+           console.error("Error saving photo:", error.message);
+           alert("Failed to save photo to database.");
+        }
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
 
-  // --- Assignment Logic ---
-  const updateAssetStatus = (newStatus: Asset['status'], staff?: {empCode: string, name: string}) => {
+  // --- Assignment Logic (Supabase Sync) ---
+  const updateAssetStatus = async (newStatus: Asset['status'], staff?: {empCode: string, name: string}) => {
     if (!selectedAsset) return;
     
-    let assignedData = {};
+    let assignedData = { assignedTo: undefined, empCode: undefined };
+    let dbAssignedData: { assigned_to: string | null, emp_code: string | null } = { assigned_to: null, emp_code: null };
+
     if (newStatus === 'Assigned' && staff) {
-      assignedData = { assignedTo: staff.name, empCode: staff.empCode };
-    } else if (newStatus === 'In Stock (Available)' || newStatus === 'Maintenance' || newStatus === 'Retired') {
-      assignedData = { assignedTo: undefined, empCode: undefined };
+      assignedData = { assignedTo: staff.name, empCode: staff.empCode as any };
+      dbAssignedData = { assigned_to: staff.name, emp_code: staff.empCode };
     }
 
-    const updatedAsset = { ...selectedAsset, status: newStatus, ...assignedData };
-    setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
-    setSelectedAsset(updatedAsset);
-    setShowAssignModal(false);
+    try {
+      // Update Database
+      const { error } = await supabase
+        .from('assets')
+        .update({ status: newStatus, ...dbAssignedData })
+        .eq('id', selectedAsset.id);
+
+      if (error) throw error;
+
+      // Update Local State
+      const updatedAsset = { ...selectedAsset, status: newStatus, ...assignedData };
+      setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
+      setSelectedAsset(updatedAsset);
+      setShowAssignModal(false);
+    } catch (error: any) {
+      console.error("Error updating assignment:", error.message);
+      alert("Failed to update status in the database.");
+    }
   };
 
   const handlePrint = () => window.print();
   const openAssetDetails = (asset: Asset) => { setSelectedAsset(asset); setViewState('view_details'); };
 
-  // Block rendering until mounted to prevent hydration errors with localStorage
-  if (!isLoaded) return null;
+  // Block rendering until mounted to prevent hydration errors
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Assets from Database...</div>;
 
   // Stats & Filters
   const totalAssets = assets.length;
@@ -390,7 +485,7 @@ export default function AdminAssetsPage() {
                 </thead>
                 <tbody>
                   {filteredAssets.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No assets found.</td></tr>
+                    <tr><td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No assets found in database.</td></tr>
                   ) : (
                     filteredAssets.map(asset => (
                       <tr key={asset.id} className="border-b border-gray-50 hover:bg-[#f2faf8] transition-colors">
