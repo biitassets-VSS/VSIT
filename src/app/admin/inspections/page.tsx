@@ -7,8 +7,6 @@ import {
   User, Calendar, AlertCircle, RefreshCcw, CameraOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Import your Supabase client
 import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
@@ -48,11 +46,11 @@ export default function InspectionsPage() {
   const [actionState, setActionState] = useState<'none' | 'reinspect' | 'reject'>('none');
   const [actionNote, setActionNote] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // --- Real-time Database Fetching ---
   const fetchInspections = async () => {
     try {
-      // Fetch inspections and JOIN the attached asset data
       const { data, error } = await supabase
         .from('inspections')
         .select(`
@@ -64,7 +62,7 @@ export default function InspectionsPage() {
           photos,
           assets ( tag_id, name, category )
         `)
-        .eq('status', 'Pending') // Only fetch Pending for the main list
+        .eq('status', 'Pending') 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -75,7 +73,7 @@ export default function InspectionsPage() {
           assetTag: item.assets?.tag_id || 'Unknown Tag',
           assetName: item.assets?.name || 'Unknown Asset',
           category: item.assets?.category || 'Other',
-          submittedBy: item.submitted_by,
+          submittedBy: item.submitted_by || 'Unknown',
           date: new Date(item.created_at).toLocaleDateString(),
           status: item.status,
           notes: item.notes || '',
@@ -93,16 +91,12 @@ export default function InspectionsPage() {
   useEffect(() => {
     fetchInspections();
 
-    // Set up Real-time Subscription to watch for new inspections
     const channel = supabase
       .channel('realtime-inspections')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'inspections' },
-        () => {
-          // Refetch data when a change occurs in the DB
-          fetchInspections();
-        }
+        () => { fetchInspections(); }
       )
       .subscribe();
 
@@ -111,12 +105,14 @@ export default function InspectionsPage() {
     };
   }, []);
 
-  // --- Database Action Handlers ---
+  // --- Database Action Handlers (Dual Update) ---
   const updateInspectionStatus = async (newStatus: string, noteToSave: string = '') => {
     if (!selectedItem) return;
+    setIsUpdating(true);
 
     try {
-      const { error } = await supabase
+      // 1. Update the Inspection Record
+      const { error: inspectionError } = await supabase
         .from('inspections')
         .update({ 
           status: newStatus,
@@ -124,18 +120,34 @@ export default function InspectionsPage() {
         })
         .eq('id', selectedItem.id);
 
-      if (error) throw error;
+      if (inspectionError) throw inspectionError;
 
-      // Optimistically remove it from the local UI
+      // 2. Automatically sync with the Assets Table
+      let assetStatusUpdate = '';
+      if (newStatus === 'Approved') assetStatusUpdate = 'Passed';
+      else if (newStatus === 'Rejected') assetStatusUpdate = 'Failed';
+      else if (newStatus === 'Re-inspection') assetStatusUpdate = 'Pending Repair';
+
+      if (assetStatusUpdate) {
+        const { error: assetError } = await supabase
+          .from('assets')
+          .update({
+            inspection_status: assetStatusUpdate,
+            last_inspection_date: new Date().toISOString().split('T')[0] // Saves as YYYY-MM-DD
+          })
+          .eq('tag_id', selectedItem.assetTag); // Matches the asset by its unique tag ID
+          
+        if (assetError) console.error("Failed to sync asset table:", assetError);
+      }
+
       setInspections(prev => prev.filter(i => i.id !== selectedItem.id));
       setViewState('list');
       
-      // Optional: You could also trigger an update to the `assets` table here
-      // e.g., if Approved, change the asset's overall condition status.
-
     } catch (error: any) {
       console.error("Error updating inspection:", error);
       alert("Failed to update inspection status.");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -148,7 +160,7 @@ export default function InspectionsPage() {
 
   const handleApprove = () => {
     updateInspectionStatus('Approved');
-    alert(`Success: ${selectedItem?.assetTag} has been Approved and marked Inspected.`);
+    alert(`Success: ${selectedItem?.assetTag} has been Approved! The Asset Inventory has been updated.`);
   };
 
   const submitAction = () => {
@@ -162,22 +174,20 @@ export default function InspectionsPage() {
       alert(`Notification logged: Staff must re-inspect ${selectedItem?.assetTag}.`);
     } else {
       updateInspectionStatus('Rejected', actionNote);
-      alert(`${selectedItem?.assetTag} rejected.`);
+      alert(`${selectedItem?.assetTag} has been rejected.`);
     }
   };
 
-  // Determine which labels to show based on category
   const isLaptop = selectedItem?.category?.toLowerCase().includes('laptop');
   const requiredLabels = isLaptop ? laptopPhotoRequirements : standardPhotoRequirements;
 
-  // Filter List based on Search
   const filteredInspections = inspections.filter(item => 
     item.assetTag.toLowerCase().includes(searchQuery.toLowerCase()) || 
     item.assetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.submittedBy.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Inspections...</div>;
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Inspections Database...</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
@@ -356,13 +366,13 @@ export default function InspectionsPage() {
                 
                 {actionState === 'none' ? (
                   <div className="space-y-4">
-                    <button onClick={handleApprove} className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-black rounded-2xl shadow-sm transition-all flex justify-center items-center gap-2 text-lg">
-                      <CheckCircle2 size={22} /> Approve & Mark Inspected
+                    <button onClick={handleApprove} disabled={isUpdating} className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-black rounded-2xl shadow-sm transition-all flex justify-center items-center gap-2 text-lg disabled:opacity-50">
+                      <CheckCircle2 size={22} /> {isUpdating ? 'Saving...' : 'Approve & Mark Inspected'}
                     </button>
-                    <button onClick={() => setActionState('reinspect')} className="w-full py-4 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-[15px]">
+                    <button onClick={() => setActionState('reinspect')} disabled={isUpdating} className="w-full py-4 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-[15px]">
                       <RefreshCcw size={20} /> Request Re-inspection
                     </button>
-                    <button onClick={() => setActionState('reject')} className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-[15px]">
+                    <button onClick={() => setActionState('reject')} disabled={isUpdating} className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black rounded-2xl transition-all flex justify-center items-center gap-2 text-[15px]">
                       <XCircle size={20} /> Reject & Close
                     </button>
                   </div>
@@ -397,10 +407,10 @@ export default function InspectionsPage() {
                       <button onClick={() => setActionState('none')} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">
                         Cancel
                       </button>
-                      <button onClick={submitAction} className={`flex-1 py-3 text-white font-black rounded-xl shadow-sm transition-colors ${
+                      <button onClick={submitAction} disabled={isUpdating} className={`flex-1 py-3 text-white font-black rounded-xl shadow-sm transition-colors disabled:opacity-50 ${
                         actionState === 'reinspect' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'
                       }`}>
-                        {actionState === 'reinspect' ? 'Send Request' : 'Submit Rejection'}
+                        {isUpdating ? 'Saving...' : (actionState === 'reinspect' ? 'Send Request' : 'Submit Rejection')}
                       </button>
                     </div>
                   </motion.div>
@@ -439,7 +449,6 @@ export default function InspectionsPage() {
               className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-gray-800"
             />
             
-            {/* Context Label at bottom of Lightbox */}
             <motion.div 
               initial={{ y: 20, opacity: 0 }} 
               animate={{ y: 0, opacity: 1 }} 
