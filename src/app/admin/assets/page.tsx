@@ -56,6 +56,7 @@ export default function AdminAssetsPage() {
   const [viewState, setViewState] = useState<'list' | 'add_single' | 'edit_asset' | 'bulk_upload' | 'print_tags' | 'view_details'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [printCategoryFilter, setPrintCategoryFilter] = useState('All');
+  const [listStatusFilter, setListStatusFilter] = useState('All Active'); // NEW: Controls list visibility
   
   // View Details & Assignment State
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -93,7 +94,6 @@ export default function AdminAssetsPage() {
         if (error) throw error;
 
         if (data) {
-          // Map snake_case DB columns to camelCase frontend interface
           const mappedAssets: Asset[] = data.map((dbAsset: any) => ({
             id: dbAsset.id,
             tagId: dbAsset.tag_id,
@@ -128,7 +128,6 @@ export default function AdminAssetsPage() {
     return `VS-${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
   };
 
-  // Auto-generate tag ONLY when adding new (protects existing tags when editing)
   useEffect(() => {
     if (singleAssetForm.category && viewState === 'add_single') {
       setSingleAssetForm(prev => ({ ...prev, tagId: generateTagId(singleAssetForm.category) }));
@@ -186,37 +185,20 @@ export default function AdminAssetsPage() {
 
     try {
       if (isEditingId && selectedAsset) {
-        // Update Existing in Supabase
-        const { error } = await supabase
-          .from('assets')
-          .update(dbPayload)
-          .eq('id', isEditingId);
-
+        const { error } = await supabase.from('assets').update(dbPayload).eq('id', isEditingId);
         if (error) throw error;
 
-        // Update Local State
         const updatedAsset: Asset = { ...selectedAsset, ...singleAssetForm, status: singleAssetForm.status as Asset['status'] };
         setAssets(assets.map(a => a.id === isEditingId ? updatedAsset : a));
         setSelectedAsset(updatedAsset);
         alert('Asset updated successfully in database!');
         setViewState('view_details');
       } else {
-        // Add New to Supabase
-        const { data, error } = await supabase
-          .from('assets')
-          .insert([{ ...dbPayload, photos: [] }])
-          .select();
-
+        const { data, error } = await supabase.from('assets').insert([{ ...dbPayload, photos: [] }]).select();
         if (error) throw error;
 
-        // Update Local State with DB returned data
         if (data && data.length > 0) {
-          const newAsset = {
-             id: data[0].id,
-             ...singleAssetForm, 
-             status: singleAssetForm.status as Asset['status'], 
-             photos: [] 
-          };
+          const newAsset = { id: data[0].id, ...singleAssetForm, status: singleAssetForm.status as Asset['status'], photos: [] };
           setAssets(prev => [newAsset, ...prev]);
         }
         alert('Asset successfully added to database!');
@@ -232,7 +214,7 @@ export default function AdminAssetsPage() {
     }
   };
 
-  // --- Bulk Upload & CSV Logic (Supabase Insert) ---
+  // --- Bulk Upload & CSV Logic ---
   const handleDownloadSample = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Category,Asset Tag,Asset Name,Serial Number,Price / Cost,Purchase Date,Warranty Expiry,Asset Condition,Current Status\n"
@@ -283,16 +265,10 @@ export default function AdminAssetsPage() {
         });
 
         try {
-          // Bulk Insert into Supabase
-          const { data, error } = await supabase
-            .from('assets')
-            .insert(newAssetsDB)
-            .select();
-
+          const { data, error } = await supabase.from('assets').insert(newAssetsDB).select();
           if (error) throw error;
 
           if (data) {
-             // Map DB data back to Local Frontend State format
              const mappedData = data.map((dbAsset: any) => ({
               id: dbAsset.id, tagId: dbAsset.tag_id, name: dbAsset.name, category: dbAsset.category,
               status: dbAsset.status, assignedTo: dbAsset.assigned_to, empCode: dbAsset.emp_code,
@@ -352,18 +328,12 @@ export default function AdminAssetsPage() {
         ctx.fillText(watermarkText, x, y);
 
         const watermarkedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-
         const newPhotos = [...(selectedAsset.photos || []), watermarkedDataUrl];
 
         try {
-          const { error } = await supabase
-            .from('assets')
-            .update({ photos: newPhotos })
-            .eq('id', selectedAsset.id);
-
+          const { error } = await supabase.from('assets').update({ photos: newPhotos }).eq('id', selectedAsset.id);
           if (error) throw error;
 
-          // Update State
           const updatedAsset = { ...selectedAsset, photos: newPhotos };
           setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
           setSelectedAsset(updatedAsset);
@@ -381,7 +351,6 @@ export default function AdminAssetsPage() {
   const updateAssetStatus = async (newStatus: Asset['status'], staff?: {empCode: string, name: string}) => {
     if (!selectedAsset) return;
     
-    // FIX: Explictly defining the types here prevents the TypeScript build error
     let assignedData: { assignedTo?: string; empCode?: string } = { assignedTo: undefined, empCode: undefined };
     let dbAssignedData: { assigned_to: string | null; emp_code: string | null } = { assigned_to: null, emp_code: null };
 
@@ -391,15 +360,9 @@ export default function AdminAssetsPage() {
     }
 
     try {
-      // Update Database
-      const { error } = await supabase
-        .from('assets')
-        .update({ status: newStatus, ...dbAssignedData })
-        .eq('id', selectedAsset.id);
-
+      const { error } = await supabase.from('assets').update({ status: newStatus, ...dbAssignedData }).eq('id', selectedAsset.id);
       if (error) throw error;
 
-      // Update Local State
       const updatedAsset = { ...selectedAsset, status: newStatus, ...assignedData };
       setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
       setSelectedAsset(updatedAsset);
@@ -413,14 +376,30 @@ export default function AdminAssetsPage() {
   const handlePrint = () => window.print();
   const openAssetDetails = (asset: Asset) => { setSelectedAsset(asset); setViewState('view_details'); };
 
-  // Block rendering until mounted to prevent hydration errors
+  // Block rendering until mounted
   if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Assets from Database...</div>;
 
-  // Stats & Filters
+  // Stats
   const totalAssets = assets.length;
   const availableAssets = assets.filter(a => a.status === 'In Stock (Available)').length;
   const assignedAssets = assets.filter(a => a.status === 'Assigned').length;
-  const filteredAssets = assets.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || a.tagId.toLowerCase().includes(searchQuery.toLowerCase()));
+  const repairAssets = assets.filter(a => a.status === 'Maintenance').length;
+
+  // Filter Logic (Search + Status visibility)
+  const filteredAssets = assets.filter(a => {
+    const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          a.tagId.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    let matchesStatus = true;
+    if (listStatusFilter === 'All Active') {
+      matchesStatus = a.status !== 'Retired';
+    } else if (listStatusFilter !== 'All') {
+      matchesStatus = a.status === listStatusFilter;
+    }
+
+    return matchesSearch && matchesStatus;
+  });
+
   const printFilteredAssets = printCategoryFilter === 'All' ? assets : assets.filter(a => a.category === printCategoryFilter);
   const filteredStaff = MOCK_STAFF.filter(s => s.name.toLowerCase().includes(staffSearch.toLowerCase()) || s.empCode.toLowerCase().includes(staffSearch.toLowerCase()));
 
@@ -447,7 +426,7 @@ export default function AdminAssetsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600"><PackageSearch size={24}/></div>
               <div><p className="text-xs font-bold text-gray-500 uppercase">Total Assets</p><p className="text-2xl font-black text-gray-900">{totalAssets}</p></div>
@@ -460,6 +439,10 @@ export default function AdminAssetsPage() {
               <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><User size={24}/></div>
               <div><p className="text-xs font-bold text-gray-500 uppercase">Assigned</p><p className="text-2xl font-black text-gray-900">{assignedAssets}</p></div>
             </div>
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600"><Wrench size={24}/></div>
+              <div><p className="text-xs font-bold text-gray-500 uppercase">In Repair</p><p className="text-2xl font-black text-gray-900">{repairAssets}</p></div>
+            </div>
           </div>
 
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -467,6 +450,22 @@ export default function AdminAssetsPage() {
               <div className="relative w-full sm:w-96">
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="text" placeholder="Search assets by name or tag ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#008b74]" />
+              </div>
+              
+              {/* NEW: Explicit Status Filter Dropdown */}
+              <div className="relative">
+                <select
+                  value={listStatusFilter}
+                  onChange={(e) => setListStatusFilter(e.target.value)}
+                  className="pl-4 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none focus:border-[#008b74] cursor-pointer"
+                >
+                  <option value="All Active">Active Assets Only</option>
+                  <option value="In Stock (Available)">In Stock</option>
+                  <option value="Assigned">Assigned</option>
+                  <option value="Maintenance">In Repair</option>
+                  <option value="Retired">Discarded / Retired</option>
+                  <option value="All">View All (Including Retired)</option>
+                </select>
               </div>
             </div>
             
@@ -482,7 +481,7 @@ export default function AdminAssetsPage() {
                 </thead>
                 <tbody>
                   {filteredAssets.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No assets found in database.</td></tr>
+                    <tr><td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No assets found matching this filter.</td></tr>
                   ) : (
                     filteredAssets.map(asset => (
                       <tr key={asset.id} className="border-b border-gray-50 hover:bg-[#f2faf8] transition-colors">
