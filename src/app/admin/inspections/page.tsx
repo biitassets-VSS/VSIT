@@ -8,17 +8,20 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Import your Supabase client
+import { supabase } from '@/lib/supabaseClient';
+
 // --- Interfaces ---
 interface InspectionReview {
   id: string;
   assetTag: string;
   assetName: string;
-  category: string; // Used to determine photo rules
+  category: string; 
   submittedBy: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Re-inspection';
   notes: string;
-  photos: Record<string, string>; // Maps "Label" -> "Photo URL"
+  photos: Record<string, string>; 
 }
 
 // --- Photo Rules ---
@@ -36,6 +39,7 @@ const standardPhotoRequirements = [
 
 export default function InspectionsPage() {
   const [inspections, setInspections] = useState<InspectionReview[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [viewState, setViewState] = useState<'list' | 'review'>('list');
   const [selectedItem, setSelectedItem] = useState<InspectionReview | null>(null);
   
@@ -43,43 +47,97 @@ export default function InspectionsPage() {
   const [enlargedPhoto, setEnlargedPhoto] = useState<{url: string, label: string} | null>(null);
   const [actionState, setActionState] = useState<'none' | 'reinspect' | 'reject'>('none');
   const [actionNote, setActionNote] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Real-time Database Fetching ---
+  const fetchInspections = async () => {
+    try {
+      // Fetch inspections and JOIN the attached asset data
+      const { data, error } = await supabase
+        .from('inspections')
+        .select(`
+          id,
+          submitted_by,
+          created_at,
+          status,
+          notes,
+          photos,
+          assets ( tag_id, name, category )
+        `)
+        .eq('status', 'Pending') // Only fetch Pending for the main list
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const mappedData: InspectionReview[] = data.map((item: any) => ({
+          id: item.id,
+          assetTag: item.assets?.tag_id || 'Unknown Tag',
+          assetName: item.assets?.name || 'Unknown Asset',
+          category: item.assets?.category || 'Other',
+          submittedBy: item.submitted_by,
+          date: new Date(item.created_at).toLocaleDateString(),
+          status: item.status,
+          notes: item.notes || '',
+          photos: item.photos || {}
+        }));
+        setInspections(mappedData);
+      }
+    } catch (error) {
+      console.error("Error fetching inspections:", error);
+    } finally {
+      setIsLoaded(true);
+    }
+  };
 
   useEffect(() => {
-    // Simulated Data with Correct Labeled Photos
-    setInspections([
-      {
-        id: 'INSP-001',
-        assetTag: 'AST-1042',
-        assetName: 'Dell XPS 15 Laptop',
-        category: 'Laptop',
-        submittedBy: 'Rahul Sharma',
-        date: new Date().toISOString().split('T')[0],
-        status: 'Pending',
-        notes: 'Screen and keyboard are in good condition. Ports are working fine. Found a minor scratch on the back panel but no major damage.',
-        photos: {
-          "Top side": "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80",
-          "Display and Keyboard": "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=80",
-          "Right Side port": "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80",
-          "Left Side port": "https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=80",
-          "Back side with Tag id Sticker": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80"
+    fetchInspections();
+
+    // Set up Real-time Subscription to watch for new inspections
+    const channel = supabase
+      .channel('realtime-inspections')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inspections' },
+        () => {
+          // Refetch data when a change occurs in the DB
+          fetchInspections();
         }
-      },
-      {
-        id: 'INSP-002',
-        assetTag: 'AST-2099',
-        assetName: 'Logitech Wireless Mouse',
-        category: 'Mouse',
-        submittedBy: 'Priya Desai',
-        date: new Date().toISOString().split('T')[0],
-        status: 'Pending',
-        notes: 'Scroll wheel is slightly loose, but it works. Battery compartment is clean.',
-        photos: {
-          "Front View / Main Photo": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=80",
-          "Back side with Tag id Sticker": "https://images.unsplash.com/photo-1615663245857-ac1eeb536fcb?auto=format&fit=crop&w=800&q=80" // Simulated tag photo
-        }
-      }
-    ]);
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  // --- Database Action Handlers ---
+  const updateInspectionStatus = async (newStatus: string, noteToSave: string = '') => {
+    if (!selectedItem) return;
+
+    try {
+      const { error } = await supabase
+        .from('inspections')
+        .update({ 
+          status: newStatus,
+          admin_notes: noteToSave 
+        })
+        .eq('id', selectedItem.id);
+
+      if (error) throw error;
+
+      // Optimistically remove it from the local UI
+      setInspections(prev => prev.filter(i => i.id !== selectedItem.id));
+      setViewState('list');
+      
+      // Optional: You could also trigger an update to the `assets` table here
+      // e.g., if Approved, change the asset's overall condition status.
+
+    } catch (error: any) {
+      console.error("Error updating inspection:", error);
+      alert("Failed to update inspection status.");
+    }
+  };
 
   const openReview = (item: InspectionReview) => {
     setSelectedItem(item);
@@ -89,10 +147,8 @@ export default function InspectionsPage() {
   };
 
   const handleApprove = () => {
-    if (!selectedItem) return;
-    setInspections(prev => prev.filter(i => i.id !== selectedItem.id));
-    alert(`Success: ${selectedItem.assetTag} has been Approved and marked Inspected.`);
-    setViewState('list');
+    updateInspectionStatus('Approved');
+    alert(`Success: ${selectedItem?.assetTag} has been Approved and marked Inspected.`);
   };
 
   const submitAction = () => {
@@ -100,25 +156,31 @@ export default function InspectionsPage() {
       alert(`Please provide a reason for ${actionState === 'reinspect' ? 'the re-inspection' : 'rejection'}.`);
       return;
     }
-    if (!selectedItem) return;
-    
-    setInspections(prev => prev.filter(i => i.id !== selectedItem.id));
     
     if (actionState === 'reinspect') {
-      alert(`Notification sent: Staff must re-inspect ${selectedItem.assetTag}. \nReason: ${actionNote}`);
+      updateInspectionStatus('Re-inspection', actionNote);
+      alert(`Notification logged: Staff must re-inspect ${selectedItem?.assetTag}.`);
     } else {
-      alert(`${selectedItem.assetTag} rejected. Reason: ${actionNote}.`);
+      updateInspectionStatus('Rejected', actionNote);
+      alert(`${selectedItem?.assetTag} rejected.`);
     }
-    
-    setViewState('list');
   };
 
   // Determine which labels to show based on category
   const isLaptop = selectedItem?.category?.toLowerCase().includes('laptop');
   const requiredLabels = isLaptop ? laptopPhotoRequirements : standardPhotoRequirements;
 
+  // Filter List based on Search
+  const filteredInspections = inspections.filter(item => 
+    item.assetTag.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    item.assetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.submittedBy.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Inspections...</div>;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
@@ -136,11 +198,17 @@ export default function InspectionsPage() {
       {/* ========================================== */}
       {viewState === 'list' && (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-black text-gray-900">Pending Reviews ({inspections.length})</h2>
-            <div className="relative hidden sm:block">
+          <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <h2 className="text-lg font-black text-gray-900">Pending Reviews ({filteredInspections.length})</h2>
+            <div className="relative w-full sm:w-auto">
               <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
-              <input type="text" placeholder="Search Tag..." className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-teal-500" />
+              <input 
+                type="text" 
+                placeholder="Search Tag or Name..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full sm:w-64 pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-teal-500" 
+              />
             </div>
           </div>
           
@@ -155,7 +223,7 @@ export default function InspectionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {inspections.length === 0 ? (
+                {filteredInspections.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="p-8 text-center text-gray-400 font-bold">
                       <CheckCircle2 size={32} className="mx-auto mb-3 text-gray-300" />
@@ -163,7 +231,7 @@ export default function InspectionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  inspections.map((item) => (
+                  filteredInspections.map((item) => (
                     <tr key={item.id} className="border-b border-gray-50 hover:bg-teal-50/30 transition-colors group">
                       <td className="p-4">
                         <div className="font-black text-sm text-gray-900">{item.assetName}</div>
@@ -231,13 +299,13 @@ export default function InspectionsPage() {
                   <h3 className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
                     <MessageSquare size={16} className="text-blue-500"/> Staff Inspection Notes
                   </h3>
-                  <p className="text-sm font-medium text-gray-700 leading-relaxed">
+                  <p className="text-sm font-medium text-gray-700 leading-relaxed whitespace-pre-line">
                     {selectedItem.notes || "No notes provided by staff."}
                   </p>
                 </div>
               </div>
 
-              {/* Labeled Photo Gallery (Strictly checks expected slots) */}
+              {/* Labeled Photo Gallery */}
               <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-black text-gray-900 mb-2">
                   Photo Verification
