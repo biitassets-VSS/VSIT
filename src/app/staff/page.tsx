@@ -6,7 +6,7 @@ import {
   MessageSquare, ShieldAlert, Send, Ticket, PlusCircle, 
   Timer, PauseCircle, MonitorUp, ImagePlus
 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient'; // Make sure this alias matches your setup
+import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
 interface AssignedAsset {
@@ -58,63 +58,66 @@ export default function StaffDashboardPage() {
 
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
-  // 1. Fetch Data Directly from Supabase
+  // 1. Fetch Data Directly from Supabase (With Local Storage Fallback)
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Grab email from Supabase OR localStorage
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user?.email) {
+        const userEmail = user?.email || localStorage.getItem('userEmail');
+
+        if (!userEmail) {
           setStaffUser({ name: 'Guest User', empCode: 'GUEST-000', email: 'Please log in' });
           setIsLoaded(true);
           return;
         }
 
-        // Fetch User Profile (Update 'employee_code' if your DB uses 'emp_code' or 'id')
+        // Fetch User Profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('full_name, employee_code, email')
-          .eq('email', user.email)
+          .eq('email', userEmail)
           .maybeSingle();
 
-        if (profile) {
-          const currentUser = { 
-            name: profile.full_name || 'Staff Member', 
-            empCode: profile.employee_code || 'N/A', 
-            email: profile.email || user.email 
-          };
-          setStaffUser(currentUser);
+        // Setup Current User
+        const currentUser = { 
+          name: profile?.full_name || localStorage.getItem('userName') || 'Staff Member', 
+          empCode: profile?.employee_code || 'N/A', 
+          email: profile?.email || userEmail 
+        };
+        
+        setStaffUser(currentUser);
 
-          // Force sidebar update just in case it's still relying on local storage
-          localStorage.setItem('userName', currentUser.name);
-          window.dispatchEvent(new Event('storage'));
+        // Force sidebar update just in case
+        localStorage.setItem('userName', currentUser.name);
+        window.dispatchEvent(new Event('storage'));
 
-          // Fetch Assets and Tickets
-          if (currentUser.empCode !== 'N/A') {
-            const [assetRes, ticketRes] = await Promise.all([
-              supabase.from('assets').select('*').eq('emp_code', currentUser.empCode),
-              supabase.from('tickets').select('*').eq('emp_code', currentUser.empCode).order('created_at', { ascending: false })
-            ]);
+        // Fetch Assets and Tickets
+        if (currentUser.empCode !== 'N/A') {
+          const [assetRes, ticketRes] = await Promise.all([
+            supabase.from('assets').select('*').eq('emp_code', currentUser.empCode),
+            supabase.from('tickets').select('*').eq('emp_code', currentUser.empCode).order('created_at', { ascending: false })
+          ]);
 
-            if (assetRes.data) {
-              setAssets(assetRes.data.map((a: any) => ({
-                id: a.id,
-                tagId: a.tag_id,
-                name: a.name,
-                category: a.category,
-                status: a.status,
-                inspectionStatus: a.inspection_status || 'Due',
-                adminFeedback: a.inspection_notes || ''
-              })));
-            }
+          if (assetRes.data) {
+            setAssets(assetRes.data.map((a: any) => ({
+              id: a.id,
+              tagId: a.tag_id,
+              name: a.name,
+              category: a.category,
+              status: a.status,
+              inspectionStatus: a.inspection_status || 'Due',
+              adminFeedback: a.inspection_notes || ''
+            })));
+          }
 
-            if (ticketRes.data) {
-              setActiveTickets(ticketRes.data.map((t: any) => ({
-                id: t.id,
-                title: t.title,
-                status: t.status || 'Open',
-                estimatedTime: t.estimated_time
-              })));
-            }
+          if (ticketRes.data) {
+            setActiveTickets(ticketRes.data.map((t: any) => ({
+              id: t.id,
+              title: t.title,
+              status: t.status || 'Open',
+              estimatedTime: t.estimated_time
+            })));
           }
         }
       } catch (err) {

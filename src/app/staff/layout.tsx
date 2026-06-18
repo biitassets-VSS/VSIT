@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Laptop, Ticket, ClipboardCheck,
   LogOut, Menu, X, ChevronDown 
 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient'; // <--- This import is now fixed!
+import { supabase } from '@/lib/supabaseClient';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -23,17 +23,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  // FETCH DATA DIRECTLY FROM SUPABASE
+  // FETCH DATA DIRECTLY FROM SUPABASE (WITH LOCAL STORAGE FALLBACK)
   useEffect(() => {
     async function fetchUserData() {
+      // 1. Try Supabase Auth first, then fallback to your custom localStorage
       const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || localStorage.getItem('userEmail');
 
-      if (user?.email) {
+      if (userEmail) {
         const { data, error } = await supabase
           .from('profiles')
           .select('full_name, employee_code') 
-          .eq('email', user.email)
-          .single();
+          .eq('email', userEmail)
+          .maybeSingle(); // maybeSingle prevents crashes if data is missing
 
         if (data) {
           const fullName = data.full_name || 'Staff Member';
@@ -51,9 +53,26 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             name: fullName,
             empCode: data.employee_code || 'N/A', 
             initials: initials.toUpperCase(),
-            email: user.email
+            email: userEmail
+          });
+        } else {
+          // SAFE FALLBACK: If DB lookup fails, use localStorage name
+          const savedName = localStorage.getItem('userName') || 'Staff Member';
+          setStaffUser({
+            name: savedName,
+            empCode: 'N/A',
+            initials: 'SM',
+            email: userEmail
           });
         }
+      } else {
+         // Default Guest State if no email found anywhere
+         setStaffUser({
+          name: 'Guest User',
+          empCode: 'GUEST',
+          initials: 'GU',
+          email: 'Please log in'
+        });
       }
     }
 
@@ -70,11 +89,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const handleLogout = async () => {
     await supabase.auth.signOut();
     
-    // Clear local storage fallbacks just in case
+    // Clear ALL relevant session data before redirecting
     localStorage.removeItem('logged_in_staff');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
+    localStorage.removeItem('authToken');
+    
+    // Trigger a storage event to clear out state in other components
+    window.dispatchEvent(new Event('storage'));
     
     router.push('/');
   };
@@ -90,6 +113,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
         <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain" />
         </div>
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg">
@@ -105,17 +129,18 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         />
       )}
 
+      {/* SIDEBAR NAVIGATION */}
       <aside 
-        className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ${
+        className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* SIDEBAR HEADER */}
         <div className="h-20 flex items-center px-6 border-b border-gray-100 justify-between shrink-0">
           <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -126,7 +151,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             const isActive = pathname === link.href || (link.href !== '/staff' && pathname.startsWith(link.href));
             const Icon = link.icon;
             return (
-              <Link key={link.name} href={link.href} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${isActive ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+              <Link 
+                key={link.name} href={link.href}
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${
+                  isActive ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 2} /> {link.name}
               </Link>
             );
