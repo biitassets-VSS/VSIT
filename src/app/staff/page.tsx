@@ -71,18 +71,19 @@ export default function StaffDashboardPage() {
       }
 
       try {
-        // Step B: Use select('*') to get all columns and find the actual name/empCode
+        // Step B: Use maybeSingle() to prevent 406 crashes if data is hidden by RLS or missing
         const { data: profileData, error: profileError } = await supabase
           .from('profiles') 
           .select('*') 
           .eq('email', userEmail)
-          .single();
+          .maybeSingle(); 
 
         // 🐛 DEBUGGING: Check your browser console to see exactly what Supabase sends back!
         console.log("Supabase Profile Data:", profileData);
         if (profileError) console.error("Supabase Error:", profileError);
 
-        // Check common database column names just in case they differ
+        // Check common database column names just in case they differ. 
+        // Optional chaining (?.) safely handles the case where profileData is null.
         let currentUser = { 
           name: profileData?.full_name || profileData?.name || profileData?.first_name || 'Staff Member', 
           empCode: profileData?.emp_code || profileData?.employee_code || profileData?.emp_id || 'N/A', 
@@ -134,7 +135,7 @@ export default function StaffDashboardPage() {
     loadUserAndData();
   }, []);
 
-  // --- Handlers (Unchanged) ---
+  // --- Handlers ---
   const openInspection = (asset: AssignedAsset) => {
     setSelectedAsset(asset);
     setPhotos({});
