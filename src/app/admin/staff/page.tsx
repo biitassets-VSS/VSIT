@@ -12,13 +12,13 @@ import { supabase } from '@/lib/supabaseClient';
 // Updated Staff Interface mapped to Supabase Schema
 interface Staff { 
   id?: string;
-  empId: string; // Maps to emp_code in DB
+  empId: string; 
   name: string; 
   department: string; 
-  isActive: boolean; // Maps to status in DB ('Active' / 'Inactive')
+  isActive: boolean; 
   email: string;
   password?: string;
-  phone: string; // Maps to contact_number in DB
+  phone: string; 
   dob?: string;
   joiningDate?: string;
 }
@@ -63,6 +63,7 @@ export default function StaffPage() {
             department: dbStaff.department,
             isActive: dbStaff.status === 'Active',
             email: dbStaff.email,
+            password: dbStaff.password || '',
             phone: dbStaff.contact_number || '',
             dob: dbStaff.dob || '',
             joiningDate: dbStaff.joining_date || ''
@@ -131,15 +132,19 @@ export default function StaffPage() {
     setIsUploading(true);
 
     try {
+      const dbPayload = {
+        name: formData.name,
+        department: formData.department,
+        contact_number: formData.phone,
+        email: formData.email,
+        password: formData.password,
+        dob: formData.dob,
+        joining_date: formData.joiningDate,
+        status: formData.isActive ? 'Active' : 'Inactive',
+      };
+
       if (isEditing && formData.empId) {
         // Update existing staff
-        const dbPayload = {
-          name: formData.name,
-          department: formData.department,
-          contact_number: formData.phone,
-          email: formData.email,
-          status: formData.isActive ? 'Active' : 'Inactive',
-        };
         const { error } = await supabase.from('staff').update(dbPayload).eq('emp_code', formData.empId);
         if (error) throw error;
         
@@ -148,15 +153,9 @@ export default function StaffPage() {
       } else {
         // Insert new staff
         const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
-        const dbPayload = {
-          emp_code: newId,
-          name: formData.name,
-          department: formData.department,
-          contact_number: formData.phone,
-          email: formData.email,
-          status: formData.isActive ? 'Active' : 'Inactive',
-        };
-        const { data, error } = await supabase.from('staff').insert([dbPayload]).select();
+        const newStaffPayload = { ...dbPayload, emp_code: newId };
+        
+        const { data, error } = await supabase.from('staff').insert([newStaffPayload]).select();
         if (error) throw error;
 
         if (data) {
@@ -176,7 +175,7 @@ export default function StaffPage() {
   // --- BULK UPLOAD LOGIC ---
 
   const handleDownloadSample = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Name,Email,Password,Phone,Department\nJane Smith,jane@vsit.com,pass123,1234567890,Accounts\nJohn Doe,john@vsit.com,pass123,9876543210,IT Department";
+    const csvContent = "data:text/csv;charset=utf-8,Name,Email,Password,Phone,Department,DateOfBirth,JoiningDate\nJane Smith,jane@vsit.com,pass123,1234567890,Accounts,1995-01-01,2023-01-01\nJohn Doe,john@vsit.com,secure789,9876543210,IT Department,1992-05-15,2024-02-10";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -200,7 +199,7 @@ export default function StaffPage() {
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       if (text) {
-        const rows = text.split('\n').slice(1);
+        const rows = text.split('\n').slice(1); // Skip Header
         const newStaffDB: any[] = [];
         
         rows.forEach((row) => {
@@ -208,16 +207,22 @@ export default function StaffPage() {
           const cols = row.split(',');
           const name = cols[0]?.trim();
           const email = cols[1]?.trim();
+          const password = cols[2]?.trim();
           const phone = cols[3]?.trim();
           const department = cols[4]?.trim() || 'IT Department';
+          const dob = cols[5]?.trim();
+          const joiningDate = cols[6]?.trim();
 
           if (name && email) {
             newStaffDB.push({
               emp_code: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
               name: name,
               email: email,
+              password: password,
               contact_number: phone,
               department: department,
+              dob: dob,
+              joining_date: joiningDate,
               status: 'Active'
             });
           }
@@ -288,7 +293,7 @@ export default function StaffPage() {
               <tr className="bg-white border-b border-gray-100 text-[11px] uppercase tracking-wider text-gray-400 font-black">
                 <th className="p-4 pl-6">Staff Member</th>
                 <th className="p-4">Contact Info</th>
-                <th className="p-4">Department</th>
+                <th className="p-4">Department & Dates</th>
                 <th className="p-4">Assigned Assets</th>
                 <th className="p-4 text-center">Login Status</th>
                 <th className="p-4 pr-6 text-right">Actions</th>
@@ -318,6 +323,7 @@ export default function StaffPage() {
                     {/* Dept & Dates */}
                     <td className="p-4">
                       <div className="text-sm font-black text-gray-700">{staff.department}</div>
+                      <div className="text-[10px] font-bold text-gray-400 uppercase mt-1">Joined: {staff.joiningDate || '-'}</div>
                     </td>
 
                     {/* Assigned Assets */}
@@ -383,6 +389,14 @@ export default function StaffPage() {
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Phone Number</label>
                     <input type="tel" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
                   </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><CalendarDays size={14}/> Date of Birth</label>
+                    <input type="date" value={formData.dob || ''} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><CalendarDays size={14}/> Joining Date</label>
+                    <input type="date" value={formData.joiningDate || ''} onChange={(e) => setFormData({...formData, joiningDate: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
+                  </div>
                 </div>
 
                 <h3 className="text-sm font-black text-gray-800 border-b pb-2 pt-2">Account & Login</h3>
@@ -406,12 +420,10 @@ export default function StaffPage() {
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><Mail size={14}/> Login Email</label>
                     <input type="email" required placeholder="name@vsit.com" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
                   </div>
-                  {!isEditing && (
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><Lock size={14}/> Default Password</label>
-                      <input type="text" placeholder="Will be assigned by system" disabled className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-100 text-gray-500 text-sm font-medium cursor-not-allowed"/>
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><Lock size={14}/> Login Password</label>
+                    <input type="text" placeholder="Assign a secure password" value={formData.password || ''} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
+                  </div>
                 </div>
 
                 <div className="pt-6 flex gap-3">
