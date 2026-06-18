@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Import your Supabase client
+import { supabase } from '@/lib/supabaseClient';
+
 // --- Interfaces ---
 interface AssignedAsset {
   id: string;
@@ -15,7 +18,7 @@ interface AssignedAsset {
   name: string;
   category: string;
   status: string;
-  inspectionStatus: 'Due' | 'Pending Approval' | 'Inspected' | 'Re-inspection';
+  inspectionStatus: 'Due' | 'Pending Approval' | 'Passed' | 'Failed' | 'Pending Repair' | 'Re-inspection';
   adminFeedback?: string;
 }
 
@@ -35,7 +38,7 @@ const standardPhotoRequirements = [
 ];
 
 export default function StaffDashboardPage() {
-  // Mock Staff Data
+  // Mock Staff Data (In a real app, this comes from your Auth context / Login)
   const staffUser = {
     name: 'Rahul Sharma',
     empCode: 'EMP-1042',
@@ -45,10 +48,10 @@ export default function StaffDashboardPage() {
   // --- State ---
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
   const [activeTickets, setActiveTickets] = useState<StaffTicket[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   
   // View Controller
   const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset'>('dashboard');
-  
   const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
   
   // Forms State
@@ -57,27 +60,60 @@ export default function StaffDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [ticketForm, setTicketForm] = useState({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
-  const [ticketPhoto, setTicketPhoto] = useState<string | null>(null); // NEW: Screenshot state for Tickets
+  const [ticketPhoto, setTicketPhoto] = useState<string | null>(null);
 
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
+  // --- LIVE DATA FETCHING ---
   useEffect(() => {
-    setAssets([
-      {
-        id: 'AST-1042', tagId: 'AST-1042', name: 'Dell XPS 15 Laptop', category: 'Laptop', 
-        status: 'Assigned', inspectionStatus: 'Re-inspection', 
-        adminFeedback: "The 'Left Side port' photo is too blurry. Please retake."
-      },
-      {
-        id: 'AST-2099', tagId: 'AST-2099', name: 'Logitech MX Master 3', category: 'Mouse', 
-        status: 'Assigned', inspectionStatus: 'Due'
-      }
-    ]);
+    const fetchStaffData = async () => {
+      try {
+        // Fetch Assets assigned to this employee
+        const { data: assetData, error: assetError } = await supabase
+          .from('assets')
+          .select('*')
+          .eq('emp_code', staffUser.empCode)
+          .eq('status', 'Assigned');
 
-    setActiveTickets([
-      { id: 'TKT-9021', title: 'Laptop Screen Flickering', status: 'In Progress', estimatedTime: '15 Min' },
-      { id: 'TKT-9025', title: 'Keyboard Keys Sticking', status: 'Hold', estimatedTime: 'Hold' }
-    ]);
+        if (assetError) throw assetError;
+
+        if (assetData) {
+          setAssets(assetData.map((a: any) => ({
+            id: a.id,
+            tagId: a.tag_id,
+            name: a.name,
+            category: a.category,
+            status: a.status,
+            inspectionStatus: a.inspection_status || 'Due',
+            adminFeedback: a.inspection_notes || ''
+          })));
+        }
+
+        // Fetch Tickets raised by this employee
+        const { data: ticketData, error: ticketError } = await supabase
+          .from('tickets')
+          .select('*')
+          .eq('emp_code', staffUser.empCode)
+          .order('created_at', { ascending: false });
+
+        if (ticketError) throw ticketError;
+
+        if (ticketData) {
+          setActiveTickets(ticketData.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status || 'Open',
+            estimatedTime: t.estimated_time
+          })));
+        }
+      } catch (error) {
+        console.error("Error fetching staff data:", error);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+
+    fetchStaffData();
   }, []);
 
   // --- Handlers ---
@@ -88,24 +124,6 @@ export default function StaffDashboardPage() {
     setViewState('inspecting');
   };
 
-  const handleSubmitTicket = () => {
-    if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setActiveTickets(prev => [{
-        id: `TKT-${Math.floor(Math.random() * 9000) + 1000}`,
-        title: ticketForm.title,
-        status: 'Open'
-      }, ...prev]);
-      setIsSubmitting(false);
-      setViewState('dashboard');
-      setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
-      setTicketPhoto(null); // Reset photo
-      alert('Ticket raised successfully!');
-    }, 1000);
-  };
-
-  // NEW: Ticket Screenshot Upload Handler
   const handleTicketPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -116,18 +134,83 @@ export default function StaffDashboardPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmitAssetRequest = () => {
+  // Submit standard IT Ticket to DB
+  const handleSubmitTicket = async () => {
+    if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
+    setIsSubmitting(true);
+    
+    try {
+      const { data, error } = await supabase.from('tickets').insert([{
+        title: ticketForm.title,
+        description: ticketForm.description,
+        category: ticketForm.category,
+        priority: ticketForm.priority,
+        status: 'Open',
+        submitted_by: staffUser.name,
+        emp_code: staffUser.empCode,
+        // Optional: If your tickets table has a screenshot column, it will save here
+        screenshot: ticketPhoto 
+      }]).select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setActiveTickets(prev => [{
+          id: data[0].id,
+          title: data[0].title,
+          status: data[0].status
+        }, ...prev]);
+      }
+      
+      setViewState('dashboard');
+      setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
+      setTicketPhoto(null);
+      alert('Ticket raised successfully!');
+    } catch (error: any) {
+      alert("Error submitting ticket: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Submit Asset Request (Mapped as a Ticket to Admin)
+  const handleSubmitAssetRequest = async () => {
     if (!assetRequestForm.reason) return alert("Please provide a reason.");
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    
+    try {
+      const { data, error } = await supabase.from('tickets').insert([{
+        title: `Asset Request: ${assetRequestForm.category}`,
+        description: `Reason for request: ${assetRequestForm.reason}`,
+        category: 'Hardware Request',
+        priority: 'Medium',
+        status: 'Open',
+        submitted_by: staffUser.name,
+        emp_code: staffUser.empCode
+      }]).select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setActiveTickets(prev => [{
+          id: data[0].id,
+          title: data[0].title,
+          status: data[0].status
+        }, ...prev]);
+      }
+
       setViewState('dashboard');
       setAssetRequestForm({ category: 'Mouse', reason: '' });
       alert('Asset request submitted to Admin for approval!');
-    }, 1000);
+    } catch (error: any) {
+      alert("Error submitting asset request: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSubmitInspection = () => {
+  // Submit Inspection to DB
+  const handleSubmitInspection = async () => {
     if (!selectedAsset) return;
     const requiredLabels = selectedAsset.category.toLowerCase().includes('laptop') ? laptopPhotoRequirements : standardPhotoRequirements;
     const missingPhotos = requiredLabels.filter(label => !photos[label]);
@@ -138,15 +221,39 @@ export default function StaffDashboardPage() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      // 1. Insert into Inspections Table
+      const { error: inspectError } = await supabase.from('inspections').insert([{
+        asset_id: selectedAsset.id, // Links inspection to specific asset
+        submitted_by: staffUser.name,
+        emp_code: staffUser.empCode,
+        status: 'Pending',
+        notes: notes,
+        photos: photos
+      }]);
+
+      if (inspectError) throw inspectError;
+
+      // 2. Update Assets Table Status
+      const { error: assetError } = await supabase.from('assets').update({
+        inspection_status: 'Pending Approval'
+      }).eq('id', selectedAsset.id);
+
+      if (assetError) throw assetError;
+
+      // Update UI locally
       setAssets(prev => prev.map(a => a.id === selectedAsset.id ? { ...a, inspectionStatus: 'Pending Approval' } : a));
-      alert('Inspection submitted successfully!');
-      setIsSubmitting(false);
+      
+      alert('Inspection submitted successfully! Admin will review it shortly.');
       setViewState('dashboard');
-    }, 1000);
+    } catch (error: any) {
+      alert("Error submitting inspection: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // --- Photo Upload Logic with Watermark (For Inspections) ---
+  // --- Photo Upload Logic with Watermark ---
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -181,6 +288,8 @@ export default function StaffDashboardPage() {
 
   const isLaptop = selectedAsset?.category?.toLowerCase().includes('laptop');
   const requiredLabels = isLaptop ? laptopPhotoRequirements : standardPhotoRequirements;
+
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Dashboard...</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto px-4 sm:px-0">
@@ -234,11 +343,13 @@ export default function StaffDashboardPage() {
                   <div key={ticket.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-2xl border bg-gray-50 border-gray-200 gap-3">
                     <div>
                       <h4 className="font-black text-gray-900 text-sm flex items-center gap-2">
-                        {ticket.title} <span className="text-[10px] bg-white border px-1.5 py-0.5 rounded text-gray-500 uppercase">{ticket.id}</span>
+                        {ticket.title} <span className="text-[10px] bg-white border px-1.5 py-0.5 rounded text-gray-500 uppercase">{ticket.id.substring(0, 8)}...</span>
                       </h4>
-                      <span className="text-xs font-bold text-blue-600 mt-1.5 inline-block">Status: {ticket.status}</span>
+                      <span className={`text-xs font-bold mt-1.5 inline-block ${
+                        ticket.status === 'Resolved' ? 'text-green-600' : 'text-blue-600'
+                      }`}>Status: {ticket.status}</span>
                     </div>
-                    {ticket.estimatedTime && (
+                    {ticket.estimatedTime && ticket.status !== 'Resolved' && (
                       <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 font-black text-xs uppercase shadow-sm ${ticket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
                         {ticket.estimatedTime === 'Hold' ? <PauseCircle size={14}/> : <Timer size={14}/>}
                         {ticket.estimatedTime === 'Hold' ? 'On Hold' : `ETA: ${ticket.estimatedTime}`}
@@ -257,33 +368,45 @@ export default function StaffDashboardPage() {
                 <Package size={20} className="text-teal-600" /> My Assigned Assets ({assets.length})
               </h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-              {assets.map((asset) => (
-                <div key={asset.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-200 flex flex-col justify-between hover:border-teal-300 transition-colors group">
-                  <div>
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="text-xs font-black bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-gray-600 uppercase tracking-wider">{asset.category}</span>
-                      {asset.inspectionStatus === 'Inspected' && <CheckCircle2 size={20} className="text-green-500" />}
-                      {asset.inspectionStatus === 'Re-inspection' && <ShieldAlert size={20} className="text-orange-500 animate-pulse" />}
+            
+            {assets.length === 0 ? (
+              <div className="p-10 text-center text-gray-400 font-bold text-sm">
+                No assets currently assigned to you.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
+                {assets.map((asset) => (
+                  <div key={asset.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-200 flex flex-col justify-between hover:border-teal-300 transition-colors group">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-xs font-black bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-gray-600 uppercase tracking-wider">{asset.category}</span>
+                        {(asset.inspectionStatus === 'Passed' || asset.inspectionStatus === 'Inspected') && <CheckCircle2 size={20} className="text-green-500" />}
+                        {asset.inspectionStatus === 'Re-inspection' && <ShieldAlert size={20} className="text-orange-500 animate-pulse" />}
+                      </div>
+                      <h3 className="text-lg font-black text-gray-900 mb-1">{asset.name}</h3>
+                      <p className="text-sm font-bold text-gray-500 uppercase">{asset.tagId}</p>
                     </div>
-                    <h3 className="text-lg font-black text-gray-900 mb-1">{asset.name}</h3>
-                    <p className="text-sm font-bold text-gray-500 uppercase">{asset.tagId}</p>
+                    <div className="mt-6 pt-5 border-t border-gray-200 flex items-center justify-between">
+                      <span className={`text-xs font-black uppercase tracking-wider ${
+                        asset.inspectionStatus === 'Due' ? 'text-blue-600' : 
+                        asset.inspectionStatus === 'Re-inspection' ? 'text-orange-600' : 
+                        asset.inspectionStatus === 'Pending Approval' ? 'text-yellow-600' : 
+                        asset.inspectionStatus === 'Failed' ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {asset.inspectionStatus}
+                      </span>
+                      {(asset.inspectionStatus === 'Due' || asset.inspectionStatus === 'Re-inspection') ? (
+                        <button onClick={() => openInspection(asset)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-colors flex items-center gap-2">
+                          <Camera size={14} /> Start Inspection
+                        </button>
+                      ) : asset.inspectionStatus === 'Pending Approval' ? (
+                        <span className="text-xs font-bold text-gray-400">Waiting for Admin...</span>
+                      ) : <span className="text-xs font-bold text-gray-400">Up to date</span>}
+                    </div>
                   </div>
-                  <div className="mt-6 pt-5 border-t border-gray-200 flex items-center justify-between">
-                    <span className={`text-xs font-black uppercase tracking-wider ${asset.inspectionStatus === 'Due' ? 'text-blue-600' : asset.inspectionStatus === 'Re-inspection' ? 'text-orange-600' : asset.inspectionStatus === 'Pending Approval' ? 'text-yellow-600' : 'text-green-600'}`}>
-                      {asset.inspectionStatus}
-                    </span>
-                    {(asset.inspectionStatus === 'Due' || asset.inspectionStatus === 'Re-inspection') ? (
-                      <button onClick={() => openInspection(asset)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-colors flex items-center gap-2">
-                        <Camera size={14} /> Start Inspection
-                      </button>
-                    ) : asset.inspectionStatus === 'Pending Approval' ? (
-                      <span className="text-xs font-bold text-gray-400">Waiting for Admin...</span>
-                    ) : <span className="text-xs font-bold text-gray-400">Up to date</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -355,7 +478,6 @@ export default function StaffDashboardPage() {
                 />
               </div>
 
-              {/* NEW: SCREENSHOT UPLOAD SECTION */}
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase mb-2">Attach Screenshot (Optional)</label>
                 {ticketPhoto ? (
@@ -386,7 +508,7 @@ export default function StaffDashboardPage() {
               <button 
                 onClick={handleSubmitTicket}
                 disabled={isSubmitting}
-                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-4"
+                className={`w-full py-4 font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-4 ${isSubmitting ? 'bg-gray-400 text-white' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
               >
                 {isSubmitting ? 'Submitting...' : <><Send size={18} /> Submit Ticket</>}
               </button>
@@ -442,7 +564,7 @@ export default function StaffDashboardPage() {
               <button 
                 onClick={handleSubmitAssetRequest}
                 disabled={isSubmitting}
-                className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+                className={`w-full py-4 font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 ${isSubmitting ? 'bg-gray-400 text-white' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
               >
                 {isSubmitting ? 'Submitting...' : <><Send size={18} /> Send Request to Admin</>}
               </button>
@@ -487,7 +609,7 @@ export default function StaffDashboardPage() {
                 <Camera size={20} className="text-teal-600" /> Upload Photos
               </h3>
               <p className="text-sm font-bold text-teal-800 bg-teal-50 p-3 sm:p-4 rounded-xl border border-teal-100 mb-6">
-                {isLaptop ? 'Laptop Rules: All 5 angles required.' : 'Standard Rules: 2 angles required.'} Photos are watermarked.
+                {isLaptop ? 'Laptop Rules: All 5 angles required.' : 'Standard Rules: 2 angles required.'} Photos are auto-watermarked.
               </p>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -533,7 +655,7 @@ export default function StaffDashboardPage() {
               <button 
                 onClick={handleSubmitInspection}
                 disabled={isSubmitting} 
-                className="w-full sm:w-auto px-8 py-4 bg-teal-600 hover:bg-teal-700 text-white text-[15px] font-black rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 min-w-[200px]"
+                className={`w-full sm:w-auto px-8 py-4 text-white text-[15px] font-black rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 min-w-[200px] ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}
               >
                 {isSubmitting ? 'Submitting...' : <><Send size={18}/> Submit to Admin</>}
               </button>
