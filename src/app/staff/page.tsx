@@ -61,30 +61,38 @@ export default function StaffDashboardPage() {
   // 1. Load User Profile from Supabase & Fetch Live Data
   useEffect(() => {
     const loadUserAndData = async () => {
-      // Step A: Get email from local storage (saved during login)
       const userEmail = localStorage.getItem('userEmail');
       const userRole = localStorage.getItem('userRole');
 
       if (!userEmail) {
-        // Fallback if not logged in properly or viewing as generic guest
         setStaffUser({ name: 'Guest User', empCode: 'GUEST-000', email: 'Please log in' });
         setIsLoaded(true);
         return;
       }
 
       try {
-        // Step B: Fetch EXACT profile details from Supabase 'profiles' table
+        // Step B: Use select('*') to get all columns and find the actual name/empCode
         const { data: profileData, error: profileError } = await supabase
           .from('profiles') 
-          .select('full_name, emp_code, email')
+          .select('*') 
           .eq('email', userEmail)
           .single();
 
+        // 🐛 DEBUGGING: Check your browser console to see exactly what Supabase sends back!
+        console.log("Supabase Profile Data:", profileData);
+        if (profileError) console.error("Supabase Error:", profileError);
+
+        // Check common database column names just in case they differ
         let currentUser = { 
-          name: profileData?.full_name || 'Staff Member', 
-          empCode: profileData?.emp_code || 'N/A', 
+          name: profileData?.full_name || profileData?.name || profileData?.first_name || 'Staff Member', 
+          empCode: profileData?.emp_code || profileData?.employee_code || profileData?.emp_id || 'N/A', 
           email: profileData?.email || userEmail 
         };
+
+        // 💾 CRITICAL FIX FOR SIDEBAR: Save the real name so the Sidebar can use it
+        localStorage.setItem('userName', currentUser.name);
+        // Force a storage event so the sidebar updates instantly without refreshing
+        window.dispatchEvent(new Event('storage'));
 
         setStaffUser(currentUser);
 
@@ -126,7 +134,7 @@ export default function StaffDashboardPage() {
     loadUserAndData();
   }, []);
 
-  // --- Handlers ---
+  // --- Handlers (Unchanged) ---
   const openInspection = (asset: AssignedAsset) => {
     setSelectedAsset(asset);
     setPhotos({});
