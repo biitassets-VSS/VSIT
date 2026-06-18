@@ -7,6 +7,7 @@ import {
   User, ShieldAlert, Tag, Filter, Send, Timer, PauseCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/lib/supabaseClient'; // Make sure this import is here
 
 // --- Interfaces ---
 interface TicketReply {
@@ -23,7 +24,7 @@ interface SupportTicket {
   description: string;
   priority: 'High' | 'Medium' | 'Low';
   status: 'Open' | 'In Progress' | 'Resolved' | 'Hold';
-  estimatedTime?: string; // NEW ETA FIELD
+  estimatedTime?: string; 
   submittedBy: string;
   empCode: string;
   date: string;
@@ -35,38 +36,48 @@ export default function AdminTicketsPage() {
   const [viewState, setViewState] = useState<'list' | 'detail'>('list');
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'In Progress' | 'Hold' | 'Resolved'>('All');
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   
   // Admin Action State
   const [replyText, setReplyText] = useState('');
   const [newStatus, setNewStatus] = useState<'Open' | 'In Progress' | 'Hold' | 'Resolved'>('Open');
   const [eta, setEta] = useState<string>('');
 
+  // 1. FETCH TICKETS FROM SUPABASE
   useEffect(() => {
-    setTickets([
-      {
-        id: 'TKT-9021',
-        title: 'Laptop Screen Flickering',
-        description: 'My Dell XPS 15 screen randomly flickers when connected to the charger.',
-        priority: 'High',
-        status: 'Open',
-        submittedBy: 'Rahul Sharma',
-        empCode: 'EMP-1042',
-        date: new Date().toISOString().split('T')[0],
-        replies: []
-      },
-      {
-        id: 'TKT-9022',
-        title: 'Need Adobe Creative Cloud Access',
-        description: 'Hi, I need access to Adobe Photoshop and Illustrator for the new marketing campaign.',
-        priority: 'Medium',
-        status: 'In Progress',
-        estimatedTime: '45 Min',
-        submittedBy: 'Priya Desai',
-        empCode: 'EMP-2099',
-        date: '2023-10-24',
-        replies: []
+    const fetchTickets = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('tickets')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          const mappedTickets: SupportTicket[] = data.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            priority: t.priority || 'Medium',
+            status: t.status || 'Open',
+            estimatedTime: t.estimated_time || '',
+            submittedBy: t.submitted_by || 'Unknown User',
+            empCode: t.emp_code || '',
+            date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
+            replies: t.replies || [] // Assumes 'replies' is a JSONB column in Supabase
+          }));
+          setTickets(mappedTickets);
+        }
+      } catch (error) {
+        console.error("Error fetching tickets:", error);
+      } finally {
+        setIsLoaded(true);
       }
-    ]);
+    };
+
+    fetchTickets();
   }, []);
 
   const openTicket = (ticket: SupportTicket) => {
@@ -77,17 +88,15 @@ export default function AdminTicketsPage() {
     setViewState('detail');
   };
 
-  const handleUpdateTicket = () => {
+  // 2. UPDATE TICKET IN SUPABASE
+  const handleUpdateTicket = async () => {
     if (!selectedTicket) return;
+    setIsUpdating(true);
 
-    const updatedTicket = { 
-      ...selectedTicket, 
-      status: newStatus,
-      estimatedTime: eta 
-    };
+    const newReplies = [...(selectedTicket.replies || [])];
     
     if (replyText.trim()) {
-      updatedTicket.replies.push({
+      newReplies.push({
         id: Date.now().toString(),
         sender: 'Admin',
         name: 'IT Admin',
@@ -96,15 +105,45 @@ export default function AdminTicketsPage() {
       });
     }
 
-    setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-    setSelectedTicket(updatedTicket);
-    setReplyText('');
-    alert(`Ticket ${selectedTicket.id} updated! Notification sent to staff.`);
+    const dbPayload = {
+      status: newStatus,
+      estimated_time: eta,
+      replies: newReplies
+    };
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update(dbPayload)
+        .eq('id', selectedTicket.id);
+
+      if (error) throw error;
+
+      // Update local state to reflect changes instantly
+      const updatedTicket = { 
+        ...selectedTicket, 
+        status: newStatus,
+        estimatedTime: eta,
+        replies: newReplies
+      };
+
+      setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
+      setSelectedTicket(updatedTicket);
+      setReplyText('');
+      alert(`Ticket updated successfully! Notification sent to staff.`);
+    } catch (error: any) {
+      console.error("Failed to update ticket:", error);
+      alert("Failed to update ticket: " + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const filteredTickets = tickets.filter(t => filterStatus === 'All' || t.status === filterStatus);
   const openCount = tickets.filter(t => t.status === 'Open').length;
   const inProgressCount = tickets.filter(t => t.status === 'In Progress').length;
+
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Support Tickets...</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -162,47 +201,53 @@ export default function AdminTicketsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTickets.map((ticket) => (
-                  <tr key={ticket.id} className="border-b border-gray-50 hover:bg-teal-50/30 transition-colors">
-                    <td className="p-4">
-                      <div className="font-black text-sm text-gray-900 truncate max-w-[200px]">{ticket.title}</div>
-                      <div className="text-[11px] font-bold text-teal-600 bg-teal-50 inline-flex items-center gap-1 px-2 py-0.5 rounded-md mt-1 border border-teal-100">
-                        <Tag size={10} /> {ticket.id}
-                      </div>
-                    </td>
-                    <td className="p-4 hidden sm:table-cell">
-                      <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                        <User size={14} className="text-gray-400"/> {ticket.submittedBy}
-                      </div>
-                      <div className="text-xs text-gray-500 font-medium ml-5">{ticket.empCode}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex flex-col items-start gap-1">
-                        <div className="flex items-center gap-1.5 text-xs font-black">
-                          {ticket.status === 'Open' && <AlertCircle size={14} className="text-red-500" />}
-                          {ticket.status === 'In Progress' && <Clock size={14} className="text-blue-500" />}
-                          {ticket.status === 'Hold' && <PauseCircle size={14} className="text-orange-500" />}
-                          {ticket.status === 'Resolved' && <CheckCircle2 size={14} className="text-green-500" />}
-                          <span className={
-                            ticket.status === 'Open' ? 'text-red-600' : 
-                            ticket.status === 'In Progress' ? 'text-blue-600' : 
-                            ticket.status === 'Hold' ? 'text-orange-600' : 'text-green-600'
-                          }>{ticket.status}</span>
-                        </div>
-                        {ticket.estimatedTime && ticket.status !== 'Resolved' && (
-                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${ticket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-700' : 'bg-teal-50 text-teal-700'}`}>
-                             <Timer size={10}/> ETA: {ticket.estimatedTime}
-                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button onClick={() => openTicket(ticket)} className="px-4 py-2 bg-gray-900 hover:bg-teal-600 text-white text-xs font-black rounded-lg transition-colors shadow-sm">
-                        Manage
-                      </button>
-                    </td>
+                {filteredTickets.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No tickets found matching this filter.</td>
                   </tr>
-                ))}
+                ) : (
+                  filteredTickets.map((ticket) => (
+                    <tr key={ticket.id} className="border-b border-gray-50 hover:bg-teal-50/30 transition-colors">
+                      <td className="p-4">
+                        <div className="font-black text-sm text-gray-900 truncate max-w-[200px]">{ticket.title}</div>
+                        <div className="text-[11px] font-bold text-teal-600 bg-teal-50 inline-flex items-center gap-1 px-2 py-0.5 rounded-md mt-1 border border-teal-100">
+                          <Tag size={10} /> {ticket.id.substring(0, 8).toUpperCase()}...
+                        </div>
+                      </td>
+                      <td className="p-4 hidden sm:table-cell">
+                        <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                          <User size={14} className="text-gray-400"/> {ticket.submittedBy}
+                        </div>
+                        <div className="text-xs text-gray-500 font-medium ml-5">{ticket.empCode}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="flex items-center gap-1.5 text-xs font-black">
+                            {ticket.status === 'Open' && <AlertCircle size={14} className="text-red-500" />}
+                            {ticket.status === 'In Progress' && <Clock size={14} className="text-blue-500" />}
+                            {ticket.status === 'Hold' && <PauseCircle size={14} className="text-orange-500" />}
+                            {ticket.status === 'Resolved' && <CheckCircle2 size={14} className="text-green-500" />}
+                            <span className={
+                              ticket.status === 'Open' ? 'text-red-600' : 
+                              ticket.status === 'In Progress' ? 'text-blue-600' : 
+                              ticket.status === 'Hold' ? 'text-orange-600' : 'text-green-600'
+                            }>{ticket.status}</span>
+                          </div>
+                          {ticket.estimatedTime && ticket.status !== 'Resolved' && (
+                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${ticket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-700' : 'bg-teal-50 text-teal-700'}`}>
+                               <Timer size={10}/> ETA: {ticket.estimatedTime}
+                             </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button onClick={() => openTicket(ticket)} className="px-4 py-2 bg-gray-900 hover:bg-teal-600 text-white text-xs font-black rounded-lg transition-colors shadow-sm">
+                          Manage
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -224,7 +269,7 @@ export default function AdminTicketsPage() {
                   <div>
                     <h2 className="text-2xl font-black text-gray-900">{selectedTicket.title}</h2>
                     <div className="flex items-center gap-4 mt-2">
-                      <span className="text-sm font-bold text-gray-500 flex items-center gap-1"><User size={14}/> {selectedTicket.submittedBy}</span>
+                      <span className="text-sm font-bold text-gray-500 flex items-center gap-1"><User size={14}/> {selectedTicket.submittedBy} ({selectedTicket.empCode})</span>
                     </div>
                   </div>
                   {selectedTicket.estimatedTime && selectedTicket.status !== 'Resolved' && (
@@ -239,6 +284,24 @@ export default function AdminTicketsPage() {
                     {selectedTicket.description}
                   </p>
                 </div>
+                
+                {/* Optional: Render existing replies here if needed */}
+                {selectedTicket.replies && selectedTicket.replies.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <h3 className="text-sm font-black text-gray-900 mb-4 flex items-center gap-2"><MessageSquare size={16} /> Conversation History</h3>
+                    <div className="space-y-3">
+                      {selectedTicket.replies.map((reply, idx) => (
+                        <div key={idx} className={`p-4 rounded-2xl border text-sm ${reply.sender === 'Admin' ? 'bg-teal-50 border-teal-100 ml-8' : 'bg-gray-50 border-gray-100 mr-8'}`}>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-bold text-gray-900">{reply.name} <span className="text-xs text-gray-500 font-medium">({reply.sender})</span></span>
+                            <span className="text-xs text-gray-400">{reply.date}</span>
+                          </div>
+                          <p className="text-gray-700">{reply.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -262,7 +325,6 @@ export default function AdminTicketsPage() {
                     </select>
                   </div>
 
-                  {/* ETA DROPDOWN ADDED HERE */}
                   {newStatus !== 'Resolved' && (
                     <div>
                       <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1"><Timer size={14}/> Resolution Time</label>
@@ -295,9 +357,10 @@ export default function AdminTicketsPage() {
 
                   <button 
                     onClick={handleUpdateTicket}
-                    className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+                    disabled={isUpdating}
+                    className={`w-full py-3.5 font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 ${isUpdating ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
                   >
-                    <Send size={18} /> Update & Notify Staff
+                    <Send size={18} /> {isUpdating ? 'Updating...' : 'Update & Notify Staff'}
                   </button>
                 </div>
               </div>
