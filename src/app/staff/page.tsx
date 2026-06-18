@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Package, CheckCircle2, AlertCircle, Camera, 
   ArrowLeft, Trash2, MessageSquare, ShieldAlert, Send,
@@ -27,6 +27,12 @@ interface StaffTicket {
   estimatedTime?: string;
 }
 
+interface StaffUser {
+  name: string;
+  empCode: string;
+  department: string;
+}
+
 // --- Photo Rules ---
 const laptopPhotoRequirements = [
   "Top side", "Display and Keyboard", "Right Side port", "Left Side port", "Back side with Tag id Sticker"
@@ -36,31 +42,54 @@ const standardPhotoRequirements = [
 ];
 
 export default function StaffDashboardPage() {
-  const staffUser = {
-    name: 'Rahul Sharma',
-    empCode: 'EMP-1042',
-    department: 'Engineering'
-  };
+  // DYNAMIC USER STATE (No longer hardcoded)
+  const [staffUser, setStaffUser] = useState<StaffUser | null>(null);
 
+  // --- State ---
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
   const [activeTickets, setActiveTickets] = useState<StaffTicket[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   
+  // View Controller
   const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
   
+  // Forms State
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [ticketForm, setTicketForm] = useState({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
   const [ticketPhoto, setTicketPhoto] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
+  // 1. FIRST EFFECT: GET LOGGED IN USER
   useEffect(() => {
+    // Look for the user data saved during login
+    const storedUser = localStorage.getItem('logged_in_staff');
+    
+    if (storedUser) {
+      setStaffUser(JSON.parse(storedUser));
+    } else {
+      // FALLBACK FOR DEVELOPMENT: If no login is found, default to Lakhwinder
+      setStaffUser({
+        name: 'Lakhwinder Singh',
+        empCode: 'EMP-001',
+        department: 'IT Department'
+      });
+    }
+  }, []);
+
+  // 2. SECOND EFFECT: FETCH DATA BASED ON USER
+  useEffect(() => {
+    // Only run this if we have successfully loaded the user
+    if (!staffUser) return;
+
     const fetchStaffData = async () => {
       try {
+        // Fetch ONLY assets assigned to THIS specific employee
         const { data: assetData, error: assetError } = await supabase
           .from('assets')
           .select('*')
@@ -81,6 +110,7 @@ export default function StaffDashboardPage() {
           })));
         }
 
+        // Fetch ONLY tickets created by THIS specific employee
         const { data: ticketData, error: ticketError } = await supabase
           .from('tickets')
           .select('*')
@@ -105,8 +135,9 @@ export default function StaffDashboardPage() {
     };
 
     fetchStaffData();
-  }, []);
+  }, [staffUser]); // This effect re-runs anytime the staffUser changes
 
+  // --- Handlers ---
   const openInspection = (asset: AssignedAsset) => {
     setSelectedAsset(asset);
     setPhotos({});
@@ -126,6 +157,8 @@ export default function StaffDashboardPage() {
 
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
+    if (!staffUser) return;
+
     setIsSubmitting(true);
     
     try {
@@ -163,6 +196,8 @@ export default function StaffDashboardPage() {
 
   const handleSubmitAssetRequest = async () => {
     if (!assetRequestForm.reason) return alert("Please provide a reason.");
+    if (!staffUser) return;
+
     setIsSubmitting(true);
     
     try {
@@ -197,7 +232,8 @@ export default function StaffDashboardPage() {
   };
 
   const handleSubmitInspection = async () => {
-    if (!selectedAsset) return;
+    if (!selectedAsset || !staffUser) return;
+    
     const requiredLabels = selectedAsset.category.toLowerCase().includes('laptop') ? laptopPhotoRequirements : standardPhotoRequirements;
     const missingPhotos = requiredLabels.filter(label => !photos[label]);
     
@@ -271,7 +307,10 @@ export default function StaffDashboardPage() {
   const isLaptop = selectedAsset?.category?.toLowerCase().includes('laptop');
   const requiredLabels = isLaptop ? laptopPhotoRequirements : standardPhotoRequirements;
 
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Dashboard...</div>;
+  // Block rendering until we know who the user is and have loaded their data
+  if (!staffUser || !isLoaded) {
+    return <div className="p-10 text-center font-bold text-gray-500">Loading Dashboard...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto px-4 sm:px-0">
