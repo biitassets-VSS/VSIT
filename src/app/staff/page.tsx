@@ -58,29 +58,38 @@ export default function StaffDashboardPage() {
 
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
-  // 1. Load User & Fetch Live Data
+  // 1. Load User Profile from Supabase & Fetch Live Data
   useEffect(() => {
     const loadUserAndData = async () => {
-      // Get user from localStorage (set during your login flow)
-      const storedUser = localStorage.getItem('logged_in_staff');
-      let currentUser = { name: 'User', empCode: 'N/A', email: '' };
+      // Step A: Get email from local storage (saved during login)
+      const userEmail = localStorage.getItem('userEmail');
+      const userRole = localStorage.getItem('userRole');
 
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        // FIX: Check for both empCode and emp_code to guarantee it displays
-        const safeEmpCode = parsed.empCode || parsed.emp_code || parsed.id || 'N/A';
-        
-        currentUser = { 
-          name: parsed.name || 'Staff Member', 
-          empCode: safeEmpCode, 
-          email: parsed.email || '' 
-        };
-        setStaffUser(currentUser);
+      if (!userEmail) {
+        // Fallback if not logged in properly or viewing as generic guest
+        setStaffUser({ name: 'Guest User', empCode: 'GUEST-000', email: 'Please log in' });
+        setIsLoaded(true);
+        return;
       }
 
-      // Fetch Live Data based on empCode
-      if (currentUser.empCode !== 'N/A') {
-        try {
+      try {
+        // Step B: Fetch EXACT profile details from Supabase 'profiles' table
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles') 
+          .select('full_name, emp_code, email')
+          .eq('email', userEmail)
+          .single();
+
+        let currentUser = { 
+          name: profileData?.full_name || 'Staff Member', 
+          empCode: profileData?.emp_code || 'N/A', 
+          email: profileData?.email || userEmail 
+        };
+
+        setStaffUser(currentUser);
+
+        // Step C: Fetch Live Assets and Tickets based on the real empCode
+        if (currentUser.empCode !== 'N/A' && userRole !== 'guest') {
           const [assetRes, ticketRes] = await Promise.all([
             supabase.from('assets').select('*').eq('emp_code', currentUser.empCode),
             supabase.from('tickets').select('*').eq('emp_code', currentUser.empCode).order('created_at', { ascending: false })
@@ -106,11 +115,12 @@ export default function StaffDashboardPage() {
               estimatedTime: t.estimated_time
             })));
           }
-        } catch (err) {
-          console.error("Data fetch error", err);
         }
+      } catch (err) {
+        console.error("Data fetch error", err);
+      } finally {
+        setIsLoaded(true);
       }
-      setIsLoaded(true);
     };
 
     loadUserAndData();
