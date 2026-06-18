@@ -1,122 +1,73 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Package, CheckCircle2, Camera, ArrowLeft, Trash2, 
-  MessageSquare, ShieldAlert, Send, Ticket, PlusCircle, 
-  Timer, PauseCircle, MonitorUp, ImagePlus
+  Package, CheckCircle2, AlertCircle, Camera, 
+  ArrowLeft, Trash2, MessageSquare, ShieldAlert, Send,
+  Ticket, PlusCircle, Timer, PauseCircle, MonitorUp, ImagePlus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
-// --- Interfaces ---
-interface AssignedAsset {
-  id: string;
-  tagId: string;
-  name: string;
-  category: string;
-  status: string;
-  inspectionStatus: 'Due' | 'Pending Approval' | 'Passed' | 'Failed' | 'Pending Repair' | 'Re-inspection';
-  adminFeedback?: string;
-}
-
-interface StaffTicket {
-  id: string;
-  title: string;
-  status: 'Open' | 'In Progress' | 'Hold' | 'Resolved';
-  estimatedTime?: string;
-}
-
-interface StaffUser {
-  name: string;
-  empCode: string;
-}
-
 export default function StaffDashboardPage() {
-  const [staffUser, setStaffUser] = useState<StaffUser | null>(null);
-  const [assets, setAssets] = useState<AssignedAsset[]>([]);
-  const [activeTickets, setActiveTickets] = useState<StaffTicket[]>([]);
+  const [staffUser, setStaffUser] = useState({ name: 'Loading...', empCode: '...' });
+  const [assets, setAssets] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  
-  const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset'>('dashboard');
-  const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
-  
-  const [photos, setPhotos] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. Load User & Data
   useEffect(() => {
-    // Attempt to get user from localStorage
+    // 1. Get logged-in user from localStorage (set this during your login flow)
     const storedUser = localStorage.getItem('logged_in_staff');
-    const user = storedUser ? JSON.parse(storedUser) : { name: 'Lakhwinder Canberra', empCode: 'EMP-1722' };
-    setStaffUser(user);
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setStaffUser({ name: user.name, empCode: user.empCode });
+      
+      // 2. Fetch live data for this specific user
+      fetchDashboardData(user.empCode);
+    } else {
+      // Fallback: If not logged in, redirect to login page or handle accordingly
+      console.error("No user found in localStorage");
+      setIsLoaded(true);
+    }
   }, []);
 
-  // 2. Fetch Live Supabase Data
-  useEffect(() => {
-    if (!staffUser) return;
+  const fetchDashboardData = async (empCode: string) => {
+    try {
+      // Fetch Assets assigned to THIS employee
+      const { data, error } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('emp_code', empCode); // Uses the correct emp_code from DB
 
-    const fetchData = async () => {
-      try {
-        // Fetch Assets assigned to this employee
-        const { data: assetData } = await supabase
-          .from('assets')
-          .select('*')
-          .eq('emp_code', staffUser.empCode);
+      if (error) throw error;
+      setAssets(data || []);
+    } catch (err) {
+      console.error("Error fetching staff data:", err);
+    } finally {
+      setIsLoaded(true);
+    }
+  };
 
-        if (assetData) {
-          setAssets(assetData.map((a: any) => ({
-            id: a.id,
-            tagId: a.tag_id,
-            name: a.name,
-            category: a.category,
-            status: a.status,
-            inspectionStatus: a.inspection_status || 'Due',
-            adminFeedback: a.inspection_notes || ''
-          })));
-        }
-
-        // Fetch Tickets
-        const { data: ticketData } = await supabase
-          .from('tickets')
-          .select('*')
-          .eq('emp_code', staffUser.empCode);
-
-        if (ticketData) {
-          setActiveTickets(ticketData.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            status: t.status || 'Open',
-            estimatedTime: t.estimated_time
-          })));
-        }
-      } catch (err) {
-        console.error("Database Error:", err);
-      } finally {
-        setIsLoaded(true);
-      }
-    };
-    fetchData();
-  }, [staffUser]);
-
-  if (!isLoaded) return <div className="p-20 text-center font-bold text-gray-400">Loading your profile...</div>;
+  if (!isLoaded) return <div>Loading...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+    <div className="space-y-6">
+      {/* Dynamic Header */}
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-gray-900">Hi, {staffUser?.name}</h1>
-          <p className="text-gray-500 font-bold">{staffUser?.empCode}</p>
+          <h1 className="text-3xl font-black text-gray-900">Welcome, {staffUser.name} 👋</h1>
+          <p className="text-gray-500 font-bold mt-1">ID: {staffUser.empCode}</p>
+        </div>
+        <div className="bg-teal-50 px-6 py-3 rounded-2xl">
+          <p className="text-xs font-black text-teal-600 uppercase">Emp Code</p>
+          <p className="text-2xl font-black text-teal-900">{staffUser.empCode}</p>
         </div>
       </div>
       
-      {/* Dashboard UI goes here (same as previous) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {assets.map(asset => (
-          <div key={asset.id} className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-black text-xl">{asset.name}</h3>
-            <p className="text-teal-600 font-bold">{asset.tagId}</p>
-            <p className="mt-2 text-sm font-bold text-gray-500">Status: {asset.inspectionStatus}</p>
+      {/* Assets Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {assets.map((asset) => (
+          <div key={asset.id} className="p-6 bg-white rounded-3xl border border-gray-100">
+            <h3 className="font-black text-lg">{asset.name}</h3>
+            <p className="text-sm font-bold text-gray-400">{asset.tag_id}</p>
           </div>
         ))}
       </div>
