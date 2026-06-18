@@ -66,42 +66,51 @@ export default function StaffDashboardPage() {
       let currentUser = { name: 'User', empCode: 'N/A', email: '' };
 
       if (storedUser) {
-        currentUser = JSON.parse(storedUser);
+        const parsed = JSON.parse(storedUser);
+        // FIX: Check for both empCode and emp_code to guarantee it displays
+        const safeEmpCode = parsed.empCode || parsed.emp_code || parsed.id || 'N/A';
+        
+        currentUser = { 
+          name: parsed.name || 'Staff Member', 
+          empCode: safeEmpCode, 
+          email: parsed.email || '' 
+        };
         setStaffUser(currentUser);
       }
 
       // Fetch Live Data based on empCode
-      try {
-        const [assetRes, ticketRes] = await Promise.all([
-          supabase.from('assets').select('*').eq('emp_code', currentUser.empCode),
-          supabase.from('tickets').select('*').eq('emp_code', currentUser.empCode).order('created_at', { ascending: false })
-        ]);
+      if (currentUser.empCode !== 'N/A') {
+        try {
+          const [assetRes, ticketRes] = await Promise.all([
+            supabase.from('assets').select('*').eq('emp_code', currentUser.empCode),
+            supabase.from('tickets').select('*').eq('emp_code', currentUser.empCode).order('created_at', { ascending: false })
+          ]);
 
-        if (assetRes.data) {
-          setAssets(assetRes.data.map((a: any) => ({
-            id: a.id,
-            tagId: a.tag_id,
-            name: a.name,
-            category: a.category,
-            status: a.status,
-            inspectionStatus: a.inspection_status || 'Due',
-            adminFeedback: a.inspection_notes || ''
-          })));
-        }
+          if (assetRes.data) {
+            setAssets(assetRes.data.map((a: any) => ({
+              id: a.id,
+              tagId: a.tag_id,
+              name: a.name,
+              category: a.category,
+              status: a.status,
+              inspectionStatus: a.inspection_status || 'Due',
+              adminFeedback: a.inspection_notes || ''
+            })));
+          }
 
-        if (ticketRes.data) {
-          setActiveTickets(ticketRes.data.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            status: t.status || 'Open',
-            estimatedTime: t.estimated_time
-          })));
+          if (ticketRes.data) {
+            setActiveTickets(ticketRes.data.map((t: any) => ({
+              id: t.id,
+              title: t.title,
+              status: t.status || 'Open',
+              estimatedTime: t.estimated_time
+            })));
+          }
+        } catch (err) {
+          console.error("Data fetch error", err);
         }
-      } catch (err) {
-        console.error("Data fetch error", err);
-      } finally {
-        setIsLoaded(true);
       }
+      setIsLoaded(true);
     };
 
     loadUserAndData();
@@ -285,7 +294,9 @@ export default function StaffDashboardPage() {
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-black text-gray-900">Welcome, {staffUser.name} 👋</h1>
-              <p className="text-sm font-bold text-gray-500 mt-1">ID: {staffUser.empCode} {staffUser.email && `| ${staffUser.email}`}</p>
+              <p className="text-sm font-bold text-gray-500 mt-1">
+                {staffUser.email ? `Email: ${staffUser.email}` : 'Loading profile details...'}
+              </p>
             </div>
             <div className="bg-teal-50 border border-teal-100 px-4 py-2 rounded-xl flex items-center gap-3">
               <span className="text-xs font-bold text-teal-600 uppercase tracking-wide">Emp Code</span>
@@ -432,8 +443,12 @@ export default function StaffDashboardPage() {
                     className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
                   >
                     <option value="Hardware">Hardware Issue</option>
-                    <option value="Software">Software / Access</option>
-                    <option value="Network">Network / Internet</option>
+                    <option value="Internet">Internet / Network</option>
+                    <option value="Software">Software</option>
+                    <option value="Email">Email Login</option>
+                    <option value="Headphone">Headphone</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>
