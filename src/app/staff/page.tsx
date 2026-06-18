@@ -7,8 +7,6 @@ import {
   Ticket, PlusCircle, Timer, PauseCircle, MonitorUp, ImagePlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Import your Supabase client
 import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
@@ -38,23 +36,19 @@ const standardPhotoRequirements = [
 ];
 
 export default function StaffDashboardPage() {
-  // Mock Staff Data (In a real app, this comes from your Auth context / Login)
   const staffUser = {
     name: 'Rahul Sharma',
     empCode: 'EMP-1042',
     department: 'Engineering'
   };
 
-  // --- State ---
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
   const [activeTickets, setActiveTickets] = useState<StaffTicket[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // View Controller
   const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
   
-  // Forms State
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,11 +58,9 @@ export default function StaffDashboardPage() {
 
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
-  // --- LIVE DATA FETCHING ---
   useEffect(() => {
     const fetchStaffData = async () => {
       try {
-        // Fetch Assets assigned to this employee
         const { data: assetData, error: assetError } = await supabase
           .from('assets')
           .select('*')
@@ -89,7 +81,6 @@ export default function StaffDashboardPage() {
           })));
         }
 
-        // Fetch Tickets raised by this employee
         const { data: ticketData, error: ticketError } = await supabase
           .from('tickets')
           .select('*')
@@ -116,7 +107,6 @@ export default function StaffDashboardPage() {
     fetchStaffData();
   }, []);
 
-  // --- Handlers ---
   const openInspection = (asset: AssignedAsset) => {
     setSelectedAsset(asset);
     setPhotos({});
@@ -134,7 +124,6 @@ export default function StaffDashboardPage() {
     reader.readAsDataURL(file);
   };
 
-  // Submit standard IT Ticket to DB
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
     setIsSubmitting(true);
@@ -148,7 +137,6 @@ export default function StaffDashboardPage() {
         status: 'Open',
         submitted_by: staffUser.name,
         emp_code: staffUser.empCode,
-        // Optional: If your tickets table has a screenshot column, it will save here
         screenshot: ticketPhoto 
       }]).select();
 
@@ -173,7 +161,6 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // Submit Asset Request (Mapped as a Ticket to Admin)
   const handleSubmitAssetRequest = async () => {
     if (!assetRequestForm.reason) return alert("Please provide a reason.");
     setIsSubmitting(true);
@@ -209,7 +196,6 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // Submit Inspection to DB
   const handleSubmitInspection = async () => {
     if (!selectedAsset) return;
     const requiredLabels = selectedAsset.category.toLowerCase().includes('laptop') ? laptopPhotoRequirements : standardPhotoRequirements;
@@ -222,9 +208,8 @@ export default function StaffDashboardPage() {
 
     setIsSubmitting(true);
     try {
-      // 1. Insert into Inspections Table
       const { error: inspectError } = await supabase.from('inspections').insert([{
-        asset_id: selectedAsset.id, // Links inspection to specific asset
+        asset_id: selectedAsset.id,
         submitted_by: staffUser.name,
         emp_code: staffUser.empCode,
         status: 'Pending',
@@ -234,14 +219,12 @@ export default function StaffDashboardPage() {
 
       if (inspectError) throw inspectError;
 
-      // 2. Update Assets Table Status
       const { error: assetError } = await supabase.from('assets').update({
         inspection_status: 'Pending Approval'
       }).eq('id', selectedAsset.id);
 
       if (assetError) throw assetError;
 
-      // Update UI locally
       setAssets(prev => prev.map(a => a.id === selectedAsset.id ? { ...a, inspectionStatus: 'Pending Approval' } : a));
       
       alert('Inspection submitted successfully! Admin will review it shortly.');
@@ -253,7 +236,6 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // --- Photo Upload Logic with Watermark ---
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -294,9 +276,6 @@ export default function StaffDashboardPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto px-4 sm:px-0">
       
-      {/* ========================================== */}
-      {/* 1. VIEW: STAFF DASHBOARD (OVERVIEW)        */}
-      {/* ========================================== */}
       {viewState === 'dashboard' && (
         <>
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -332,7 +311,6 @@ export default function StaffDashboardPage() {
             </button>
           </div>
 
-          {/* ACTIVE TICKETS & ETAs */}
           {activeTickets.length > 0 && (
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
               <h2 className="text-lg font-black text-gray-900 flex items-center gap-2 mb-4">
@@ -361,7 +339,6 @@ export default function StaffDashboardPage() {
             </div>
           )}
 
-          {/* ASSETS */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mt-2">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -380,7 +357,7 @@ export default function StaffDashboardPage() {
                     <div>
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-xs font-black bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-gray-600 uppercase tracking-wider">{asset.category}</span>
-                        {(asset.inspectionStatus === 'Passed' || asset.inspectionStatus === 'Inspected') && <CheckCircle2 size={20} className="text-green-500" />}
+                        {asset.inspectionStatus === 'Passed' && <CheckCircle2 size={20} className="text-green-500" />}
                         {asset.inspectionStatus === 'Re-inspection' && <ShieldAlert size={20} className="text-orange-500 animate-pulse" />}
                       </div>
                       <h3 className="text-lg font-black text-gray-900 mb-1">{asset.name}</h3>
@@ -411,9 +388,6 @@ export default function StaffDashboardPage() {
         </>
       )}
 
-      {/* ========================================== */}
-      {/* 2. VIEW: RAISE IT TICKET FORM              */}
-      {/* ========================================== */}
       {viewState === 'raising_ticket' && (
         <div className="space-y-6">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
@@ -517,9 +491,6 @@ export default function StaffDashboardPage() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* 3. VIEW: REQUEST NEW ASSET FORM            */}
-      {/* ========================================== */}
       {viewState === 'requesting_asset' && (
         <div className="space-y-6">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
@@ -573,9 +544,6 @@ export default function StaffDashboardPage() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* 4. VIEW: INSPECTION UPLOAD FORM            */}
-      {/* ========================================== */}
       {viewState === 'inspecting' && selectedAsset && (
         <div className="space-y-6">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
