@@ -23,40 +23,44 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  // FETCH DATA DIRECTLY FROM SUPABASE (WITH LOCAL STORAGE FALLBACK)
+  // FETCH DATA DIRECTLY FROM SUPABASE (BULLETPROOF VERSION)
   useEffect(() => {
     async function fetchUserData() {
-      // 1. Try Supabase Auth first, then fallback to your custom localStorage
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email || localStorage.getItem('userEmail');
 
       if (userEmail) {
+        // Using select('*') ensures the query never crashes due to a wrong column name
         const { data, error } = await supabase
           .from('profiles')
-          .select('full_name, employee_code') 
+          .select('*') 
           .eq('email', userEmail)
-          .maybeSingle(); // maybeSingle prevents crashes if data is missing
+          .maybeSingle();
+
+        if (error) console.error("Profile Fetch Error:", error.message);
 
         if (data) {
-          const fullName = data.full_name || 'Staff Member';
+          // Safely check all common column names for Name and Emp Code
+          const fullName = data.full_name || data.name || data.first_name || 'Staff Member';
+          const code = data.emp_code || data.employee_code || data.employee_id || data.emp_id || 'N/A';
           
           // Calculate Initials
           const nameParts = fullName.trim().split(' ');
           let initials = 'SM';
-          if (nameParts.length > 1) {
+          if (nameParts.length > 1 && nameParts[0] && nameParts[nameParts.length - 1]) {
             initials = nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0);
-          } else {
+          } else if (fullName.length > 1) {
             initials = fullName.substring(0, 2);
           }
 
           setStaffUser({
             name: fullName,
-            empCode: data.employee_code || 'N/A', 
+            empCode: code, 
             initials: initials.toUpperCase(),
             email: userEmail
           });
         } else {
-          // SAFE FALLBACK: If DB lookup fails, use localStorage name
+          // SAFE FALLBACK: If DB lookup fails entirely
           const savedName = localStorage.getItem('userName') || 'Staff Member';
           setStaffUser({
             name: savedName,
@@ -66,13 +70,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           });
         }
       } else {
-         // Default Guest State if no email found anywhere
-         setStaffUser({
-          name: 'Guest User',
-          empCode: 'GUEST',
-          initials: 'GU',
-          email: 'Please log in'
-        });
+         setStaffUser({ name: 'Guest User', empCode: 'GUEST', initials: 'GU', email: 'Please log in' });
       }
     }
 

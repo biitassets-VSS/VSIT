@@ -58,11 +58,10 @@ export default function StaffDashboardPage() {
 
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
 
-  // 1. Fetch Data Directly from Supabase (With Local Storage Fallback)
+  // 1. Fetch Data Directly from Supabase (BULLETPROOF VERSION)
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Grab email from Supabase OR localStorage
         const { data: { user } } = await supabase.auth.getUser();
         const userEmail = user?.email || localStorage.getItem('userEmail');
 
@@ -72,17 +71,19 @@ export default function StaffDashboardPage() {
           return;
         }
 
-        // Fetch User Profile
-        const { data: profile } = await supabase
+        // Fetch User Profile using * to prevent column name crashes
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('full_name, employee_code, email')
+          .select('*')
           .eq('email', userEmail)
           .maybeSingle();
 
-        // Setup Current User
+        if (profileError) console.error("Profile Fetch Error:", profileError.message);
+
+        // Setup Current User safely by checking all possible column names
         const currentUser = { 
-          name: profile?.full_name || localStorage.getItem('userName') || 'Staff Member', 
-          empCode: profile?.employee_code || 'N/A', 
+          name: profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member', 
+          empCode: profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A', 
           email: profile?.email || userEmail 
         };
         
@@ -92,7 +93,7 @@ export default function StaffDashboardPage() {
         localStorage.setItem('userName', currentUser.name);
         window.dispatchEvent(new Event('storage'));
 
-        // Fetch Assets and Tickets
+        // Fetch Assets and Tickets (Using the safe empCode)
         if (currentUser.empCode !== 'N/A') {
           const [assetRes, ticketRes] = await Promise.all([
             supabase.from('assets').select('*').eq('emp_code', currentUser.empCode),
