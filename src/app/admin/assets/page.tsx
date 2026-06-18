@@ -64,16 +64,13 @@ export default function AdminAssetsPage() {
   };
   const [singleAssetForm, setSingleAssetForm] = useState(emptyFormState);
   
-  // Real Database States
   const [assets, setAssets] = useState<Asset[]>([]);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // FETCH EVERYTHING FROM SUPABASE (NO MOCK DATA)
   useEffect(() => {
     const fetchDatabaseRecords = async () => {
       try {
-        // Fetch Assets and Staff concurrently from real database
         const [assetsResponse, staffResponse] = await Promise.all([
           supabase.from('assets').select('*').order('created_at', { ascending: false }),
           supabase.from('staff').select('emp_code, name')
@@ -238,9 +235,25 @@ export default function AdminAssetsPage() {
         const rows = text.split('\n').slice(1);
         const newAssetsDB: any[] = [];
         
+        // --- HELPER FUNCTION TO FIX DATES FOR SUPABASE ---
+        const formatToDBDate = (dateString?: string) => {
+          if (!dateString) return undefined;
+          const cleanDate = dateString.trim();
+          if (cleanDate.includes('-') && cleanDate.split('-')[0].length === 4) return cleanDate;
+          const parts = cleanDate.split(/[\/\-]/);
+          if (parts.length === 3) {
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            const year = parts[2];
+            if (year.length === 4) return `${year}-${month}-${day}`;
+          }
+          return cleanDate;
+        };
+
         rows.forEach((row) => {
-          if (!row.trim()) return;
-          const cols = row.split(',');
+          const cleanRow = row.replace(/\r/g, ''); 
+          if (!cleanRow.trim()) return;
+          const cols = cleanRow.split(',');
           const category = cols[0] || 'Other';
           const tagId = cols[1] ? cols[1] : generateTagId(category);
 
@@ -250,8 +263,8 @@ export default function AdminAssetsPage() {
             name: cols[2] || 'Unknown Asset',
             serial_number: cols[3],
             price: cols[4],
-            purchase_date: cols[5],
-            warranty_expiry: cols[6],
+            purchase_date: formatToDBDate(cols[5]),
+            warranty_expiry: formatToDBDate(cols[6]),
             condition: cols[7],
             status: cols[8]?.trim() || 'In Stock (Available)',
             photos: []
@@ -388,7 +401,6 @@ export default function AdminAssetsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  // Filter staff securely via database response
   const filteredStaff = staffList.filter(s => 
     (s.name && s.name.toLowerCase().includes(staffSearch.toLowerCase())) || 
     (s.emp_code && s.emp_code.toLowerCase().includes(staffSearch.toLowerCase()))
@@ -396,7 +408,6 @@ export default function AdminAssetsPage() {
 
   const printFilteredAssets = printCategoryFilter === 'All' ? assets : assets.filter(a => a.category === printCategoryFilter);
 
-  // Determine if overdue
   const isOverdue = (nextDateStr?: string) => {
     if (!nextDateStr || nextDateStr === '-') return false;
     const nextDate = new Date(nextDateStr);
@@ -408,7 +419,6 @@ export default function AdminAssetsPage() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto relative">
       <style dangerouslySetInnerHTML={{__html: `@media print { body * { visibility: hidden; } #printable-area, #printable-area * { visibility: visible; } #printable-area { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } }`}} />
 
-      {/* 1. ASSET LIST VIEW */}
       {viewState === 'list' && (
         <>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-[24px] shadow-sm border border-gray-100">
@@ -515,7 +525,6 @@ export default function AdminAssetsPage() {
         </>
       )}
 
-      {/* 2. VIEW DETAILS PAGE */}
       {viewState === 'view_details' && selectedAsset && (
         <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in zoom-in-95 duration-300">
           
@@ -580,7 +589,6 @@ export default function AdminAssetsPage() {
             </div>
 
             <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
-              {/* Left Details Column */}
               <div className="space-y-8">
                 <div>
                   <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><DollarSign size={16}/> Purchase & Warranty</h3>
@@ -599,7 +607,6 @@ export default function AdminAssetsPage() {
                   </div>
                 </div>
 
-                {/* NEW: INSPECTION STATUS WIDGET */}
                 <div>
                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><CheckCircle2 size={16}/> Inspection Status</h3>
                    <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm relative overflow-hidden">
@@ -635,7 +642,6 @@ export default function AdminAssetsPage() {
 
               </div>
 
-              {/* Right Media Column */}
               <div className="space-y-8">
                 <div>
                   <div className="flex justify-between items-end mb-4">
@@ -643,7 +649,6 @@ export default function AdminAssetsPage() {
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {/* Render saved & watermarked photos */}
                     {selectedAsset.photos?.map((photoUrl, idx) => (
                       <div key={idx} onClick={() => setInspectionPhoto(photoUrl)} className="aspect-square bg-gray-100 border border-gray-200 rounded-2xl flex items-center justify-center overflow-hidden relative group cursor-pointer shadow-sm hover:shadow-md transition">
                         <img src={photoUrl} alt="Inspection" className="w-full h-full object-cover" />
@@ -653,7 +658,6 @@ export default function AdminAssetsPage() {
 
                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" />
                     
-                    {/* Upload button */}
                     <div onClick={() => fileInputRef.current?.click()} className="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-[#008b74] hover:text-[#008b74] transition cursor-pointer">
                       <Plus size={24} className="mb-1" />
                       <span className="text-xs font-bold text-center px-2">Upload Photo (Auto-Watermarks)</span>
@@ -679,9 +683,6 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
-      {/* --- MODALS OVERLAYS --- */}
-
-      {/* 1. Assignment Modal */}
       {showAssignModal && selectedAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden border border-gray-100">
@@ -720,7 +721,6 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
-      {/* 2. Photo Inspection Modal */}
       {inspectionPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 sm:p-8 animate-in fade-in">
           <button onClick={() => setInspectionPhoto(null)} className="absolute top-6 right-6 text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition">
@@ -735,9 +735,6 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* 3. PRINT TAGS VIEW                         */}
-      {/* ========================================== */}
       {viewState === 'print_tags' && (
         <div className="space-y-6">
           <div className="no-print flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -773,9 +770,6 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* 4. FORM VIEW (Used for both Add and Edit)  */}
-      {/* ========================================== */}
       {(viewState === 'add_single' || viewState === 'edit_asset') && (
         <div className="space-y-6 max-w-5xl mx-auto">
           <div className="flex justify-between items-center mb-2">
@@ -878,9 +872,6 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* 5. BULK UPLOAD VIEW                        */}
-      {/* ========================================== */}
       {viewState === 'bulk_upload' && (
         <div className="space-y-6">
            <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Assets</button>
