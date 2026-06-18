@@ -840,12 +840,16 @@ export default function AdminAssetsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">Current Status <span className="text-red-500">*</span></label>
-                  <select value={singleAssetForm.status} onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none">
-                    <option value="In Stock (Available)">In Stock (Available)</option>
-                    <option value="Assigned">Assigned</option>
-                    <option value="Maintenance">Maintenance / Repair</option>
-                    <option value="Retired">Retired / Discarded</option>
-                  </select>
+                  <select 
+  value={singleAssetForm.status} 
+  onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value as Asset['status']})} 
+  className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none"
+>
+  <option value="In Stock (Available)">In Stock (Available)</option>
+  <option value="Assigned">Assigned</option>
+  <option value="Maintenance">Maintenance / Repair</option>
+  <option value="Retired">Retired / Discarded</option>
+</select>
                 </div>
                 <div className="col-span-1 md:col-span-2">
                   <label className="block text-sm font-bold text-gray-900 mb-2">Additional Notes</label>
