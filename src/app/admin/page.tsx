@@ -7,6 +7,7 @@ import {
   Activity, AlertTriangle, ArrowRight,
   CheckCircle2, Wrench, UserCheck, Trash2
 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
 interface Asset {
@@ -14,7 +15,6 @@ interface Asset {
   name: string;
   tagId: string;
   status: string;
-  inspectionAlert?: string;
 }
 
 export default function AdminDashboardPage() {
@@ -44,30 +44,62 @@ export default function AdminDashboardPage() {
   ];
 
   useEffect(() => {
-    // Fetch live data from local storage
-    const savedAssets = JSON.parse(localStorage.getItem('vsit_assets_inventory') || '[]');
-    const savedStaff = JSON.parse(localStorage.getItem('vsit_staff_users') || '[]');
+    const fetchDashboardData = async () => {
+      try {
+        // Fetch Assets and Staff concurrently from real database
+        const [assetsResponse, staffResponse] = await Promise.all([
+          supabase.from('assets').select('*').order('created_at', { ascending: false }),
+          supabase.from('staff').select('id, status')
+        ]);
 
-    const totalStaffCount = savedStaff.length > 0 ? savedStaff.length : 12; // Fallback to 12 for demo
+        if (assetsResponse.error) throw assetsResponse.error;
+        if (staffResponse.error) throw staffResponse.error;
 
-    // Calculate real stats
-    setStats({
-      totalAssets: savedAssets.length,
-      inStock: savedAssets.filter((a: any) => a.status === 'In Stock').length,
-      assigned: savedAssets.filter((a: any) => a.status === 'Assigned').length,
-      repair: savedAssets.filter((a: any) => a.status === 'Repair').length,
-      discard: savedAssets.filter((a: any) => a.status === 'Discard').length,
-      
-      totalStaff: totalStaffCount,
-      onlineStaff: Math.floor(totalStaffCount * 0.8), // 80% online for demo
-      onLeaveStaff: Math.ceil(totalStaffCount * 0.2), // 20% on leave for demo
-      
-      overdueInspections: savedAssets.filter((a: any) => a.inspectionAlert === 'Overdue').length
-    });
+        const assetsData = assetsResponse.data || [];
+        const staffData = staffResponse.data || [];
 
-    // Get 4 most recent assets for the activity feed
-    setRecentAssets(savedAssets.slice(0, 4));
-    setIsLoading(false);
+        // Check for overdue inspections (dates in the past)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to midnight
+        
+        const overdueCount = assetsData.filter((a: any) => {
+          if (!a.next_inspection_date || a.next_inspection_date === '-') return false;
+          const nextDate = new Date(a.next_inspection_date);
+          return nextDate < today;
+        }).length;
+
+        // Calculate real stats
+        setStats({
+          totalAssets: assetsData.length,
+          inStock: assetsData.filter((a: any) => a.status === 'In Stock (Available)').length,
+          assigned: assetsData.filter((a: any) => a.status === 'Assigned').length,
+          repair: assetsData.filter((a: any) => a.status === 'Maintenance').length,
+          discard: assetsData.filter((a: any) => a.status === 'Retired').length,
+          
+          totalStaff: staffData.length,
+          onlineStaff: staffData.filter((s: any) => s.status === 'Active').length,
+          onLeaveStaff: staffData.filter((s: any) => s.status === 'Inactive').length,
+          
+          overdueInspections: overdueCount
+        });
+
+        // Map the 4 most recent assets for the activity feed
+        const mappedRecentAssets = assetsData.slice(0, 4).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          tagId: a.tag_id,
+          status: a.status
+        }));
+        
+        setRecentAssets(mappedRecentAssets);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
   }, []);
 
   return (
@@ -110,7 +142,7 @@ export default function AdminDashboardPage() {
                     <CheckCircle2 size={16} className="text-green-600"/>
                     <span className="text-xs font-bold text-green-800">In Stock</span>
                   </div>
-                  <span className="text-sm font-black text-green-900">{stats.inStock}</span>
+                  <span className="text-sm font-black text-green-900">{isLoading ? '-' : stats.inStock}</span>
                 </div>
                 
                 <div className="bg-blue-50/50 border border-blue-100 p-3 rounded-2xl flex items-center justify-between">
@@ -118,7 +150,7 @@ export default function AdminDashboardPage() {
                     <UserCheck size={16} className="text-blue-600"/>
                     <span className="text-xs font-bold text-blue-800">Assigned</span>
                   </div>
-                  <span className="text-sm font-black text-blue-900">{stats.assigned}</span>
+                  <span className="text-sm font-black text-blue-900">{isLoading ? '-' : stats.assigned}</span>
                 </div>
 
                 <div className="bg-orange-50/50 border border-orange-100 p-3 rounded-2xl flex items-center justify-between">
@@ -126,7 +158,7 @@ export default function AdminDashboardPage() {
                     <Wrench size={16} className="text-orange-600"/>
                     <span className="text-xs font-bold text-orange-800">Repair</span>
                   </div>
-                  <span className="text-sm font-black text-orange-900">{stats.repair}</span>
+                  <span className="text-sm font-black text-orange-900">{isLoading ? '-' : stats.repair}</span>
                 </div>
 
                 <div className="bg-red-50/50 border border-red-100 p-3 rounded-2xl flex items-center justify-between">
@@ -134,7 +166,7 @@ export default function AdminDashboardPage() {
                     <Trash2 size={16} className="text-red-500"/>
                     <span className="text-xs font-bold text-red-800">Discard</span>
                   </div>
-                  <span className="text-sm font-black text-red-900">{stats.discard}</span>
+                  <span className="text-sm font-black text-red-900">{isLoading ? '-' : stats.discard}</span>
                 </div>
               </div>
             </div>
@@ -171,15 +203,15 @@ export default function AdminDashboardPage() {
                     <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
                     <span className="text-sm font-bold text-gray-700">Online / Active</span>
                   </div>
-                  <span className="text-sm font-black text-gray-900">{stats.onlineStaff}</span>
+                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : stats.onlineStaff}</span>
                 </div>
 
                 <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
-                    <span className="text-sm font-bold text-gray-700">On Leave / Offline</span>
+                    <span className="text-sm font-bold text-gray-700">On Leave / Inactive</span>
                   </div>
-                  <span className="text-sm font-black text-gray-900">{stats.onLeaveStaff}</span>
+                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : stats.onLeaveStaff}</span>
                 </div>
               </div>
             </div>
@@ -199,7 +231,7 @@ export default function AdminDashboardPage() {
 
             <div className="space-y-4">
               {isLoading ? (
-                <div className="text-center p-4 text-gray-400 font-bold text-sm">Loading...</div>
+                <div className="text-center p-4 text-gray-400 font-bold text-sm">Loading Database...</div>
               ) : recentAssets.length === 0 ? (
                 <div className="text-center p-6 text-gray-400 font-bold text-sm bg-gray-50 rounded-2xl">No assets found in inventory.</div>
               ) : (
@@ -216,11 +248,11 @@ export default function AdminDashboardPage() {
                     </div>
                     <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg border ${
                       asset.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
-                      asset.status === 'Repair' ? 'bg-orange-50 text-orange-700 border-orange-100' : 
-                      asset.status === 'Discard' ? 'bg-red-50 text-red-700 border-red-100' : 
+                      asset.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-100' : 
+                      asset.status === 'Retired' ? 'bg-red-50 text-red-700 border-red-100' : 
                       'bg-green-50 text-green-700 border-green-100'
                     }`}>
-                      {asset.status}
+                      {asset.status === 'Maintenance' ? 'Repair' : asset.status === 'Retired' ? 'Discard' : asset.status}
                     </span>
                   </div>
                 ))
@@ -239,8 +271,8 @@ export default function AdminDashboardPage() {
             <h2 className="text-[22px] font-black text-[#0f172a] mb-6">Quick Actions</h2>
             
             <div className="space-y-3.5">
-              <Link href="/admin/assets/new" className="flex items-center justify-between p-5 bg-[#f0fcf9] hover:bg-[#e1f8f3] transition-colors rounded-2xl group">
-                <span className="font-black text-[15px] text-[#0d7a66] tracking-tight">Add New Asset</span>
+              <Link href="/admin/assets" className="flex items-center justify-between p-5 bg-[#f0fcf9] hover:bg-[#e1f8f3] transition-colors rounded-2xl group">
+                <span className="font-black text-[15px] text-[#0d7a66] tracking-tight">Manage Assets</span>
                 <Package size={22} className="text-[#0d7a66] opacity-90 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
               </Link>
 
@@ -265,9 +297,9 @@ export default function AdminDashboardPage() {
               <div>
                 <h3 className="text-sm font-black text-red-900 mb-1">Attention Required</h3>
                 <p className="text-xs font-bold text-red-700/80 leading-relaxed mb-3">
-                  You have <span className="text-red-600 font-black px-1">{stats.overdueInspections}</span> assets with overdue inspections that need your review.
+                  You have <span className="text-red-600 font-black px-1">{isLoading ? '-' : stats.overdueInspections}</span> assets with overdue inspections that need your review.
                 </p>
-                <Link href="/admin/inspections" className="text-xs font-black text-red-700 bg-red-100 px-4 py-2 rounded-lg hover:bg-red-200 transition-colors inline-block">
+                <Link href="/admin/assets" className="text-xs font-black text-red-700 bg-red-100 px-4 py-2 rounded-lg hover:bg-red-200 transition-colors inline-block">
                   Review Now
                 </Link>
               </div>
