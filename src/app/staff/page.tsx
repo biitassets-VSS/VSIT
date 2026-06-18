@@ -83,7 +83,10 @@ export default function StaffDashboardPage() {
         // Setup Current User safely by checking all possible column names
        const currentUser = { 
   name: profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member', 
-  empCode: profile?.id || profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A', 
+  
+  // Notice we removed profile?.id from this line!
+  empCode: profile?.emp_code || profile?.employee_code || 'N/A', 
+  
   email: profile?.email || userEmail 
 };
         

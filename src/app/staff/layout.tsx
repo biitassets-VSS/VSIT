@@ -42,7 +42,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         if (data) {
           // Safely check all common column names for Name and Emp Code
           const fullName = data.full_name || data.name || data.first_name || 'Staff Member';
-          const code = data.id || data.emp_code || data.employee_code || data.employee_id || data.emp_id || 'N/A';
+          const code = data.emp_code || data.employee_code || data.employee_id || data.emp_id || 'N/A';
           
           // Calculate Initials
           const nameParts = fullName.trim().split(' ');
