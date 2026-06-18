@@ -32,6 +32,8 @@ interface Asset {
 
 const CATEGORY_PREFIX_MAP: Record<string, string> = {
   'Laptop': 'LAP',
+  'Monitor': 'MON', // Added Monitor just in case you need it too!
+  'Mouse': 'MOU',   // ADDED MOUSE HERE
   'Headphone': 'HDP',
   'Keyboard': 'KBD',
   'Wired Keyboard Combo': 'WKC',
@@ -56,7 +58,7 @@ export default function AdminAssetsPage() {
   const [viewState, setViewState] = useState<'list' | 'add_single' | 'edit_asset' | 'bulk_upload' | 'print_tags' | 'view_details'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [printCategoryFilter, setPrintCategoryFilter] = useState('All');
-  const [listStatusFilter, setListStatusFilter] = useState('All Active'); // NEW: Controls list visibility
+  const [listStatusFilter, setListStatusFilter] = useState('All Active'); 
   
   // View Details & Assignment State
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -219,7 +221,7 @@ export default function AdminAssetsPage() {
     const csvContent = "data:text/csv;charset=utf-8," 
       + "Category,Asset Tag,Asset Name,Serial Number,Price / Cost,Purchase Date,Warranty Expiry,Asset Condition,Current Status\n"
       + "Laptop,,Dell XPS 15 Laptop,SN-9982348X,120000,2023-01-15,2026-01-15,New,In Stock (Available)\n"
-      + "Keyboard,VS-KBD-654321,Logitech K850,SN-112233,4500,2023-05-20,2024-05-20,Good,In Stock (Available)";
+      + "Mouse,,Logitech MX Master 3,SN-MOUSE-99,8500,2023-05-20,2024-05-20,Good,In Stock (Available)";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -452,7 +454,7 @@ export default function AdminAssetsPage() {
                 <input type="text" placeholder="Search assets by name or tag ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-[#008b74]" />
               </div>
               
-              {/* NEW: Explicit Status Filter Dropdown */}
+              {/* Explicit Status Filter Dropdown */}
               <div className="relative">
                 <select
                   value={listStatusFilter}
