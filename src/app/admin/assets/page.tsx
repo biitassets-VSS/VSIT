@@ -60,7 +60,7 @@ export default function AdminAssetsPage() {
 
   const emptyFormState = {
     tagId: '', serialNumber: '', name: '', category: '', price: '',
-    purchaseDate: '', warrantyExpiry: '', condition: '', status: 'In Stock (Available)' as const, notes: ''
+    purchaseDate: '', warrantyExpiry: '', condition: '', status: 'In Stock (Available)' as Asset['status'], notes: ''
   };
   const [singleAssetForm, setSingleAssetForm] = useState(emptyFormState);
   
@@ -643,6 +643,7 @@ export default function AdminAssetsPage() {
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {/* Render saved & watermarked photos */}
                     {selectedAsset.photos?.map((photoUrl, idx) => (
                       <div key={idx} onClick={() => setInspectionPhoto(photoUrl)} className="aspect-square bg-gray-100 border border-gray-200 rounded-2xl flex items-center justify-center overflow-hidden relative group cursor-pointer shadow-sm hover:shadow-md transition">
                         <img src={photoUrl} alt="Inspection" className="w-full h-full object-cover" />
@@ -652,6 +653,7 @@ export default function AdminAssetsPage() {
 
                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" />
                     
+                    {/* Upload button */}
                     <div onClick={() => fileInputRef.current?.click()} className="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-[#008b74] hover:text-[#008b74] transition cursor-pointer">
                       <Plus size={24} className="mb-1" />
                       <span className="text-xs font-bold text-center px-2">Upload Photo (Auto-Watermarks)</span>
@@ -679,6 +681,7 @@ export default function AdminAssetsPage() {
 
       {/* --- MODALS OVERLAYS --- */}
 
+      {/* 1. Assignment Modal */}
       {showAssignModal && selectedAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden border border-gray-100">
@@ -717,6 +720,7 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
+      {/* 2. Photo Inspection Modal */}
       {inspectionPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 sm:p-8 animate-in fade-in">
           <button onClick={() => setInspectionPhoto(null)} className="absolute top-6 right-6 text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition">
@@ -731,6 +735,9 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
+      {/* ========================================== */}
+      {/* 3. PRINT TAGS VIEW                         */}
+      {/* ========================================== */}
       {viewState === 'print_tags' && (
         <div className="space-y-6">
           <div className="no-print flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -766,6 +773,9 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
+      {/* ========================================== */}
+      {/* 4. FORM VIEW (Used for both Add and Edit)  */}
+      {/* ========================================== */}
       {(viewState === 'add_single' || viewState === 'edit_asset') && (
         <div className="space-y-6 max-w-5xl mx-auto">
           <div className="flex justify-between items-center mb-2">
@@ -841,15 +851,15 @@ export default function AdminAssetsPage() {
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">Current Status <span className="text-red-500">*</span></label>
                   <select 
-  value={singleAssetForm.status} 
-  onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value as Asset['status']})} 
-  className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none"
->
-  <option value="In Stock (Available)">In Stock (Available)</option>
-  <option value="Assigned">Assigned</option>
-  <option value="Maintenance">Maintenance / Repair</option>
-  <option value="Retired">Retired / Discarded</option>
-</select>
+                    value={singleAssetForm.status} 
+                    onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value as Asset['status']})} 
+                    className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none"
+                  >
+                    <option value="In Stock (Available)">In Stock (Available)</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="Maintenance">Maintenance / Repair</option>
+                    <option value="Retired">Retired / Discarded</option>
+                  </select>
                 </div>
                 <div className="col-span-1 md:col-span-2">
                   <label className="block text-sm font-bold text-gray-900 mb-2">Additional Notes</label>
@@ -868,6 +878,9 @@ export default function AdminAssetsPage() {
         </div>
       )}
 
+      {/* ========================================== */}
+      {/* 5. BULK UPLOAD VIEW                        */}
+      {/* ========================================== */}
       {viewState === 'bulk_upload' && (
         <div className="space-y-6">
            <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Assets</button>
