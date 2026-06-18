@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 
 // Import your Supabase client
-// Adjust the path if your lib is located differently
 import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
@@ -357,9 +356,6 @@ export default function AdminAssetsPage() {
         const newPhotos = [...(selectedAsset.photos || []), watermarkedDataUrl];
 
         try {
-          // Update Supabase DB 
-          // Note: Saving Base64 to DB is okay for small prototypes, but for production, 
-          // consider uploading the File to Supabase Storage Buckets and saving the URL here instead.
           const { error } = await supabase
             .from('assets')
             .update({ photos: newPhotos })
@@ -385,11 +381,12 @@ export default function AdminAssetsPage() {
   const updateAssetStatus = async (newStatus: Asset['status'], staff?: {empCode: string, name: string}) => {
     if (!selectedAsset) return;
     
-    let assignedData = { assignedTo: undefined, empCode: undefined };
-    let dbAssignedData: { assigned_to: string | null, emp_code: string | null } = { assigned_to: null, emp_code: null };
+    // FIX: Explictly defining the types here prevents the TypeScript build error
+    let assignedData: { assignedTo?: string; empCode?: string } = { assignedTo: undefined, empCode: undefined };
+    let dbAssignedData: { assigned_to: string | null; emp_code: string | null } = { assigned_to: null, emp_code: null };
 
     if (newStatus === 'Assigned' && staff) {
-      assignedData = { assignedTo: staff.name, empCode: staff.empCode as any };
+      assignedData = { assignedTo: staff.name, empCode: staff.empCode };
       dbAssignedData = { assigned_to: staff.name, emp_code: staff.empCode };
     }
 
