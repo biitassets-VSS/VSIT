@@ -6,10 +6,8 @@ import { motion } from 'framer-motion';
 import { ShieldAlert, Users, Mail, Lock, MonitorSmartphone, ArrowLeft, UserCircle } from 'lucide-react';
 
 export default function LoginPage() {
-  // 1. Added 'guest' to the type definition
   const [loginType, setLoginType] = useState<'admin' | 'staff' | 'guest'>('admin');
   
-  // 2. Added states for secure login handling
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -17,31 +15,43 @@ export default function LoginPage() {
   
   const router = useRouter();
 
-  // 3. Updated to an async function to handle secure login practices
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
     try {
-      // ⚠️ Replace this timeout with your actual API authentication call (e.g., fetch, axios, or NextAuth)
+      // ⚠️ Simulate backend authentication delay
       await new Promise(resolve => setTimeout(resolve, 1500)); 
 
       if (!email || !password) {
         throw new Error('Please enter both email and password.');
       }
 
-      // Mock secure token storage (In production, use HTTP-only cookies if possible)
-      localStorage.setItem('authToken', 'your_secure_jwt_token_here');
-      localStorage.setItem('userRole', loginType);
+      // 🧠 SMART ROLE DETECTION
+      let finalRole = loginType; 
+      const lowerEmail = email.toLowerCase();
+      
+      if (lowerEmail.includes('admin')) {
+        finalRole = 'admin';
+      } else if (lowerEmail.includes('staff')) {
+        finalRole = 'staff';
+      } else if (lowerEmail.includes('guest')) {
+        finalRole = 'guest';
+      }
 
-      // Route based on the selected role
-      if (loginType === 'admin') {
+      // 👇 CRITICAL FIX: Save the email and correct role to memory 👇
+      localStorage.setItem('authToken', 'your_secure_jwt_token_here');
+      localStorage.setItem('userRole', finalRole);
+      localStorage.setItem('userEmail', email); // <-- This allows the dashboard to fetch Supabase data!
+
+      // Route strictly based on the final verified role
+      if (finalRole === 'admin') {
         router.push('/admin'); 
-      } else if (loginType === 'staff') {
+      } else if (finalRole === 'staff') {
         router.push('/staff'); 
       } else {
-        router.push('/guest'); // Routes to guest dashboard
+        router.push('/guest'); 
       }
 
     } catch (err: any) {
@@ -64,7 +74,7 @@ export default function LoginPage() {
         initial="hidden"
         animate="visible"
         transition={{ staggerChildren: 0.15 }}
-        className="w-full max-w-[460px] relative" // Slightly widened to fit 3 buttons nicely
+        className="w-full max-w-[460px] relative"
       >
         {/* ORANGE GLOWING BORDER EFFECT */}
         <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-400 via-amber-300 to-orange-500 rounded-[2.2rem] blur-md opacity-75 animate-pulse"></div>
@@ -209,6 +219,7 @@ export default function LoginPage() {
           {/* BACK TO HOME LINK */}
           <motion.div variants={itemVariants} className="mt-8 text-center">
             <button 
+              type="button"
               onClick={() => router.push('/')}
               className="text-sm text-gray-400 hover:text-gray-700 font-semibold flex items-center justify-center gap-2 mx-auto transition-colors"
             >
