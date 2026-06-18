@@ -12,14 +12,45 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
+  // DYNAMIC USER STATE
+  const [staffUser, setStaffUser] = useState({
+    name: 'Loading...',
+    role: 'Staff Member',
+    initials: '...',
+    email: 'Loading...'
+  });
+  
   const pathname = usePathname();
   const router = useRouter();
 
-  const staffUser = {
-    name: 'Lakhwinder Singh',
-    role: 'Staff Member',
-    initials: 'LS'
-  };
+  // FETCH LOGGED IN USER DATA
+  useEffect(() => {
+    const storedUser = localStorage.getItem('logged_in_staff');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      const fullName = parsedUser.name || 'Staff Member';
+      
+      // Calculate initials (e.g., "Lakhwinder Singh" -> "LS")
+      const nameParts = fullName.split(' ');
+      const initials = nameParts.length > 1 
+        ? nameParts[0].charAt(0) + nameParts[1].charAt(0) 
+        : fullName.substring(0, 2);
+
+      setStaffUser({
+        name: fullName,
+        role: parsedUser.empCode || parsedUser.emp_code || 'Staff Member',
+        email: parsedUser.email || '',
+        initials: initials.toUpperCase()
+      });
+    } else {
+      setStaffUser({
+        name: 'Guest User',
+        role: 'Unauthenticated',
+        initials: 'GU',
+        email: 'Please log in'
+      });
+    }
+  }, []);
 
   const navLinks = [
     { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
@@ -28,7 +59,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     { name: 'Inspections', href: '/staff/inspections', icon: ClipboardCheck },
   ];
 
-  const handleLogout = () => router.push('/');
+  const handleLogout = () => {
+    // Clear the active session before redirecting
+    localStorage.removeItem('logged_in_staff');
+    router.push('/');
+  };
 
   const checkIsActive = (href: string) => {
     if (href === '/staff') return pathname === '/staff'; 
@@ -69,7 +104,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        <div className="h-20 flex items-center px-6 border-b border-gray-100 justify-between">
+        <div className="h-20 flex items-center px-6 border-b border-gray-100 justify-between shrink-0">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
@@ -98,18 +133,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-100 relative">
+        {/* BOTTOM PROFILE WIDGET */}
+        <div className="p-4 border-t border-gray-100 relative shrink-0">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border border-blue-300 flex items-center justify-center text-blue-800 font-black text-sm shadow-sm">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border border-blue-300 flex items-center justify-center text-blue-800 font-black text-sm shadow-sm">
                 {staffUser.initials}
               </div>
-              <div className="text-left">
-                <p className="text-sm font-extrabold text-gray-900 leading-tight">{staffUser.name}</p>
-                <p className="text-[11px] font-bold text-blue-600">{staffUser.role}</p>
+              <div className="text-left overflow-hidden">
+                <p className="text-sm font-extrabold text-gray-900 leading-tight truncate">{staffUser.name}</p>
+                <p className="text-[11px] font-bold text-blue-600 truncate">{staffUser.email || staffUser.role}</p>
               </div>
             </div>
-            <ChevronDown size={16} className={`text-gray-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={16} className={`text-gray-500 shrink-0 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {/* CSS Animation Dropdown */}
