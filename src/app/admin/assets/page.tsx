@@ -6,7 +6,7 @@ import {
   Filter, User, ArrowLeft, Download, 
   FileSpreadsheet, CheckCircle2, AlertCircle, Save,
   Printer, QrCode, FileText, Image as ImageIcon,
-  DollarSign, Wrench, Hash, Trash2, UserMinus, X
+  DollarSign, Wrench, Hash, Trash2, UserMinus, X, Pencil
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -50,7 +50,7 @@ const MOCK_STAFF = [
 ];
 
 export default function AdminAssetsPage() {
-  const [viewState, setViewState] = useState<'list' | 'add_single' | 'bulk_upload' | 'print_tags' | 'view_details'>('list');
+  const [viewState, setViewState] = useState<'list' | 'add_single' | 'edit_asset' | 'bulk_upload' | 'print_tags' | 'view_details'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [printCategoryFilter, setPrintCategoryFilter] = useState('All');
   
@@ -63,15 +63,16 @@ export default function AdminAssetsPage() {
   const [inspectionPhoto, setInspectionPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Bulk Upload State
+  // Form & Upload States
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditingId, setIsEditingId] = useState<string | null>(null);
 
-  // Add Single Asset State
-  const [singleAssetForm, setSingleAssetForm] = useState({
+  const emptyFormState = {
     tagId: '', serialNumber: '', name: '', category: '', price: '',
     purchaseDate: '', warrantyExpiry: '', condition: '', status: 'In Stock (Available)', notes: ''
-  });
+  };
+  const [singleAssetForm, setSingleAssetForm] = useState(emptyFormState);
 
   // Mock Asset Data
   const [assets, setAssets] = useState<Asset[]>([
@@ -103,11 +104,67 @@ export default function AdminAssetsPage() {
     return `VS-${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
   };
 
+  // Auto-generate tag ONLY when adding new (protects existing tags when editing)
   useEffect(() => {
     if (singleAssetForm.category && viewState === 'add_single') {
       setSingleAssetForm(prev => ({ ...prev, tagId: generateTagId(singleAssetForm.category) }));
     }
   }, [singleAssetForm.category, viewState]);
+
+  // --- Form Handlers (Add & Edit) ---
+  const handleEditClick = () => {
+    if (selectedAsset) {
+      setSingleAssetForm({
+        tagId: selectedAsset.tagId,
+        serialNumber: selectedAsset.serialNumber || '',
+        name: selectedAsset.name,
+        category: selectedAsset.category,
+        price: selectedAsset.price || '',
+        purchaseDate: selectedAsset.purchaseDate || '',
+        warrantyExpiry: selectedAsset.warrantyExpiry || '',
+        condition: selectedAsset.condition || '',
+        status: selectedAsset.status,
+        notes: selectedAsset.notes || ''
+      });
+      setIsEditingId(selectedAsset.id);
+      setViewState('edit_asset');
+    }
+  };
+
+  const handleCancelForm = () => {
+    setSingleAssetForm(emptyFormState);
+    if (viewState === 'edit_asset') {
+      setViewState('view_details');
+    } else {
+      setViewState('list');
+    }
+    setIsEditingId(null);
+  };
+
+  const handleAssetFormSubmit = () => {
+    if (!singleAssetForm.tagId || !singleAssetForm.name || !singleAssetForm.category) {
+      return alert("Please fill in all the required fields (*).");
+    }
+    setIsUploading(true);
+    setTimeout(() => {
+      if (isEditingId && selectedAsset) {
+        // Update Existing
+        const updatedAsset: Asset = { ...selectedAsset, ...singleAssetForm, status: singleAssetForm.status as Asset['status'] };
+        setAssets(assets.map(a => a.id === isEditingId ? updatedAsset : a));
+        setSelectedAsset(updatedAsset);
+        alert('Asset updated successfully!');
+        setViewState('view_details');
+      } else {
+        // Add New
+        setAssets(prev => [{ id: Date.now().toString(), ...singleAssetForm, status: singleAssetForm.status as Asset['status'], photos: [] }, ...prev]);
+        alert('Asset successfully added to inventory!');
+        setViewState('list');
+      }
+      setIsUploading(false);
+      setSingleAssetForm(emptyFormState);
+      setIsEditingId(null);
+    }, 800);
+  };
 
   // --- Bulk Upload & CSV Logic ---
   const handleDownloadSample = () => {
@@ -143,7 +200,6 @@ export default function AdminAssetsPage() {
           if (!row.trim()) return;
           const cols = row.split(',');
           const category = cols[0] || 'Other';
-          // Auto-generate tag if column 1 is empty, otherwise use provided tag
           const tagId = cols[1] ? cols[1] : generateTagId(category); 
 
           newAssets.push({
@@ -173,20 +229,6 @@ export default function AdminAssetsPage() {
     reader.readAsText(selectedFile);
   };
 
-  const handleAddSingleSubmit = () => {
-    if (!singleAssetForm.tagId || !singleAssetForm.name || !singleAssetForm.category) {
-      return alert("Please fill in all the required fields (*).");
-    }
-    setIsUploading(true);
-    setTimeout(() => {
-      setAssets(prev => [{ id: Date.now().toString(), ...singleAssetForm, status: singleAssetForm.status as any, photos: [] }, ...prev]);
-      setIsUploading(false);
-      setSingleAssetForm({ tagId: '', serialNumber: '', name: '', category: '', price: '', purchaseDate: '', warrantyExpiry: '', condition: '', status: 'In Stock (Available)', notes: '' });
-      alert('Asset successfully added to inventory!');
-      setViewState('list');
-    }, 800);
-  };
-
   // --- Photo Upload & Canvas Watermarking ---
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -196,20 +238,15 @@ export default function AdminAssetsPage() {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Create canvas to draw the image and watermark
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Draw original image
         ctx.drawImage(img, 0, 0);
 
-        // Setup Watermark Text (Current Date & Time)
         const watermarkText = new Date().toLocaleString();
-        
-        // Responsive font size based on image width
         const fontSize = Math.max(16, Math.floor(img.width * 0.03)); 
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.textAlign = 'right';
@@ -219,19 +256,15 @@ export default function AdminAssetsPage() {
         const x = canvas.width - padding;
         const y = canvas.height - padding;
 
-        // Add shadow/outline for readability on light backgrounds
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.lineWidth = fontSize * 0.15;
         ctx.strokeText(watermarkText, x, y);
 
-        // Add White Text
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.fillText(watermarkText, x, y);
 
-        // Get final watermarked image
         const watermarkedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-        // Update State
         const updatedAsset = { ...selectedAsset, photos: [...(selectedAsset.photos || []), watermarkedDataUrl] };
         setAssets(assets.map(a => a.id === selectedAsset.id ? updatedAsset : a));
         setSelectedAsset(updatedAsset);
@@ -373,6 +406,11 @@ export default function AdminAssetsPage() {
             </button>
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               
+              {/* EDIT BUTTON */}
+              <button onClick={handleEditClick} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 flex items-center gap-2 shadow-sm">
+                <Pencil size={16} /> Edit Details
+              </button>
+
               {selectedAsset.status === 'Assigned' ? (
                 <button onClick={() => updateAssetStatus('In Stock (Available)')} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 flex items-center gap-2 shadow-sm">
                   <UserMinus size={16} /> Unassign (Return to Stock)
@@ -400,7 +438,6 @@ export default function AdminAssetsPage() {
                  <Trash2 size={16} /> Discard
                </button>
               )}
-
             </div>
           </div>
 
@@ -426,7 +463,6 @@ export default function AdminAssetsPage() {
             </div>
 
             <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
-              
               {/* Left Details Column */}
               <div className="space-y-8">
                 <div>
@@ -442,7 +478,7 @@ export default function AdminAssetsPage() {
                   <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><FileText size={16}/> Notes & Condition</h3>
                   <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
                     <div className="mb-4"><span className="text-sm font-bold text-gray-500 block mb-1">Current Condition</span><span className="inline-block px-3 py-1 bg-white border border-gray-200 rounded-lg text-sm font-black text-gray-700">{selectedAsset.condition || 'Not Specified'}</span></div>
-                    <div><span className="text-sm font-bold text-gray-500 block mb-1">Additional Notes</span><p className="text-sm font-medium text-gray-800 bg-white p-3 rounded-xl border border-gray-200 min-h-[80px]">{selectedAsset.notes || 'No notes have been added.'}</p></div>
+                    <div><span className="text-sm font-bold text-gray-500 block mb-1">Additional Notes</span><p className="text-sm font-medium text-gray-800 bg-white p-3 rounded-xl border border-gray-200 min-h-[80px] whitespace-pre-line">{selectedAsset.notes || 'No notes have been added.'}</p></div>
                   </div>
                 </div>
               </div>
@@ -584,17 +620,17 @@ export default function AdminAssetsPage() {
       )}
 
       {/* ========================================== */}
-      {/* 4. ADD NEW ASSET VIEW                      */}
+      {/* 4. FORM VIEW (Used for both Add and Edit)  */}
       {/* ========================================== */}
-      {viewState === 'add_single' && (
+      {(viewState === 'add_single' || viewState === 'edit_asset') && (
         <div className="space-y-6 max-w-5xl mx-auto">
           <div className="flex justify-between items-center mb-2">
-            <button type="button" onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-              <ArrowLeft size={16} /> Back to Assets
+            <button type="button" onClick={handleCancelForm} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+              <ArrowLeft size={16} /> Back {viewState === 'edit_asset' ? 'to Details' : 'to Assets'}
             </button>
-            <h2 className="text-2xl sm:text-3xl font-black text-gray-900">Add New Asset</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-gray-900">{viewState === 'edit_asset' ? 'Edit Asset Details' : 'Add New Asset'}</h2>
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); handleAddSingleSubmit(); }} className="space-y-6">
+          <form onSubmit={(e) => { e.preventDefault(); handleAssetFormSubmit(); }} className="space-y-6">
             <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
               <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 border-b border-gray-100">Basic Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -623,10 +659,61 @@ export default function AdminAssetsPage() {
                 </div>
               </div>
             </div>
+
+            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
+              <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 border-b border-gray-100">Purchase & Warranty</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Price / Cost</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
+                    <input type="number" placeholder="0.00" value={singleAssetForm.price} onChange={(e) => setSingleAssetForm({...singleAssetForm, price: e.target.value})} className="w-full bg-white border border-gray-200 pl-8 pr-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none"/>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Purchase Date</label>
+                  <input type="date" value={singleAssetForm.purchaseDate} onChange={(e) => setSingleAssetForm({...singleAssetForm, purchaseDate: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Warranty Expiry</label>
+                  <input type="date" value={singleAssetForm.warrantyExpiry} onChange={(e) => setSingleAssetForm({...singleAssetForm, warrantyExpiry: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none"/>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
+              <h3 className="text-lg font-black text-gray-900 mb-5 pb-4 border-b border-gray-100">Condition & Notes</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Asset Condition</label>
+                  <select value={singleAssetForm.condition} onChange={(e) => setSingleAssetForm({...singleAssetForm, condition: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none">
+                    <option value="" disabled>Select...</option>
+                    <option value="New">New</option>
+                    <option value="Good">Good</option>
+                    <option value="Fair">Fair</option>
+                    <option value="Poor">Poor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Current Status <span className="text-red-500">*</span></label>
+                  <select value={singleAssetForm.status} onChange={(e) => setSingleAssetForm({...singleAssetForm, status: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none">
+                    <option value="In Stock (Available)">In Stock (Available)</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="Maintenance">Maintenance / Repair</option>
+                    <option value="Retired">Retired / Discarded</option>
+                  </select>
+                </div>
+                <div className="col-span-1 md:col-span-2">
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Additional Notes</label>
+                  <textarea rows={3} placeholder="Add any relevant notes..." value={singleAssetForm.notes} onChange={(e) => setSingleAssetForm({...singleAssetForm, notes: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-3.5 rounded-xl text-sm font-medium focus:border-[#008b74] focus:outline-none resize-none"/>
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-4 border-t border-gray-200 pt-6">
-              <button type="button" onClick={() => setViewState('list')} className="px-6 py-3.5 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm">Cancel</button>
+              <button type="button" onClick={handleCancelForm} className="px-6 py-3.5 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm">Cancel</button>
               <button type="submit" disabled={isUploading} className="px-8 py-3.5 bg-[#008b74] hover:bg-[#00705d] text-white font-black rounded-xl shadow-md transition-all flex items-center gap-2 text-sm">
-                {isUploading ? 'Saving...' : <><Save size={18} /> Save Asset</>}
+                {isUploading ? 'Saving...' : <><Save size={18} /> {viewState === 'edit_asset' ? 'Save Changes' : 'Save Asset'}</>}
               </button>
             </div>
           </form>
