@@ -7,6 +7,8 @@ import {
   Package, Wrench, UserCheck, Box, BarChart3
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- TYPES ---
 interface Asset {
@@ -16,8 +18,6 @@ interface Asset {
   category: string;
   status: 'In Stock (Available)' | 'Assigned' | 'Maintenance' | 'Retired';
   assignedToName?: string;
-  inspectionStatus: 'Pending' | 'Passed' | 'Failed';
-  lastInspectionDate: string;
 }
 
 export default function AdminReportsPage() {
@@ -26,7 +26,7 @@ export default function AdminReportsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // 1. FETCH LIVE DATA FROM SUPABASE
+  // 1. FETCH LIVE DATA
   useEffect(() => {
     const fetchAssets = async () => {
       const { data, error } = await supabase.from('assets').select('*');
@@ -36,10 +36,8 @@ export default function AdminReportsPage() {
           tagId: a.tag_id,
           name: a.name,
           category: a.category,
-          status: a.status === 'In Stock (Available)' ? 'In Stock (Available)' : a.status,
+          status: a.status,
           assignedToName: a.assigned_to,
-          inspectionStatus: 'Pending', // Placeholder until you add inspection table integration
-          lastInspectionDate: 'N/A'
         }));
         setAssets(mapped);
       }
@@ -81,14 +79,36 @@ export default function AdminReportsPage() {
     });
   }, [assets]);
 
-  const handleExportCSV = () => alert("Exporting report...");
+  // --- PDF EXPORT FUNCTION ---
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(`Asset Report: ${activeReport.replace('_', ' ')}`, 14, 20);
+    
+    const isSummary = activeReport === 'CATEGORY_SUMMARY';
+    const columns = isSummary 
+      ? ["Category", "Total", "Assigned", "In Stock", "Repair"]
+      : ["Asset Name", "Tag ID", "Category", "Status"];
 
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Data...</div>;
+    const rows = isSummary 
+      ? categorySummary.map(c => [c.category, c.total, c.assigned, c.inStock, c.repair])
+      : filteredAssets.map(a => [a.name, a.tagId, a.category, a.status]);
+
+    autoTable(doc, {
+      head: [columns],
+      body: rows,
+      startY: 30,
+      headStyles: { fillColor: [0, 139, 116] }, // Your brand color
+    });
+
+    doc.save(`Asset_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
+
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Report Data...</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* HEADER */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
@@ -96,14 +116,12 @@ export default function AdminReportsPage() {
           </h1>
           <p className="text-sm font-medium text-gray-500 mt-1">Generate and export live database reports.</p>
         </div>
-        <button onClick={handleExportCSV} className="flex items-center gap-2 bg-[#008b74] hover:bg-[#00705d] text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm">
-          <Download size={18} /> Export Report
+        <button onClick={handleExportPDF} className="flex items-center gap-2 bg-[#008b74] hover:bg-[#00705d] text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm">
+          <Download size={18} /> Download PDF Report
         </button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        
-        {/* SIDEBAR */}
         <div className="lg:w-64 shrink-0 space-y-2 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 h-fit">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 px-2">Report Types</h3>
           {[
@@ -113,27 +131,21 @@ export default function AdminReportsPage() {
             { id: 'ASSIGNED', label: 'Assigned', icon: <UserCheck size={16}/> },
             { id: 'REPAIR', label: 'Under Repair', icon: <Wrench size={16}/> },
           ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveReport(tab.id)}
+            <button key={tab.id} onClick={() => setActiveReport(tab.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                 activeReport === tab.id ? 'bg-[#e6f4f1] text-[#008b74] border border-[#008b74]/20' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
+              }`}>
               {tab.icon} {tab.label}
             </button>
           ))}
         </div>
 
-        {/* CONTENT */}
         <div className="flex-1 space-y-4">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" placeholder="Search report..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:ring-2 focus:ring-[#008b74] outline-none text-sm font-medium"
-              />
+              <input type="text" placeholder="Search current report..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:ring-2 focus:ring-[#008b74] outline-none text-sm font-medium" />
             </div>
           </div>
 
@@ -141,22 +153,13 @@ export default function AdminReportsPage() {
             {activeReport === 'CATEGORY_SUMMARY' ? (
               <table className="w-full text-left">
                 <thead className="bg-gray-50 uppercase text-[10px] text-gray-500 font-black">
-                  <tr>
-                    <th className="p-4">Category</th>
-                    <th className="p-4">Total</th>
-                    <th className="p-4">Assigned</th>
-                    <th className="p-4">In Stock</th>
-                    <th className="p-4">Repair</th>
-                  </tr>
+                  <tr><th className="p-4">Category</th><th className="p-4">Total</th><th className="p-4">Assigned</th><th className="p-4">In Stock</th><th className="p-4">Repair</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {categorySummary.map((cat, i) => (
                     <tr key={i} className="text-sm font-bold">
-                      <td className="p-4">{cat.category}</td>
-                      <td className="p-4">{cat.total}</td>
-                      <td className="p-4 text-blue-600">{cat.assigned}</td>
-                      <td className="p-4 text-[#008b74]">{cat.inStock}</td>
-                      <td className="p-4 text-orange-600">{cat.repair}</td>
+                      <td className="p-4">{cat.category}</td><td className="p-4">{cat.total}</td>
+                      <td className="p-4 text-blue-600">{cat.assigned}</td><td className="p-4 text-[#008b74]">{cat.inStock}</td><td className="p-4 text-orange-600">{cat.repair}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -164,11 +167,7 @@ export default function AdminReportsPage() {
             ) : (
               <table className="w-full text-left">
                 <thead className="bg-gray-50 uppercase text-[10px] text-gray-500 font-black">
-                  <tr>
-                    <th className="p-4">Asset Name</th>
-                    <th className="p-4">Category</th>
-                    <th className="p-4">Status</th>
-                  </tr>
+                  <tr><th className="p-4">Asset Name</th><th className="p-4">Category</th><th className="p-4">Status</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredAssets.map((a) => (
