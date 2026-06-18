@@ -23,33 +23,53 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  // FETCH LOGGED IN USER DATA
+  // FETCH LOGGED IN USER DATA FROM LOCAL STORAGE
   useEffect(() => {
-    const storedUser = localStorage.getItem('logged_in_staff');
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      const fullName = parsedUser.name || 'Staff Member';
-      
-      // Calculate initials (e.g., "Lakhwinder Singh" -> "LS")
-      const nameParts = fullName.split(' ');
-      const initials = nameParts.length > 1 
-        ? nameParts[0].charAt(0) + nameParts[1].charAt(0) 
-        : fullName.substring(0, 2);
+    const updateSidebarData = () => {
+      // 1. Fetch data from localStorage (saved by page.tsx and login)
+      const userEmail = localStorage.getItem('userEmail');
+      const userName = localStorage.getItem('userName');
+      // For role, we check the general role, but could also fetch empCode if saved globally
+      const userRole = localStorage.getItem('userRole'); 
 
-      setStaffUser({
-        name: fullName,
-        role: parsedUser.empCode || parsedUser.emp_code || 'Staff Member',
-        email: parsedUser.email || '',
-        initials: initials.toUpperCase()
-      });
-    } else {
-      setStaffUser({
-        name: 'Guest User',
-        role: 'Unauthenticated',
-        initials: 'GU',
-        email: 'Please log in'
-      });
-    }
+      if (userEmail) {
+        // Fallback name if the dashboard hasn't saved the real name yet
+        const fullName = userName || 'Staff Member';
+        
+        // Calculate initials dynamically
+        const nameParts = fullName.trim().split(' ');
+        let initials = 'SM';
+        if (nameParts.length > 1 && nameParts[0].length > 0 && nameParts[1].length > 0) {
+          initials = nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0);
+        } else if (fullName.length > 1) {
+          initials = fullName.substring(0, 2);
+        }
+
+        setStaffUser({
+          name: fullName,
+          role: userRole === 'admin' ? 'Admin' : 'Staff Member', // Default fallback
+          email: userEmail,
+          initials: initials.toUpperCase()
+        });
+      } else {
+        // Default Guest State
+        setStaffUser({
+          name: 'Guest User',
+          role: 'Unauthenticated',
+          initials: 'GU',
+          email: 'Please log in'
+        });
+      }
+    };
+
+    // Run once on mount
+    updateSidebarData();
+
+    // Add event listener for cross-component updates (when page.tsx saves the real name)
+    window.addEventListener('storage', updateSidebarData);
+    
+    // Cleanup listener on unmount
+    return () => window.removeEventListener('storage', updateSidebarData);
   }, []);
 
   const navLinks = [
@@ -60,8 +80,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   ];
 
   const handleLogout = () => {
-    // Clear the active session before redirecting
+    // Clear ALL relevant session data before redirecting
     localStorage.removeItem('logged_in_staff');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('authToken');
+    
+    // Trigger a storage event to clear out state in other components
+    window.dispatchEvent(new Event('storage'));
+    
     router.push('/');
   };
 
