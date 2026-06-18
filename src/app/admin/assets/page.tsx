@@ -49,6 +49,30 @@ const MOCK_STAFF = [
   { empCode: 'EMP-3015', name: 'Neha Verma' },
 ];
 
+// Default Mock Data (used only on first load)
+const DEFAULT_MOCK_ASSETS: Asset[] = [
+  { 
+    id: '1', tagId: 'VS-LAP-104291', name: 'Dell XPS 15 Laptop', category: 'Laptop', status: 'Assigned', 
+    assignedTo: 'Rahul Sharma', empCode: 'EMP-1042', serialNumber: 'SN-9982348X', price: '125000', 
+    purchaseDate: '2023-01-15', warrantyExpiry: '2026-01-15', condition: 'Good', 
+    notes: 'Handed over with charger and wireless mouse.', photos: [] 
+  },
+  { 
+    id: '2', tagId: 'VS-WMC-209932', name: 'Logitech Wireless Combo', category: 'Wireless Keyboard Combo', 
+    status: 'Assigned', assignedTo: 'Rahul Sharma', empCode: 'EMP-1042', serialNumber: 'SN-112233', 
+    price: '3500', purchaseDate: '2023-02-10', warrantyExpiry: '2024-02-10', condition: 'Good', photos: []
+  },
+  { 
+    id: '3', tagId: 'VS-LAP-300188', name: 'Apple MacBook Pro M2', category: 'Laptop', status: 'In Stock (Available)',
+    serialNumber: 'C02F3983QQQ', price: '185000', purchaseDate: '2023-11-05', warrantyExpiry: '2026-11-05', condition: 'New', photos: []
+  },
+  { 
+    id: '4', tagId: 'VS-OTH-300511', name: 'Dell 27" 4K Monitor', category: 'Other', status: 'Maintenance',
+    serialNumber: 'DELL-MON-4K-99', price: '32000', purchaseDate: '2022-06-12', warrantyExpiry: '2025-06-12', condition: 'Poor',
+    notes: 'Screen flickering issue reported. Sent to service center.', photos: []
+  },
+];
+
 export default function AdminAssetsPage() {
   const [viewState, setViewState] = useState<'list' | 'add_single' | 'edit_asset' | 'bulk_upload' | 'print_tags' | 'view_details'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,29 +98,32 @@ export default function AdminAssetsPage() {
   };
   const [singleAssetForm, setSingleAssetForm] = useState(emptyFormState);
 
-  // Mock Asset Data
-  const [assets, setAssets] = useState<Asset[]>([
-    { 
-      id: '1', tagId: 'VS-LAP-104291', name: 'Dell XPS 15 Laptop', category: 'Laptop', status: 'Assigned', 
-      assignedTo: 'Rahul Sharma', empCode: 'EMP-1042', serialNumber: 'SN-9982348X', price: '125000', 
-      purchaseDate: '2023-01-15', warrantyExpiry: '2026-01-15', condition: 'Good', 
-      notes: 'Handed over with charger and wireless mouse.', photos: [] 
-    },
-    { 
-      id: '2', tagId: 'VS-WMC-209932', name: 'Logitech Wireless Combo', category: 'Wireless Keyboard Combo', 
-      status: 'Assigned', assignedTo: 'Rahul Sharma', empCode: 'EMP-1042', serialNumber: 'SN-112233', 
-      price: '3500', purchaseDate: '2023-02-10', warrantyExpiry: '2024-02-10', condition: 'Good', photos: []
-    },
-    { 
-      id: '3', tagId: 'VS-LAP-300188', name: 'Apple MacBook Pro M2', category: 'Laptop', status: 'In Stock (Available)',
-      serialNumber: 'C02F3983QQQ', price: '185000', purchaseDate: '2023-11-05', warrantyExpiry: '2026-11-05', condition: 'New', photos: []
-    },
-    { 
-      id: '4', tagId: 'VS-OTH-300511', name: 'Dell 27" 4K Monitor', category: 'Other', status: 'Maintenance',
-      serialNumber: 'DELL-MON-4K-99', price: '32000', purchaseDate: '2022-06-12', warrantyExpiry: '2025-06-12', condition: 'Poor',
-      notes: 'Screen flickering issue reported. Sent to service center.', photos: []
-    },
-  ]);
+  // --- Persistent Storage Logic ---
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load from localStorage on initial render
+  useEffect(() => {
+    const savedAssets = localStorage.getItem('vs_assets_inventory');
+    if (savedAssets) {
+      try {
+        setAssets(JSON.parse(savedAssets));
+      } catch (e) {
+        setAssets(DEFAULT_MOCK_ASSETS);
+      }
+    } else {
+      setAssets(DEFAULT_MOCK_ASSETS);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Save to localStorage whenever assets change
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('vs_assets_inventory', JSON.stringify(assets));
+    }
+  }, [assets, isLoaded]);
+
 
   // Tag ID Generator
   const generateTagId = (category: string) => {
@@ -294,6 +321,9 @@ export default function AdminAssetsPage() {
   const handlePrint = () => window.print();
   const openAssetDetails = (asset: Asset) => { setSelectedAsset(asset); setViewState('view_details'); };
 
+  // Block rendering until mounted to prevent hydration errors with localStorage
+  if (!isLoaded) return null;
+
   // Stats & Filters
   const totalAssets = assets.length;
   const availableAssets = assets.filter(a => a.status === 'In Stock (Available)').length;
@@ -359,33 +389,37 @@ export default function AdminAssetsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAssets.map(asset => (
-                    <tr key={asset.id} className="border-b border-gray-50 hover:bg-[#f2faf8] transition-colors">
-                      <td className="p-4">
-                        <div className="font-black text-sm text-[#008b74] cursor-pointer hover:underline" onClick={() => openAssetDetails(asset)}>{asset.name}</div>
-                        <div className="text-[11px] font-bold text-gray-600 bg-gray-100 inline-flex items-center gap-1 px-2 py-0.5 rounded-md mt-1 border border-gray-200">
-                          <QrCode size={10} /> {asset.tagId}
-                        </div>
-                      </td>
-                      <td className="p-4 text-sm font-bold text-gray-600">{asset.category}</td>
-                      <td className="p-4">
-                        <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${
-                          asset.status === 'In Stock (Available)' ? 'bg-[#e6f4f1] text-[#008b74] border-[#008b74]/20' :
-                          asset.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                          asset.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                          'bg-red-50 text-red-700 border-red-200'
-                        }`}>{asset.status}</span>
-                      </td>
-                      <td className="p-4">
-                        {asset.assignedTo ? (
-                          <div>
-                            <div className="text-sm font-bold text-gray-900">{asset.assignedTo}</div>
-                            <div className="text-xs font-medium text-gray-500">{asset.empCode}</div>
+                  {filteredAssets.length === 0 ? (
+                    <tr><td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No assets found.</td></tr>
+                  ) : (
+                    filteredAssets.map(asset => (
+                      <tr key={asset.id} className="border-b border-gray-50 hover:bg-[#f2faf8] transition-colors">
+                        <td className="p-4">
+                          <div className="font-black text-sm text-[#008b74] cursor-pointer hover:underline" onClick={() => openAssetDetails(asset)}>{asset.name}</div>
+                          <div className="text-[11px] font-bold text-gray-600 bg-gray-100 inline-flex items-center gap-1 px-2 py-0.5 rounded-md mt-1 border border-gray-200">
+                            <QrCode size={10} /> {asset.tagId}
                           </div>
-                        ) : (<span className="text-xs font-bold text-gray-400">-</span>)}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="p-4 text-sm font-bold text-gray-600">{asset.category}</td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${
+                            asset.status === 'In Stock (Available)' ? 'bg-[#e6f4f1] text-[#008b74] border-[#008b74]/20' :
+                            asset.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            asset.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                            'bg-red-50 text-red-700 border-red-200'
+                          }`}>{asset.status}</span>
+                        </td>
+                        <td className="p-4">
+                          {asset.assignedTo ? (
+                            <div>
+                              <div className="text-sm font-bold text-gray-900">{asset.assignedTo}</div>
+                              <div className="text-xs font-medium text-gray-500">{asset.empCode}</div>
+                            </div>
+                          ) : (<span className="text-xs font-bold text-gray-400">-</span>)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
