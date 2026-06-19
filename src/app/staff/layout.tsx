@@ -95,7 +95,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-gray-900/60 z-40 lg:hidden backdrop-blur-sm" />
       )}
 
-      {/* SIDEBAR (Copyright Removed) */}
+      {/* SIDEBAR */}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-100 shadow-sm z-50 flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         
         <div className="h-20 flex items-center justify-between px-6 border-b border-gray-50 shrink-0">
@@ -127,20 +127,25 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
+        {/* PROFILE SECTION - UPDATED TO MATCH IMAGE STYLE */}
         <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2">
           <button 
             onClick={() => setIsProfileOpen(!isProfileOpen)} 
-            className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-blue-50 ring-2 ring-blue-100' : 'hover:bg-gray-50'}`}
+            className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-orange-50 ring-2 ring-orange-100' : 'hover:bg-gray-50'}`}
           >
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 border border-blue-300 flex items-center justify-center text-white font-black text-sm shadow-sm">
+              {/* Solid Orange Avatar */}
+              <div className="h-11 w-11 shrink-0 rounded-full bg-[#ff9800] flex items-center justify-center text-white font-black text-[15px] shadow-sm">
                 {staffProfile.initials}
               </div>
+              
+              {/* Text Layout matching the image */}
               <div className="text-left overflow-hidden">
-                <p className="text-sm font-extrabold text-gray-900 leading-tight truncate">{staffProfile.name}</p>
-                <p className="text-[11px] font-bold text-blue-600 truncate">{staffProfile.email}</p>
+                <p className="text-[15px] font-bold text-[#0f172a] leading-tight truncate">{staffProfile.name}</p>
+                <p className="text-[13px] font-semibold text-[#f97316] truncate mt-0.5">{staffProfile.email}</p>
               </div>
             </div>
+            
             <ChevronDown size={16} className={`text-gray-500 shrink-0 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
 
@@ -171,16 +176,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* FLOATING COPYRIGHT AT BOTTOM RIGHT */}
       <div className="fixed bottom-4 right-6 z-40 pointer-events-none">
         <p className="text-[11px] font-medium text-gray-500 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-gray-100">
-          Design by <span className="text-orange-500 font-bold tracking-wide">AinodeArt</span>
+          Design by <span className="text-blue-600 font-bold tracking-wide">AinodeArt</span>
         </p>
       </div>
 
     </div>
-    {/* FLOATING COPYRIGHT AT BOTTOM RIGHT */}
-      <div className="fixed bottom-4 right-6 z-50 pointer-events-none">
-        <p className="text-[11px] font-medium text-gray-500 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-gray-100">
-          Design by <span className="text-blue-600 font-bold tracking-wide">AinodeArt</span>
-        </p>
-      </div>
   );
 }
