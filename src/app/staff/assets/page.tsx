@@ -1,38 +1,46 @@
-'use client';
-
 import React from 'react';
 import { 
   Laptop, Monitor, CheckCircle2, AlertTriangle, 
-  ShieldCheck, Calendar, Info
+  ShieldCheck, Calendar, Info, Smartphone, HelpCircle
 } from 'lucide-react';
+// import prisma from '@/lib/prisma'; // Example: Import your DB client here
 
-export default function StaffAssetsPage() {
+// Helper function to map database string types to Lucide icons
+const getIconForType = (type: string) => {
+  switch (type.toLowerCase()) {
+    case 'laptop': return Laptop;
+    case 'monitor': return Monitor;
+    case 'phone': return Smartphone;
+    default: return HelpCircle;
+  }
+};
+
+export default async function StaffAssetsPage() {
   
-  // Mock Data: Staff's Assigned Assets with Inspection Status
-  const myAssets = [
+  // 1. FETCH LIVE DATA FROM YOUR DATABASE
+  // Example using Prisma: const dbAssets = await prisma.asset.findMany({ where: { userId: currentUser.id } });
+  // Example using Fetch API: const res = await fetch('https://your-api.com/assets', { cache: 'no-store' });
+  
+  // For this example, we'll pretend this is the raw data returning from your DB:
+  const dbAssets = [
     { 
       id: 'TAG-1045', 
       name: 'MacBook Pro 14" (M2)', 
       type: 'Laptop', 
-      assignedDate: 'Jan 15, 2023',
+      assignedDate: '2023-01-15',
       health: 'Good Condition',
       inspectionStatus: 'Passed',
-      lastInspected: 'Oct 01, 2023',
-      nextInspection: 'Apr 01, 2024',
-      icon: Laptop
-    },
-    { 
-      id: 'TAG-2099', 
-      name: 'Dell UltraSharp 27" 4K', 
-      type: 'Monitor', 
-      assignedDate: 'Jan 15, 2023',
-      health: 'Minor Scratches',
-      inspectionStatus: 'Due Soon',
-      lastInspected: 'Mar 10, 2023',
-      nextInspection: 'Nov 15, 2023',
-      icon: Monitor
+      lastInspected: '2023-10-01',
+      nextInspection: '2024-04-01'
     }
   ];
+
+  // 2. MAP THE DB DATA TO YOUR UI EXPECTATIONS
+  const myAssets = dbAssets.map(asset => ({
+    ...asset,
+    // Format dates if needed here, and attach the correct React Icon component
+    icon: getIconForType(asset.type) 
+  }));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -40,7 +48,9 @@ export default function StaffAssetsPage() {
       {/* HEADER */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <h1 className="text-2xl font-black text-gray-900">My Assigned Assets</h1>
-        <p className="text-sm font-medium text-gray-500 mt-1">View the equipment assigned to you and their current inspection status.</p>
+        <p className="text-sm font-medium text-gray-500 mt-1">
+          View the equipment assigned to you and their current inspection status.
+        </p>
       </div>
 
       {/* ASSETS GRID */}
@@ -101,12 +111,10 @@ export default function StaffAssetsPage() {
                 </div>
 
               </div>
-
             </div>
           );
         })}
       </div>
-
     </div>
   );
 }
