@@ -1,44 +1,13 @@
 // src/app/settings/page.tsx
 import SettingsClient from './SettingsClient';
 
-// ⚠️ IMPORTANT: Import your actual database client here!
-// import prisma from '@/lib/prisma'; 
+// ⚠️ IMPORT YOUR ACTUAL DATABASE CLIENT HERE
+// Example: import prisma from '@/lib/prisma'; 
 
 export default async function SettingsPage() {
   
-  // =====================================================================
-  // STEP 1: FETCH REAL DATA FROM YOUR DATABASE
-  // Uncomment the code below and ensure it matches your database schema.
-  // =====================================================================
-  
-  /*
-  // Fetch real settings from DB (or use defaults if none exist)
-  const dbSettings = await prisma.systemSettings.findFirst() || {
-    appName: 'Asset Management Portal',
-    supportEmail: 'admin@company.com',
-    allowStaffLogin: true,
-    allowStaffEditAssets: false,
-    requireAdminApproval: true,
-    compressUploads: true,
-    maxUploadSizeMB: '5',
-    enableWatermarks: true,
-    watermarkFormat: 'Date & Time'
-  };
-
-  // Fetch real users from DB
-  const dbUsers = await prisma.user.findMany({
-    select: { 
-      id: true, 
-      name: true, 
-      email: true, 
-      role: true 
-    },
-    orderBy: { name: 'asc' }
-  });
-  */
-
-  // ⚠️ UNTIL YOU UNCOMMENT THE DB QUERY ABOVE, THIS WILL BE EMPTY
-  // Once your DB is connected, replace these empty arrays with dbSettings & dbUsers
+  // 1. FETCH REAL SETTINGS
+  // Replace with your actual DB call, or keep defaults if you don't store settings in the DB yet.
   const liveSettings = {
     appName: 'Asset Management Portal',
     supportEmail: 'admin@company.com',
@@ -50,9 +19,23 @@ export default async function SettingsPage() {
     enableWatermarks: true,
     watermarkFormat: 'Date & Time'
   };
-  
-  const liveUsers: any[] = []; // <-- Replace with `dbUsers` once your DB is connected
 
-  // STEP 2: PASS LIVE DATA TO UI
+  // 2. FETCH REAL USERS FROM YOUR DATABASE
+  // ⚠️ UNCOMMENT AND UPDATE THIS BLOCK TO MATCH YOUR DATABASE
+  /*
+  const liveUsers = await prisma.user.findMany({
+    select: { 
+      id: true, 
+      name: true, 
+      email: true, 
+      role: true // This should pull 'Staff', 'Admin', or 'Revoked'
+    },
+    orderBy: { name: 'asc' } // Sorts alphabetically by name
+  });
+  */
+
+  // Fallback empty array to prevent crashes until you uncomment the block above.
+  const liveUsers: any[] = []; 
+
   return <SettingsClient initialSettings={liveSettings} initialUsers={liveUsers} />;
 }

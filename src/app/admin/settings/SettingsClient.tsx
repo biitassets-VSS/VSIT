@@ -37,39 +37,57 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Initialize State entirely from the Live Database Props
+  // Initialize State with Live Database Data
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [users, setUsers] = useState<UserRecord[]>(initialUsers);
 
-  // Handlers
+  // Handlers for Global Settings
   const handleToggle = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleRoleChange = (userId: string | number, newRole: string) => {
+  // Handler for Individual User Role Changes
+  const handleRoleChange = async (userId: string | number, newRole: string) => {
+    // 1. Update UI instantly for a snappy feel
     setUsers(prev => prev.map(user => 
       user.id === userId ? { ...user, role: newRole } : user
     ));
+
+    // 2. Send the update to your actual database API
+    try {
+      // ⚠️ YOU MUST CREATE THIS API ROUTE IN YOUR NEXT.JS APP
+      /*
+      const response = await fetch('/api/users/update-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, newRole })
+      });
+
+      if (!response.ok) throw new Error('Failed to update role in database');
+      */
+    } catch (error) {
+      alert("Failed to update user access. Please try again.");
+      // Optional: Revert the UI state if the API fails
+    }
   };
 
-  const handleSave = async () => {
+  const handleSaveSettings = async () => {
     setIsSaving(true);
     
     try {
-      // TODO: PUSH UPDATED SETTINGS AND USERS TO YOUR DATABASE
-      // Example:
+      // PUSH UPDATED GLOBAL SETTINGS TO YOUR DATABASE
       /*
       await fetch('/api/settings/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings, users })
+        body: JSON.stringify({ settings })
       });
       */
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
-      alert("Failed to save settings. Please try again.");
+      alert("Failed to save global settings. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -87,7 +105,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
           <p className="text-sm font-medium text-gray-500 mt-1">Control application rules, roles, and media configurations.</p>
         </div>
         <button 
-          onClick={handleSave} 
+          onClick={handleSaveSettings} 
           disabled={isSaving}
           className={`w-full sm:w-auto px-6 py-3 font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 ${saved ? 'bg-green-500 text-white' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
         >
@@ -215,9 +233,8 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
             <tbody className="divide-y divide-gray-50">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center">
-                    <p className="text-gray-500 text-sm font-medium">No users found.</p>
-                    <p className="text-gray-400 text-xs mt-1">Please ensure your database is connected in page.tsx.</p>
+                  <td colSpan={3} className="py-8 text-center text-gray-500 text-sm font-medium">
+                    No users found. Please connect your database in page.tsx.
                   </td>
                 </tr>
               ) : (
@@ -233,7 +250,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
                       <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                         user.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
                         user.role === 'Staff' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-600'
+                        'bg-red-100 text-red-700'
                       }`}>
                         {user.role}
                       </span>
@@ -246,7 +263,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
                       >
                         <option value="Admin">Set as Admin</option>
                         <option value="Staff">Set as Staff</option>
-                        <option value="Pending">Revoke Access</option>
+                        <option value="Revoked">Revoke Access</option>
                       </select>
                     </td>
                   </tr>
