@@ -5,7 +5,7 @@ import {
   PackageSearch, Plus, Search, Filter, Edit, 
   Trash2, X, Loader2, CheckCircle2, AlertCircle, Laptop, 
   Settings, Upload, Download, Eye, Camera, ShieldCheck, ClipboardCheck,
-  ArrowLeft, Calendar
+  ArrowLeft, Wrench, UserMinus, XOctagon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
@@ -14,6 +14,7 @@ interface Asset {
   id: string;
   tag_id: string;
   name: string;
+  brand: string;
   category: string;
   serial_number: string;
   status: 'Available' | 'Assigned' | 'Maintenance' | 'Retired';
@@ -52,9 +53,9 @@ export default function AdminAssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
 
-  // New Form State (Matching your Screenshot)
+  // Form State
   const [formData, setFormData] = useState({
-    tag_id: '', name: '', category: '', serial_number: '', 
+    tag_id: '', name: '', brand: '', category: '', serial_number: '', 
     status: 'Available', emp_code: '',
     price: '', purchase_date: '', warranty_expiry: '', asset_condition: 'Brand New', condition_notes: ''
   });
@@ -104,7 +105,6 @@ export default function AdminAssetsPage() {
     }
   };
 
-  // --- AUTO GENERATE TAG ID LOGIC ---
   const handleCategoryChange = (cat: string) => {
     const prefixes: Record<string, string> = {
       'Laptop': 'LAP', 'Mouse': 'MOU', 'Keyboards': 'KEY',
@@ -121,7 +121,7 @@ export default function AdminAssetsPage() {
     if (asset) {
       setEditingAsset(asset);
       setFormData({
-        tag_id: asset.tag_id, name: asset.name, category: asset.category, 
+        tag_id: asset.tag_id, name: asset.name, brand: asset.brand || '', category: asset.category, 
         serial_number: asset.serial_number || '', status: asset.status, emp_code: asset.emp_code || '',
         price: asset.price || '', purchase_date: asset.purchase_date || '', 
         warranty_expiry: asset.warranty_expiry || '', asset_condition: asset.asset_condition || 'Good',
@@ -130,7 +130,7 @@ export default function AdminAssetsPage() {
     } else {
       setEditingAsset(null);
       setFormData({
-        tag_id: '', name: '', category: '', serial_number: '', status: 'Available', emp_code: '',
+        tag_id: '', name: '', brand: '', category: '', serial_number: '', status: 'Available', emp_code: '',
         price: '', purchase_date: '', warranty_expiry: '', asset_condition: 'Brand New', condition_notes: ''
       });
     }
@@ -143,7 +143,7 @@ export default function AdminAssetsPage() {
     
     setIsSubmitting(true);
     const payload = {
-      tag_id: formData.tag_id, name: formData.name, category: formData.category,
+      tag_id: formData.tag_id, name: formData.name, brand: formData.brand, category: formData.category,
       serial_number: formData.serial_number, status: formData.status, 
       emp_code: formData.status === 'Assigned' ? formData.emp_code : null,
       price: formData.price, purchase_date: formData.purchase_date,
@@ -168,8 +168,30 @@ export default function AdminAssetsPage() {
     }
   };
 
+  // --- QUICK ACTIONS (UNASSIGN, REPAIR, DISCARD) ---
+  const handleQuickStatusChange = async (newStatus: string) => {
+    if (!selectedAsset) return;
+    if (!confirm(`Are you sure you want to mark this asset as ${newStatus}?`)) return;
+    
+    setIsSubmitting(true);
+    try {
+      await supabase.from('assets').update({ 
+        status: newStatus, 
+        emp_code: newStatus === 'Available' || newStatus === 'Maintenance' || newStatus === 'Retired' ? null : selectedAsset.emp_code 
+      }).eq('id', selectedAsset.id);
+      
+      alert(`Asset successfully updated to ${newStatus}!`);
+      setViewState('list');
+      fetchData();
+    } catch (error: any) {
+      alert("Error updating status: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete ${name}?`)) {
+    if (confirm(`Are you sure you want to completely delete ${name}?`)) {
       try {
         await supabase.from('assets').delete().eq('id', id);
         setAssets(assets.filter(a => a.id !== id));
@@ -187,7 +209,7 @@ export default function AdminAssetsPage() {
 
   // --- BULK UPLOAD LOGIC ---
   const handleDownloadSample = () => {
-    const csvContent = "data:text/csv;charset=utf-8,name,category,tag_id,serial_number,status,price,purchase_date,warranty_expiry,asset_condition\nDell XPS 15,Laptop,LAP-1001,SN123456,Available,85000,2023-01-15,2026-01-15,Brand New\nLogitech Mouse,Mouse,MOU-2001,,Available,1500,,,Good";
+    const csvContent = "data:text/csv;charset=utf-8,name,brand,category,tag_id,serial_number,status,price,purchase_date,warranty_expiry,asset_condition\nDell XPS 15,Dell,Laptop,LAP-1001,SN123456,Available,85000,2023-01-15,2026-01-15,Brand New\nLogitech MX Master,Logitech,Mouse,MOU-2001,,Available,1500,,,Good";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -205,10 +227,10 @@ export default function AdminAssetsPage() {
       const text = await file.text();
       const rows = text.split('\n').slice(1);
       const payload = rows.filter(r => r.trim() !== '').map(row => {
-        const [name, category, tag_id, serial_number, status, price, purchase_date, warranty_expiry, asset_condition] = row.split(',');
+        const [name, brand, category, tag_id, serial_number, status, price, purchase_date, warranty_expiry, asset_condition] = row.split(',');
         return { 
-          name, category, tag_id, serial_number, status: status || 'Available',
-          price, purchase_date, warranty_expiry, asset_condition: asset_condition || 'Good'
+          name, brand, category, tag_id, serial_number, status: status || 'Available',
+          price, purchase_date, warranty_expiry, asset_condition: asset_condition || 'Brand New'
         };
       });
       if (payload.length > 0) {
@@ -280,7 +302,9 @@ export default function AdminAssetsPage() {
   };
 
   const filteredAssets = assets.filter(asset => {
-    const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || asset.tag_id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          asset.tag_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (asset.brand && asset.brand.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesFilter = filterStatus === 'All' || asset.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -294,11 +318,10 @@ export default function AdminAssetsPage() {
     <div className="animate-in fade-in duration-500 pb-10">
       
       {/* ============================================================== */}
-      {/* 1. LIST VIEW (Default Dashboard)                               */}
+      {/* 1. LIST VIEW                                                   */}
       {/* ============================================================== */}
       {viewState === 'list' && (
         <div className="space-y-6">
-          {/* HEADER & STATS */}
           <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-white p-6 rounded-[24px] shadow-sm border border-gray-100">
             <div>
               <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
@@ -315,11 +338,10 @@ export default function AdminAssetsPage() {
             </div>
           </div>
 
-          {/* FILTERS & SEARCH */}
           <div className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 justify-between">
             <div className="relative w-full md:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input type="text" placeholder="Search by Asset Name or Tag ID..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"/>
+              <input type="text" placeholder="Search by Asset Name, Brand or Tag ID..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"/>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
               <Filter size={16} className="text-gray-400 shrink-0" />
@@ -329,7 +351,6 @@ export default function AdminAssetsPage() {
             </div>
           </div>
 
-          {/* ASSETS TABLE */}
           <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[800px]">
@@ -352,7 +373,7 @@ export default function AdminAssetsPage() {
                           <div className="font-black text-sm text-gray-900 group-hover:text-orange-600 transition-colors">{asset.name}</div>
                           <div className="flex flex-col gap-1 mt-1">
                             <span className="text-[10px] font-bold text-gray-500 bg-gray-100 w-fit px-2 py-0.5 rounded border border-gray-200 hover:underline">TAG: {asset.tag_id}</span>
-                            <span className="text-[10px] font-bold text-gray-400">S/N: {asset.serial_number || 'N/A'}</span>
+                            <span className="text-[10px] font-bold text-gray-400">Brand: {asset.brand || 'N/A'} | S/N: {asset.serial_number || 'N/A'}</span>
                           </div>
                         </td>
                         <td className="p-4"><div className="flex items-center gap-2 text-sm font-bold text-gray-700"><Laptop size={14} className="text-gray-400"/> {asset.category}</div></td>
@@ -381,11 +402,10 @@ export default function AdminAssetsPage() {
       )}
 
       {/* ============================================================== */}
-      {/* 2. ADD / EDIT ASSET FORM (Matches Screenshot Exactly)          */}
+      {/* 2. ADD / EDIT ASSET FORM                                       */}
       {/* ============================================================== */}
       {viewState === 'form' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-6">
-          
           <div className="flex justify-between items-center bg-transparent py-2">
             <button onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
               <ArrowLeft size={16} /> Back to Assets
@@ -395,7 +415,7 @@ export default function AdminAssetsPage() {
 
           <form onSubmit={handleSaveAsset} className="space-y-6">
             
-            {/* CARD 1: Basic Information */}
+            {/* Basic Information */}
             <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
               <h3 className="text-lg font-black text-gray-900 mb-6">Basic Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -411,10 +431,14 @@ export default function AdminAssetsPage() {
                   <input required type="text" value={formData.tag_id} onChange={e => setFormData({...formData, tag_id: e.target.value})} placeholder="e.g. AST-1042" className="w-full px-4 py-3 rounded-xl border-2 border-teal-500 bg-white focus:outline-none text-sm font-bold" />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">Asset Name *</label>
                   <input required type="text" placeholder="e.g. Dell XPS 15 Laptop" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-teal-500 outline-none text-sm font-medium" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Brand</label>
+                  <input type="text" placeholder="e.g. Dell, Apple, HP" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-teal-500 outline-none text-sm font-medium" />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">Serial Number</label>
@@ -423,7 +447,7 @@ export default function AdminAssetsPage() {
               </div>
             </div>
 
-            {/* CARD 2: Purchase & Warranty */}
+            {/* Purchase & Warranty */}
             <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
               <h3 className="text-lg font-black text-gray-900 mb-6">Purchase & Warranty</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -443,7 +467,7 @@ export default function AdminAssetsPage() {
               </div>
             </div>
 
-            {/* CARD 3: Condition & Status */}
+            {/* Condition & Status */}
             <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
               <h3 className="text-lg font-black text-gray-900 mb-6">Condition & Status</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -480,24 +504,12 @@ export default function AdminAssetsPage() {
               </div>
             </div>
 
-            {/* CARD 4: Upload Photos (For initial adding) */}
-            <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex justify-between items-center">
-              <div className="flex items-center gap-2 text-lg font-black text-gray-900">
-                <Camera className="text-teal-600"/> Upload Photos (Optional)
-              </div>
-              <button type="button" className="px-6 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-200">
-                Choose Files
-              </button>
-            </div>
-
-            {/* ACTION BUTTONS */}
             <div className="flex gap-4 justify-end">
               <button type="button" onClick={() => setViewState('list')} className="px-8 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Cancel</button>
               <button type="submit" disabled={isSubmitting} className="px-10 py-4 bg-teal-600 text-white font-black rounded-xl hover:bg-teal-700 transition-all shadow-sm flex items-center gap-2">
                 {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Save Asset Record'}
               </button>
             </div>
-
           </form>
         </motion.div>
       )}
@@ -507,31 +519,49 @@ export default function AdminAssetsPage() {
       {/* ============================================================== */}
       {viewState === 'detail' && selectedAsset && (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-5xl mx-auto bg-white rounded-[24px] shadow-2xl overflow-hidden my-4 flex flex-col md:flex-row border border-gray-100">
+          
           {/* LEFT SIDE: DETAILS */}
           <div className="w-full md:w-1/2 bg-gray-50 border-r border-gray-100 p-6 sm:p-8 space-y-6">
             <div className="flex justify-between items-start">
               <div>
                 <button onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors mb-4"><ArrowLeft size={16} /> Back</button>
                 <h2 className="text-2xl font-black text-gray-900">{selectedAsset.name}</h2>
-                <p className="text-sm font-bold text-orange-600 mt-1 bg-orange-100 w-fit px-2 py-0.5 rounded border border-orange-200">{selectedAsset.tag_id}</p>
+                <div className="flex gap-2 mt-1">
+                  <p className="text-sm font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded border border-orange-200">{selectedAsset.tag_id}</p>
+                  {selectedAsset.brand && <p className="text-sm font-bold text-gray-600 bg-gray-200 px-2 py-0.5 rounded border border-gray-300">{selectedAsset.brand}</p>}
+                </div>
               </div>
             </div>
             
             <div className="space-y-4">
+              
+              {/* NEW QUICK ACTIONS PANEL */}
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Status & Assignment</p>
-                <p className="font-bold text-gray-900 text-sm flex items-center gap-2">{selectedAsset.status} • {selectedAsset.status === 'Assigned' ? selectedAsset.staff_name : 'No User'}</p>
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
+                 <div className="flex flex-wrap gap-2">
+                    {selectedAsset.status === 'Available' && (
+                      <button onClick={() => handleOpenAddForm(selectedAsset)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 hover:bg-blue-100 flex items-center gap-1"><Plus size={14}/> Assign to Staff</button>
+                    )}
+                    {selectedAsset.status === 'Assigned' && (
+                      <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1"><UserMinus size={14}/> Unassign Asset</button>
+                    )}
+                    {selectedAsset.status !== 'Maintenance' && (
+                      <button onClick={() => handleQuickStatusChange('Maintenance')} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200 hover:bg-amber-100 flex items-center gap-1"><Wrench size={14}/> Send to Repair</button>
+                    )}
+                    {selectedAsset.status === 'Maintenance' && (
+                      <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1"><CheckCircle2 size={14}/> Mark Repaired (Available)</button>
+                    )}
+                    {selectedAsset.status !== 'Retired' && (
+                      <button onClick={() => handleQuickStatusChange('Retired')} className="px-3 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 hover:bg-red-100 flex items-center gap-1"><XOctagon size={14}/> Discard / Retire</button>
+                    )}
+                 </div>
               </div>
+
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Category</p>
-                  <p className="font-bold text-gray-900 text-sm">{selectedAsset.category}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Serial Number</p>
-                  <p className="font-bold text-gray-900 text-sm">{selectedAsset.serial_number || 'N/A'}</p>
-                </div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Status & User</p><p className="font-bold text-gray-900 text-sm">{selectedAsset.status} • {selectedAsset.status === 'Assigned' ? selectedAsset.staff_name : 'No User'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Serial Number</p><p className="font-bold text-gray-900 text-sm">{selectedAsset.serial_number || 'N/A'}</p></div>
               </div>
+              
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Latest Inspection Record</p>
                 {selectedAsset.inspection_status ? (
@@ -548,11 +578,11 @@ export default function AdminAssetsPage() {
                 ) : (<p className="text-sm font-medium text-gray-500 italic">No inspection data recorded yet.</p>)}
               </div>
             </div>
-            <button onClick={() => handleOpenAddForm(selectedAsset)} className="w-full py-3 bg-gray-900 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-gray-800"><Edit size={16}/> Edit Asset Details</button>
+            <button onClick={() => handleOpenAddForm(selectedAsset)} className="w-full py-3 bg-gray-900 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-gray-800 mt-4"><Edit size={16}/> Edit Full Details</button>
           </div>
 
           {/* RIGHT SIDE: INSPECT ACTION */}
-          <div className="w-full md:w-1/2 p-6 sm:p-8 bg-white relative">
+          <div className="w-full md:w-1/2 p-6 sm:p-8 bg-white relative border-l border-gray-100">
             <h3 className="text-lg font-black text-gray-900 flex items-center gap-2 mb-6"><ClipboardCheck className="text-orange-500"/> Update Inspection</h3>
             
             <div className="space-y-5">
@@ -584,7 +614,7 @@ export default function AdminAssetsPage() {
       {/* --- BULK UPLOAD MODAL --- */}
       <AnimatePresence>
         {isBulkModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-gray-900/60">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm bg-gray-900/60">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-[24px] w-full max-w-md shadow-2xl overflow-hidden">
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-blue-50"><h2 className="text-lg font-black text-blue-900 flex items-center gap-2"><Upload size={20}/> Bulk Upload CSV</h2><button onClick={() => setIsBulkModalOpen(false)} className="p-2 text-blue-400 hover:bg-blue-100 rounded-full"><X size={20} /></button></div>
               <div className="p-6 space-y-6 text-center">
