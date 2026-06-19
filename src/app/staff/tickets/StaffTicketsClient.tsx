@@ -1,4 +1,3 @@
-// src/app/staff/tickets/StaffTicketsClient.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -12,64 +11,75 @@ interface TicketRecord {
   id: string;
   issue: string;
   asset: string;
-  status: string; // 'Open' | 'Closed' etc.
+  status: string;
   date: string;
   notes: string;
   hasAttachment: boolean;
 }
 
-interface StaffTicketsClientProps {
-  initialTickets: TicketRecord[];
+interface AssetRecord {
+  id: string;
+  name: string;
 }
 
-export default function StaffTicketsClient({ initialTickets }: StaffTicketsClientProps) {
+interface StaffTicketsClientProps {
+  initialTickets: TicketRecord[];
+  assignedAssets: AssetRecord[];
+}
+
+export default function StaffTicketsClient({ initialTickets, assignedAssets }: StaffTicketsClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tickets, setTickets] = useState<TicketRecord[]>(initialTickets);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form States for creating a new ticket
+  // Form States
   const [issue, setIssue] = useState('');
   const [asset, setAsset] = useState('Software / General Issue');
   const [notes, setNotes] = useState('');
+  const [file, setFile] = useState<File | null>(null);
 
   // Handle Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     try {
-      // TODO: POST NEW TICKET TO YOUR DATABASE
-      // Example:
-      /*
-      const res = await fetch('/api/tickets', {
+      // 1. PREPARE DATA (Handle file upload if necessary)
+      const formData = new FormData();
+      formData.append('issue', issue);
+      formData.append('asset', asset);
+      formData.append('notes', notes);
+      if (file) {
+        formData.append('file', file);
+      }
+
+      // 2. SEND TO YOUR REAL API ENDPOINT
+      const response = await fetch('/api/tickets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issue, asset, notes })
+        body: formData, // Using FormData to support file uploads
       });
-      const newTicket = await res.json();
-      */
 
-      // Placeholder for immediate UI update (replace with real DB response)
-      const newTicket: TicketRecord = {
-        id: `TKT-${Math.floor(Math.random() * 9000) + 1000}`,
-        issue,
-        asset,
-        status: 'Open',
-        date: new Date().toLocaleDateString(),
-        notes,
-        hasAttachment: false
-      };
+      if (!response.ok) throw new Error('Failed to submit ticket');
 
-      // Update UI state
-      setTickets([newTicket, ...tickets]);
+      // 3. GET THE SAVED TICKET FROM DB
+      const newlySavedTicket: TicketRecord = await response.json();
+
+      // 4. UPDATE UI
+      setTickets([newlySavedTicket, ...tickets]);
       alert("Ticket raised successfully! IT Support has been notified.");
       
-      // Reset form and close modal
+      // 5. RESET FORM
       setIssue('');
       setAsset('Software / General Issue');
       setNotes('');
+      setFile(null);
       setIsModalOpen(false);
 
     } catch (error) {
       alert("Failed to submit ticket. Please try again.");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -101,7 +111,9 @@ export default function StaffTicketsClient({ initialTickets }: StaffTicketsClien
         
         <div className="divide-y divide-gray-100">
           {tickets.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 font-medium">No tickets found.</div>
+            <div className="p-10 text-center text-gray-500 font-medium">
+              No tickets found. You have no active or past support requests.
+            </div>
           ) : (
             tickets.map((ticket) => (
               <div key={ticket.id} className="p-6 hover:bg-gray-50 transition-colors flex flex-col md:flex-row gap-4 md:items-center justify-between">
@@ -152,7 +164,11 @@ export default function StaffTicketsClient({ initialTickets }: StaffTicketsClien
             
             <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h2 className="text-xl font-black text-gray-900">Raise IT Ticket</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-900 rounded-full transition-colors">
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                disabled={isSubmitting}
+                className="p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-900 rounded-full transition-colors disabled:opacity-50"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -164,22 +180,30 @@ export default function StaffTicketsClient({ initialTickets }: StaffTicketsClien
                   required 
                   value={issue}
                   onChange={(e) => setIssue(e.target.value)}
+                  disabled={isSubmitting}
                   type="text" 
                   placeholder="E.g. Cannot connect to Wi-Fi" 
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium" 
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium disabled:opacity-50" 
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5">Select Asset (Optional)</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Select Asset</label>
                 <select 
                   value={asset}
                   onChange={(e) => setAsset(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium appearance-none"
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium appearance-none disabled:opacity-50"
                 >
-                  <option value="MacBook Pro M2 (TAG-1045)">MacBook Pro M2 (TAG-1045)</option>
-                  <option value="Dell UltraSharp 27 (TAG-2099)">Dell UltraSharp 27" (TAG-2099)</option>
                   <option value="Software / General Issue">Software / General Issue</option>
+                  
+                  {/* LIVE DATA: Dynamically maps the user's assigned assets to the dropdown */}
+                  {assignedAssets.map((dbAsset) => (
+                    <option key={dbAsset.id} value={`${dbAsset.name} (${dbAsset.id})`}>
+                      {dbAsset.name} ({dbAsset.id})
+                    </option>
+                  ))}
+
                 </select>
               </div>
 
@@ -189,31 +213,48 @@ export default function StaffTicketsClient({ initialTickets }: StaffTicketsClien
                   required 
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
+                  disabled={isSubmitting}
                   rows={3} 
                   placeholder="Please provide details about what happened..." 
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium resize-none"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm font-medium resize-none disabled:opacity-50"
                 ></textarea>
               </div>
 
               {/* FILE UPLOAD DRAG & DROP */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Attach Screenshot (Optional)</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-blue-50 hover:border-blue-400 transition-colors cursor-pointer group">
+                <div className="relative border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-blue-50 hover:border-blue-400 transition-colors cursor-pointer group">
                   <div className="bg-blue-100 text-blue-600 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform">
                     <UploadCloud size={24} />
                   </div>
-                  <p className="text-sm font-bold text-gray-700">Click to upload or drag & drop</p>
+                  <p className="text-sm font-bold text-gray-700">
+                    {file ? file.name : "Click to upload or drag & drop"}
+                  </p>
                   <p className="text-xs text-gray-500 mt-1 font-medium">PNG, JPG, or PDF (max 5MB)</p>
-                  <input type="file" className="hidden" />
+                  <input 
+                    type="file" 
+                    disabled={isSubmitting}
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" 
+                  />
                 </div>
               </div>
 
               <div className="pt-2 flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-5 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)} 
+                  disabled={isSubmitting}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200 transition-all">
-                  Submit Ticket
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200 transition-all flex justify-center items-center disabled:opacity-70"
+                >
+                  {isSubmitting ? "Submitting..." : "Submit Ticket"}
                 </button>
               </div>
             </form>
