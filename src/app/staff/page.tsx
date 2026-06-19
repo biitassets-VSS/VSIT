@@ -24,7 +24,7 @@ interface AssignedAsset {
 export default function StaffDashboard() {
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
-  const [staffProfile, setStaffProfile] = useState<{name: string, emp_code: string} | null>(null);
+  const [staffProfile, setStaffProfile] = useState<{name: string, emp_code: string, id: string} | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modals State
@@ -63,7 +63,7 @@ export default function StaffDashboard() {
           .single();
 
         if (profileData) {
-          setStaffProfile(profileData);
+          setStaffProfile({ ...profileData, id: user.id });
           const { data: myAssets } = await supabase.from('assets').select('*').eq('emp_code', profileData.emp_code);
           if (myAssets) setAssets(myAssets);
           const { data: myTickets } = await supabase.from('tickets').select('*').eq('emp_code', profileData.emp_code).order('created_at', { ascending: false });
@@ -77,6 +77,8 @@ export default function StaffDashboard() {
     };
     fetchData();
   }, []);
+
+  // --- SUBMIT HANDLERS ---
 
   const handleTicketSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,10 +96,10 @@ export default function StaffDashboard() {
       
       // SEND ALERT TO ADMIN
       await supabase.from('notifications').insert([{
-        target_role: 'admin', // Targets your specific schema setup
+        target_role: 'admin',
         title: `New Ticket: ${ticketSubject}`,
         message: `${staffProfile.name} (${staffProfile.emp_code}) raised a new IT Ticket regarding ${ticketAsset}.`,
-        type: 'ticket' // Update to match your Enum if needed
+        type: 'ticket' // <--- Triggers the Admin Ticket Menu Badge
       }]);
 
       alert("IT Ticket raised successfully!");
@@ -110,14 +112,6 @@ export default function StaffDashboard() {
     }
   };
 
-  const handleTicketPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => setTicketScreenshot(event.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
   const handleNewAssetRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newReqCategory) return alert("Please select an asset category.");
@@ -128,6 +122,8 @@ export default function StaffDashboard() {
 
     setIsSubmitting(true);
     try {
+      // (Optional) You can insert the request into a 'requests' table here if you have one.
+      
       // SEND ALERT TO ADMIN
       await supabase.from('notifications').insert([{
         target_role: 'admin',
@@ -172,6 +168,16 @@ export default function StaffDashboard() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // --- PHOTO UPLOAD HELPERS ---
+
+  const handleTicketPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => setTicketScreenshot(event.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
   const handleReplacePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -240,7 +246,6 @@ export default function StaffDashboard() {
       </div>
 
       {/* STATS & ASSETS */}
-      {/* ... (Kept existing clean Stats & Asset visual mapping as shown in previous build) ... */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-6 rounded-[20px] border border-gray-100 shadow-sm flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600"><Laptop size={24}/></div><div><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">My Assets</p><p className="text-2xl font-black text-gray-900">{totalAssets}</p></div></div>
         <div className="bg-white p-6 rounded-[20px] border border-gray-100 shadow-sm flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600"><AlertCircle size={24}/></div><div><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Needs Inspection</p><p className="text-2xl font-black text-gray-900">{pendingInspections}</p></div></div>

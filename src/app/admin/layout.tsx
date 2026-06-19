@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, PackageSearch, Settings, 
-  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, Loader2, ChevronDown, Bell 
+  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, Loader2, Bell 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -23,9 +23,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // Notifications State
+  // Notifications & Alerts State
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<any>(null); // State for the live popup alert
   
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
     name: 'Loading...',
@@ -60,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     verifyAdmin();
 
-    // REAL-TIME LISTENER FOR NEW NOTIFICATIONS
+    // REAL-TIME LISTENER
     const channel = supabase
       .channel('admin_notifications')
       .on('postgres_changes', { 
@@ -69,8 +70,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         table: 'notifications',
         filter: "target_role=eq.admin" 
       }, (payload) => {
-        setNotifications(current => [payload.new, ...current]);
-        // Optional: You could add a browser push notification or toast here
+        const newNotif = payload.new;
+        setNotifications(current => [newNotif, ...current]);
+        
+        // Trigger the Live Toast Alert Popup
+        setActiveAlert(newNotif);
+        
+        // Auto-hide alert after 5 seconds
+        setTimeout(() => setActiveAlert(null), 5000);
       })
       .subscribe();
 
@@ -83,9 +90,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const { data } = await supabase
       .from('notifications')
       .select('*')
-      .eq('target_role', 'admin') // Matches your schema
+      .eq('target_role', 'admin')
       .order('created_at', { ascending: false })
-      .limit(30);
+      .limit(40);
     if (data) setNotifications(data);
   };
 
@@ -93,8 +100,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(current => current.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
-
-  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -104,9 +109,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (isCheckingAuth) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-10 h-10 text-orange-500 animate-spin" /></div>;
 
+  // --- BADGE COUNTS ---
+  // Count unread items by their 'type' column
+  const unreadTotal = notifications.filter(n => !n.is_read).length;
+  // Make sure to lowercase the type to match safely
+  const unreadTickets = notifications.filter(n => !n.is_read && n.type?.toLowerCase() === 'ticket').length;
+  const unreadInspections = notifications.filter(n => !n.is_read && n.type?.toLowerCase() === 'inspection').length;
+
   return (
     <div className="min-h-screen bg-gray-50 flex font-sans relative">
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-gray-900/60 z-40 lg:hidden backdrop-blur-sm" />}
+
+      {/* --- LIVE TOAST ALERT POPUP --- */}
+      {activeAlert && (
+        <div className="fixed top-6 right-6 z-[100] w-80 bg-white border border-gray-100 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-right-8 fade-in duration-300">
+          <div className="flex justify-between items-start mb-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+              <h4 className="text-xs font-black text-orange-600 uppercase tracking-wider">{activeAlert.type}</h4>
+            </div>
+            <button onClick={() => setActiveAlert(null)} className="text-gray-400 hover:text-gray-800"><X size={16}/></button>
+          </div>
+          <h3 className="font-bold text-gray-900 text-sm mt-1">{activeAlert.title}</h3>
+          <p className="text-xs text-gray-600 mt-1 leading-relaxed">{activeAlert.message}</p>
+        </div>
+      )}
 
       {/* SIDEBAR */}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-100 shadow-sm z-50 flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
@@ -121,16 +148,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
             { name: 'Staff / Users', href: '/admin/staff', icon: Users },
             { name: 'Asset Inventory', href: '/admin/assets', icon: PackageSearch },
-            { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck },
-            { name: 'Tickets', href: '/admin/tickets', icon: Ticket }, 
+            { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck, badge: unreadInspections },
+            { name: 'Tickets', href: '/admin/tickets', icon: Ticket, badge: unreadTickets }, 
             { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
             { name: 'Settings', href: '/admin/settings', icon: Settings },
           ].map((link) => {
             const Icon = link.icon;
             const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
             return (
-              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${isActive ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100/50' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
-                <Icon size={20} className={isActive ? 'text-orange-500' : 'text-gray-400'} /> {link.name}
+              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${isActive ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100/50' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
+                <div className="flex items-center gap-3">
+                  <Icon size={20} className={isActive ? 'text-orange-500' : 'text-gray-400'} /> {link.name}
+                </div>
+                
+                {/* MENU TAB BADGE */}
+                {link.badge && link.badge > 0 ? (
+                  <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300">
+                    {link.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -143,11 +179,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="flex items-center gap-3">
               <div className="relative">
                 <Bell size={20} className="text-gray-600" />
-                {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white animate-pulse"></span>}
+                {unreadTotal > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white animate-pulse"></span>}
               </div>
-              <span className="text-sm font-bold text-gray-700">Alerts</span>
+              <span className="text-sm font-bold text-gray-700">All Alerts</span>
             </div>
-            {unreadCount > 0 && <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{unreadCount} New</span>}
+            {unreadTotal > 0 && <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{unreadTotal} New</span>}
           </button>
 
           {isNotifOpen && (
@@ -195,7 +231,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-4">
             <button onClick={() => setIsNotifOpen(true)} className="relative p-2 text-gray-500">
               <Bell size={20} />
-              {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
+              {unreadTotal > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
             </button>
             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg"><Menu size={24} /></button>
           </div>
