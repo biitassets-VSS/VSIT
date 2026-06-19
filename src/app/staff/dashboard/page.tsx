@@ -1,4 +1,3 @@
-// src/app/staff/dashboard/page.tsx
 import StaffDashboardClient from './StaffDashboardClient';
 
 // Import your database client here (e.g., Prisma, Drizzle, or Mongoose)
