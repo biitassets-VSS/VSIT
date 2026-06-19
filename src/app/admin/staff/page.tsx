@@ -9,7 +9,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
 
-// Updated Staff Interface mapped to Supabase Schema
 interface Staff { 
   id?: string;
   empId: string; 
@@ -47,10 +46,10 @@ export default function StaffPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Fetch Staff from real DB
+        // 1. Fetch Staff with EXPLICIT columns to prevent the "role does not exist" error
         const { data: staffData, error: staffError } = await supabase
           .from('staff')
-          .select('*')
+          .select('id, emp_code, name, department, status, email, password, contact_number, dob, joining_date, created_at')
           .order('created_at', { ascending: false });
 
         if (staffError) throw staffError;
@@ -144,14 +143,12 @@ export default function StaffPage() {
       };
 
       if (isEditing && formData.empId) {
-        // Update existing staff
         const { error } = await supabase.from('staff').update(dbPayload).eq('emp_code', formData.empId);
         if (error) throw error;
         
         setStaffList(staffList.map(s => s.empId === formData.empId ? formData as Staff : s));
         alert("Staff updated successfully!");
       } else {
-        // Insert new staff
         const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
         const newStaffPayload = { ...dbPayload, emp_code: newId };
         
@@ -199,20 +196,17 @@ export default function StaffPage() {
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       if (text) {
-        const rows = text.split('\n').slice(1); // Skip Header
+        const rows = text.split('\n').slice(1);
         const newStaffDB: any[] = [];
         
-        // --- HELPER FUNCTION TO FIX DATES FOR SUPABASE ---
         const formatToDBDate = (dateString?: string) => {
           if (!dateString) return undefined;
           const cleanDate = dateString.trim();
           
-          // If already YYYY-MM-DD, return as is
           if (cleanDate.includes('-') && cleanDate.split('-')[0].length === 4) {
             return cleanDate;
           }
           
-          // If DD/MM/YYYY or DD-MM-YYYY, convert to YYYY-MM-DD
           const parts = cleanDate.split(/[\/\-]/);
           if (parts.length === 3) {
             const day = parts[0].padStart(2, '0');
@@ -220,11 +214,10 @@ export default function StaffPage() {
             const year = parts[2];
             if (year.length === 4) return `${year}-${month}-${day}`;
           }
-          return cleanDate; // Fallback
+          return cleanDate;
         };
 
         rows.forEach((row) => {
-          // Remove hidden carriage returns from CSV
           const cleanRow = row.replace(/\r/g, ''); 
           if (!cleanRow.trim()) return;
           
@@ -266,7 +259,7 @@ export default function StaffPage() {
           alert(`${newStaffDB.length} Staff members uploaded successfully!`);
           setIsBulkModalOpen(false);
           setSelectedFile(null);
-          window.location.reload(); // Refresh to fetch new list from DB
+          window.location.reload(); 
         } catch (error: any) {
           console.error("Full Error Details:", error);
           alert(`Upload Failed: ${error.message || error.details || 'Check console for details'}`);
@@ -497,7 +490,6 @@ export default function StaffPage() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Upload CSV File</label>
                   
-                  {/* Connect the onClick to trigger the hidden input */}
                   <div 
                     onClick={() => fileInputRef.current?.click()} 
                     className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center transition-colors cursor-pointer ${selectedFile ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}
@@ -513,7 +505,6 @@ export default function StaffPage() {
                       </>
                     )}
                     
-                    {/* Hidden file input */}
                     <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
                   </div>
                 </div>
