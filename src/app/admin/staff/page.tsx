@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { createClient } from '@supabase/supabase-js';
 import { 
   Users, Search, Package, UserCheck, Power, X, 
-  Plus, UploadCloud, Download, Mail, Phone, CalendarDays, Lock, ChevronRight 
+  Plus, UploadCloud, Download, Mail, Phone, CalendarDays, Lock, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
@@ -20,6 +21,7 @@ interface Staff {
   phone: string; 
   dob?: string;
   joiningDate?: string;
+  role?: string;
 }
 
 interface Asset { id: string; name: string; tagId: string; assignedToEmpId?: string; }
@@ -45,6 +47,7 @@ export default function StaffPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch staff
         const { data: staffData, error: staffError } = await supabase
           .from('staff')
           .select('id, emp_code, name, department, status, email, password, contact_number, dob, joining_date, created_at')
@@ -52,19 +55,26 @@ export default function StaffPage() {
 
         if (staffError) throw staffError;
 
+        // Fetch roles from profiles table
+        const { data: profileData } = await supabase.from('profiles').select('email, role');
+
         if (staffData) {
-          const mappedStaff = staffData.map((dbStaff: any) => ({
-            id: dbStaff.id,
-            empId: dbStaff.emp_code,
-            name: dbStaff.name,
-            department: dbStaff.department,
-            isActive: dbStaff.status === 'Active',
-            email: dbStaff.email,
-            password: dbStaff.password || '',
-            phone: dbStaff.contact_number || '',
-            dob: dbStaff.dob || '',
-            joiningDate: dbStaff.joining_date || ''
-          }));
+          const mappedStaff = staffData.map((dbStaff: any) => {
+            const userProfile = profileData?.find(p => p.email === dbStaff.email);
+            return {
+              id: dbStaff.id,
+              empId: dbStaff.emp_code,
+              name: dbStaff.name,
+              department: dbStaff.department,
+              isActive: dbStaff.status === 'Active',
+              email: dbStaff.email,
+              password: dbStaff.password || '',
+              phone: dbStaff.contact_number || '',
+              dob: dbStaff.dob || '',
+              joiningDate: dbStaff.joining_date || '',
+              role: userProfile?.role || 'staff'
+            };
+          });
           setStaffList(mappedStaff);
         }
 
@@ -98,7 +108,7 @@ export default function StaffPage() {
   };
 
   const handleOpenAdd = () => {
-    setFormData({ isActive: true, department: 'IT Department' });
+    setFormData({ isActive: true, department: 'IT Department', role: 'staff' });
     setIsModalOpen(true);
   };
 
@@ -107,7 +117,37 @@ export default function StaffPage() {
     setIsUploading(true);
 
     try {
+      const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
+
+      // 1. CREATE AUTH USER SILENTLY (so it doesn't log the Admin out)
+      if (formData.email && formData.password) {
+        const authClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { auth: { persistSession: false } }
+        );
+
+        const { error: authError } = await authClient.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (authError && !authError.message.includes('already registered')) {
+          throw new Error("Could not create login account: " + authError.message);
+        }
+      }
+
+      // 2. SAVE ROLE TO PROFILES TABLE
+      await supabase.from('profiles').upsert({
+        email: formData.email,
+        name: formData.name,
+        emp_code: newId,
+        role: formData.role || 'staff'
+      });
+
+      // 3. SAVE DETAILS TO STAFF TABLE
       const dbPayload = {
+        emp_code: newId,
         name: formData.name,
         department: formData.department,
         contact_number: formData.phone,
@@ -117,18 +157,16 @@ export default function StaffPage() {
         joining_date: formData.joiningDate,
         status: formData.isActive ? 'Active' : 'Inactive',
       };
-
-      const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
-      const newStaffPayload = { ...dbPayload, emp_code: newId };
       
-      const { data, error } = await supabase.from('staff').insert([newStaffPayload]).select();
+      const { data, error } = await supabase.from('staff').insert([dbPayload]).select();
       if (error) throw error;
 
       if (data) {
-        const newStaff: Staff = { ...formData, empId: newId, isActive: formData.isActive || false } as Staff;
+        const newStaff: Staff = { ...formData, empId: newId, isActive: formData.isActive || false, role: formData.role || 'staff' } as Staff;
         setStaffList([newStaff, ...staffList]);
       }
-      alert("Staff created successfully!");
+      
+      alert("Staff created successfully! They can now log in.");
       setIsModalOpen(false);
     } catch (error: any) {
       alert("Error saving staff: " + error.message);
@@ -137,8 +175,9 @@ export default function StaffPage() {
     }
   };
 
+  // --- BULK UPLOAD LOGIC ---
   const handleDownloadSample = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Name,Email,Password,Phone,Department,DateOfBirth,JoiningDate\nJane Smith,jane@vsit.com,pass123,1234567890,Accounts,1995-01-01,2023-01-01\nJohn Doe,john@vsit.com,secure789,9876543210,IT Department,1992-05-15,2024-02-10";
+    const csvContent = "data:text/csv;charset=utf-8,Name,Email,Password,Phone,Department,DateOfBirth,JoiningDate\nJane Smith,jane@vsit.com,pass123,1234567890,Accounts,1995-01-01,2023-01-01";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -168,11 +207,7 @@ export default function StaffPage() {
         const formatToDBDate = (dateString?: string) => {
           if (!dateString) return undefined;
           const cleanDate = dateString.trim();
-          
-          if (cleanDate.includes('-') && cleanDate.split('-')[0].length === 4) {
-            return cleanDate;
-          }
-          
+          if (cleanDate.includes('-') && cleanDate.split('-')[0].length === 4) return cleanDate;
           const parts = cleanDate.split(/[\/\-]/);
           if (parts.length === 3) {
             const day = parts[0].padStart(2, '0');
@@ -186,49 +221,31 @@ export default function StaffPage() {
         rows.forEach((row) => {
           const cleanRow = row.replace(/\r/g, ''); 
           if (!cleanRow.trim()) return;
-          
           const cols = cleanRow.split(',');
-          const name = cols[0]?.trim();
-          const email = cols[1]?.trim();
-          const password = cols[2]?.trim();
-          const phone = cols[3]?.trim();
-          const department = cols[4]?.trim() || 'IT Department';
-          const dob = cols[5]?.trim();
-          const joiningDate = cols[6]?.trim();
-
-          if (name && email) {
-            const staffEntry: any = {
+          if (cols[0]?.trim() && cols[1]?.trim()) {
+            newStaffDB.push({
               emp_code: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
-              name: name,
-              email: email,
-              department: department,
+              name: cols[0].trim(),
+              email: cols[1].trim(),
+              password: cols[2]?.trim(),
+              contact_number: cols[3]?.trim(),
+              department: cols[4]?.trim() || 'IT Department',
+              dob: formatToDBDate(cols[5]?.trim()),
+              joining_date: formatToDBDate(cols[6]?.trim()),
               status: 'Active'
-            };
-
-            if (password) staffEntry.password = password;
-            if (phone) staffEntry.contact_number = phone;
-            if (dob) staffEntry.dob = formatToDBDate(dob);
-            if (joiningDate) staffEntry.joining_date = formatToDBDate(joiningDate);
-
-            newStaffDB.push(staffEntry);
+            });
           }
         });
 
         try {
-          const { data, error } = await supabase.from('staff').insert(newStaffDB).select();
-          
-          if (error) {
-            console.error("SUPABASE REJECTED UPLOAD:", error);
-            throw error; 
-          }
-
+          const { error } = await supabase.from('staff').insert(newStaffDB);
+          if (error) throw error; 
           alert(`${newStaffDB.length} Staff members uploaded successfully!`);
           setIsBulkModalOpen(false);
           setSelectedFile(null);
           window.location.reload(); 
         } catch (error: any) {
-          console.error("Full Error Details:", error);
-          alert(`Upload Failed: ${error.message || error.details || 'Check console for details'}`);
+          alert(`Upload Failed: ${error.message || 'Check console'}`);
         } finally {
           setIsUploading(false);
         }
@@ -286,7 +303,7 @@ export default function StaffPage() {
                 <th className="p-4">Department & Dates</th>
                 <th className="p-4">Assigned Assets</th>
                 <th className="p-4 text-center">Login Status</th>
-                <th className="p-4 pr-6 text-right">Profile</th>
+                <th className="p-4 pr-6 text-center">System Role</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -329,10 +346,13 @@ export default function StaffPage() {
                       </button>
                     </td>
 
-                    <td className="p-4 pr-6 text-right">
-                      <Link href={`/admin/staff/${staff.empId}`} className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                        View <ChevronRight size={14} />
-                      </Link>
+                    <td className="p-4 pr-6 text-center">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider ${
+                        staff.role === 'admin' ? 'bg-orange-100 text-orange-700 border border-orange-200' : 'bg-blue-100 text-blue-700 border border-blue-200'
+                      }`}>
+                        {staff.role === 'admin' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
+                        {staff.role || 'Staff'}
+                      </span>
                     </td>
 
                   </tr>
@@ -394,9 +414,12 @@ export default function StaffPage() {
                       <option value="HR">HR</option>
                     </select>
                   </div>
-                  <div className="flex items-center pt-8">
-                    <input type="checkbox" id="statusToggle" checked={formData.isActive || false} onChange={(e) => setFormData({...formData, isActive: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
-                    <label htmlFor="statusToggle" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Account is Active (Can Login)</label>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">System Role</label>
+                    <select required value={formData.role || 'staff'} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium">
+                      <option value="staff">Standard Staff</option>
+                      <option value="admin">Administrator</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><Mail size={14}/> Login Email</label>
@@ -406,12 +429,16 @@ export default function StaffPage() {
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5"><Lock size={14}/> Login Password</label>
                     <input type="text" placeholder="Assign a secure password" value={formData.password || ''} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"/>
                   </div>
+                  <div className="flex items-center md:col-span-2 pt-2">
+                    <input type="checkbox" id="statusToggle" checked={formData.isActive || false} onChange={(e) => setFormData({...formData, isActive: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
+                    <label htmlFor="statusToggle" className="ml-2 text-sm font-bold text-gray-700 cursor-pointer">Account is Active (Can Login)</label>
+                  </div>
                 </div>
 
                 <div className="pt-6 flex gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 text-sm font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
                   <button type="submit" disabled={isUploading} className="flex-1 px-4 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-sm rounded-xl transition-all">
-                    {isUploading ? 'Saving...' : 'Create Staff Member'}
+                    {isUploading ? 'Creating...' : 'Create Staff & Allow Login'}
                   </button>
                 </div>
               </form>
