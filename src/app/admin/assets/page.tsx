@@ -10,82 +10,345 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
 
-// ... [Keep your interfaces the same as previous step] ...
+interface Asset {
+  id: string;
+  tag_id: string;
+  name: string;
+  brand: string;
+  category: string;
+  serial_number: string;
+  status: 'Available' | 'Assigned' | 'Maintenance' | 'Retired';
+  emp_code: string | null;
+  staff_name?: string;
+  created_at: string;
+  price?: string;
+  purchase_date?: string;
+  warranty_expiry?: string;
+  asset_condition?: string;
+  inspection_status?: string;
+  inspection_notes?: string;
+  photos?: string[];
+  updated_at?: string;
+}
+
+interface StaffMember {
+  emp_code: string;
+  name: string;
+}
 
 export default function AdminAssetsPage() {
-  // ... [Keep your existing useState hooks and fetchData] ...
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Search & Filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
 
-  // --- REVISED QUICK ACTIONS PANEL IN YOUR RENDER ---
-  /* 
-     Replace the existing "Quick Actions" div inside your Detail View 
-     (viewState === 'detail') with this logic:
-  */
+  // View States
+  const [viewState, setViewState] = useState<'list' | 'form' | 'detail'>('list');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+
+  // --- ADDED MISSING STATE HOOKS ---
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignSearch, setAssignSearch] = useState('');
+
+  // Form State
+  const [formData, setFormData] = useState({
+    tag_id: '', name: '', brand: '', category: '', serial_number: '', 
+    status: 'Available', emp_code: '',
+    price: '', purchase_date: '', warranty_expiry: '', asset_condition: 'Brand New', condition_notes: ''
+  });
+  
+  // Inspection Form States
+  const [inspectNotes, setInspectNotes] = useState('');
+  const [inspectStatus, setInspectStatus] = useState('Good');
+  const [inspectPhotos, setInspectPhotos] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const CATEGORIES = [
+    'Laptop', 'Mouse', 'Keyboards', 'Wire Combo Kits', 
+    'Wireless Combo Kits', 'Headphone', 'Stand', 
+    'Mobile Phone', 'Cleaning Kits', 'EXT Ports'
+  ];
+  
+  const CONDITIONS = ['Brand New', 'Good', 'Fair', 'Poor', 'Damaged'];
+  const STATUSES = ['Available', 'Assigned', 'Maintenance', 'Retired'];
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const { data: staffData } = await supabase.from('staff').select('emp_code, name');
+      let staffMap: Record<string, string> = {};
+      if (staffData) {
+        setStaffList(staffData);
+        staffData.forEach((s: any) => staffMap[s.emp_code] = s.name);
+      }
+
+      const { data: assetData, error } = await supabase.from('assets').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (assetData) {
+        setAssets(assetData.map((a: any) => ({
+          ...a,
+          staff_name: a.emp_code ? (staffMap[a.emp_code] || 'Unknown Staff') : 'Unassigned',
+          photos: a.photos || []
+        })));
+      }
+    } catch (error) {
+      console.error("Error fetching assets:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    const prefixes: Record<string, string> = {
+      'Laptop': 'LAP', 'Mouse': 'MOU', 'Keyboards': 'KEY',
+      'Wire Combo Kits': 'WCK', 'Wireless Combo Kits': 'WLC',
+      'Headphone': 'HDP', 'Stand': 'STN', 'Mobile Phone': 'MOB',
+      'Cleaning Kits': 'CLK', 'EXT Ports': 'EXT'
+    };
+    const prefix = prefixes[cat] || 'AST';
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    setFormData({ ...formData, category: cat, tag_id: `${prefix}-${randomNum}` });
+  };
+
+  const handleOpenAddForm = (asset?: Asset) => {
+    if (asset) {
+      setEditingAsset(asset);
+      setFormData({
+        tag_id: asset.tag_id, name: asset.name, brand: asset.brand || '', category: asset.category, 
+        serial_number: asset.serial_number || '', status: asset.status, emp_code: asset.emp_code || '',
+        price: asset.price || '', purchase_date: asset.purchase_date || '', 
+        warranty_expiry: asset.warranty_expiry || '', asset_condition: asset.asset_condition || 'Good',
+        condition_notes: asset.inspection_notes || ''
+      });
+    } else {
+      setEditingAsset(null);
+      setFormData({
+        tag_id: '', name: '', brand: '', category: '', serial_number: '', status: 'Available', emp_code: '',
+        price: '', purchase_date: '', warranty_expiry: '', asset_condition: 'Brand New', condition_notes: ''
+      });
+    }
+    setViewState('form');
+  };
+
+  const handleSaveAsset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!formData.category) return alert("Please select a category.");
+    
+    setIsSubmitting(true);
+    const payload = {
+      tag_id: formData.tag_id, name: formData.name, brand: formData.brand, category: formData.category,
+      serial_number: formData.serial_number, status: formData.status, 
+      emp_code: formData.status === 'Assigned' ? formData.emp_code : null,
+      price: formData.price, purchase_date: formData.purchase_date,
+      warranty_expiry: formData.warranty_expiry, asset_condition: formData.asset_condition,
+      inspection_notes: formData.condition_notes
+    };
+
+    try {
+      if (editingAsset) {
+        await supabase.from('assets').update(payload).eq('id', editingAsset.id);
+        alert("Asset updated successfully!");
+      } else {
+        await supabase.from('assets').insert([payload]);
+        alert("New asset added successfully!");
+      }
+      setViewState('list');
+      fetchData();
+    } catch (error: any) {
+      alert("Error saving asset: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuickStatusChange = async (newStatus: string) => {
+    if (!selectedAsset) return;
+    if (!confirm(`Are you sure you want to mark this asset as ${newStatus}?`)) return;
+    
+    setIsSubmitting(true);
+    try {
+      const isUnassigning = newStatus === 'Available' || newStatus === 'Maintenance' || newStatus === 'Retired';
+      const newEmpCode = isUnassigning ? null : selectedAsset.emp_code;
+
+      await supabase.from('assets').update({ 
+        status: newStatus, 
+        emp_code: newEmpCode 
+      }).eq('id', selectedAsset.id);
+      
+      alert(`Asset successfully updated to ${newStatus}!`);
+      
+      setSelectedAsset(prev => prev ? {
+        ...prev, 
+        status: newStatus as any, 
+        emp_code: newEmpCode,
+        staff_name: isUnassigning ? 'Unassigned' : prev.staff_name
+      } : null);
+      
+      setIsAssigning(false);
+      fetchData();
+    } catch (error: any) {
+      alert("Error updating status: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAssignAsset = async (empCode: string) => {
+    if (!selectedAsset) return;
+    setIsSubmitting(true);
+    try {
+      await supabase.from('assets').update({
+        status: 'Assigned',
+        emp_code: empCode
+      }).eq('id', selectedAsset.id);
+
+      const staffName = staffList.find(s => s.emp_code === empCode)?.name || 'Unknown';
+      
+      setSelectedAsset(prev => prev ? {
+        ...prev,
+        status: 'Assigned',
+        emp_code: empCode,
+        staff_name: staffName
+      } : null);
+
+      setIsAssigning(false);
+      setAssignSearch('');
+      fetchData();
+      alert("Asset successfully assigned!");
+    } catch (error: any) {
+      alert("Error assigning asset: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (confirm(`Are you sure you want to completely delete ${name}?`)) {
+      try {
+        await supabase.from('assets').delete().eq('id', id);
+        setAssets(assets.filter(a => a.id !== id));
+      } catch (error: any) { alert("Error deleting asset: " + error.message); }
+    }
+  };
+
+  const openAssetDetails = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setInspectPhotos([]);
+    setInspectNotes('');
+    setInspectStatus('Good');
+    setIsAssigning(false);
+    setAssignSearch('');
+    setViewState('detail');
+  };
+
+  const handleDownloadSample = () => {
+    const csvContent = "data:text/csv;charset=utf-8,name,brand,category,tag_id,serial_number,status,price,purchase_date,warranty_expiry,asset_condition\nDell XPS 15,Dell,Laptop,LAP-1001,SN123456,Available,85000,2023-01-15,2026-01-15,Brand New\nLogitech MX Master,Logitech,Mouse,MOU-2001,,Available,1500,,,Good";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Asset_Bulk_Upload_Sample.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsSubmitting(true);
+    try {
+      const text = await file.text();
+      const rows = text.split('\n').slice(1);
+      const payload = rows.filter(r => r.trim() !== '').map(row => {
+        const [name, brand, category, tag_id, serial_number, status, price, purchase_date, warranty_expiry, asset_condition] = row.split(',');
+        return { 
+          name, brand, category, tag_id, serial_number, status: status || 'Available',
+          price, purchase_date, warranty_expiry, asset_condition: asset_condition || 'Brand New'
+        };
+      });
+      if (payload.length > 0) {
+        await supabase.from('assets').insert(payload);
+        alert(`${payload.length} assets uploaded successfully!`);
+        setIsBulkModalOpen(false);
+        fetchData();
+      }
+    } catch (err: any) { alert("Error uploading file: Please ensure CSV format is correct."); }
+    finally { setIsSubmitting(false); }
+  };
+
+  const handlePhotoCaptureWithWatermark = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !selectedAsset) return;
+
+    const maxPhotos = selectedAsset.category === 'Laptop' ? 5 : 2;
+    if (inspectPhotos.length + files.length > maxPhotos) {
+      alert(`Error: ${selectedAsset.category}s require exactly ${maxPhotos} photos.`);
+      return;
+    }
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width; canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          ctx.drawImage(img, 0, 0);
+          ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+          ctx.fillRect(0, img.height - 60, img.width, 60);
+          ctx.font = "bold 24px Arial";
+          ctx.fillStyle = "white";
+          const timestamp = new Date().toLocaleString();
+          ctx.fillText(`Scanned: ${timestamp}`, 20, img.height - 20);
+          setInspectPhotos(prev => [...prev, canvas.toDataURL('image/jpeg', 0.8)]);
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleUpdateInspection = async () => {
+    if (!selectedAsset) return;
+    const reqPhotos = selectedAsset.category === 'Laptop' ? 5 : 2;
+    if (inspectPhotos.length !== reqPhotos) {
+      alert(`Please upload exactly ${reqPhotos} photos for this ${selectedAsset.category}.`);
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await supabase.from('assets').update({
+        inspection_status: inspectStatus,
+        inspection_notes: inspectNotes,
+        photos: inspectPhotos,
+        updated_at: new Date().toISOString()
+      }).eq('id', selectedAsset.id);
+      
+      alert("Inspection Updated Successfully!");
+      setViewState('list');
+      fetchData();
+    } catch(err:any) { alert("Error: " + err.message); }
+    finally { setIsSubmitting(false); }
+  };
+
+  // ... [Keep your JSX for "list", "form", and "detail" views as developed] ...
 
   return (
-    <div className="space-y-6">
-      {/* ... (Existing List View Code) ... */}
-
-      {/* --- REVISED QUICK ACTIONS PANEL --- */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
-        
-        {isAssigning ? (
-           // ASSIGNMENT SEARCH BOX
-           <div className="animate-in fade-in zoom-in duration-300 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
-             <div className="flex justify-between items-center"><span className="text-xs font-black text-blue-900 uppercase">Search Staff</span><button onClick={() => setIsAssigning(false)}><X size={14}/></button></div>
-             <input type="text" placeholder="Name or Emp ID..." onChange={(e) => setAssignSearch(e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs border border-gray-200" />
-             <div className="max-h-32 overflow-y-auto space-y-1">
-               {staffList.filter(s => s.name.toLowerCase().includes(assignSearch.toLowerCase())).map(staff => (
-                 <div key={staff.emp_code} className="flex justify-between items-center p-2 bg-white rounded-lg cursor-pointer hover:bg-blue-100" onClick={() => handleAssignAsset(staff.emp_code)}>
-                   <p className="text-xs font-bold">{staff.name}</p><Plus size={14} className="text-blue-600"/>
-                 </div>
-               ))}
-             </div>
-           </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {/* 1. ASSIGN BUTTON (Shows only if NOT assigned) */}
-            {selectedAsset?.status !== 'Assigned' && (
-              <button onClick={() => setIsAssigning(true)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 hover:bg-blue-100 flex items-center gap-1">
-                <UserPlus size={14}/> Assign Asset
-              </button>
-            )}
-
-            {/* 2. UNASSIGN BUTTON (Shows ONLY if assigned) */}
-            {selectedAsset?.status === 'Assigned' && (
-              <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1">
-                <UserMinus size={14}/> Unassign
-              </button>
-            )}
-
-            {/* 3. REPAIR BUTTON (Shows if not in repair) */}
-            {selectedAsset?.status !== 'Maintenance' && (
-              <button onClick={() => handleQuickStatusChange('Maintenance')} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200 hover:bg-amber-100 flex items-center gap-1">
-                <Wrench size={14}/> Repair
-              </button>
-            )}
-
-            {/* 4. DISCARD BUTTON (Shows if not retired) */}
-            {selectedAsset?.status !== 'Retired' && (
-              <button onClick={() => handleQuickStatusChange('Retired')} className="px-3 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 hover:bg-red-100 flex items-center gap-1">
-                <XOctagon size={14}/> Discard
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* --- REVISED STATUS & USER PANEL (SHOWS SHIELD) --- */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Status & User</p>
-          <div className="flex items-center gap-1.5">
-            {selectedAsset?.status === 'Assigned' && <Shield className="text-blue-500 fill-blue-500" size={16} />}
-            <p className="font-bold text-gray-900 text-sm">{selectedAsset?.status} {selectedAsset?.status === 'Assigned' && `• ${selectedAsset.staff_name}`}</p>
-          </div>
-        </div>
-        {/* ... (rest of details) ... */}
-      </div>
+    <div className="animate-in fade-in duration-500 pb-10">
+      {/* ... [Rest of your UI code goes here] ... */}
     </div>
   );
 }
