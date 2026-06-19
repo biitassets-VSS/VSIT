@@ -1,3 +1,4 @@
+// src/app/admin/AdminLayoutClient.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -8,8 +9,6 @@ import {
   LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Use your existing working client instead of the broken package!
 import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminLayoutClient({ children }: { children: React.ReactNode }) {
@@ -27,9 +26,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
 
-  // Handle Logout securely via Supabase
-  const handleLogout = async (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.clear();
     router.push('/login');
@@ -37,31 +34,20 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden lg:flex flex-col w-72 bg-white border-r border-gray-100 shadow-sm z-10">
+        {/* RESTORED LOGO SECTION */}
         <div className="h-20 flex items-center px-8 border-b border-gray-50">
-          <img 
-            src="/logo.png" 
-            alt="Company Logo" 
-            className="h-10 w-auto object-contain" 
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<span class="text-2xl font-black text-teal-600">Logo Error</span>');
-            }} 
-          />
+           <img src="/logo.png" alt="Company Logo" className="h-10 w-auto object-contain" />
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {navLinks.map((link) => {
             const Icon = link.icon;
             const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
-            
             return (
               <Link key={link.name} href={link.href} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 font-bold text-sm ${
-                isActive 
-                  ? 'bg-teal-50 text-teal-700 shadow-sm border border-teal-100/50' 
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'            
+                isActive ? 'bg-teal-50 text-teal-700 shadow-sm border border-teal-100/50' : 'text-gray-500 hover:bg-gray-50'
               }`}>
                 <Icon size={20} className={isActive ? 'text-teal-600' : 'text-gray-400'} />
                 {link.name}
@@ -70,62 +56,36 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
           })}
         </nav>
 
+        {/* RESTORED COPYRIGHT FOOTER */}
+        <div className="p-6 border-t border-gray-50 text-center">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">© 2026 AinodeArt</p>
+            <p className="text-[9px] text-gray-300">All rights reserved.</p>
+        </div>
+
         <div className="p-4 border-t border-gray-50">
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-gray-500 hover:bg-red-50 hover:text-red-600 font-bold text-sm transition-colors">
-            <LogOut size={20} />
-            Logout
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-gray-500 hover:bg-red-50 hover:text-red-600 font-bold text-sm">
+            <LogOut size={20} /> Logout
           </button>
         </div>
       </aside>
 
-      {/* MOBILE HEADER & MENU */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        
-        <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 shrink-0 shadow-sm z-20">
-          <img src="/logo.png" alt="Company Logo" className="h-8 w-auto object-contain" />
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-gray-600 bg-gray-50 rounded-xl">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+      {/* MOBILE HEADER */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4">
+            <img src="/logo.png" alt="Logo" className="h-8" />
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Menu /></button>
         </header>
 
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-30 lg:hidden" />
-              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', bounce: 0, duration: 0.4 }} className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-40 lg:hidden flex flex-col">
-                <div className="h-16 flex items-center px-6 border-b border-gray-100">
-                  <img src="/logo.png" alt="Company Logo" className="h-8 w-auto object-contain" />
-                </div>
-                <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-                  {navLinks.map((link) => {
-                    const Icon = link.icon;
-                    const isActive = link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
-                    return (
-                      <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${isActive ? 'bg-teal-50 text-teal-700 border border-teal-100/50' : 'text-gray-500 hover:bg-gray-50'}`}>
-                        <Icon size={20} className={isActive ? 'text-teal-600' : 'text-gray-400'} />
-                        {link.name}
-                      </Link>
-                    );
-                  })}
-                </nav>
-                <div className="p-4 border-t border-gray-50">
-                  <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-gray-500 hover:bg-red-50 hover:text-red-600 font-bold text-sm transition-colors">
-                    <LogOut size={20} />
-                    Logout
-                  </button>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* MAIN PAGE CONTENT */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-gray-50">
-          <div className="max-w-7xl mx-auto w-full">
+        {/* MAIN CONTENT AREA */}
+        <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
+            {/* RESTORED WELCOME MESSAGE */}
+            <div className="mb-8">
+                <h1 className="text-3xl font-black text-gray-900">Welcome, Admin</h1>
+                <p className="text-gray-500 font-medium">Manage your portal assets and staff members.</p>
+            </div>
+            
             {children}
-          </div>
         </main>
-
       </div>
     </div>
   );
