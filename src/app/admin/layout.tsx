@@ -89,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* COPYRIGHT SECTION */}
         <div className="p-6 border-t border-gray-50 text-center">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">© 2026 AinodeArt</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">© 2026 AINODEART</p>
         </div>
 
         <div className="p-4 border-t border-gray-50">
@@ -99,7 +99,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 shadow-sm">
             <img src="/logo.png" alt="Logo" className="h-8" />
@@ -107,11 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
 
         <main className="flex-1 p-8 overflow-y-auto">
-            {/* WELCOME MESSAGE */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-black text-gray-900">Welcome, Admin</h1>
-                <p className="text-gray-500 font-medium">Manage your portal assets and staff members.</p>
-            </div>
+            {/* DUPLICATE WELCOME MESSAGE REMOVED. YOUR DASHBOARD PAGE WILL NOW HANDLE THE WELCOME TITLE. */}
             {children}
         </main>
       </div>
