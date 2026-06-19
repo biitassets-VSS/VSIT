@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { 
   ClipboardCheck, Search, AlertCircle, Clock, 
-  CheckCircle2, Laptop, ChevronRight, Loader2, Calendar 
+  CheckCircle2, Laptop, ChevronRight, Loader2, Calendar, X, Save
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
 
 interface InspectionAsset {
@@ -25,6 +24,14 @@ export default function StaffInspectionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('All');
 
+  // Modal & Form States
+  const [inspectingAsset, setInspectingAsset] = useState<InspectionAsset | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inspectionForm, setInspectionForm] = useState({
+    status: 'Passed',
+    notes: ''
+  });
+
   useEffect(() => {
     const fetchInspections = async () => {
       try {
@@ -39,7 +46,6 @@ export default function StaffInspectionsPage() {
 
         if (!staffProfile) return;
 
-        // Fetch using select('*') to match the working My Assets page
         const { data: myAssets, error } = await supabase
           .from('assets')
           .select('*')
@@ -49,7 +55,6 @@ export default function StaffInspectionsPage() {
         if (error) throw error;
 
         if (myAssets) {
-          // Clean up null statuses so they say "Pending"
           const cleanedAssets = myAssets.map((asset: any) => ({
             id: asset.id,
             tag_id: asset.tag_id,
@@ -71,6 +76,63 @@ export default function StaffInspectionsPage() {
     fetchInspections();
   }, []);
 
+  const isOverdue = (dateStr: string | null) => {
+    if (!dateStr || dateStr === '-') return false;
+    return new Date(dateStr) < new Date();
+  };
+
+  // --- SUBMIT INSPECTION LOGIC ---
+  const handleSaveInspection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inspectingAsset) return;
+    
+    setIsSubmitting(true);
+
+    try {
+      // Calculate Dates
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      
+      // Set next inspection 6 months from today (You can change this number)
+      const nextDate = new Date(today.setMonth(today.getMonth() + 6));
+      const nextDateStr = nextDate.toISOString().split('T')[0];
+
+      const dbPayload = {
+        inspection_status: inspectionForm.status,
+        last_inspection_date: todayStr,
+        next_inspection_date: nextDateStr,
+        inspection_notes: inspectionForm.notes
+      };
+
+      // Save to Supabase
+      const { error } = await supabase
+        .from('assets')
+        .update(dbPayload)
+        .eq('id', inspectingAsset.id);
+
+      if (error) throw error;
+
+      // Update Local State so UI refreshes instantly
+      const updatedAssets = assets.map(a => 
+        a.id === inspectingAsset.id ? { ...a, ...dbPayload } : a
+      );
+      
+      setAssets(updatedAssets);
+      setInspectingAsset(null); // Close modal
+      alert("Inspection saved successfully!");
+
+    } catch (error: any) {
+      alert("Failed to save inspection: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openInspectionModal = (asset: InspectionAsset) => {
+    setInspectingAsset(asset);
+    setInspectionForm({ status: 'Passed', notes: '' }); // Reset form
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -78,11 +140,6 @@ export default function StaffInspectionsPage() {
       </div>
     );
   }
-
-  const isOverdue = (dateStr: string | null) => {
-    if (!dateStr || dateStr === '-') return false;
-    return new Date(dateStr) < new Date();
-  };
 
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = asset.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -100,6 +157,7 @@ export default function StaffInspectionsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
       
+      {/* HEADER */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
@@ -111,6 +169,7 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
+      {/* FILTER BAR */}
       <div className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative w-full sm:max-w-md">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -135,6 +194,7 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
+      {/* LIST OF INSPECTIONS */}
       {filteredAssets.length === 0 ? (
         <div className="bg-white rounded-[24px] p-10 text-center shadow-sm border border-gray-100">
           <ClipboardCheck size={48} className="mx-auto text-gray-200 mb-4" />
@@ -204,14 +264,14 @@ export default function StaffInspectionsPage() {
                       </td>
 
                       <td className="p-4 text-right">
-                        <Link 
-                          href={`/staff/inspections/new/${asset.id}`}
+                        <button 
+                          onClick={() => openInspectionModal(asset)}
                           className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
                             needsAction ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          {needsAction ? 'Start Inspection' : 'View / Re-inspect'} <ChevronRight size={14} />
-                        </Link>
+                          {needsAction ? 'Start Inspection' : 'Re-inspect'} <ChevronRight size={14} />
+                        </button>
                       </td>
                     </motion.tr>
                   );
@@ -221,6 +281,74 @@ export default function StaffInspectionsPage() {
           </div>
         </div>
       )}
+
+      {/* ========================================= */}
+      {/* INSTANT INSPECTION MODAL                  */}
+      {/* ========================================= */}
+      <AnimatePresence>
+        {inspectingAsset && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setInspectingAsset(null)} />
+            
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+              
+              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div>
+                  <h2 className="text-lg font-black text-gray-900">Health Inspection</h2>
+                  <p className="text-xs font-bold text-gray-500 mt-1">{inspectingAsset.name} ({inspectingAsset.tag_id})</p>
+                </div>
+                <button onClick={() => setInspectingAsset(null)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20} /></button>
+              </div>
+
+              <form onSubmit={handleSaveInspection} className="p-6 space-y-6">
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-3">Is this equipment working properly?</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <label className={`cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center justify-center gap-2 text-center transition-all ${inspectionForm.status === 'Passed' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                      <input type="radio" name="status" value="Passed" checked={inspectionForm.status === 'Passed'} onChange={(e) => setInspectionForm({...inspectionForm, status: e.target.value})} className="hidden" />
+                      <CheckCircle2 size={24} />
+                      <span className="text-xs font-black uppercase">Passed</span>
+                    </label>
+                    <label className={`cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center justify-center gap-2 text-center transition-all ${inspectionForm.status === 'Pending Repair' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                      <input type="radio" name="status" value="Pending Repair" checked={inspectionForm.status === 'Pending Repair'} onChange={(e) => setInspectionForm({...inspectionForm, status: e.target.value})} className="hidden" />
+                      <Clock size={24} />
+                      <span className="text-xs font-black uppercase">Needs Repair</span>
+                    </label>
+                    <label className={`cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center justify-center gap-2 text-center transition-all ${inspectionForm.status === 'Failed' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                      <input type="radio" name="status" value="Failed" checked={inspectionForm.status === 'Failed'} onChange={(e) => setInspectionForm({...inspectionForm, status: e.target.value})} className="hidden" />
+                      <AlertCircle size={24} />
+                      <span className="text-xs font-black uppercase">Failed/Broken</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">Inspection Notes</label>
+                  <textarea 
+                    rows={4} 
+                    required={inspectionForm.status !== 'Passed'}
+                    placeholder={inspectionForm.status === 'Passed' ? "Any optional comments..." : "Please describe what is wrong with the equipment..."}
+                    value={inspectionForm.notes} 
+                    onChange={(e) => setInspectionForm({...inspectionForm, notes: e.target.value})} 
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-blue-500 focus:outline-none resize-none"
+                  />
+                  {inspectionForm.status !== 'Passed' && <p className="text-[10px] font-bold text-red-500 mt-1">* Notes are required for items that need repair or have failed.</p>}
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setInspectingAsset(null)} className="flex-1 px-4 py-3.5 text-sm font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="flex-1 px-4 py-3.5 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-sm rounded-xl transition-all flex items-center justify-center gap-2">
+                    {isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : <><Save size={16} /> Complete Inspection</>}
+                  </button>
+                </div>
+              </form>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
