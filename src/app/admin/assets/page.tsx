@@ -166,13 +166,13 @@ export default function AdminAssetsPage() {
       tag_id: singleAssetForm.tagId,
       name: singleAssetForm.name,
       category: singleAssetForm.category,
-      serial_number: singleAssetForm.serialNumber,
-      price: singleAssetForm.price,
-      purchase_date: singleAssetForm.purchaseDate,
-      warranty_expiry: singleAssetForm.warrantyExpiry,
-      condition: singleAssetForm.condition,
+      serial_number: singleAssetForm.serialNumber || null,
+      price: singleAssetForm.price ? parseFloat(singleAssetForm.price) : null,
+      purchase_date: singleAssetForm.purchaseDate || null,
+      warranty_expiry: singleAssetForm.warrantyExpiry || null,
+      condition: singleAssetForm.condition || null,
       status: singleAssetForm.status,
-      notes: singleAssetForm.notes
+      notes: singleAssetForm.notes || null
     };
 
     try {
@@ -200,7 +200,7 @@ export default function AdminAssetsPage() {
       setIsEditingId(null);
     } catch (error: any) {
       console.error("Error saving asset:", error.message);
-      alert("Failed to save asset to the database.");
+      alert(`Failed to save asset to the database: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -235,41 +235,54 @@ export default function AdminAssetsPage() {
         const rows = text.split('\n').slice(1);
         const newAssetsDB: any[] = [];
         
-        // --- HELPER FUNCTION TO FIX DATES FOR SUPABASE ---
+        // Safely parse dates to YYYY-MM-DD or return null for Supabase
         const formatToDBDate = (dateString?: string) => {
-          if (!dateString) return undefined;
+          if (!dateString || !dateString.trim()) return null;
           const cleanDate = dateString.trim();
           if (cleanDate.includes('-') && cleanDate.split('-')[0].length === 4) return cleanDate;
           const parts = cleanDate.split(/[\/\-]/);
           if (parts.length === 3) {
-            const day = parts[0].padStart(2, '0');
-            const month = parts[1].padStart(2, '0');
             const year = parts[2];
-            if (year.length === 4) return `${year}-${month}-${day}`;
+            if (year.length === 4) {
+              const month = parts[1].padStart(2, '0');
+              const day = parts[0].padStart(2, '0');
+              return `${year}-${month}-${day}`;
+            }
           }
-          return cleanDate;
+          return null;
         };
 
         rows.forEach((row) => {
           const cleanRow = row.replace(/\r/g, ''); 
           if (!cleanRow.trim()) return;
           const cols = cleanRow.split(',');
-          const category = cols[0] || 'Other';
-          const tagId = cols[1] ? cols[1] : generateTagId(category);
+          
+          const category = cols[0]?.trim() || 'Other';
+          const name = cols[2]?.trim();
+          
+          if (!name) return; // Skip if no name
+
+          // Generate tag if column 2 is blank
+          const tagId = cols[1]?.trim() ? cols[1].trim() : generateTagId(category);
 
           newAssetsDB.push({
             category: category,
             tag_id: tagId,
-            name: cols[2] || 'Unknown Asset',
-            serial_number: cols[3],
-            price: cols[4],
+            name: name,
+            serial_number: cols[3]?.trim() || null,
+            price: cols[4]?.trim() ? parseFloat(cols[4].trim()) : null,
             purchase_date: formatToDBDate(cols[5]),
             warranty_expiry: formatToDBDate(cols[6]),
-            condition: cols[7],
+            condition: cols[7]?.trim() || null,
             status: cols[8]?.trim() || 'In Stock (Available)',
             photos: []
           });
         });
+
+        if (newAssetsDB.length === 0) {
+          setIsUploading(false);
+          return alert("No valid rows found in the CSV.");
+        }
 
         try {
           const { data, error } = await supabase.from('assets').insert(newAssetsDB).select();
@@ -291,7 +304,7 @@ export default function AdminAssetsPage() {
           }
         } catch (error: any) {
           console.error("Error bulk uploading assets:", error.message);
-          alert("Failed to bulk upload assets to database.");
+          alert(`Failed to bulk upload assets: ${error.message}`);
         } finally {
           setIsUploading(false);
         }
