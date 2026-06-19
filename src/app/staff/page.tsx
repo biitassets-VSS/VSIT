@@ -78,8 +78,15 @@ export default function StaffDashboard() {
 
   // Calculations for summary cards
   const totalAssets = assets.length;
-  const pendingInspections = assets.filter(a => a.inspection_status === 'Pending' || a.inspection_status === 'Failed').length;
   const inRepair = assets.filter(a => a.status === 'Maintenance').length;
+  
+  // SMARTER COUNT: Checks for 'Pending', 'Failed', OR if the status is completely empty (null)
+  const pendingInspections = assets.filter(a => 
+    !a.inspection_status || 
+    a.inspection_status === 'Pending' || 
+    a.inspection_status === 'Failed' ||
+    a.inspection_status === 'Pending Repair'
+  ).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
@@ -180,12 +187,12 @@ export default function StaffDashboard() {
                       <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Inspection Status</p>
                       <p className="text-xs font-black flex items-center gap-1 text-gray-700">
                         {asset.inspection_status === 'Passed' && <CheckCircle2 size={12} className="text-green-500" />}
-                        {asset.inspection_status === 'Pending' && <Clock size={12} className="text-orange-500" />}
-                        {asset.inspection_status}
+                        {(asset.inspection_status === 'Pending' || asset.inspection_status === 'Pending Repair' || !asset.inspection_status) && <Clock size={12} className="text-orange-500" />}
+                        {asset.inspection_status === 'Failed' && <AlertCircle size={12} className="text-red-500" />}
+                        {asset.inspection_status || 'Pending'}
                       </p>
                     </div>
                     
-                    {/* You can link this to an inspection form or details page in the future */}
                     <Link href={`/staff/assets`} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                       <ChevronRight size={16} />
                     </Link>
