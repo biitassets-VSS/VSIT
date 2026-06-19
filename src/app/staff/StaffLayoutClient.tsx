@@ -1,4 +1,3 @@
-// src/app/staff/StaffLayoutClient.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -8,9 +7,10 @@ import {
   LayoutDashboard, Laptop, Ticket, ClipboardCheck,
   LogOut, Menu, X, ChevronDown 
 } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-// Define the shape of the data passed from the Server Component
+// Use your existing working client instead of the broken package!
+import { supabase } from '@/lib/supabaseClient';
+
 interface StaffUser {
   name: string;
   empCode: string;
@@ -24,7 +24,6 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
   
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClientComponentClient(); // Use Next.js helper for client
 
   const navLinks = [
     { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
@@ -35,21 +34,11 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    
-    // Clear ALL relevant session data before redirecting
-    localStorage.removeItem('logged_in_staff');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('authToken');
-    
-    // Trigger a storage event to clear out state in other components
+    localStorage.clear();
     window.dispatchEvent(new Event('storage'));
-    
-    router.push('/');
+    router.push('/login');
   };
 
-  // Automatically close mobile sidebar when navigating to a new page
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
@@ -60,7 +49,6 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain" />
         </div>
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg">
@@ -77,14 +65,12 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
       )}
 
       {/* SIDEBAR NAVIGATION */}
-      <aside 
-        className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
+      <aside className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 z-50 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
         <div className="h-20 flex items-center px-6 border-b border-gray-100 justify-between shrink-0">
           <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
@@ -110,7 +96,7 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
           })}
         </nav>
 
-        {/* BOTTOM PROFILE WIDGET (Populated by live DB data) */}
+        {/* BOTTOM PROFILE WIDGET */}
         <div className="p-4 border-t border-gray-100 relative shrink-0">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}>
             <div className="flex items-center gap-3 overflow-hidden">
@@ -125,7 +111,6 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
             <ChevronDown size={16} className={`text-gray-500 shrink-0 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* CSS Animation Dropdown */}
           {isProfileOpen && (
             <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 p-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
@@ -137,7 +122,12 @@ export default function StaffLayoutClient({ children, staffUser }: { children: R
       </aside>
 
       <main className="flex-1 w-full max-w-7xl mx-auto md:p-8 p-4 relative h-screen overflow-y-auto">
-        {children}
+        {React.Children.map(children, child => {
+          if (React.isValidElement(child)) {
+            return React.cloneElement(child as React.ReactElement<any>, { staffUser });
+          }
+          return child;
+        })}
       </main>
     </div>
   );

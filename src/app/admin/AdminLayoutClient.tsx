@@ -1,20 +1,21 @@
-// src/app/admin/AdminLayoutClient.tsx
 'use client';
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, PackageSearch, Settings, 
   LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+// Use your existing working client instead of the broken package!
+import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const supabase = createClientComponentClient();
 
   const navLinks = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -30,7 +31,8 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    localStorage.clear();
+    router.push('/login');
   };
 
   return (
