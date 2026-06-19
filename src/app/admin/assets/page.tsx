@@ -1,40 +1,12 @@
-useEffect(() => {
-    const fetchTicketsAndStaff = async () => {
-      try {
-        const { data: staffData } = await supabase.from('staff').select('emp_code, name');
-        const staffMap: Record<string, string> = {};
-        if (staffData) staffData.forEach((staff: any) => staffMap[staff.emp_code] = staff.name);
+'use client';
 
-        const { data: ticketData } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-        if (ticketData) {
-          const mappedTickets: SupportTicket[] = ticketData.map((t: any) => ({
-            id: t.id,
-            title: t.subject || t.title || 'No Subject Provided', 
-            description: t.description || 'No description',
-            priority: t.priority || 'Medium',
-            status: t.status || 'Open',
-            estimatedTime: t.waiting_time || '', 
-            submittedBy: staffMap[t.emp_code] || 'Unknown User', 
-            empCode: t.emp_code || 'N/A',
-            date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
-            replies: t.replies || [] 
-          }));
-          setTickets(mappedTickets);
-        }
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-      } finally {
-        setIsLoaded(true);
-      }
-    };
+import React from 'react';
 
-    fetchTicketsAndStaff();
-
-    // REAL-TIME LISTENER FOR ADMIN TICKETS
-    const channel = supabase.channel('admin_tickets_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-        fetchTicketsAndStaff(); // Refresh instantly
-      }).subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+export default function AdminAssetsPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-black text-gray-900">IT Assets Management</h1>
+      <p>Asset list will go here.</p>
+    </div>
+  );
+}
