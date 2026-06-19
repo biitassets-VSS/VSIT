@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { 
-  Users, Search, Package, UserCheck, Edit, Trash2, Power, X, 
-  Plus, UploadCloud, Download, Mail, Phone, CalendarDays, Lock 
+  Users, Search, Package, UserCheck, Power, X, 
+  Plus, UploadCloud, Download, Mail, Phone, CalendarDays, Lock, ChevronRight 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
@@ -36,7 +36,6 @@ export default function StaffPage() {
   
   // Form & Upload State
   const [formData, setFormData] = useState<Partial<Staff>>({});
-  const [isEditing, setIsEditing] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -46,7 +45,6 @@ export default function StaffPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Fetch Staff with EXPLICIT columns to prevent the "role does not exist" error
         const { data: staffData, error: staffError } = await supabase
           .from('staff')
           .select('id, emp_code, name, department, status, email, password, contact_number, dob, joining_date, created_at')
@@ -70,7 +68,6 @@ export default function StaffPage() {
           setStaffList(mappedStaff);
         }
 
-        // 2. Fetch Assets to show assignments
         const { data: assetsData } = await supabase.from('assets').select('id, name, tag_id, emp_code');
         if (assetsData) {
           setAssets(assetsData.map((a: any) => ({
@@ -89,8 +86,6 @@ export default function StaffPage() {
     fetchData();
   }, []);
 
-  // --- ACTIONS (Supabase Synced) ---
-
   const handleToggleStatus = async (staff: Staff) => {
     const newStatus = staff.isActive ? 'Inactive' : 'Active';
     try {
@@ -102,27 +97,8 @@ export default function StaffPage() {
     }
   };
 
-  const handleDeleteStaff = async (empId: string) => {
-    if (window.confirm("Are you sure you want to delete this user? They will no longer be able to log in.")) {
-      try {
-        const { error } = await supabase.from('staff').delete().eq('emp_code', empId);
-        if (error) throw error;
-        setStaffList(staffList.filter(staff => staff.empId !== empId));
-      } catch (error: any) {
-        alert("Failed to delete staff: " + error.message);
-      }
-    }
-  };
-
   const handleOpenAdd = () => {
     setFormData({ isActive: true, department: 'IT Department' });
-    setIsEditing(false);
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEdit = (staff: Staff) => {
-    setFormData(staff);
-    setIsEditing(true);
     setIsModalOpen(true);
   };
 
@@ -142,25 +118,17 @@ export default function StaffPage() {
         status: formData.isActive ? 'Active' : 'Inactive',
       };
 
-      if (isEditing && formData.empId) {
-        const { error } = await supabase.from('staff').update(dbPayload).eq('emp_code', formData.empId);
-        if (error) throw error;
-        
-        setStaffList(staffList.map(s => s.empId === formData.empId ? formData as Staff : s));
-        alert("Staff updated successfully!");
-      } else {
-        const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
-        const newStaffPayload = { ...dbPayload, emp_code: newId };
-        
-        const { data, error } = await supabase.from('staff').insert([newStaffPayload]).select();
-        if (error) throw error;
+      const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
+      const newStaffPayload = { ...dbPayload, emp_code: newId };
+      
+      const { data, error } = await supabase.from('staff').insert([newStaffPayload]).select();
+      if (error) throw error;
 
-        if (data) {
-          const newStaff: Staff = { ...formData, empId: newId, isActive: formData.isActive || false } as Staff;
-          setStaffList([newStaff, ...staffList]);
-        }
-        alert("Staff created successfully!");
+      if (data) {
+        const newStaff: Staff = { ...formData, empId: newId, isActive: formData.isActive || false } as Staff;
+        setStaffList([newStaff, ...staffList]);
       }
+      alert("Staff created successfully!");
       setIsModalOpen(false);
     } catch (error: any) {
       alert("Error saving staff: " + error.message);
@@ -168,8 +136,6 @@ export default function StaffPage() {
       setIsUploading(false);
     }
   };
-
-  // --- BULK UPLOAD LOGIC ---
 
   const handleDownloadSample = () => {
     const csvContent = "data:text/csv;charset=utf-8,Name,Email,Password,Phone,Department,DateOfBirth,JoiningDate\nJane Smith,jane@vsit.com,pass123,1234567890,Accounts,1995-01-01,2023-01-01\nJohn Doe,john@vsit.com,secure789,9876543210,IT Department,1992-05-15,2024-02-10";
@@ -320,7 +286,7 @@ export default function StaffPage() {
                 <th className="p-4">Department & Dates</th>
                 <th className="p-4">Assigned Assets</th>
                 <th className="p-4 text-center">Login Status</th>
-                <th className="p-4 pr-6 text-right">Actions</th>
+                <th className="p-4 pr-6 text-right">Profile</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -329,7 +295,6 @@ export default function StaffPage() {
                 return (
                   <tr key={staff.empId} className={`transition-colors ${staff.isActive ? 'hover:bg-gray-50/50' : 'bg-gray-50/50 opacity-75'}`}>
                     
-                    {/* Name & ID */}
                     <td className="p-4 pl-6">
                       <Link href={`/admin/staff/${staff.empId}`} className={`font-bold hover:underline inline-flex items-center gap-2 ${staff.isActive ? 'text-blue-600 hover:text-blue-800' : 'text-gray-500'}`}>
                         <UserCheck size={16} className={staff.isActive ? "text-blue-400" : "text-gray-400"} /> {staff.name}
@@ -338,19 +303,16 @@ export default function StaffPage() {
                       <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mt-1 inline-block">{staff.empId}</span>
                     </td>
 
-                    {/* Contact Info */}
                     <td className="p-4">
                       <div className="text-xs font-bold text-gray-600 flex items-center gap-1.5 mb-1"><Mail size={12} className="text-gray-400"/> {staff.email}</div>
                       <div className="text-xs font-medium text-gray-500 flex items-center gap-1.5"><Phone size={12} className="text-gray-400"/> {staff.phone || '-'}</div>
                     </td>
 
-                    {/* Dept & Dates */}
                     <td className="p-4">
                       <div className="text-sm font-black text-gray-700">{staff.department}</div>
                       <div className="text-[10px] font-bold text-gray-400 uppercase mt-1">Joined: {staff.joiningDate || '-'}</div>
                     </td>
 
-                    {/* Assigned Assets */}
                     <td className="p-4">
                       {assignedAssets.length > 0 ? (
                         <div className="flex flex-col gap-1">
@@ -361,19 +323,16 @@ export default function StaffPage() {
                       ) : <span className="text-xs text-gray-400 font-medium">No assets assigned</span>}
                     </td>
 
-                    {/* Status */}
                     <td className="p-4 text-center">
                       <button onClick={() => handleToggleStatus(staff)} title={staff.isActive ? "Disable Login" : "Enable Login"} className={`px-3 py-1 text-[11px] font-black rounded-lg uppercase tracking-wide inline-flex items-center gap-1 transition-all ${staff.isActive ? 'bg-green-50 text-green-600 border border-green-200 hover:bg-green-100' : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'}`}>
                         <Power size={12} /> {staff.isActive ? 'Active' : 'Disabled'}
                       </button>
                     </td>
 
-                    {/* Actions */}
                     <td className="p-4 pr-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleOpenEdit(staff)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={18} /></button>
-                        <button onClick={() => handleDeleteStaff(staff.empId)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
-                      </div>
+                      <Link href={`/admin/staff/${staff.empId}`} className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                        View <ChevronRight size={14} />
+                      </Link>
                     </td>
 
                   </tr>
@@ -385,7 +344,7 @@ export default function StaffPage() {
       </div>
 
       {/* ========================================= */}
-      {/* ADD / EDIT STAFF MODAL                    */}
+      {/* ADD STAFF MODAL                           */}
       {/* ========================================= */}
       <AnimatePresence>
         {isModalOpen && (
@@ -395,8 +354,7 @@ export default function StaffPage() {
               
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
-                  {isEditing ? <Edit size={20} className="text-blue-600"/> : <Plus size={20} className="text-blue-600"/>} 
-                  {isEditing ? 'Edit Staff Details' : 'Create Staff Profile'}
+                  <Plus size={20} className="text-blue-600"/> Create Staff Profile
                 </h2>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20} /></button>
               </div>
@@ -453,7 +411,7 @@ export default function StaffPage() {
                 <div className="pt-6 flex gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 text-sm font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
                   <button type="submit" disabled={isUploading} className="flex-1 px-4 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-sm rounded-xl transition-all">
-                    {isUploading ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Staff Member')}
+                    {isUploading ? 'Saving...' : 'Create Staff Member'}
                   </button>
                 </div>
               </form>
@@ -486,7 +444,6 @@ export default function StaffPage() {
                   </button>
                 </div>
 
-                {/* Upload Section with File Selection Logic */}
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Upload CSV File</label>
                   
