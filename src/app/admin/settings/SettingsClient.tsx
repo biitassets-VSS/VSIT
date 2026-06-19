@@ -37,7 +37,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Initialize State with Live Database Data
+  // Initialize State entirely from the Live Database Props
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [users, setUsers] = useState<UserRecord[]>(initialUsers);
 
@@ -56,10 +56,10 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
     setIsSaving(true);
     
     try {
-      // PUSH UPDATED SETTINGS AND USERS TO YOUR DATABASE
+      // TODO: PUSH UPDATED SETTINGS AND USERS TO YOUR DATABASE
       // Example:
       /*
-      await fetch('/api/settings', {
+      await fetch('/api/settings/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings, users })
@@ -215,8 +215,9 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
             <tbody className="divide-y divide-gray-50">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-gray-500 text-sm font-medium">
-                    No users found in the database.
+                  <td colSpan={3} className="py-8 text-center">
+                    <p className="text-gray-500 text-sm font-medium">No users found.</p>
+                    <p className="text-gray-400 text-xs mt-1">Please ensure your database is connected in page.tsx.</p>
                   </td>
                 </tr>
               ) : (
