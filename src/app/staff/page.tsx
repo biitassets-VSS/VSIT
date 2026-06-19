@@ -27,11 +27,9 @@ export default function StaffDashboard() {
   useEffect(() => {
     const fetchMyAssets = async () => {
       try {
-        // 1. Get Logged-in User
         const { data: { user } } = await supabase.auth.getUser();
         if (!user || !user.email) return;
 
-        // 2. Find their Staff Profile to get their Employee Code and Name
         const { data: staffProfile, error: staffError } = await supabase
           .from('staff')
           .select('emp_code, name')
@@ -46,16 +44,26 @@ export default function StaffDashboard() {
 
         setStaffName(staffProfile.name);
 
-        // 3. Fetch Real Assets assigned to this Employee Code
+        // Fetch using select('*') to match the working My Assets page perfectly
         const { data: myAssets, error: assetsError } = await supabase
           .from('assets')
-          .select('id, tag_id, name, category, status, inspection_status, next_inspection_date')
+          .select('*')
           .eq('emp_code', staffProfile.emp_code);
 
         if (assetsError) throw assetsError;
 
         if (myAssets) {
-          setAssets(myAssets);
+          // Map real DB fields to state
+          const mappedAssets = myAssets.map((asset: any) => ({
+            id: asset.id,
+            tag_id: asset.tag_id,
+            name: asset.name,
+            category: asset.category,
+            status: asset.status,
+            inspection_status: asset.inspection_status || 'Pending',
+            next_inspection_date: asset.next_inspection_date || '-',
+          }));
+          setAssets(mappedAssets);
         }
 
       } catch (error) {
@@ -76,11 +84,11 @@ export default function StaffDashboard() {
     );
   }
 
-  // Calculations for summary cards
+  // Exact calculations for stats
   const totalAssets = assets.length;
   const inRepair = assets.filter(a => a.status === 'Maintenance').length;
   
-  // SMARTER COUNT: Checks for 'Pending', 'Failed', OR if the status is completely empty (null)
+  // Count everything that is NOT strictly 'Passed'
   const pendingInspections = assets.filter(a => 
     !a.inspection_status || 
     a.inspection_status === 'Pending' || 
@@ -91,7 +99,6 @@ export default function StaffDashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
       
-      {/* WELCOME HEADER */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 blur-3xl rounded-full opacity-10 -mr-10 -mt-10 pointer-events-none"></div>
         
@@ -105,7 +112,6 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      {/* SUMMARY STATS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
@@ -138,7 +144,6 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      {/* ASSETS LIST */}
       <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex items-center gap-3">
           <PackageSearch className="text-blue-600" size={24} />
@@ -189,7 +194,7 @@ export default function StaffDashboard() {
                         {asset.inspection_status === 'Passed' && <CheckCircle2 size={12} className="text-green-500" />}
                         {(asset.inspection_status === 'Pending' || asset.inspection_status === 'Pending Repair' || !asset.inspection_status) && <Clock size={12} className="text-orange-500" />}
                         {asset.inspection_status === 'Failed' && <AlertCircle size={12} className="text-red-500" />}
-                        {asset.inspection_status || 'Pending'}
+                        {asset.inspection_status}
                       </p>
                     </div>
                     

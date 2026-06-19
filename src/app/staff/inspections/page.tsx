@@ -39,19 +39,25 @@ export default function StaffInspectionsPage() {
 
         if (!staffProfile) return;
 
+        // Fetch using select('*') to match the working My Assets page
         const { data: myAssets, error } = await supabase
           .from('assets')
-          .select('id, tag_id, name, category, inspection_status, last_inspection_date, next_inspection_date')
+          .select('*')
           .eq('emp_code', staffProfile.emp_code)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         if (myAssets) {
-          // Clean up null statuses to say "Pending" by default
-          const cleanedAssets = myAssets.map(asset => ({
-            ...asset,
+          // Clean up null statuses so they say "Pending"
+          const cleanedAssets = myAssets.map((asset: any) => ({
+            id: asset.id,
+            tag_id: asset.tag_id,
+            name: asset.name,
+            category: asset.category,
             inspection_status: asset.inspection_status || 'Pending',
+            last_inspection_date: asset.last_inspection_date || '-',
+            next_inspection_date: asset.next_inspection_date || '-',
           }));
           setAssets(cleanedAssets);
         }
@@ -83,7 +89,7 @@ export default function StaffInspectionsPage() {
                           asset.tag_id?.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (filter === 'Needs Action') {
-      return asset.inspection_status === 'Pending' || asset.inspection_status === 'Failed' || isOverdue(asset.next_inspection_date);
+      return asset.inspection_status === 'Pending' || asset.inspection_status === 'Failed' || asset.inspection_status === 'Pending Repair' || isOverdue(asset.next_inspection_date);
     }
     if (filter === 'Passed') {
       return asset.inspection_status === 'Passed';
@@ -94,7 +100,6 @@ export default function StaffInspectionsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
       
-      {/* HEADER */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
@@ -106,7 +111,6 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* FILTER BAR */}
       <div className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative w-full sm:max-w-md">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -131,7 +135,6 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* LIST OF INSPECTIONS */}
       {filteredAssets.length === 0 ? (
         <div className="bg-white rounded-[24px] p-10 text-center shadow-sm border border-gray-100">
           <ClipboardCheck size={48} className="mx-auto text-gray-200 mb-4" />
@@ -155,7 +158,7 @@ export default function StaffInspectionsPage() {
               <tbody>
                 {filteredAssets.map((asset) => {
                   const overdue = isOverdue(asset.next_inspection_date);
-                  const needsAction = asset.inspection_status === 'Pending' || asset.inspection_status === 'Failed' || overdue;
+                  const needsAction = asset.inspection_status === 'Pending' || asset.inspection_status === 'Failed' || asset.inspection_status === 'Pending Repair' || overdue;
 
                   return (
                     <motion.tr 
