@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Ticket, Search, Clock, CheckCircle2, 
   AlertCircle, MessageSquare, ArrowLeft, 
-  User, ShieldAlert, Tag, Filter, Send, Timer, PauseCircle
+  User, ShieldAlert, Tag, Filter, Send, Timer, PauseCircle, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
@@ -71,12 +71,12 @@ export default function AdminTicketsPage() {
         if (ticketData) {
           const mappedTickets: SupportTicket[] = ticketData.map((t: any) => ({
             id: t.id,
-            title: t.subject || t.title || 'No Subject Provided', // Maps 'subject' from staff dashboard
+            title: t.subject || t.title || 'No Subject Provided', 
             description: t.description || 'No description',
             priority: t.priority || 'Medium',
             status: t.status || 'Open',
-            estimatedTime: t.waiting_time || '', // Maps correctly to waiting_time
-            submittedBy: staffMap[t.emp_code] || 'Unknown User', // Automatically maps the real name!
+            estimatedTime: t.waiting_time || '', 
+            submittedBy: staffMap[t.emp_code] || 'Unknown User', 
             empCode: t.emp_code || 'N/A',
             date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
             replies: t.replies || [] 
@@ -118,10 +118,9 @@ export default function AdminTicketsPage() {
       });
     }
 
-    // THIS PAYLOAD NOW PERFECTLY MATCHES YOUR DATABASE
     const dbPayload = {
       status: newStatus,
-      waiting_time: eta, // Safely targeting 'waiting_time'
+      waiting_time: eta, 
       replies: newReplies
     };
 
@@ -145,7 +144,6 @@ export default function AdminTicketsPage() {
       setSelectedTicket(updatedTicket);
       setReplyText('');
       
-      // Notify Admin/Staff visually (Optional Alert)
       alert(`Ticket updated successfully!`);
     } catch (error: any) {
       console.error("Failed to update ticket:", error);
