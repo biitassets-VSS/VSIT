@@ -7,7 +7,7 @@ import {
   User, ShieldAlert, Tag, Filter, Send, Timer, PauseCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabaseClient'; // Make sure this import is here
+import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
 interface TicketReply {
@@ -44,29 +44,42 @@ export default function AdminTicketsPage() {
   const [newStatus, setNewStatus] = useState<'Open' | 'In Progress' | 'Hold' | 'Resolved'>('Open');
   const [eta, setEta] = useState<string>('');
 
-  // 1. FETCH TICKETS FROM SUPABASE
+  // 1. FETCH TICKETS AND STAFF DATA FROM SUPABASE
   useEffect(() => {
-    const fetchTickets = async () => {
+    const fetchTicketsAndStaff = async () => {
       try {
-        const { data, error } = await supabase
+        // Fetch all staff to map emp_code to their actual names
+        const { data: staffData } = await supabase
+          .from('staff')
+          .select('emp_code, name');
+
+        const staffMap: Record<string, string> = {};
+        if (staffData) {
+          staffData.forEach((staff: any) => {
+            staffMap[staff.emp_code] = staff.name;
+          });
+        }
+
+        // Fetch tickets
+        const { data: ticketData, error } = await supabase
           .from('tickets')
           .select('*')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        if (data) {
-          const mappedTickets: SupportTicket[] = data.map((t: any) => ({
+        if (ticketData) {
+          const mappedTickets: SupportTicket[] = ticketData.map((t: any) => ({
             id: t.id,
-            title: t.title,
-            description: t.description,
+            title: t.subject || t.title || 'No Subject Provided', // Maps 'subject' from staff dashboard
+            description: t.description || 'No description',
             priority: t.priority || 'Medium',
             status: t.status || 'Open',
-            estimatedTime: t.estimated_time || '',
-            submittedBy: t.submitted_by || 'Unknown User',
-            empCode: t.emp_code || '',
+            estimatedTime: t.waiting_time || '', // Maps correctly to waiting_time
+            submittedBy: staffMap[t.emp_code] || 'Unknown User', // Automatically maps the real name!
+            empCode: t.emp_code || 'N/A',
             date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
-            replies: t.replies || [] // Assumes 'replies' is a JSONB column in Supabase
+            replies: t.replies || [] 
           }));
           setTickets(mappedTickets);
         }
@@ -77,7 +90,7 @@ export default function AdminTicketsPage() {
       }
     };
 
-    fetchTickets();
+    fetchTicketsAndStaff();
   }, []);
 
   const openTicket = (ticket: SupportTicket) => {
@@ -105,9 +118,10 @@ export default function AdminTicketsPage() {
       });
     }
 
+    // THIS PAYLOAD NOW PERFECTLY MATCHES YOUR DATABASE
     const dbPayload = {
       status: newStatus,
-      estimated_time: eta,
+      waiting_time: eta, // Safely targeting 'waiting_time'
       replies: newReplies
     };
 
@@ -130,7 +144,9 @@ export default function AdminTicketsPage() {
       setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
       setSelectedTicket(updatedTicket);
       setReplyText('');
-      alert(`Ticket updated successfully! Notification sent to staff.`);
+      
+      // Notify Admin/Staff visually (Optional Alert)
+      alert(`Ticket updated successfully!`);
     } catch (error: any) {
       console.error("Failed to update ticket:", error);
       alert("Failed to update ticket: " + error.message);
@@ -143,7 +159,7 @@ export default function AdminTicketsPage() {
   const openCount = tickets.filter(t => t.status === 'Open').length;
   const inProgressCount = tickets.filter(t => t.status === 'In Progress').length;
 
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Support Tickets...</div>;
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500 flex items-center justify-center gap-2"><Loader2 className="animate-spin text-teal-600" size={24} /> Loading Support Tickets...</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -209,7 +225,7 @@ export default function AdminTicketsPage() {
                   filteredTickets.map((ticket) => (
                     <tr key={ticket.id} className="border-b border-gray-50 hover:bg-teal-50/30 transition-colors">
                       <td className="p-4">
-                        <div className="font-black text-sm text-gray-900 truncate max-w-[200px]">{ticket.title}</div>
+                        <div className="font-black text-sm text-gray-900 truncate max-w-[200px]" title={ticket.title}>{ticket.title}</div>
                         <div className="text-[11px] font-bold text-teal-600 bg-teal-50 inline-flex items-center gap-1 px-2 py-0.5 rounded-md mt-1 border border-teal-100">
                           <Tag size={10} /> {ticket.id.substring(0, 8).toUpperCase()}...
                         </div>
@@ -280,12 +296,11 @@ export default function AdminTicketsPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-gray-900 mb-2">Description</h3>
-                  <p className="text-sm font-medium text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-200 whitespace-pre-wrap">
                     {selectedTicket.description}
                   </p>
                 </div>
                 
-                {/* Optional: Render existing replies here if needed */}
                 {selectedTicket.replies && selectedTicket.replies.length > 0 && (
                   <div className="mt-6 pt-6 border-t border-gray-100">
                     <h3 className="text-sm font-black text-gray-900 mb-4 flex items-center gap-2"><MessageSquare size={16} /> Conversation History</h3>
@@ -296,7 +311,7 @@ export default function AdminTicketsPage() {
                             <span className="font-bold text-gray-900">{reply.name} <span className="text-xs text-gray-500 font-medium">({reply.sender})</span></span>
                             <span className="text-xs text-gray-400">{reply.date}</span>
                           </div>
-                          <p className="text-gray-700">{reply.text}</p>
+                          <p className="text-gray-700 whitespace-pre-wrap">{reply.text}</p>
                         </div>
                       ))}
                     </div>
@@ -360,7 +375,7 @@ export default function AdminTicketsPage() {
                     disabled={isUpdating}
                     className={`w-full py-3.5 font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 ${isUpdating ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
                   >
-                    <Send size={18} /> {isUpdating ? 'Updating...' : 'Update & Notify Staff'}
+                    <Send size={18} /> {isUpdating ? 'Updating...' : 'Update Ticket'}
                   </button>
                 </div>
               </div>
