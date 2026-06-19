@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { 
   Settings, ShieldCheck, Image as ImageIcon, 
-  Smartphone, Save, CheckCircle2, UserCog, Camera
+  Smartphone, Save, CheckCircle2, UserCog, Camera,
+  Users, Mail
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -11,12 +12,12 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Settings State Management
+  // General Settings State
   const [settings, setSettings] = useState({
     appName: 'Asset Management Portal',
     supportEmail: 'admin@company.com',
     
-    // Role & Access Control
+    // Global Access Control
     allowStaffLogin: true,
     allowStaffEditAssets: false,
     requireAdminApproval: true,
@@ -28,13 +29,28 @@ export default function SettingsPage() {
     watermarkFormat: 'Date & Time'
   });
 
+  // MOCK DATA: User List for Role Assignment
+  const [users, setUsers] = useState([
+    { id: 1, name: 'Lakhwinder Singh', email: 'lakhwinder@company.com', role: 'Staff' },
+    { id: 2, name: 'Super Admin', email: 'admin@company.com', role: 'Admin' },
+    { id: 3, name: 'John Doe', email: 'john.doe@company.com', role: 'Staff' },
+    { id: 4, name: 'Jane Smith', email: 'jane.smith@company.com', role: 'Pending' },
+  ]);
+
+  // Handlers
   const handleToggle = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleRoleChange = (userId: number, newRole: string) => {
+    setUsers(prev => prev.map(user => 
+      user.id === userId ? { ...user, role: newRole } : user
+    ));
+  };
+
   const handleSave = () => {
     setIsSaving(true);
-    // Simulate API save
+    // Simulate API save (This is where you push settings & user roles to your database)
     setTimeout(() => {
       setIsSaving(false);
       setSaved(true);
@@ -67,19 +83,18 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* ========================================== */}
-        {/* SECTION 1: ACCESS & ROLE CONTROL           */}
+        {/* SECTION 1: GLOBAL ACCESS CONTROL           */}
         {/* ========================================== */}
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
             <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><UserCog size={20}/></div>
             <div>
-              <h2 className="text-lg font-black text-gray-900">Role & Access Control</h2>
-              <p className="text-xs font-bold text-gray-500">Manage what staff can do.</p>
+              <h2 className="text-lg font-black text-gray-900">Global Permissions</h2>
+              <p className="text-xs font-bold text-gray-500">Manage overarching portal rules.</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            {/* Toggle Item */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
               <div>
                 <p className="font-bold text-sm text-gray-900">Allow Staff to Login</p>
@@ -127,7 +142,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
               <div>
-                <p className="font-bold text-sm text-gray-900 flex items-center gap-2">Auto-Compress Mobile Photos <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[9px] uppercase rounded-md">Recommended</span></p>
+                <p className="font-bold text-sm text-gray-900 flex items-center gap-2">Auto-Compress Photos <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[9px] uppercase rounded-md">Recommended</span></p>
                 <p className="text-xs text-gray-500 font-medium">Prevents crashes on high-res gallery images.</p>
               </div>
               <button onClick={() => handleToggle('compressUploads')} className={`w-12 h-6 rounded-full transition-colors relative ${settings.compressUploads ? 'bg-teal-500' : 'bg-gray-300'}`}>
@@ -155,8 +170,67 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-
       </div>
+
+      {/* ========================================== */}
+      {/* SECTION 3: INDIVIDUAL USER ROLE MANAGEMENT */}
+      {/* ========================================== */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center"><Users size={20}/></div>
+            <div>
+              <h2 className="text-lg font-black text-gray-900">User Access Management</h2>
+              <p className="text-xs font-bold text-gray-500">Assign specific roles to registered accounts.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+                <th className="pb-3 font-bold pl-4">User Details</th>
+                <th className="pb-3 font-bold">Current Role</th>
+                <th className="pb-3 font-bold text-right pr-4">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {users.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-4 pl-4">
+                    <p className="font-bold text-sm text-gray-900">{user.name}</p>
+                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                      <Mail size={12} /> {user.email}
+                    </p>
+                  </td>
+                  <td className="py-4">
+                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                      user.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                      user.role === 'Staff' ? 'bg-blue-100 text-blue-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="py-4 text-right pr-4">
+                    <select 
+                      value={user.role}
+                      onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                      className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                    >
+                      <option value="Admin">Set as Admin</option>
+                      <option value="Staff">Set as Staff</option>
+                      <option value="Pending">Revoke Access</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   );
 }
