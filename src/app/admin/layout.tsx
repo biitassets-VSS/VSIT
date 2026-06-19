@@ -29,7 +29,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     initials: 'AD'
   });
 
-  // SECURITY & PROFILE FETCH
   useEffect(() => {
     const verifyAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -46,11 +45,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .single();
 
       if (!userProfile || userProfile.role !== 'admin') {
-        router.replace('/staff/dashboard');
+        router.replace('/staff');
         return;
       }
 
-      // Calculate Initials for Avatar
       const fullName = userProfile.name || 'Administrator';
       const nameParts = fullName.trim().split(' ');
       let initials = 'AD';
@@ -96,17 +94,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans">
+    <div className="min-h-screen bg-gray-50 flex font-sans relative">
       
       {/* MOBILE OVERLAY */}
       {isMobileMenuOpen && (
         <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-gray-900/60 z-40 lg:hidden backdrop-blur-sm" />
       )}
 
-      {/* SIDEBAR (Desktop & Mobile) */}
+      {/* SIDEBAR */}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-100 shadow-sm z-50 flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         
-        {/* LOGO HEADER */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-gray-50 shrink-0">
           <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full">
@@ -114,7 +111,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </div>
 
-        {/* MENU TABS */}
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {navLinks.map((link) => {
             const Icon = link.icon;
@@ -137,8 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* USER ID PROFILE & LOGOUT */}
-        <div className="p-4 border-t border-gray-50 relative shrink-0">
+        <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2">
           <button 
             onClick={() => setIsProfileOpen(!isProfileOpen)} 
             className={`w-full flex items-center justify-between p-2 rounded-2xl transition-all ${isProfileOpen ? 'bg-orange-50 ring-2 ring-orange-100' : 'hover:bg-gray-50'}`}
@@ -155,7 +150,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <ChevronDown size={16} className={`text-gray-500 shrink-0 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* LOGOUT DROPDOWN */}
           {isProfileOpen && (
             <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 z-50">
               <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
@@ -164,10 +158,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           )}
         </div>
+      </aside>
+
       {/* MAIN DASHBOARD CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* MOBILE TOP HEADER */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 shadow-sm shrink-0">
           <img src="/logo.png" alt="Logo" className="h-8" />
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg">
@@ -175,13 +169,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </header>
 
-        {/* PAGE CONTENT */}
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto relative">
             {children}
         </main>
       </div>
       
     </div>
-    
   );
 }
