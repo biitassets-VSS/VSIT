@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   AlertCircle, CheckCircle2, Clock, Laptop, Wrench, Ticket, 
   PlusCircle, RefreshCw, X, Camera, ShieldCheck, UploadCloud, 
@@ -50,12 +50,20 @@ export default function StaffDashboard() {
 
   const CATEGORIES = ['Laptop', 'Monitor', 'Mouse', 'Keyboard', 'Headphone', 'Mobile Phone', 'Other'];
 
-  useEffect(() => {
-    fetchData();
+  const fetchData = useCallback(async (empCode: string) => {
+    try {
+      const { data: myAssets } = await supabase.from('assets').select('*').eq('emp_code', empCode);
+      if (myAssets) setAssets(myAssets);
+      
+      const { data: myTickets } = await supabase.from('tickets').select('*').eq('emp_code', empCode).order('created_at', { ascending: false });
+      if (myTickets) setTickets(myTickets);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
   }, []);
 
-  const fetchData = async () => {
-    try {
+  useEffect(() => {
+    const initData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !user.email) return;
 
@@ -67,21 +75,24 @@ export default function StaffDashboard() {
 
       if (profileData) {
         setStaffProfile({ ...profileData, id: user.id });
-        
-        // Fetch Assets
-        const { data: myAssets } = await supabase.from('assets').select('*').eq('emp_code', profileData.emp_code);
-        if (myAssets) setAssets(myAssets);
-        
-        // Fetch Tickets
-        const { data: myTickets } = await supabase.from('tickets').select('*').eq('emp_code', profileData.emp_code).order('created_at', { ascending: false });
-        if (myTickets) setTickets(myTickets);
+        await fetchData(profileData.emp_code);
+
+        // --- REAL-TIME LISTENERS ---
+        const channel = supabase.channel('staff_dashboard_changes')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `emp_code=eq.${profileData.emp_code}` }, () => {
+            fetchData(profileData.emp_code); // Refresh when admin updates ticket
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'assets', filter: `emp_code=eq.${profileData.emp_code}` }, () => {
+            fetchData(profileData.emp_code); // Refresh when admin updates asset
+          })
+          .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
       }
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+
+    initData().finally(() => setIsLoading(false));
+  }, [fetchData]);
 
   // --- 1. TICKET SUBMIT ---
   const handleTicketSubmit = async (e: React.FormEvent) => {
@@ -107,7 +118,8 @@ export default function StaffDashboard() {
 
       alert("IT Ticket raised successfully!");
       setIsTicketModalOpen(false);
-      fetchData(); // Refresh data
+      setTicketSubject('');
+      setTicketDesc('');
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
@@ -128,6 +140,8 @@ export default function StaffDashboard() {
       }]);
       alert("New Asset Request sent to Admin for approval.");
       setIsNewReqModalOpen(false);
+      setNewReqCategory('');
+      setNewReqNotes('');
     } catch(err:any) {
       alert("Error: " + err.message);
     } finally {
@@ -135,21 +149,19 @@ export default function StaffDashboard() {
     }
   };
 
-  // --- 3. SUBMIT INSPECTION (THIS FIXES THE ADMIN DASHBOARD ISSUE) ---
+  // --- 3. SUBMIT INSPECTION ---
   const handleInspectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!actionAssetId) return alert("Please select an asset.");
     setIsSubmitting(true);
     
     try {
-      // 1. Update the actual asset table so the Admin can see it
       await supabase.from('assets').update({
         inspection_status: 'Pending Admin Review',
         inspection_notes: actionNotes,
         photos: actionPhoto ? [actionPhoto] : []
       }).eq('id', actionAssetId);
 
-      // 2. Alert the Admin via Badge
       const assetInfo = assets.find(a => a.id === actionAssetId);
       await supabase.from('notifications').insert([{
         target_role: 'admin',
@@ -160,12 +172,12 @@ export default function StaffDashboard() {
 
       alert("Inspection submitted successfully to Admin!");
       setIsInspectModalOpen(false);
-      fetchData(); // Refresh UI
+      setActionNotes('');
+      setActionPhoto(null);
     } catch(err:any) {
       alert("Error: " + err.message);
     } finally {
       setIsSubmitting(false);
-      setActionPhoto(null);
     }
   };
 
@@ -193,7 +205,7 @@ export default function StaffDashboard() {
         <p className="text-sm font-medium text-gray-500 mt-2">ID: <span className="font-bold text-gray-800">{staffProfile?.emp_code}</span> | Here is your IT workspace overview.</p>
       </div>
 
-      {/* ACTION BUTTONS (Added Inspection Button) */}
+      {/* ACTION BUTTONS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <motion.button whileHover={{ y: -4 }} onClick={() => setIsTicketModalOpen(true)} className="flex flex-col items-center gap-3 p-5 bg-white border border-gray-100 rounded-[20px] shadow-sm hover:border-blue-300 transition-all">
           <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center"><Ticket size={24} /></div>
@@ -216,11 +228,10 @@ export default function StaffDashboard() {
         </motion.button>
       </div>
 
-      {/* TICKETS & ADMIN UPDATES (Fixed missing ETA and Replies) */}
+      {/* TICKETS & ADMIN UPDATES */}
       <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
           <h2 className="text-lg font-black text-gray-900 flex items-center gap-2"><Ticket size={20} className="text-teal-600" /> My IT Tickets</h2>
-          <button onClick={fetchData} className="text-xs font-bold text-gray-500 flex items-center gap-1 hover:text-gray-900"><RefreshCw size={12}/> Refresh</button>
         </div>
         <div className="divide-y divide-gray-50">
           {tickets.length === 0 ? <p className="p-6 text-sm text-gray-500 font-bold text-center">No active tickets.</p> : tickets.map(ticket => (
@@ -266,8 +277,6 @@ export default function StaffDashboard() {
         <div className="bg-white p-6 rounded-[20px] border border-gray-100 shadow-sm flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600"><Wrench size={24}/></div><div><p className="text-xs font-bold text-gray-500 uppercase tracking-wider">In Repair</p><p className="text-2xl font-black text-gray-900">{inRepair}</p></div></div>
       </div>
 
-      {/* MODALS */}
-      
       {/* INSPECTION MODAL */}
       <AnimatePresence>
         {isInspectModalOpen && (
@@ -292,7 +301,22 @@ export default function StaffDashboard() {
         )}
       </AnimatePresence>
 
-      {/* (I have hidden the remaining standard modals in this code block for space, but they function exactly the same as previously. Ensure your other modals stay intact if you need them!) */}
+      {/* TICKET MODAL */}
+      <AnimatePresence>
+        {isTicketModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-gray-900/60">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center"><h2 className="text-xl font-black text-gray-900">Raise IT Ticket</h2><button onClick={() => setIsTicketModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button></div>
+              <form onSubmit={handleTicketSubmit} className="p-6 space-y-6">
+                <div><label className="block text-sm font-bold text-gray-700 mb-2">What is the issue?</label><input required type="text" placeholder="E.g. Cannot connect to Wi-Fi" value={ticketSubject} onChange={(e) => setTicketSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium transition-all"/></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-2">Select Asset</label><select required value={ticketAsset} onChange={(e) => setTicketAsset(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-gray-700 transition-all"><option value="Software / General Issue">Software / General Issue</option>{assets.map(a => (<option key={a.id} value={a.name}>{a.name} (Tag: {a.tag_id})</option>))}</select></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-2">Notes / Description</label><textarea required rows={4} placeholder="Please provide details about what happened..." value={ticketDesc} onChange={(e) => setTicketDesc(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium resize-none transition-all"/></div>
+                <div className="flex gap-4 pt-2"><button type="button" onClick={() => setIsTicketModalOpen(false)} className="flex-1 py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors text-sm">Cancel</button><button type="submit" disabled={isSubmitting} className="flex-1 py-3.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-all shadow-sm flex items-center justify-center gap-2 text-sm">{isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Submit Ticket'}</button></div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
