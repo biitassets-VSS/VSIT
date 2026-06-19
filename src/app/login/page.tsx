@@ -18,7 +18,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // 1. Attempt login
+      // Attempt Authentication
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -26,7 +26,7 @@ export default function LoginPage() {
 
       if (authError) throw authError;
 
-      // 2. Check role from 'profiles' table
+      // Verify Role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -34,27 +34,26 @@ export default function LoginPage() {
         .single();
 
       if (profileError || !profile) {
-        throw new Error("Could not verify your account role. Contact Admin.");
+        throw new Error("Account not verified. Contact Admin.");
       }
 
-      // 3. Redirect based on role
+      // Redirect
       if (profile.role === 'admin') {
         router.replace('/admin');
       } else if (profile.role === 'staff') {
         router.replace('/staff');
       } else {
-        throw new Error("Account role not recognized.");
+        throw new Error("Role not recognized.");
       }
-
     } catch (err: any) {
-      setError(err.message || 'An error occurred during login');
+      setError(err.message || 'Login failed');
       setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-black text-gray-900">Login</h2>
           <p className="text-gray-500 font-medium">IT Assets Management System</p>
