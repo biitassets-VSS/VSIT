@@ -5,7 +5,7 @@ import {
   PackageSearch, Plus, Search, Filter, Edit, 
   Trash2, X, Loader2, CheckCircle2, AlertCircle, Laptop, 
   Settings, Upload, Download, Eye, Camera, ShieldCheck, ClipboardCheck,
-  ArrowLeft, Wrench, UserMinus, XOctagon
+  ArrowLeft, Wrench, UserMinus, XOctagon, UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
@@ -52,6 +52,10 @@ export default function AdminAssetsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+
+  // Quick Assign States
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignSearch, setAssignSearch] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -175,16 +179,58 @@ export default function AdminAssetsPage() {
     
     setIsSubmitting(true);
     try {
+      const isUnassigning = newStatus === 'Available' || newStatus === 'Maintenance' || newStatus === 'Retired';
+      const newEmpCode = isUnassigning ? null : selectedAsset.emp_code;
+
       await supabase.from('assets').update({ 
         status: newStatus, 
-        emp_code: newStatus === 'Available' || newStatus === 'Maintenance' || newStatus === 'Retired' ? null : selectedAsset.emp_code 
+        emp_code: newEmpCode 
       }).eq('id', selectedAsset.id);
       
       alert(`Asset successfully updated to ${newStatus}!`);
-      setViewState('list');
-      fetchData();
+      
+      // Update local selectedAsset to keep the modal open and live-updated
+      setSelectedAsset(prev => prev ? {
+        ...prev, 
+        status: newStatus as any, 
+        emp_code: newEmpCode,
+        staff_name: isUnassigning ? 'Unassigned' : prev.staff_name
+      } : null);
+      
+      setIsAssigning(false);
+      fetchData(); // Background refresh the main list
     } catch (error: any) {
       alert("Error updating status: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAssignAsset = async (empCode: string) => {
+    if (!selectedAsset) return;
+    setIsSubmitting(true);
+    try {
+      await supabase.from('assets').update({
+        status: 'Assigned',
+        emp_code: empCode
+      }).eq('id', selectedAsset.id);
+
+      const staffName = staffList.find(s => s.emp_code === empCode)?.name || 'Unknown';
+      
+      // Update local state so modal updates live
+      setSelectedAsset(prev => prev ? {
+        ...prev,
+        status: 'Assigned',
+        emp_code: empCode,
+        staff_name: staffName
+      } : null);
+
+      setIsAssigning(false);
+      setAssignSearch('');
+      fetchData(); // Background refresh the main list
+      alert("Asset successfully assigned!");
+    } catch (error: any) {
+      alert("Error assigning asset: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -204,6 +250,8 @@ export default function AdminAssetsPage() {
     setInspectPhotos([]);
     setInspectNotes('');
     setInspectStatus('Good');
+    setIsAssigning(false);
+    setAssignSearch('');
     setViewState('detail');
   };
 
@@ -535,30 +583,68 @@ export default function AdminAssetsPage() {
             
             <div className="space-y-4">
               
-              {/* NEW QUICK ACTIONS PANEL */}
+              {/* QUICK ACTIONS PANEL (WITH NEW INLINE ASSIGN FEATURE) */}
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
-                 <div className="flex flex-wrap gap-2">
-                    {selectedAsset.status === 'Available' && (
-                      <button onClick={() => handleOpenAddForm(selectedAsset)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 hover:bg-blue-100 flex items-center gap-1"><Plus size={14}/> Assign to Staff</button>
-                    )}
-                    {selectedAsset.status === 'Assigned' && (
-                      <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1"><UserMinus size={14}/> Unassign Asset</button>
-                    )}
-                    {selectedAsset.status !== 'Maintenance' && (
-                      <button onClick={() => handleQuickStatusChange('Maintenance')} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200 hover:bg-amber-100 flex items-center gap-1"><Wrench size={14}/> Send to Repair</button>
-                    )}
-                    {selectedAsset.status === 'Maintenance' && (
-                      <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1"><CheckCircle2 size={14}/> Mark Repaired (Available)</button>
-                    )}
-                    {selectedAsset.status !== 'Retired' && (
-                      <button onClick={() => handleQuickStatusChange('Retired')} className="px-3 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 hover:bg-red-100 flex items-center gap-1"><XOctagon size={14}/> Discard / Retire</button>
-                    )}
-                 </div>
+                 
+                 {!isAssigning ? (
+                   <div className="flex flex-wrap gap-2">
+                      {selectedAsset.status === 'Available' && (
+                        <button onClick={() => setIsAssigning(true)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 hover:bg-blue-100 flex items-center gap-1"><UserPlus size={14}/> Assign to Staff</button>
+                      )}
+                      {selectedAsset.status === 'Assigned' && (
+                        <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1"><UserMinus size={14}/> Unassign Asset</button>
+                      )}
+                      {selectedAsset.status !== 'Maintenance' && (
+                        <button onClick={() => handleQuickStatusChange('Maintenance')} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200 hover:bg-amber-100 flex items-center gap-1"><Wrench size={14}/> Send to Repair</button>
+                      )}
+                      {selectedAsset.status === 'Maintenance' && (
+                        <button onClick={() => handleQuickStatusChange('Available')} className="px-3 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200 hover:bg-green-100 flex items-center gap-1"><CheckCircle2 size={14}/> Mark Repaired (Available)</button>
+                      )}
+                      {selectedAsset.status !== 'Retired' && (
+                        <button onClick={() => handleQuickStatusChange('Retired')} className="px-3 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-200 hover:bg-red-100 flex items-center gap-1"><XOctagon size={14}/> Discard / Retire</button>
+                      )}
+                   </div>
+                 ) : (
+                   <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-3 animate-in fade-in zoom-in duration-300">
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs font-black text-blue-900 uppercase">Select Staff Member</span>
+                       <button onClick={() => setIsAssigning(false)} className="text-blue-400 hover:text-blue-700"><X size={14}/></button>
+                     </div>
+                     <div className="relative">
+                       <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+                       <input type="text" placeholder="Search by name or ID..." value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} className="w-full pl-8 pr-3 py-2 rounded-lg text-xs font-medium border border-gray-200 outline-none focus:border-blue-500" />
+                     </div>
+                     <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                       {staffList.filter(s => s.name.toLowerCase().includes(assignSearch.toLowerCase()) || s.emp_code.toLowerCase().includes(assignSearch.toLowerCase())).map(staff => (
+                         <div key={staff.emp_code} className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-100 hover:bg-blue-100 hover:border-blue-300 cursor-pointer transition-colors" onClick={() => handleAssignAsset(staff.emp_code)}>
+                           <div>
+                             <p className="text-xs font-bold text-gray-900">{staff.name}</p>
+                             <p className="text-[10px] font-medium text-gray-500">{staff.emp_code}</p>
+                           </div>
+                           <Plus size={14} className="text-blue-600"/>
+                         </div>
+                       ))}
+                       {staffList.filter(s => s.name.toLowerCase().includes(assignSearch.toLowerCase()) || s.emp_code.toLowerCase().includes(assignSearch.toLowerCase())).length === 0 && (
+                         <p className="text-xs text-center text-gray-500 py-2">No staff found.</p>
+                       )}
+                     </div>
+                   </div>
+                 )}
               </div>
 
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm grid grid-cols-2 gap-4">
-                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Status & User</p><p className="font-bold text-gray-900 text-sm">{selectedAsset.status} • {selectedAsset.status === 'Assigned' ? selectedAsset.staff_name : 'No User'}</p></div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Status & User</p>
+                  {selectedAsset.status === 'Assigned' ? (
+                     <div className="flex items-center gap-1.5">
+                       <ShieldCheck size={14} className="text-blue-500" />
+                       <span className="font-bold text-gray-900 text-sm">Assigned • {selectedAsset.staff_name}</span>
+                     </div>
+                  ) : (
+                     <p className="font-bold text-gray-900 text-sm">{selectedAsset.status} • No User</p>
+                  )}
+                </div>
                 <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Serial Number</p><p className="font-bold text-gray-900 text-sm">{selectedAsset.serial_number || 'N/A'}</p></div>
               </div>
               
