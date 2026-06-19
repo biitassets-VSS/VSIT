@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   PackageSearch, AlertCircle, CheckCircle2, 
-  Clock, QrCode, Laptop, Wrench, ChevronRight, Loader2
+  Clock, QrCode, Laptop, Wrench, ChevronRight, Loader2,
+  Ticket, PlusCircle
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
 
 interface AssignedAsset {
@@ -44,7 +44,6 @@ export default function StaffDashboard() {
 
         setStaffName(staffProfile.name);
 
-        // Fetch using select('*') to match the working My Assets page perfectly
         const { data: myAssets, error: assetsError } = await supabase
           .from('assets')
           .select('*')
@@ -53,7 +52,6 @@ export default function StaffDashboard() {
         if (assetsError) throw assetsError;
 
         if (myAssets) {
-          // Map real DB fields to state
           const mappedAssets = myAssets.map((asset: any) => ({
             id: asset.id,
             tag_id: asset.tag_id,
@@ -84,11 +82,8 @@ export default function StaffDashboard() {
     );
   }
 
-  // Exact calculations for stats
   const totalAssets = assets.length;
   const inRepair = assets.filter(a => a.status === 'Maintenance').length;
-  
-  // Count everything that is NOT strictly 'Passed'
   const pendingInspections = assets.filter(a => 
     !a.inspection_status || 
     a.inspection_status === 'Pending' || 
@@ -99,7 +94,8 @@ export default function StaffDashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto">
       
-      <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
+      {/* HEADER WITH QUICK ACTIONS */}
+      <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 blur-3xl rounded-full opacity-10 -mr-10 -mt-10 pointer-events-none"></div>
         
         <div>
@@ -109,6 +105,16 @@ export default function StaffDashboard() {
           <p className="text-sm font-medium text-gray-500 mt-2">
             Here is an overview of the IT assets currently assigned to you.
           </p>
+        </div>
+
+        {/* QUICK ACTIONS RESTORED */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto z-10">
+          <Link href="/staff/tickets" className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 shadow-sm transition-all">
+            <Ticket size={18} /> Raise IT Ticket
+          </Link>
+          <Link href="/staff/requests" className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-all">
+            <PlusCircle size={18} /> Request New Asset
+          </Link>
         </div>
       </div>
 
