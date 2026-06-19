@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   PackageSearch, AlertCircle, CheckCircle2, 
   Clock, QrCode, Laptop, Wrench, ChevronRight, Loader2,
-  Ticket, PlusCircle, RefreshCw, X, Save, Camera, ShieldCheck
+  Ticket, PlusCircle, RefreshCw, X, Camera, ShieldCheck, UploadCloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
@@ -32,17 +32,22 @@ export default function StaffDashboard() {
   const [isReplaceModalOpen, setIsReplaceModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Forms State
+  // Form State - Ticket (Matches screenshot structure)
   const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketAsset, setTicketAsset] = useState('Software / General Issue');
   const [ticketDesc, setTicketDesc] = useState('');
+  const [ticketScreenshot, setTicketScreenshot] = useState<string | null>(null);
+  const ticketFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Form State - New Asset
   const [newReqCategory, setNewReqCategory] = useState('');
   const [newReqNotes, setNewReqNotes] = useState('');
 
+  // Form State - Replace Asset
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceNotes, setReplaceNotes] = useState('');
   const [replacePhoto, setReplacePhoto] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
   const CATEGORIES = ['Laptop', 'Monitor', 'Mouse', 'Keyboard', 'Headphone', 'Mobile Phone', 'Other'];
 
@@ -108,15 +113,24 @@ export default function StaffDashboard() {
       setIsSubmitting(false);
       setIsTicketModalOpen(false);
       setTicketSubject('');
+      setTicketAsset('Software / General Issue');
       setTicketDesc('');
+      setTicketScreenshot(null);
     }, 1000);
+  };
+
+  const handleTicketPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => setTicketScreenshot(event.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
   const handleNewAssetRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newReqCategory) return alert("Please select an asset category.");
 
-    // Strict Validation Rule
     const existingAssetsOfCategory = assets.filter(a => a.category === newReqCategory && a.status !== 'Retired');
     const existingCount = existingAssetsOfCategory.length;
 
@@ -158,7 +172,7 @@ export default function StaffDashboard() {
     }, 1000);
   };
 
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReplacePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -186,36 +200,60 @@ export default function StaffDashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto relative">
       
-      {/* WELCOME HEADER (ORANGE THEME) */}
+      {/* WELCOME HEADER */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500 blur-3xl rounded-full opacity-10 -mr-10 -mt-10 pointer-events-none"></div>
         
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-gray-900">
-              Welcome back, {staffProfile?.name || 'Team Member'}! 👋
-            </h1>
-            <p className="text-sm font-medium text-gray-500 mt-2 flex items-center gap-2">
-              <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-black font-mono text-xs border border-gray-200">
-                {staffProfile?.emp_code || 'EMP-XXXX'}
-              </span>
-              Here is an overview of your IT assets.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900">
+            Welcome back, {staffProfile?.name || 'Team Member'}! 👋
+          </h1>
+          <p className="text-sm font-medium text-gray-500 mt-2 flex items-center gap-2">
+            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-black font-mono text-xs border border-gray-200">
+              {staffProfile?.emp_code || 'EMP-XXXX'}
+            </span>
+            Here is an overview of your IT assets.
+          </p>
         </div>
       </div>
 
-      {/* QUICK ACTIONS ROW */}
+      {/* QUICK ACTIONS - LIGHT ANIMATED THUMBNAIL TABS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <button onClick={() => setIsTicketModalOpen(true)} className="flex items-center justify-center gap-2 px-5 py-4 bg-white border border-gray-200 text-gray-800 text-sm font-black rounded-[20px] hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 shadow-sm transition-all group">
-          <Ticket size={20} className="text-gray-400 group-hover:text-orange-500 transition-colors" /> Raise IT Ticket
-        </button>
-        <button onClick={() => setIsNewReqModalOpen(true)} className="flex items-center justify-center gap-2 px-5 py-4 bg-gray-900 text-white text-sm font-black rounded-[20px] hover:bg-black shadow-sm transition-all">
-          <PlusCircle size={20} /> Request New Asset
-        </button>
-        <button onClick={() => setIsReplaceModalOpen(true)} className="flex items-center justify-center gap-2 px-5 py-4 bg-orange-600 text-white text-sm font-black rounded-[20px] hover:bg-orange-700 shadow-sm transition-all">
-          <RefreshCw size={20} /> Request Replacement
-        </button>
+        <motion.button 
+          whileHover={{ y: -4, scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setIsTicketModalOpen(true)} 
+          className="flex flex-col items-center justify-center gap-3 p-6 bg-white border border-gray-100 rounded-[24px] shadow-sm hover:shadow-md hover:border-gray-300 transition-all group"
+        >
+          <div className="w-14 h-14 bg-gray-50 border border-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:bg-gray-900 group-hover:text-white transition-all">
+            <Ticket size={26} />
+          </div>
+          <span className="font-black text-gray-800 text-sm">Raise IT Ticket</span>
+        </motion.button>
+
+        <motion.button 
+          whileHover={{ y: -4, scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setIsNewReqModalOpen(true)} 
+          className="flex flex-col items-center justify-center gap-3 p-6 bg-orange-50/50 border border-orange-100 rounded-[24px] shadow-sm hover:shadow-md hover:border-orange-300 transition-all group"
+        >
+          <div className="w-14 h-14 bg-orange-100 border border-orange-200 text-orange-600 rounded-full flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-all">
+            <PlusCircle size={26} />
+          </div>
+          <span className="font-black text-orange-900 text-sm">Request New Asset</span>
+        </motion.button>
+
+        <motion.button 
+          whileHover={{ y: -4, scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setIsReplaceModalOpen(true)} 
+          className="flex flex-col items-center justify-center gap-3 p-6 bg-red-50/50 border border-red-100 rounded-[24px] shadow-sm hover:shadow-md hover:border-red-300 transition-all group"
+        >
+          <div className="w-14 h-14 bg-red-100 border border-red-200 text-red-600 rounded-full flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-all">
+            <RefreshCw size={26} />
+          </div>
+          <span className="font-black text-red-900 text-sm">Request Replacement</span>
+        </motion.button>
       </div>
 
       {/* STATS */}
@@ -321,27 +359,69 @@ export default function StaffDashboard() {
       {/* MODALS SECTION                                                   */}
       {/* ============================================================== */}
 
-      {/* 1. RAISE TICKET MODAL */}
+      {/* 1. RAISE TICKET MODAL - REDESIGNED TO MATCH SCREENSHOT */}
       <AnimatePresence>
         {isTicketModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-gray-900/60">
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
-              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-lg font-black text-gray-900 flex items-center gap-2"><Ticket size={20} className="text-gray-500"/> Raise IT Ticket</h2>
-                <button onClick={() => setIsTicketModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-200 rounded-full"><X size={20} /></button>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+                <h2 className="text-xl font-black text-gray-900">Raise IT Ticket</h2>
+                <button onClick={() => setIsTicketModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
               </div>
-              <form onSubmit={handleTicketSubmit} className="p-6 space-y-5">
+              
+              <form onSubmit={handleTicketSubmit} className="p-6 space-y-6">
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-2">Subject</label>
-                  <input required type="text" placeholder="E.g., Software installation required" value={ticketSubject} onChange={(e) => setTicketSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-medium"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">What is the issue?</label>
+                  <input required type="text" placeholder="E.g. Cannot connect to Wi-Fi" value={ticketSubject} onChange={(e) => setTicketSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium transition-all"/>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-2">Description</label>
-                  <textarea required rows={4} placeholder="Describe the issue in detail..." value={ticketDesc} onChange={(e) => setTicketDesc(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-medium resize-none"/>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Select Asset</label>
+                  <select required value={ticketAsset} onChange={(e) => setTicketAsset(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-gray-700 transition-all">
+                    <option value="Software / General Issue">Software / General Issue</option>
+                    {assets.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} (Tag: {a.tag_id})</option>
+                    ))}
+                  </select>
                 </div>
-                <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-gray-900 text-white font-black rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2">
-                  {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Submit Ticket'}
-                </button>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Notes / Description</label>
+                  <textarea required rows={4} placeholder="Please provide details about what happened..." value={ticketDesc} onChange={(e) => setTicketDesc(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium resize-none transition-all"/>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Attach Screenshot (Optional)</label>
+                  <div 
+                    onClick={() => ticketFileInputRef.current?.click()} 
+                    className="border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50 hover:border-orange-300 transition-all group"
+                  >
+                    {ticketScreenshot ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle2 size={32} className="text-green-500" />
+                        <span className="text-sm font-bold text-gray-700">Image Attached</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                          <UploadCloud size={24} />
+                        </div>
+                        <p className="text-sm font-bold text-gray-800">Click to upload or drag & drop</p>
+                        <p className="text-xs font-medium text-gray-400 mt-1">PNG, JPG, or PDF (max 5MB)</p>
+                      </>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" ref={ticketFileInputRef} onChange={handleTicketPhotoUpload} />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <button type="button" onClick={() => setIsTicketModalOpen(false)} className="flex-1 py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors text-sm">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isSubmitting} className="flex-1 py-3.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-all shadow-sm flex items-center justify-center gap-2 text-sm">
+                    {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Submit Ticket'}
+                  </button>
+                </div>
               </form>
             </motion.div>
           </div>
@@ -410,16 +490,19 @@ export default function StaffDashboard() {
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">Upload Photo of Fault (Optional)</label>
                   <div className="flex items-center gap-4">
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-bold flex items-center gap-2 text-gray-700 transition-colors">
+                    <button type="button" onClick={() => replaceFileInputRef.current?.click()} className="px-4 py-2 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-bold flex items-center gap-2 text-gray-700 transition-colors">
                       <Camera size={16} /> Choose Photo
                     </button>
-                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handlePhotoCapture} className="hidden" />
+                    <input type="file" accept="image/*" ref={replaceFileInputRef} onChange={handleReplacePhotoCapture} className="hidden" />
                     {replacePhoto && <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={14}/> Photo Attached</span>}
                   </div>
                 </div>
-                <div className="pt-2">
-                  <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-orange-600 text-white font-black rounded-xl hover:bg-orange-700 transition-all flex items-center justify-center gap-2 shadow-sm">
-                    {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Submit Replacement Request'}
+                <div className="pt-2 flex gap-4">
+                  <button type="button" onClick={() => setIsReplaceModalOpen(false)} className="flex-1 py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors text-sm">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isSubmitting} className="flex-1 py-3.5 bg-orange-600 text-white font-black rounded-xl hover:bg-orange-700 transition-all flex items-center justify-center gap-2 shadow-sm text-sm">
+                    {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Submit Request'}
                   </button>
                 </div>
               </form>
