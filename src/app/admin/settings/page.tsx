@@ -1,13 +1,16 @@
 // src/app/settings/page.tsx
 import SettingsClient from './SettingsClient';
+import { createClient } from '@supabase/supabase-js';
 
-// ⚠️ IMPORT YOUR ACTUAL DATABASE CLIENT HERE
-// Example: import prisma from '@/lib/prisma'; 
+// Initialize Supabase Client for the Server
+// Ensure these environment variables exist in your .env.local file
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!; // Or your Service Role key
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function SettingsPage() {
   
-  // 1. FETCH REAL SETTINGS
-  // Replace with your actual DB call, or keep defaults if you don't store settings in the DB yet.
+  // Default Settings (You can fetch these from Supabase later if you create a settings table)
   const liveSettings = {
     appName: 'Asset Management Portal',
     supportEmail: 'admin@company.com',
@@ -20,22 +23,24 @@ export default async function SettingsPage() {
     watermarkFormat: 'Date & Time'
   };
 
-  // 2. FETCH REAL USERS FROM YOUR DATABASE
-  // ⚠️ UNCOMMENT AND UPDATE THIS BLOCK TO MATCH YOUR DATABASE
-  /*
-  const liveUsers = await prisma.user.findMany({
-    select: { 
-      id: true, 
-      name: true, 
-      email: true, 
-      role: true // This should pull 'Staff', 'Admin', or 'Revoked'
-    },
-    orderBy: { name: 'asc' } // Sorts alphabetically by name
-  });
-  */
+  try {
+    // FETCH REAL USERS FROM SUPABASE
+    // Change 'profiles' to whatever your table is named (e.g., 'users' or 'staff')
+    const { data: dbUsers, error } = await supabase
+      .from('profiles') 
+      .select('id, name, email, role')
+      .order('name', { ascending: true });
 
-  // Fallback empty array to prevent crashes until you uncomment the block above.
-  const liveUsers: any[] = []; 
+    if (error) {
+      console.error("Supabase Error fetching users:", error.message);
+      return <SettingsClient initialSettings={liveSettings} initialUsers={[]} />;
+    }
 
-  return <SettingsClient initialSettings={liveSettings} initialUsers={liveUsers} />;
+    // Pass the fetched data to your Client Component
+    return <SettingsClient initialSettings={liveSettings} initialUsers={dbUsers || []} />;
+    
+  } catch (error) {
+    console.error("Unexpected error connecting to Supabase:", error);
+    return <SettingsClient initialSettings={liveSettings} initialUsers={[]} />;
+  }
 }
