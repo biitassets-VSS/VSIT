@@ -32,4 +32,10 @@ export default async function StaffTicketsPage() {
       assignedAssets={realAssets} 
     />
   );
+  {/* FLOATING COPYRIGHT AT BOTTOM RIGHT */}
+      <div className="fixed bottom-4 right-6 z-50 pointer-events-none">
+        <p className="text-[11px] font-medium text-gray-500 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-gray-100">
+          Design by <span className="text-blue-600 font-bold tracking-wide">AinodeArt</span>
+        </p>
+      </div>
 }

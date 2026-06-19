@@ -164,15 +164,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           )}
         </div>
-
-        {/* COPYRIGHT SAME AS LOGIN PAGE */}
-        <div className="p-4 bg-gray-50 border-t border-gray-100 text-center shrink-0">
-          <p className="text-xs font-medium text-gray-500">
-            Design by <span className="text-orange-500 font-bold tracking-wide">AinodeArt</span>
-          </p>
-        </div>
-      </aside>
-
       {/* MAIN DASHBOARD CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0">
         
@@ -191,5 +182,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
       
     </div>
+    {/* FLOATING COPYRIGHT AT BOTTOM RIGHT */}
+      <div className="fixed bottom-4 right-6 z-50 pointer-events-none">
+        <p className="text-[11px] font-medium text-gray-500 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-gray-100">
+          Design by <span className="text-blue-600 font-bold tracking-wide">AinodeArt</span>
+        </p>
+      </div>
   );
 }
