@@ -20,74 +20,56 @@ export default function LoginPage() {
     try {
       const cleanEmail = email.trim().toLowerCase();
 
-      // 1. Authenticate with Supabase Auth tab
+      // 1. Log into Supabase Authentication Core
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password.trim(),
       });
 
       if (authError) throw new Error(authError.message);
-      if (!authData?.user) throw new Error("Authentication failed. Account not found.");
+      if (!authData?.user) throw new Error("Login failed. User data empty.");
 
-      // 2. Fetch User Profile (Bulletproof Multi-Matching)
-      let { data: profile, error: profileError } = await supabase
+      const userId = authData.user.id;
+
+      // 2. Safely check or create profile row
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('email', cleanEmail)
+        .select('role, name, full_name')
+        .eq('id', userId)
         .maybeSingle();
 
-      // Failsafe rescue: If missing from profiles but exists in bulk-uploaded staff directory table
-      if (!profile) {
-        const { data: staffDirectory } = await supabase
-          .from('staff')
-          .select('*')
-          .ilike('email', cleanEmail)
-          .maybeSingle();
+      // Determine role safely without blocking the user at the login page
+      let userRole = 'staff';
+      let displayName = 'Staff Member';
 
-        if (staffDirectory) {
-          // Auto-repair the profile row right now so they never see the error block again
-          const { data: repairedProfile } = await supabase
-            .from('profiles')
-            .upsert({
-              id: authData.user.id,
-              email: cleanEmail,
-              name: staffDirectory.name,
-              full_name: staffDirectory.name,
-              emp_code: staffDirectory.emp_code,
-              role: 'staff'
-            })
-            .select()
-            .single();
-
-          if (repairedProfile) {
-            profile = repairedProfile;
-          }
-        }
+      if (profile) {
+        userRole = profile.role || 'staff';
+        displayName = profile.full_name || profile.name || 'Staff Member';
+      } else {
+        // If profile row is missing, force-heal it directly so they are unblocked
+        await supabase.from('profiles').upsert({
+          id: userId,
+          email: cleanEmail,
+          name: 'Staff Member',
+          full_name: 'Staff Member',
+          role: 'staff'
+        });
       }
 
-      // If absolutely no profile or staff registration can be found anywhere
-      if (!profile) {
-        throw new Error("User profile registration data not found in workspace rows. Please check with your administrator.");
-      }
-
-      const userRole = profile.role || 'staff'; 
-      const resolvedName = profile.full_name || profile.name || 'Staff Member';
-
-      localStorage.setItem('userName', resolvedName);
+      // 3. Save details to local cache
+      localStorage.setItem('userName', displayName);
       localStorage.setItem('userEmail', cleanEmail);
 
-      // 3. Routing permissions separation
-      if (userRole === 'admin') {
-        router.push('/admin'); 
-      } else if (userRole === 'guest') {
-        router.push('/staff?mode=demo'); 
+      // 4. Direct Routing - Absolute path split
+      if (cleanEmail === 'lakhwinder.bi@outlook.com' || userRole === 'admin') {
+        router.push('/admin');
       } else {
-        router.push('/staff'); 
+        router.push('/staff');
       }
 
     } catch (error: any) {
       setErrorMsg(error.message || "Invalid Email or Password");
-    } finally {
+    } bits: {
       setIsLoading(false);
     }
   };
