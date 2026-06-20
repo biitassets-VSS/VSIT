@@ -75,7 +75,7 @@ export default function AdminTicketsPage() {
             description: t.description || 'No description',
             priority: t.priority || 'Medium',
             status: t.status || 'Open',
-            estimatedTime: t.estimated_time || '', // FIXED: Changed waiting_time to estimated_time
+            estimatedTime: t.waiting_time || '', // PERFECT MATCH TO YOUR DATABASE
             submittedBy: staffMap[t.emp_code] || 'Unknown User', 
             empCode: t.emp_code || 'N/A',
             date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
@@ -120,7 +120,7 @@ export default function AdminTicketsPage() {
 
     const dbPayload = {
       status: newStatus,
-      estimated_time: eta, // FIXED: Matches database column name
+      waiting_time: eta, // PERFECT MATCH TO YOUR DATABASE
       replies: newReplies
     };
 
@@ -134,7 +134,7 @@ export default function AdminTicketsPage() {
 
       if (error) throw error;
 
-      // FIXED: Catch silent RLS failures where error is null but nothing updated
+      // Catch silent RLS failures where error is null but nothing updated
       if (!data || data.length === 0) {
         throw new Error("Database blocked the update. Check your Supabase RLS 'UPDATE' policy for the tickets table.");
       }
