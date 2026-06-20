@@ -109,7 +109,8 @@ function StaffDashboardContent() {
       // ==========================================
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        const userEmail = user?.email || localStorage.getItem('userEmail');
+        const rawEmail = user?.email || localStorage.getItem('userEmail') || '';
+        const userEmail = rawEmail.trim();
 
         if (!userEmail) {
           if (isMounted) {
@@ -119,16 +120,18 @@ function StaffDashboardContent() {
           return;
         }
 
-        // 1. Bulletproof Profile Search (Check both profiles and staff table)
+        // 1. Bulletproof Profile Search (Case-Insensitive .ilike matching)
         const [profileRes, staffRes] = await Promise.all([
-          supabase.from('profiles').select('*').eq('email', userEmail).maybeSingle(),
-          supabase.from('staff').select('*').eq('email', userEmail).maybeSingle()
+          supabase.from('profiles').select('*').ilike('email', userEmail).maybeSingle(),
+          supabase.from('staff').select('*').ilike('email', userEmail).maybeSingle()
         ]);
 
         const profileData = profileRes.data;
         const staffData = staffRes.data;
 
-        const resolvedEmpCode = profileData?.emp_code || staffData?.emp_code || 'N/A';
+        // Fix missing cases and extra spaces
+        const rawEmpCode = profileData?.emp_code || staffData?.emp_code || profileData?.emp_id || staffData?.emp_id || 'N/A';
+        const resolvedEmpCode = rawEmpCode.trim();
         const resolvedName = profileData?.full_name || profileData?.name || staffData?.name || 'Staff Member';
 
         const currentUser = { 
@@ -139,12 +142,12 @@ function StaffDashboardContent() {
         
         if (isMounted) setStaffUser(currentUser);
 
-        // 2. Fetch Live Tickets
+        // 2. Fetch Live Tickets (Case-Insensitive Match)
         if (resolvedEmpCode !== 'N/A') {
           const { data: ticketRes } = await supabase
             .from('tickets')
             .select('*')
-            .eq('emp_code', resolvedEmpCode)
+            .ilike('emp_code', resolvedEmpCode)
             .order('created_at', { ascending: false });
 
           if (isMounted && ticketRes) {
@@ -166,10 +169,14 @@ function StaffDashboardContent() {
           }
         }
 
-        // 3. Fetch Live Assets explicitly tied to the emp_code
+        // 3. Fetch Live Assets (Case-Insensitive Match to bypass silly bugs)
         let fetchedAssets: any[] = [];
         if (resolvedEmpCode !== 'N/A') {
-          const { data, error: assetErr } = await supabase.from('assets').select('*').eq('emp_code', resolvedEmpCode);
+          const { data, error: assetErr } = await supabase
+            .from('assets')
+            .select('*')
+            .ilike('emp_code', resolvedEmpCode);
+            
           if (assetErr) console.error("Assets fetch error:", assetErr);
           if (data && data.length > 0) fetchedAssets = data;
         }
@@ -224,6 +231,10 @@ function StaffDashboardContent() {
     setViewState(view);
     setActiveTab('form'); 
   };
+
+  // ==========================================
+  // SAFE SUBMIT HANDLERS
+  // ==========================================
 
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
