@@ -24,14 +24,12 @@ export default function AdminDashboardPage() {
     assigned: 0,
     repair: 0,
     discard: 0,
-    
     totalStaff: 0,
-    onlineStaff: 0,
-    onLeaveStaff: 0,
-    
     overdueInspections: 0
   });
   
+  // LIVE PRESENCE STATE
+  const [onlineIds, setOnlineIds] = useState<string[]>([]);
   const [recentAssets, setRecentAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -44,12 +42,14 @@ export default function AdminDashboardPage() {
   ];
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchDashboardData = async () => {
       try {
-        // Fetch Assets and Staff concurrently from real database
+        // Fetch Assets and Staff (Profiles) concurrently from real database
         const [assetsResponse, staffResponse] = await Promise.all([
           supabase.from('assets').select('*').order('created_at', { ascending: false }),
-          supabase.from('staff').select('id, status')
+          supabase.from('profiles').select('id') // using profiles to accurately match auth IDs
         ]);
 
         if (assetsResponse.error) throw assetsResponse.error;
@@ -69,38 +69,59 @@ export default function AdminDashboardPage() {
         }).length;
 
         // Calculate real stats
-        setStats({
-          totalAssets: assetsData.length,
-          inStock: assetsData.filter((a: any) => a.status === 'In Stock (Available)').length,
-          assigned: assetsData.filter((a: any) => a.status === 'Assigned').length,
-          repair: assetsData.filter((a: any) => a.status === 'Maintenance').length,
-          discard: assetsData.filter((a: any) => a.status === 'Retired').length,
-          
-          totalStaff: staffData.length,
-          onlineStaff: staffData.filter((s: any) => s.status === 'Active').length,
-          onLeaveStaff: staffData.filter((s: any) => s.status === 'Inactive').length,
-          
-          overdueInspections: overdueCount
-        });
+        if (isMounted) {
+          setStats({
+            totalAssets: assetsData.length,
+            inStock: assetsData.filter((a: any) => a.status === 'Available' || a.status === 'In Stock (Available)').length,
+            assigned: assetsData.filter((a: any) => a.status === 'Assigned').length,
+            repair: assetsData.filter((a: any) => a.status === 'Maintenance').length,
+            discard: assetsData.filter((a: any) => a.status === 'Retired').length,
+            totalStaff: staffData.length,
+            overdueInspections: overdueCount
+          });
 
-        // Map the 4 most recent assets for the activity feed
-        const mappedRecentAssets = assetsData.slice(0, 4).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          tagId: a.tag_id,
-          status: a.status
-        }));
-        
-        setRecentAssets(mappedRecentAssets);
+          // Map the 4 most recent assets for the activity feed
+          const mappedRecentAssets = assetsData.slice(0, 4).map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            tagId: a.tag_id,
+            status: a.status
+          }));
+          
+          setRecentAssets(mappedRecentAssets);
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
     fetchDashboardData();
+
+    // LIVE SUPABASE REALTIME PRESENCE (Microsoft Teams-style engine)
+    const presenceRoom = supabase.channel('online-users');
+
+    presenceRoom
+      .on('presence', { event: 'sync' }, () => {
+        if (isMounted) {
+          const newState = presenceRoom.presenceState();
+          const activeUserIds = Object.keys(newState);
+          setOnlineIds(activeUserIds);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(presenceRoom);
+    };
   }, []);
+
+  // Calculate live online/offline counts
+  // We cap onlineCount to totalStaff just in case guests hit the room
+  const activeOnlineCount = Math.min(onlineIds.length, stats.totalStaff); 
+  const offlineCount = Math.max(0, stats.totalStaff - activeOnlineCount);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -171,11 +192,14 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* 2. STAFF OVERVIEW CARD */}
+            {/* 2. STAFF OVERVIEW CARD (NOW WITH LIVE WEBSOCKET PRESENCE) */}
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-sm font-bold text-gray-500 mb-1">Total Staff</p>
+                  <p className="text-sm font-bold text-gray-500 mb-1 flex items-center gap-2">
+                    Total Staff 
+                    <span className="text-[9px] bg-green-50 text-green-600 font-bold px-1.5 py-0.5 rounded-full animate-pulse tracking-wider uppercase">Live Sync</span>
+                  </p>
                   <h3 className="text-4xl font-black text-gray-900">{isLoading ? '-' : stats.totalStaff}</h3>
                 </div>
                 <div className="flex flex-col items-end">
@@ -196,22 +220,22 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Staff Status Breakdown */}
+              {/* Live Staff Status Breakdown */}
               <div className="space-y-3 mt-2">
                 <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
                     <span className="text-sm font-bold text-gray-700">Online / Active</span>
                   </div>
-                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : stats.onlineStaff}</span>
+                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : activeOnlineCount}</span>
                 </div>
 
                 <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
-                    <span className="text-sm font-bold text-gray-700">On Leave / Inactive</span>
+                    <div className="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
+                    <span className="text-sm font-bold text-gray-700">Offline / Away</span>
                   </div>
-                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : stats.onLeaveStaff}</span>
+                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : offlineCount}</span>
                 </div>
               </div>
             </div>
