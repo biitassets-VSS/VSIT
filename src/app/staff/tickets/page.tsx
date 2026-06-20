@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Ticket, AlertCircle, Clock, CheckCircle2, 
   PauseCircle, ArrowLeft, MessageSquare, Send, 
-  Tag, Timer, Loader2, User, ShieldAlert 
+  Tag, Timer, Loader2, User, ShieldAlert, Filter
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -30,6 +30,7 @@ interface SupportTicket {
 export default function StaffTicketsPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'In Progress' | 'Hold' | 'Resolved'>('All');
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Staff User Context
@@ -40,7 +41,7 @@ export default function StaffTicketsPage() {
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. FETCH PROFILE AND TICKETS
+  // 1. FETCH PROFILE AND TICKETS (BULLETPROOF VERSION)
   useEffect(() => {
     const fetchMyTickets = async () => {
       try {
@@ -52,20 +53,21 @@ export default function StaffTicketsPage() {
           return;
         }
 
-        // Fetch bulletproof profile to get the correct emp_code
+        // Fetch profile safely to guarantee we get the emp_code
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('email', userEmail)
           .maybeSingle();
 
+        // Safe fallback dragnet for name and emp_code
         const currentName = profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member';
-        const currentEmpCode = profile?.emp_code || profile?.employee_code || 'N/A';
+        const currentEmpCode = profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A';
         
         setStaffName(currentName);
         setEmpCode(currentEmpCode);
 
-        // Fetch tickets matching this emp_code
+        // Fetch ALL tickets matching this emp_code
         if (currentEmpCode !== 'N/A') {
           const { data: ticketData, error } = await supabase
             .from('tickets')
@@ -81,7 +83,7 @@ export default function StaffTicketsPage() {
               title: t.subject || t.title || 'No Subject',
               description: t.description || 'No description provided.',
               status: t.status || 'Open',
-              estimatedTime: t.waiting_time || '', // Perfect match to your database
+              estimatedTime: t.waiting_time || t.estimated_time || '', 
               date: t.created_at ? new Date(t.created_at).toLocaleDateString() : '',
               replies: t.replies || []
             })));
@@ -139,6 +141,12 @@ export default function StaffTicketsPage() {
     }
   };
 
+  // Filtering Logic
+  const filteredTickets = tickets.filter(t => filterStatus === 'All' || t.status === filterStatus);
+  const openCount = tickets.filter(t => t.status === 'Open').length;
+  const inProgressCount = tickets.filter(t => t.status === 'In Progress').length;
+  const resolvedCount = tickets.filter(t => t.status === 'Resolved').length;
+
   if (!isLoaded) {
     return (
       <div className="p-10 text-center font-bold text-gray-500 flex items-center justify-center gap-2">
@@ -153,30 +161,69 @@ export default function StaffTicketsPage() {
       {/* --- LIST VIEW --- */}
       {!selectedTicket ? (
         <>
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
-            <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center shrink-0">
-              <Ticket size={24} />
+          {/* HEADER & SUMMARY WIDGETS */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center shrink-0">
+                <Ticket size={24} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-black text-gray-900">My IT Tickets</h1>
+                <p className="text-sm font-bold text-gray-500 mt-0.5">Track your requests and communicate with IT Support.</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-black text-gray-900">My IT Tickets</h1>
-              <p className="text-sm font-bold text-gray-500 mt-0.5">Track your requests and communicate with IT Support.</p>
+            
+            <div className="flex gap-2 w-full md:w-auto">
+              <div className="bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
+                <p className="text-[10px] font-bold text-red-600 uppercase">Open</p>
+                <p className="text-base font-black text-red-900">{openCount}</p>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
+                <p className="text-[10px] font-bold text-blue-600 uppercase">Process</p>
+                <p className="text-base font-black text-blue-900">{inProgressCount}</p>
+              </div>
+              <div className="bg-green-50 border border-green-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
+                <p className="text-[10px] font-bold text-green-600 uppercase">Resolved</p>
+                <p className="text-base font-black text-green-900">{resolvedCount}</p>
+              </div>
             </div>
           </div>
 
+          {/* TICKETS LIST CONTAINER */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            {tickets.length === 0 ? (
+            
+            {/* FILTER TABS */}
+            <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-2 overflow-x-auto">
+              <Filter size={16} className="text-gray-400 shrink-0" />
+              {['All', 'Open', 'In Progress', 'Hold', 'Resolved'].map(status => (
+                <button
+                  key={status}
+                  onClick={() => setFilterStatus(status as any)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition-colors ${
+                    filterStatus === status 
+                      ? 'bg-gray-900 text-white shadow-sm' 
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            {/* TICKET ITEMS */}
+            {filteredTickets.length === 0 ? (
               <div className="p-12 text-center flex flex-col items-center justify-center">
                 <CheckCircle2 size={48} className="text-gray-300 mb-4" />
                 <h3 className="text-lg font-black text-gray-900">No Tickets Found</h3>
-                <p className="text-sm font-medium text-gray-500 mt-1">You don't have any active or past support tickets.</p>
+                <p className="text-sm font-medium text-gray-500 mt-1">You don't have any tickets matching this status.</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {tickets.map(ticket => (
-                  <div key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="p-5 sm:p-6 hover:bg-gray-50 cursor-pointer transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group">
+                {filteredTickets.map(ticket => (
+                  <div key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="p-5 sm:p-6 hover:bg-teal-50/50 cursor-pointer transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md flex items-center gap-1 border border-gray-200">
                           <Tag size={10} /> {ticket.id.substring(0, 8)}
                         </span>
                         <span className="text-xs font-bold text-gray-400">{ticket.date}</span>
@@ -191,7 +238,7 @@ export default function StaffTicketsPage() {
                           ETA: {ticket.estimatedTime}
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5 text-xs font-black">
+                      <div className="flex items-center gap-1.5 text-xs font-black w-24 justify-end">
                         {ticket.status === 'Open' && <AlertCircle size={14} className="text-red-500" />}
                         {ticket.status === 'In Progress' && <Clock size={14} className="text-blue-500" />}
                         {ticket.status === 'Hold' && <PauseCircle size={14} className="text-orange-500" />}
@@ -230,7 +277,7 @@ export default function StaffTicketsPage() {
               </div>
               
               <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl border bg-gray-50">
+                <div className="flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl border bg-gray-50 shadow-sm">
                   {selectedTicket.status === 'Open' && <AlertCircle size={16} className="text-red-500" />}
                   {selectedTicket.status === 'In Progress' && <Clock size={16} className="text-blue-500" />}
                   {selectedTicket.status === 'Hold' && <PauseCircle size={16} className="text-orange-500" />}
@@ -242,7 +289,7 @@ export default function StaffTicketsPage() {
                   }>{selectedTicket.status}</span>
                 </div>
                 {selectedTicket.estimatedTime && selectedTicket.status !== 'Resolved' && (
-                  <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 font-black text-xs uppercase ${selectedTicket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
+                  <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 font-black text-xs uppercase shadow-sm ${selectedTicket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
                     <Timer size={14}/> ETA: {selectedTicket.estimatedTime}
                   </div>
                 )}
