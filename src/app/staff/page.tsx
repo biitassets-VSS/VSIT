@@ -83,9 +83,6 @@ function StaffDashboardContent() {
     let isMounted = true;
 
     const loadData = async () => {
-      // ==========================================
-      // 🚨 GUEST DEMO OVERRIDE 🚨
-      // ==========================================
       if (isGuest) {
         if (isMounted) {
           setStaffUser({ name: 'Demo Guest', empCode: 'DEMO-999', email: 'guest@vsit.com' });
@@ -104,9 +101,6 @@ function StaffDashboardContent() {
         return; 
       }
 
-      // ==========================================
-      // NORMAL REAL DATABASE LOAD (BULLETPROOF)
-      // ==========================================
       try {
         const { data: { user } } = await supabase.auth.getUser();
         const rawEmail = user?.email || localStorage.getItem('userEmail') || '';
@@ -141,16 +135,27 @@ function StaffDashboardContent() {
         
         if (isMounted) setStaffUser(currentUser);
 
-        // 2. Fetch Tickets (Aggressive Smart Filter)
+        // 2. Fetch Tickets (TYPO-PROOF FILTER)
         const { data: allTickets } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
         
         if (isMounted && allTickets) {
           const myTickets = allTickets.filter(t => {
-            const dbValue = String(t.emp_code || '').toLowerCase().trim();
+            const dbCode = String(t.emp_code || '').toLowerCase().trim();
+            const dbName = String(t.staff_name || t.assigned_to || '').toLowerCase().trim();
             const myCode = resolvedEmpCode.toLowerCase();
             const myName = resolvedName.toLowerCase();
-            // Match if DB holds their ID OR their Name
-            return (dbValue === myCode && myCode !== 'n/a') || (dbValue === myName && myName !== 'staff member');
+
+            // Exact Match
+            if (dbCode === myCode && myCode !== 'n/a') return true;
+            if (dbName === myName && myName !== 'staff member') return true;
+
+            // Fuzzy "Typo-Proof" Match (e.g., Matches "Canberra" even if Lakhwinder is misspelled)
+            if (myName !== 'staff member') {
+              const nameWords = myName.split(' ').filter(word => word.length > 3);
+              const isTypoMatch = nameWords.some(word => dbName.includes(word));
+              if (isTypoMatch) return true;
+            }
+            return false;
           });
 
           const mappedTickets = myTickets.map((t: any) => ({
@@ -169,20 +174,33 @@ function StaffDashboardContent() {
           ));
         }
 
-        // 3. Fetch Assets (Aggressive Smart Filter)
+        // 3. Fetch Assets (TYPO-PROOF FILTER - THIS FIXES THE ZERO ASSETS BUG)
         const { data: allAssets, error: assetErr } = await supabase.from('assets').select('*');
         if (assetErr) console.error("Assets fetch error:", assetErr);
 
         let fetchedAssets: any[] = [];
         if (allAssets) {
           fetchedAssets = allAssets.filter(a => {
-            // Check both emp_code and assigned_to columns just in case!
-            const dbValue = String(a.emp_code || a.assigned_to || '').toLowerCase().trim();
+            const dbCode = String(a.emp_code || '').toLowerCase().trim();
+            const dbAssignedTo = String(a.assigned_to || a.staff_name || '').toLowerCase().trim();
+            
             const myCode = resolvedEmpCode.toLowerCase();
             const myName = resolvedName.toLowerCase();
             
-            // Match if DB holds their ID OR their Name
-            return (dbValue === myCode && myCode !== 'n/a') || (dbValue === myName && myName !== 'staff member');
+            // 1. Exact Match on ID
+            if (myCode !== 'n/a' && dbCode === myCode) return true;
+            
+            // 2. Exact Match on Name
+            if (myName !== 'staff member' && dbAssignedTo === myName) return true;
+
+            // 3. Typo-Proof Match (If "Canberra" matches, it shows the asset!)
+            if (myName !== 'staff member') {
+               const nameWords = myName.split(' ').filter(word => word.length > 3); // Extracts e.g. "canberra"
+               const isTypoMatch = nameWords.some(word => dbAssignedTo.includes(word));
+               if (isTypoMatch) return true;
+            }
+
+            return false;
           });
         }
 
