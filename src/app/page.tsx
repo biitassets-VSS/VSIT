@@ -20,31 +20,24 @@ export default function LoginPage() {
     try {
       const cleanEmail = email.trim().toLowerCase();
 
-      // 1. Authenticate with Supabase Auth
+      // 1. Authenticate with Supabase Auth tab
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password.trim(),
       });
 
       if (authError) throw new Error(authError.message);
-      if (!authData?.user) throw new Error("Authentication failed. No user found.");
+      if (!authData?.user) throw new Error("Authentication failed. Account not found.");
 
-      const userId = authData.user.id;
-
-      // 2. Fetch User Role from Profiles
+      // 2. Fetch User Profile (Bulletproof Multi-Matching)
       let { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role, name')
-        .eq('id', userId)
+        .select('*')
+        .eq('email', cleanEmail)
         .maybeSingle();
 
-      // =========================================================
-      // ⚡ SELF-HEALING PROFILE RESCUE BLOCK FOR BULK UPLOADS ⚡
-      // =========================================================
+      // Failsafe rescue: If missing from profiles but exists in bulk-uploaded staff directory table
       if (!profile) {
-        console.log("Profile missing for user ID. Rescuing from staff table...");
-        
-        // Fetch their template details from the uploaded staff table
         const { data: staffDirectory } = await supabase
           .from('staff')
           .select('*')
@@ -52,11 +45,11 @@ export default function LoginPage() {
           .maybeSingle();
 
         if (staffDirectory) {
-          // Force insert the profile row on the fly
-          const { data: newProfile, error: insertError } = await supabase
+          // Auto-repair the profile row right now so they never see the error block again
+          const { data: repairedProfile } = await supabase
             .from('profiles')
             .upsert({
-              id: userId,
+              id: authData.user.id,
               email: cleanEmail,
               name: staffDirectory.name,
               full_name: staffDirectory.name,
@@ -66,22 +59,24 @@ export default function LoginPage() {
             .select()
             .single();
 
-          if (insertError) {
-            console.error("Profile rescue insertion failed:", insertError);
-          } else {
-            profile = newProfile;
+          if (repairedProfile) {
+            profile = repairedProfile;
           }
         }
       }
 
-      // 3. Evaluate Routing Permissions
-      const userRole = profile?.role || 'staff'; 
-      const resolvedName = profile?.name || 'Staff Member';
+      // If absolutely no profile or staff registration can be found anywhere
+      if (!profile) {
+        throw new Error("User profile registration data not found in workspace rows. Please check with your administrator.");
+      }
+
+      const userRole = profile.role || 'staff'; 
+      const resolvedName = profile.full_name || profile.name || 'Staff Member';
 
       localStorage.setItem('userName', resolvedName);
       localStorage.setItem('userEmail', cleanEmail);
 
-      // 4. Send them to the correct layout dashboard
+      // 3. Routing permissions separation
       if (userRole === 'admin') {
         router.push('/admin'); 
       } else if (userRole === 'guest') {
