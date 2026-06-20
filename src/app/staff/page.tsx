@@ -120,7 +120,7 @@ function StaffDashboardContent() {
           return;
         }
 
-        // 1. Bulletproof Profile Search (Case-Insensitive .ilike matching)
+        // 1. Fetch Profile Data
         const [profileRes, staffRes] = await Promise.all([
           supabase.from('profiles').select('*').ilike('email', userEmail).maybeSingle(),
           supabase.from('staff').select('*').ilike('email', userEmail).maybeSingle()
@@ -129,7 +129,6 @@ function StaffDashboardContent() {
         const profileData = profileRes.data;
         const staffData = staffRes.data;
 
-        // Fix missing cases and extra spaces
         const rawEmpCode = profileData?.emp_code || staffData?.emp_code || profileData?.emp_id || staffData?.emp_id || 'N/A';
         const resolvedEmpCode = rawEmpCode.trim();
         const resolvedName = profileData?.full_name || profileData?.name || staffData?.name || 'Staff Member';
@@ -142,43 +141,49 @@ function StaffDashboardContent() {
         
         if (isMounted) setStaffUser(currentUser);
 
-        // 2. Fetch Live Tickets (Case-Insensitive Match)
-        if (resolvedEmpCode !== 'N/A') {
-          const { data: ticketRes } = await supabase
-            .from('tickets')
-            .select('*')
-            .ilike('emp_code', resolvedEmpCode)
-            .order('created_at', { ascending: false });
+        // 2. Fetch Tickets (Aggressive Smart Filter)
+        const { data: allTickets } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+        
+        if (isMounted && allTickets) {
+          const myTickets = allTickets.filter(t => {
+            const dbValue = String(t.emp_code || '').toLowerCase().trim();
+            const myCode = resolvedEmpCode.toLowerCase();
+            const myName = resolvedName.toLowerCase();
+            // Match if DB holds their ID OR their Name
+            return (dbValue === myCode && myCode !== 'n/a') || (dbValue === myName && myName !== 'staff member');
+          });
 
-          if (isMounted && ticketRes) {
-            const mappedTickets = ticketRes.map((t: any) => ({
-              id: t.id,
-              title: t.subject || t.title || 'No Subject',
-              description: t.description || '',
-              status: formatStatus(t.status), 
-              estimatedTime: t.waiting_time || t.estimated_time || '',
-              date: t.created_at ? new Date(t.created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date',
-              replies: t.replies || []
-            }));
+          const mappedTickets = myTickets.map((t: any) => ({
+            id: t.id,
+            title: t.subject || t.title || 'No Subject',
+            description: t.description || '',
+            status: formatStatus(t.status), 
+            estimatedTime: t.waiting_time || t.estimated_time || '',
+            date: t.created_at ? new Date(t.created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date',
+            replies: t.replies || []
+          }));
 
-            setRecentTickets(mappedTickets.slice(0, 3));
-            const hardwareHistory = mappedTickets.filter((t: StaffTicket) => 
-              t.title.toLowerCase().includes('request') || t.title.toLowerCase().includes('replace')
-            );
-            setAssetHistory(hardwareHistory);
-          }
+          setRecentTickets(mappedTickets.slice(0, 3));
+          setAssetHistory(mappedTickets.filter((t: StaffTicket) => 
+            t.title.toLowerCase().includes('request') || t.title.toLowerCase().includes('replace')
+          ));
         }
 
-        // 3. Fetch Live Assets (Case-Insensitive Match to bypass silly bugs)
+        // 3. Fetch Assets (Aggressive Smart Filter)
+        const { data: allAssets, error: assetErr } = await supabase.from('assets').select('*');
+        if (assetErr) console.error("Assets fetch error:", assetErr);
+
         let fetchedAssets: any[] = [];
-        if (resolvedEmpCode !== 'N/A') {
-          const { data, error: assetErr } = await supabase
-            .from('assets')
-            .select('*')
-            .ilike('emp_code', resolvedEmpCode);
+        if (allAssets) {
+          fetchedAssets = allAssets.filter(a => {
+            // Check both emp_code and assigned_to columns just in case!
+            const dbValue = String(a.emp_code || a.assigned_to || '').toLowerCase().trim();
+            const myCode = resolvedEmpCode.toLowerCase();
+            const myName = resolvedName.toLowerCase();
             
-          if (assetErr) console.error("Assets fetch error:", assetErr);
-          if (data && data.length > 0) fetchedAssets = data;
+            // Match if DB holds their ID OR their Name
+            return (dbValue === myCode && myCode !== 'n/a') || (dbValue === myName && myName !== 'staff member');
+          });
         }
 
         if (isMounted) {
@@ -231,10 +236,6 @@ function StaffDashboardContent() {
     setViewState(view);
     setActiveTab('form'); 
   };
-
-  // ==========================================
-  // SAFE SUBMIT HANDLERS
-  // ==========================================
 
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
@@ -442,7 +443,6 @@ function StaffDashboardContent() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto px-4 sm:px-0">
       
-      {/* DEMO MODE BANNER */}
       {isGuest && (
         <div className="bg-purple-100 border border-purple-200 p-3 rounded-xl flex items-center justify-center gap-2">
           <AlertCircle className="text-purple-600" size={18} />
@@ -455,7 +455,9 @@ function StaffDashboardContent() {
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center w-full gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-black text-[#002B49]">Welcome back, {staffUser.name}! 👋</h1>
-              <p className="text-sm font-bold text-gray-500">ID: <span className="text-gray-900">{staffUser.empCode}</span> | Workspace overview.</p>
+              <p className="text-sm font-bold text-gray-500">
+                ID: <span className="text-gray-900">{staffUser.empCode}</span> | Email: {staffUser.email}
+              </p>
             </div>
             <button className="relative p-3 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors">
               <Bell size={24} className="text-[#002B49]" />
