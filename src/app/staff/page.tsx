@@ -62,7 +62,7 @@ export default function StaffDashboardPage() {
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
   const [assetReplaceForm, setAssetReplaceForm] = useState({ assetId: '', reason: '' });
 
-  // 1. FETCH LIVE DATA (WITH ASSET DRAGNET SEARCH)
+  // 1. FETCH LIVE DATA 
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -108,34 +108,24 @@ export default function StaffDashboardPage() {
         }
 
         // --- FETCH ASSETS (DRAGNET METHOD) ---
-        // We check Emp Code first, then fallback to Name, then fallback to Email.
         let fetchedAssets: any[] = [];
-        
-        // Try 1: By Employee Code
         if (currentUser.empCode !== 'N/A') {
           const { data, error } = await supabase.from('assets').select('*').eq('emp_code', currentUser.empCode);
           if (!error && data && data.length > 0) fetchedAssets = data;
         }
-
-        // Try 2: By Name (assigned_to)
         if (fetchedAssets.length === 0) {
           const { data, error } = await supabase.from('assets').select('*').eq('assigned_to', currentUser.name);
           if (!error && data && data.length > 0) fetchedAssets = data;
         }
-
-        // Try 3: By Name (staff_name - alternative column)
         if (fetchedAssets.length === 0) {
           const { data, error } = await supabase.from('assets').select('*').eq('staff_name', currentUser.name);
           if (!error && data && data.length > 0) fetchedAssets = data;
         }
-
-        // Try 4: By Email
         if (fetchedAssets.length === 0) {
           const { data, error } = await supabase.from('assets').select('*').eq('email', currentUser.email);
           if (!error && data && data.length > 0) fetchedAssets = data;
         }
 
-        // Map the found assets into the UI
         if (fetchedAssets.length > 0) {
           setAssets(fetchedAssets.map((a: any) => ({
             id: a.id,
@@ -170,11 +160,16 @@ export default function StaffDashboardPage() {
     document.getElementById('my-assets-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // =========================================================================
+  // SEAMLESS REAL-TIME SUBMISSION HANDLERS (NO PAGE REFRESH NEEDED)
+  // =========================================================================
+
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
     setIsSubmitting(true);
     try {
-      await supabase.from('tickets').insert([{
+      // Added .select() to grab the newly created ticket instantly
+      const { data, error } = await supabase.from('tickets').insert([{
         subject: ticketForm.title,
         description: ticketForm.description,
         category: ticketForm.category,
@@ -182,9 +177,28 @@ export default function StaffDashboardPage() {
         status: 'Open',
         emp_code: staffUser.empCode,
         screenshot: ticketPhoto 
-      }]);
+      }]).select();
+
+      if (error) throw error;
+
+      // Update local state instantly so it appears on the dashboard
+      if (data && data.length > 0) {
+        const newTicket: StaffTicket = {
+          id: data[0].id,
+          title: data[0].subject || data[0].title || 'No Subject',
+          description: data[0].description || '',
+          status: data[0].status || 'Open',
+          estimatedTime: data[0].waiting_time || data[0].estimated_time || '',
+          date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          replies: data[0].replies || []
+        };
+        // Add new ticket to top of list, keep maximum of 3 for the preview
+        setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
+      }
+
       alert('Ticket raised successfully!');
-      window.location.reload();
+      setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' }); // Reset Form
+      setViewState('dashboard'); // Return to dashboard seamlessly
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -196,16 +210,33 @@ export default function StaffDashboardPage() {
     if (!assetRequestForm.reason) return alert("Please provide a reason.");
     setIsSubmitting(true);
     try {
-      await supabase.from('tickets').insert([{
+      const { data, error } = await supabase.from('tickets').insert([{
         subject: `Asset Request: ${assetRequestForm.category}`,
         description: `Reason: ${assetRequestForm.reason}`,
         category: 'Hardware Request',
         priority: 'Medium',
         status: 'Open',
         emp_code: staffUser.empCode
-      }]);
+      }]).select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const newTicket: StaffTicket = {
+          id: data[0].id,
+          title: data[0].subject,
+          description: data[0].description,
+          status: data[0].status,
+          estimatedTime: '',
+          date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          replies: []
+        };
+        setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
+      }
+
       alert('Asset request submitted to Admin!');
-      window.location.reload();
+      setAssetRequestForm({ category: 'Mouse', reason: '' });
+      setViewState('dashboard');
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -217,17 +248,35 @@ export default function StaffDashboardPage() {
     if (!assetReplaceForm.assetId || !assetReplaceForm.reason) return alert("Please select an asset and provide a reason.");
     setIsSubmitting(true);
     const assetToReplace = assets.find(a => a.id === assetReplaceForm.assetId);
+    
     try {
-      await supabase.from('tickets').insert([{
+      const { data, error } = await supabase.from('tickets').insert([{
         subject: `Replace Asset: ${assetToReplace?.name} (${assetToReplace?.tagId})`,
         description: `Reason for replacement: ${assetReplaceForm.reason}`,
         category: 'Hardware Replacement',
         priority: 'Medium',
         status: 'Open',
         emp_code: staffUser.empCode
-      }]);
+      }]).select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const newTicket: StaffTicket = {
+          id: data[0].id,
+          title: data[0].subject,
+          description: data[0].description,
+          status: data[0].status,
+          estimatedTime: '',
+          date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          replies: []
+        };
+        setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
+      }
+
       alert('Asset replacement request submitted to Admin!');
-      window.location.reload();
+      setAssetReplaceForm({ assetId: '', reason: '' });
+      setViewState('dashboard');
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
