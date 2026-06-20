@@ -170,7 +170,7 @@ export default function StaffProfileView() {
     }
   };
 
-  // --- HANDLER: GRANT LOGIN ACCESS (BULLETPROOF VERSION) ---
+  // --- HANDLER: GRANT LOGIN ACCESS ---
   const handleEnableLogin = async () => {
     if (!staff || !staff.email) return alert("Staff member must have a valid email address.");
     
@@ -190,17 +190,16 @@ export default function StaffProfileView() {
         { auth: { persistSession: false, autoRefreshToken: false } }
       );
 
-      const { error: authError } = await authClient.auth.signUp({
+      const { data: authData, error: authError } = await authClient.auth.signUp({
         email: cleanEmail,
         password: cleanPassword,
       });
 
-      // BULLETPROOF ERROR CHECKING
+      let authUserId = authData?.user?.id;
+
+      // ERROR HANDLING & ID RETRIEVAL
       if (authError) {
-        // Attempt to rip any hidden text out of the Supabase Error Object
-        const detailedError = authError.message || (authError as any).error_description || (authError as any).msg || JSON.stringify(authError);
-        
-        // If it's a ghost error '{}', or it says the user exists, we IGNORE it and force the account to activate.
+        const detailedError = authError.message || String(authError);
         const isSafeToIgnore = 
           detailedError.toLowerCase().includes('already registered') || 
           detailedError.toLowerCase().includes('user already exists') || 
@@ -208,11 +207,25 @@ export default function StaffProfileView() {
 
         if (!isSafeToIgnore) {
           throw new Error(`Auth Detail: ${detailedError}`);
+        } else {
+          // If the user already exists in Auth, fetch their existing ID from the profiles table!
+          const { data: existingProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
+          if (existingProfile?.id) {
+            authUserId = existingProfile.id;
+          } else {
+            // Failsafe if they are in Auth but have no profile
+            throw new Error("User email exists in the system but is corrupted. Go to Supabase -> Authentication -> Users, delete this email, and try again.");
+          }
         }
       }
 
-      // 2. Save to Profiles Table
+      if (!authUserId) {
+        throw new Error("Failed to generate or retrieve a valid User ID.");
+      }
+
+      // 2. Save to Profiles Table (NOW INJECTING THE ID)
       const { error: profileError } = await supabase.from('profiles').upsert({
+        id: authUserId, // <--- This fixes the null constraint error!
         email: cleanEmail,
         name: staff.name,
         full_name: staff.name,
