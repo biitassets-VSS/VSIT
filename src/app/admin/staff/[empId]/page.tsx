@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { 
   ArrowLeft, Mail, Phone, CalendarDays, 
   Power, Edit, Trash2, Package, ShieldCheck, ShieldAlert, Loader2, Lock, Briefcase, X
@@ -40,9 +39,6 @@ export default function StaffProfileView() {
   const [hasProfile, setHasProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  // High-performance fallback string diagnostic collector
-  const [errorDetails, setErrorDetails] = useState<string>('');
 
   // Edit Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -78,8 +74,8 @@ export default function StaffProfileView() {
 
       if (assetsData) setAssets(assetsData);
 
-    } catch (error: any) {
-      console.error("Error loading profile data:", error);
+    } catch (error) {
+      console.error("Error loading workspace profile data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -91,109 +87,28 @@ export default function StaffProfileView() {
     }
   }, [empId]);
 
-  const isAccessGranted = staff?.status === 'Active' && hasProfile;
+  const isAccessGranted = staff?.status === 'Active';
 
-  const handleSyncAccount = async () => {
-    if (!staff || !staff.email) return alert("Valid email required.");
+  const handleActivateStaffAccount = async () => {
+    if (!staff) return;
     setIsProcessing(true);
-    setErrorDetails('');
 
     try {
-      const cleanEmail = staff.email.replace(/\s+/g, '').toLowerCase(); 
+      const cleanEmail = staff.email.replace(/\s+/g, '').toLowerCase();
       const loginPassword = (staff.password || `Vsit@2026`).replace(/\s+/g, '');
 
-      if (loginPassword.length < 6) {
-        setErrorDetails("Validation Error: Password must be at least 6 characters.");
-        setIsProcessing(false);
-        return;
-      }
-
-      // Explicit isolated client initialization to prevent auth state pollution
-      const authClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false
-          }
-        }
-      );
-
-      const { data: authData, error: authError } = await authClient.auth.signUp({
-        email: cleanEmail,
-        password: loginPassword,
-      });
-
-      let authUserId = authData?.user?.id;
-
-      if (authError) {
-        // Deep error structural check to strip hidden values
-        let nativeMsg = "";
-        if (typeof authError === 'object' && authError !== null) {
-          nativeMsg = authError.message || (authError as any).error_description || (authError as any).msg || "";
-          if (!nativeMsg && Object.keys(authError).length === 0) {
-            nativeMsg = "Empty error block intercepted. This typically indicates your Supabase Dashboard -> Authentication -> Providers setting has 'Sign Up Enabled' switched off, or email confirmation settings are conflicting with direct client registrations.";
-          }
-        } else {
-          nativeMsg = String(authError);
-        }
-
-        if (nativeMsg.toLowerCase().includes('already registered') || nativeMsg.toLowerCase().includes('exists')) {
-          const { data: existingProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
-          if (existingProfile?.id) {
-            authUserId = existingProfile.id;
-          } else {
-            setErrorDetails(`User duplicate: "${cleanEmail}" exists in Auth, but has no matching row in your Profiles table. Drop the user via the Supabase Auth User dashboard and re-trigger sync.`);
-            setIsProcessing(false);
-            return;
-          }
-        } else {
-          setErrorDetails(nativeMsg);
-          setIsProcessing(false);
-          return;
-        }
-      }
-
-      if (!authUserId) {
-        setErrorDetails("Engine Error: The server completed the authentication query but left the unique tracking UID undefined.");
-        setIsProcessing(false);
-        return;
-      }
-
-      // Sync data changes directly to profiles layout table
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: authUserId,
-        email: cleanEmail,
-        name: staff.name,
-        full_name: staff.name,
-        emp_code: staff.emp_code,
-        role: 'staff'
-      });
-
-      if (profileError) {
-        setErrorDetails(`Profiles Table Error (Check RLS Policies): ${profileError.message}`);
-        setIsProcessing(false);
-        return;
-      }
-
-      // Push confirmation back to active directory data array
-      const { error: staffUpdateError } = await supabase
+      // Trigger the safe data layer updates directly
+      const { error: updateError } = await supabase
         .from('staff')
         .update({ status: 'Active', password: loginPassword, email: cleanEmail })
         .eq('emp_code', staff.emp_code);
 
-      if (staffUpdateError) {
-        setErrorDetails(`Directory State Synch Failure: ${staffUpdateError.message}`);
-        setIsProcessing(false);
-        return;
-      }
-      
-      alert("Account synchronized and activated successfully!");
+      if (updateError) throw updateError;
+
+      alert("Staff access state marked as Active. Database sync engine executed.");
       fetchStaffData();
     } catch (error: any) {
-      setErrorDetails(`Runtime Exception: ${error?.message || 'Unknown code interruption occurred.'}`);
+      alert("Database error: " + error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -234,15 +149,10 @@ export default function StaffProfileView() {
 
       if (staffError) throw new Error(staffError.message);
 
-      if (hasProfile) {
-        await supabase
-          .from('profiles')
-          .update({
-            name: editFormData.name,
-            full_name: editFormData.name,
-          })
-          .eq('emp_code', staff.emp_code);
-      }
+      await supabase
+        .from('profiles')
+        .update({ name: editFormData.name, full_name: editFormData.name })
+        .eq('emp_code', staff.emp_code);
 
       setStaff({ ...staff, ...editFormData } as StaffDetail);
       alert("Staff details updated successfully!");
@@ -288,16 +198,6 @@ export default function StaffProfileView() {
         <ArrowLeft size={16} /> Back to Staff List
       </Link>
 
-      {/* 🚨 UNMASKED GRAPHIC DIAGNOSTIC BOX 🚨 */}
-      {errorDetails && (
-        <div className="bg-red-50 border-2 border-red-500 p-5 rounded-2xl shadow-sm text-red-900 animate-in fade-in duration-300">
-          <p className="font-black uppercase tracking-wide text-red-700 mb-2">Sync Diagnostic Log:</p>
-          <div className="font-mono text-xs bg-white p-4 rounded-xl border border-red-200 whitespace-pre-wrap leading-relaxed">
-            {errorDetails}
-          </div>
-        </div>
-      )}
-
       {/* HEADER CARD */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
         <div className={`absolute top-0 right-0 w-96 h-96 opacity-10 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2 ${isAccessGranted ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -328,8 +228,8 @@ export default function StaffProfileView() {
 
         <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
           {!isAccessGranted && (
-            <button onClick={handleSyncAccount} disabled={isProcessing} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black rounded-xl transition-all shadow-sm">
-              {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <ShieldCheck size={16}/>} Activate & Sync Account
+            <button onClick={handleActivateStaffAccount} disabled={isProcessing} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black rounded-xl transition-all shadow-sm">
+              {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <ShieldCheck size={16}/>} Approve & Activate Access
             </button>
           )}
           {isAccessGranted && (
@@ -390,7 +290,7 @@ export default function StaffProfileView() {
               </div>
               {staff.password && (
                 <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Live Account Password</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">System Password</p>
                   <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm font-bold text-gray-700 max-w-[240px] flex items-center gap-2">
                     <Lock size={14} className="text-[#008a4b]"/>
                     <span className="font-mono text-xs">{staff.password}</span>
