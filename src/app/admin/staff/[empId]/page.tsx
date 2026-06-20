@@ -40,6 +40,9 @@ export default function StaffProfileView() {
   const [hasProfile, setHasProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // ⚡ DEDICATED VISIBLE ERROR LOG ⚡
+  const [activationError, setActivationError] = useState<string>('');
 
   // Edit Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -48,7 +51,6 @@ export default function StaffProfileView() {
 
   const fetchStaffData = async () => {
     try {
-      // 1. Fetch Staff Directory Record
       const { data: staffData, error: staffError } = await supabase
         .from('staff')
         .select('*')
@@ -59,8 +61,7 @@ export default function StaffProfileView() {
       setStaff(staffData);
 
       if (staffData?.email) {
-        const cleanEmail = staffData.email.trim();
-        // 2. Check if they have a matching profile
+        const cleanEmail = staffData.email.trim().toLowerCase();
         const { data: profileData } = await supabase
           .from('profiles')
           .select('id')
@@ -70,7 +71,6 @@ export default function StaffProfileView() {
         if (profileData) setHasProfile(true);
       }
 
-      // 3. Load Assigned Assets
       const { data: assetsData } = await supabase
         .from('assets')
         .select('id, name, tag_id')
@@ -80,7 +80,7 @@ export default function StaffProfileView() {
 
     } catch (error) {
       console.error("Error loading profile data:", error);
-    } finally {
+    } bits: {
       setIsLoading(false);
     }
   };
@@ -93,17 +93,19 @@ export default function StaffProfileView() {
 
   const isAccessGranted = staff?.status === 'Active' && hasProfile;
 
-  // --- HANDLER: FORCE ACCOUNT SYNC ACTIVATION ---
+  // --- HANDLER: SYNC & ACTIVATE ACCOUNT ---
   const handleSyncAccount = async () => {
     if (!staff || !staff.email) return alert("Valid email required.");
     setIsProcessing(true);
+    setActivationError('');
 
     try {
-      const cleanEmail = staff.email.trim();
-      const loginPassword = (staff.password || `Vsit@2026`).trim();
+      // Clean bulk upload data completely
+      const cleanEmail = staff.email.replace(/\s+/g, '').toLowerCase(); 
+      const loginPassword = (staff.password || `Vsit@2026`).replace(/\s+/g, '');
 
       if (loginPassword.length < 6) {
-        throw new Error("Password must be at least 6 characters long.");
+        throw new Error("Password must be at least 6 characters long for Supabase rules.");
       }
 
       const authClient = createClient(
@@ -120,20 +122,25 @@ export default function StaffProfileView() {
       let authUserId = authData?.user?.id;
 
       if (authError) {
-        const msg = authError.message || JSON.stringify(authError);
-        if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('exists')) {
-          // If already in auth but row is missing in profiles, generate a custom execution fallback
-          alert("This email is already registered in Supabase Auth tab but missing its profile row. Please delete the user from Authentication -> Users in Supabase dashboard first, then click Sync again.");
-          setIsProcessing(false);
-          return;
+        // Rip text from hidden parameters to bypass empty {} issues
+        const errorString = authError.message || (authError as any).error_description || JSON.stringify(authError);
+        
+        if (errorString.toLowerCase().includes('already registered') || errorString.toLowerCase().includes('exists')) {
+          // Fallback if record exists in auth table but is missing profile mapping
+          const { data: existingProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
+          if (existingProfile?.id) {
+            authUserId = existingProfile.id;
+          } else {
+            throw new Error(`User already exists in Supabase Authentication -> Users table. Please go there, delete "${cleanEmail}", and click this button again.`);
+          }
         } else {
-          throw new Error(msg);
+          throw new Error(errorString);
         }
       }
 
-      if (!authUserId) throw new Error("Could not acquire a valid Auth UID from Supabase.");
+      if (!authUserId) throw new Error("Supabase auth did not output a valid User UID.");
 
-      // Create profile row mapping
+      // Insert profile row mapping securely
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: authUserId,
         email: cleanEmail,
@@ -143,15 +150,16 @@ export default function StaffProfileView() {
         role: 'staff'
       });
 
-      if (profileError) throw new Error("Profiles table RLS/Constraint error: " + profileError.message);
+      if (profileError) throw new Error(`Profiles table RLS/Constraint validation blocked creation: ${profileError.message}`);
 
-      // Update directory record status
-      await supabase.from('staff').update({ status: 'Active', password: loginPassword }).eq('emp_code', staff.emp_code);
+      // Save status back to active directory
+      await supabase.from('staff').update({ status: 'Active', password: loginPassword, email: cleanEmail }).eq('emp_code', staff.emp_code);
       
-      alert("Account successfully synchronized and activated!");
+      alert("Account activated successfully!");
       fetchStaffData();
     } catch (error: any) {
-      alert("Activation Failed: " + error.message);
+      // Print the full unformatted message to screen context safely
+      setActivationError(error.message || "Unknown schema processing error occurred.");
     } finally {
       setIsProcessing(false);
     }
@@ -208,7 +216,7 @@ export default function StaffProfileView() {
       fetchStaffData();
     } catch (error: any) {
       alert("Error updating staff: " + error.message);
-    } finally {
+    } bits: {
       setIsUpdating(false);
     }
   };
@@ -248,6 +256,14 @@ export default function StaffProfileView() {
       <Link href="/admin/staff" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors w-fit">
         <ArrowLeft size={16} /> Back to Staff List
       </Link>
+
+      {/* 🚨 DETAILED ERROR PRINTOUT 🚨 */}
+      {activationError && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl text-red-800 text-sm font-medium shadow-sm animate-in zoom-in duration-200">
+          <p className="font-black uppercase tracking-wide text-red-700 mb-1">Database Sync Error Details:</p>
+          <p className="font-mono">{activationError}</p>
+        </div>
+      )}
 
       {/* HEADER CARD */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
