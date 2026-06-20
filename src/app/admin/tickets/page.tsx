@@ -75,7 +75,7 @@ export default function AdminTicketsPage() {
             description: t.description || 'No description',
             priority: t.priority || 'Medium',
             status: t.status || 'Open',
-            estimatedTime: t.waiting_time || '', 
+            estimatedTime: t.estimated_time || '', // FIXED: Changed waiting_time to estimated_time
             submittedBy: staffMap[t.emp_code] || 'Unknown User', 
             empCode: t.emp_code || 'N/A',
             date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
@@ -120,17 +120,24 @@ export default function AdminTicketsPage() {
 
     const dbPayload = {
       status: newStatus,
-      waiting_time: eta, 
+      estimated_time: eta, // FIXED: Matches database column name
       replies: newReplies
     };
 
     try {
-      const { error } = await supabase
+      // ADDED .select() to force Supabase to return the updated row
+      const { data, error } = await supabase
         .from('tickets')
         .update(dbPayload)
-        .eq('id', selectedTicket.id);
+        .eq('id', selectedTicket.id)
+        .select();
 
       if (error) throw error;
+
+      // FIXED: Catch silent RLS failures where error is null but nothing updated
+      if (!data || data.length === 0) {
+        throw new Error("Database blocked the update. Check your Supabase RLS 'UPDATE' policy for the tickets table.");
+      }
 
       // Update local state to reflect changes instantly
       const updatedTicket = { 
