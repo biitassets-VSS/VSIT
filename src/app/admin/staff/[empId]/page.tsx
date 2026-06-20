@@ -39,114 +39,123 @@ export default function StaffProfileView() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [hasProfile, setHasProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Edit Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<StaffDetail>>({});
   const [isUpdating, setIsUpdating] = useState(false);
 
-  useEffect(() => {
-    if (!empId) return;
+  const fetchStaffData = async () => {
+    try {
+      // 1. Fetch Staff Directory Record
+      const { data: staffData, error: staffError } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('emp_code', empId)
+        .single();
 
-    const fetchAndAutoSync = async () => {
-      try {
-        // 1. Fetch Staff Directory Record
-        const { data: staffData, error: staffError } = await supabase
-          .from('staff')
-          .select('*')
-          .eq('emp_code', empId)
-          .single();
+      if (staffError) throw staffError;
+      setStaff(staffData);
 
-        if (staffError) throw staffError;
-        setStaff(staffData);
-
-        if (!staffData || !staffData.email) {
-          setIsLoading(false);
-          return;
-        }
-
+      if (staffData?.email) {
         const cleanEmail = staffData.email.trim();
-
         // 2. Check if they have a matching profile
         const { data: profileData } = await supabase
           .from('profiles')
           .select('id')
           .eq('email', cleanEmail)
           .maybeSingle();
-
-        if (profileData) {
-          setHasProfile(true);
-        } else {
-          // =========================================================
-          // ⚡ AUTOMATIC BACKGROUND ACCOUNT SYNC FOR BULK UPLOADS ⚡
-          // =========================================================
-          // If they exist in staff table but have no Auth account/profile,
-          // we use their pre-defined password or create a default secure one.
-          const loginPassword = (staffData.password || `Vsit@${staffData.emp_code || '2026'}`).trim();
-          
-          if (loginPassword.length >= 6) {
-            // Setup a detached client to prevent logging out Lakhwinder (Admin)
-            const authClient = createClient(
-              process.env.NEXT_PUBLIC_SUPABASE_URL!,
-              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-              { auth: { persistSession: false, autoRefreshToken: false } }
-            );
-
-            const { data: authData, error: authError } = await authClient.auth.signUp({
-              email: cleanEmail,
-              password: loginPassword,
-            });
-
-            let authUserId = authData?.user?.id;
-
-            if (authError) {
-              const msg = authError.message.toLowerCase();
-              // If account already exists in Auth tab, extract id from profiles if it exists
-              if (msg.includes('already registered') || msg.includes('exists')) {
-                const { data: fallbackProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
-                if (fallbackProfile) authUserId = fallbackProfile.id;
-              }
-            }
-
-            if (authUserId) {
-              // Create the profile mapping row seamlessly
-              await supabase.from('profiles').upsert({
-                id: authUserId,
-                email: cleanEmail,
-                name: staffData.name,
-                full_name: staffData.name,
-                emp_code: staffData.emp_code,
-                role: 'staff'
-              });
-
-              // Mark directory entry as active and fully configured
-              await supabase.from('staff').update({ status: 'Active', password: loginPassword }).eq('emp_code', staffData.emp_code);
-              
-              setHasProfile(true);
-              setStaff({ ...staffData, status: 'Active', password: loginPassword });
-            }
-          }
-        }
-
-        // 3. Load Assigned Assets
-        const { data: assetsData } = await supabase
-          .from('assets')
-          .select('id, name, tag_id')
-          .eq('emp_code', empId);
-
-        if (assetsData) setAssets(assetsData);
-
-      } catch (error) {
-        console.error("Error loading or auto-syncing profile data:", error);
-      } finally {
-        setIsLoading(false);
+        
+        if (profileData) setHasProfile(true);
       }
-    };
 
-    fetchAndAutoSync();
+      // 3. Load Assigned Assets
+      const { data: assetsData } = await supabase
+        .from('assets')
+        .select('id, name, tag_id')
+        .eq('emp_code', empId);
+
+      if (assetsData) setAssets(assetsData);
+
+    } catch (error) {
+      console.error("Error loading profile data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (empId) {
+      fetchStaffData();
+    }
   }, [empId]);
 
   const isAccessGranted = staff?.status === 'Active' && hasProfile;
+
+  // --- HANDLER: FORCE ACCOUNT SYNC ACTIVATION ---
+  const handleSyncAccount = async () => {
+    if (!staff || !staff.email) return alert("Valid email required.");
+    setIsProcessing(true);
+
+    try {
+      const cleanEmail = staff.email.trim();
+      const loginPassword = (staff.password || `Vsit@2026`).trim();
+
+      if (loginPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters long.");
+      }
+
+      const authClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+
+      const { data: authData, error: authError } = await authClient.auth.signUp({
+        email: cleanEmail,
+        password: loginPassword,
+      });
+
+      let authUserId = authData?.user?.id;
+
+      if (authError) {
+        const msg = authError.message || JSON.stringify(authError);
+        if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('exists')) {
+          // If already in auth but row is missing in profiles, generate a custom execution fallback
+          alert("This email is already registered in Supabase Auth tab but missing its profile row. Please delete the user from Authentication -> Users in Supabase dashboard first, then click Sync again.");
+          setIsProcessing(false);
+          return;
+        } else {
+          throw new Error(msg);
+        }
+      }
+
+      if (!authUserId) throw new Error("Could not acquire a valid Auth UID from Supabase.");
+
+      // Create profile row mapping
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: authUserId,
+        email: cleanEmail,
+        name: staff.name,
+        full_name: staff.name,
+        emp_code: staff.emp_code,
+        role: 'staff'
+      });
+
+      if (profileError) throw new Error("Profiles table RLS/Constraint error: " + profileError.message);
+
+      // Update directory record status
+      await supabase.from('staff').update({ status: 'Active', password: loginPassword }).eq('emp_code', staff.emp_code);
+      
+      alert("Account successfully synchronized and activated!");
+      fetchStaffData();
+    } catch (error: any) {
+      alert("Activation Failed: " + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // --- HANDLER: OPEN EDIT MODAL ---
   const handleOpenEdit = () => {
@@ -184,20 +193,19 @@ export default function StaffProfileView() {
       if (staffError) throw new Error(staffError.message);
 
       if (hasProfile) {
-        const { error: profileError } = await supabase
+        await supabase
           .from('profiles')
           .update({
             name: editFormData.name,
             full_name: editFormData.name,
           })
           .eq('emp_code', staff.emp_code);
-          
-        if (profileError) throw new Error(profileError.message);
       }
 
       setStaff({ ...staff, ...editFormData } as StaffDetail);
       alert("Staff details updated successfully!");
       setIsEditModalOpen(false);
+      fetchStaffData();
     } catch (error: any) {
       alert("Error updating staff: " + error.message);
     } finally {
@@ -207,10 +215,11 @@ export default function StaffProfileView() {
 
   // --- HANDLER: DEACTIVATE LOGIN ---
   const handleDeactivateLogin = async () => {
-    if (!staff || !confirm("Are you sure you want to deactivate login access for this staff member?")) return;
+    if (!staff || !confirm("Are you sure you want to deactivate login access?")) return;
     try {
       await supabase.from('staff').update({ status: 'Inactive' }).eq('emp_code', staff.emp_code);
       setStaff({ ...staff, status: 'Inactive' });
+      fetchStaffData();
     } catch (error: any) {
       alert("Error deactivating: " + error.message);
     }
@@ -269,6 +278,11 @@ export default function StaffProfileView() {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
+          {!isAccessGranted && (
+            <button onClick={handleSyncAccount} disabled={isProcessing} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black rounded-xl transition-all shadow-sm">
+              {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <ShieldCheck size={16}/>} Activate & Sync Account
+            </button>
+          )}
           {isAccessGranted && (
             <button onClick={handleDeactivateLogin} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-sm font-bold rounded-xl transition-all">
               <Power size={16}/> Deactivate Login
