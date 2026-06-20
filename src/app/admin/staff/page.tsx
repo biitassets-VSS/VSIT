@@ -29,7 +29,7 @@ interface Staff {
   dob?: string;
   joiningDate?: string;
   role?: string;
-  assignedAssets?: Asset[]; // Added for high-performance rendering
+  assignedAssets?: Asset[]; 
 }
 
 export default function StaffPage() {
@@ -52,7 +52,6 @@ export default function StaffPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch everything at the exact same time for maximum speed
         const [staffRes, profilesRes, assetsRes] = await Promise.all([
           supabase.from('staff').select('id, emp_code, name, department, status, email, password, contact_number, dob, joining_date, created_at').order('created_at', { ascending: false }),
           supabase.from('profiles').select('email, role'),
@@ -61,7 +60,6 @@ export default function StaffPage() {
 
         if (staffRes.error) throw staffRes.error;
 
-        // Pre-group assets by employee code (O(1) lookup speed for the table)
         const assetMap: Record<string, Asset[]> = {};
         if (assetsRes.data) {
           assetsRes.data.forEach((a: any) => {
@@ -76,7 +74,6 @@ export default function StaffPage() {
           });
         }
 
-        // Build Staff List instantly
         if (staffRes.data) {
           const mappedStaff = staffRes.data.map((dbStaff: any) => {
             const userProfile = profilesRes.data?.find(p => p.email === dbStaff.email);
@@ -92,7 +89,7 @@ export default function StaffPage() {
               dob: dbStaff.dob || '',
               joiningDate: dbStaff.joining_date || '',
               role: userProfile?.role || 'staff',
-              assignedAssets: assetMap[dbStaff.emp_code] || [] // Attach pre-indexed assets
+              assignedAssets: assetMap[dbStaff.emp_code] || [] 
             };
           });
           setStaffList(mappedStaff);
@@ -118,6 +115,7 @@ export default function StaffPage() {
   };
 
   const handleOpenAdd = () => {
+    // Default form state: Checkbox is ticked by default
     setFormData({ isActive: true, department: 'IT Department', role: 'staff' });
     setIsModalOpen(true);
   };
@@ -129,8 +127,10 @@ export default function StaffPage() {
     try {
       const newId = `EMP-${Math.floor(Math.random() * 9000) + 1000}`;
 
-      // 1. CREATE AUTH USER SILENTLY
-      if (formData.email && formData.password) {
+      // 1. ONLY CREATE AUTH USER AND PROFILE IF 'IS ACTIVE' IS TICKED
+      if (formData.isActive && formData.email && formData.password) {
+        
+        // Create Auth login credentials silently
         const authClient = createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -145,17 +145,18 @@ export default function StaffPage() {
         if (authError && !authError.message.includes('already registered')) {
           throw new Error("Could not create login account: " + authError.message);
         }
+
+        // Save to 'profiles' table to allow app dashboard access
+        await supabase.from('profiles').upsert({
+          email: formData.email,
+          full_name: formData.name,
+          name: formData.name,
+          emp_code: newId,
+          role: formData.role || 'staff'
+        });
       }
 
-      // 2. SAVE ROLE TO PROFILES TABLE
-      await supabase.from('profiles').upsert({
-        email: formData.email,
-        name: formData.name,
-        emp_code: newId,
-        role: formData.role || 'staff'
-      });
-
-      // 3. SAVE DETAILS TO STAFF TABLE
+      // 2. ALWAYS SAVE DETAILS TO MAIN 'STAFF' DIRECTORY TABLE
       const dbPayload = {
         emp_code: newId,
         name: formData.name,
@@ -171,12 +172,19 @@ export default function StaffPage() {
       const { data, error } = await supabase.from('staff').insert([dbPayload]).select();
       if (error) throw error;
 
+      // Update UI list
       if (data) {
         const newStaff: Staff = { ...formData, empId: newId, isActive: formData.isActive || false, role: formData.role || 'staff', assignedAssets: [] } as Staff;
         setStaffList([newStaff, ...staffList]);
       }
       
-      alert("Staff created successfully! They can now log in.");
+      // Dynamic success alert based on checkbox selection
+      if (formData.isActive) {
+        alert("Staff created successfully! They can now log in.");
+      } else {
+        alert("Staff record saved to directory successfully! (No login access granted).");
+      }
+      
       setIsModalOpen(false);
     } catch (error: any) {
       alert("Error saving staff: " + error.message);
@@ -438,16 +446,20 @@ export default function StaffPage() {
                     <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide flex items-center gap-1.5"><Lock size={14}/> Login Password</label>
                     <input type="text" placeholder="Assign a secure password" value={formData.password || ''} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none text-sm font-bold"/>
                   </div>
+                  
+                  {/* UPDATED CHECKBOX FEATURE */}
                   <div className="flex items-center md:col-span-2 pt-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
                     <input type="checkbox" id="statusToggle" checked={formData.isActive || false} onChange={(e) => setFormData({...formData, isActive: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"/>
-                    <label htmlFor="statusToggle" className="ml-3 text-sm font-black text-gray-700 cursor-pointer">Account is Active (Can Login)</label>
+                    <label htmlFor="statusToggle" className="ml-3 text-sm font-black text-[#002B49] cursor-pointer">
+                      Account is Active (Can Login Staff User)
+                    </label>
                   </div>
                 </div>
 
                 <div className="pt-6 flex gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3.5 text-sm font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl transition-all">Cancel</button>
                   <button type="submit" disabled={isUploading} className="flex-1 px-4 py-3.5 text-sm font-black bg-[#006456] text-white hover:bg-teal-800 shadow-sm rounded-xl transition-all flex justify-center">
-                    {isUploading ? 'Creating...' : 'Create Staff & Allow Login'}
+                    {isUploading ? 'Processing...' : (formData.isActive ? 'Create Staff & Allow Login' : 'Create Staff Directory Profile')}
                   </button>
                 </div>
               </form>
