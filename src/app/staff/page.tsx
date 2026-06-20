@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
-// --- Smart Status Formatter (Fixes missing status designs) ---
+// --- Smart Status Formatter ---
 const formatStatus = (s?: string) => {
   if (!s) return 'Open';
   const lower = s.toLowerCase().trim();
@@ -16,7 +16,7 @@ const formatStatus = (s?: string) => {
   if (lower.includes('progress') || lower.includes('process')) return 'In Progress';
   if (lower.includes('hold') || lower.includes('pause')) return 'Hold';
   if (lower.includes('open')) return 'Open';
-  return s.charAt(0).toUpperCase() + s.slice(1); // Fallback capitalized
+  return s.charAt(0).toUpperCase() + s.slice(1); 
 };
 
 // --- Interfaces ---
@@ -69,7 +69,6 @@ export default function StaffDashboardPage() {
 
   // Forms
   const [ticketForm, setTicketForm] = useState({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
-  const [ticketPhoto, setTicketPhoto] = useState<string | null>(null);
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
   const [assetReplaceForm, setAssetReplaceForm] = useState({ assetId: '', reason: '' });
 
@@ -114,7 +113,7 @@ export default function StaffDashboardPage() {
               id: t.id,
               title: t.subject || t.title || 'No Subject',
               description: t.description || '',
-              status: formatStatus(t.status), // Auto-normalize status
+              status: formatStatus(t.status), 
               estimatedTime: t.waiting_time || t.estimated_time || '',
               date: t.created_at ? new Date(t.created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date',
               replies: t.replies || []
@@ -160,21 +159,20 @@ export default function StaffDashboardPage() {
       }
     };
 
-    // Initial Load
     loadData();
 
     // LIVE SUPABASE REALTIME SUBSCRIPTIONS
     const ticketsChannel = supabase
       .channel('realtime-tickets-dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-        loadData(); // Instantly refresh data when Admin makes a change
+        loadData(); 
       })
       .subscribe();
 
     const assetsChannel = supabase
       .channel('realtime-assets-dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
-        loadData(); // Instantly refresh data if Admin assigns an asset
+        loadData(); 
       })
       .subscribe();
 
@@ -195,18 +193,17 @@ export default function StaffDashboardPage() {
 
   const scrollToAssets = () => document.getElementById('my-assets-section')?.scrollIntoView({ behavior: 'smooth' });
 
+  // 1. TICKET SUBMISSION (FIXED COLUMNS)
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
     setIsSubmitting(true);
     try {
       const { data, error } = await supabase.from('tickets').insert([{
-        subject: ticketForm.title,
+        // Mapped Category and Priority directly into the Subject line to match DB Schema
+        subject: `[${ticketForm.category}] ${ticketForm.title} (${ticketForm.priority} Priority)`,
         description: ticketForm.description,
-        category: ticketForm.category,
-        priority: ticketForm.priority,
         status: 'Open',
-        emp_code: staffUser.empCode,
-        screenshot: ticketPhoto 
+        emp_code: staffUser.empCode
       }]).select();
 
       if (error) throw error;
@@ -234,6 +231,7 @@ export default function StaffDashboardPage() {
     }
   };
 
+  // 2. ASSET REQUEST (FIXED COLUMNS)
   const handleSubmitAssetRequest = async () => {
     if (!assetRequestForm.reason) return alert("Please provide a reason.");
     setIsSubmitting(true);
@@ -241,8 +239,6 @@ export default function StaffDashboardPage() {
       const { data, error } = await supabase.from('tickets').insert([{
         subject: `Asset Request: ${assetRequestForm.category}`,
         description: `Reason: ${assetRequestForm.reason}`,
-        category: 'Hardware Request',
-        priority: 'Medium',
         status: 'Open',
         emp_code: staffUser.empCode
       }]).select();
@@ -272,6 +268,7 @@ export default function StaffDashboardPage() {
     }
   };
 
+  // 3. ASSET REPLACE (FIXED COLUMNS)
   const handleSubmitAssetReplace = async () => {
     if (!assetReplaceForm.assetId || !assetReplaceForm.reason) return alert("Please select an asset and provide a reason.");
     setIsSubmitting(true);
@@ -281,8 +278,6 @@ export default function StaffDashboardPage() {
       const { data, error } = await supabase.from('tickets').insert([{
         subject: `Replace Asset: ${assetToReplace?.name} (${assetToReplace?.tagId})`,
         description: `Reason for replacement: ${assetReplaceForm.reason}`,
-        category: 'Hardware Replacement',
-        priority: 'Medium',
         status: 'Open',
         emp_code: staffUser.empCode
       }]).select();
@@ -476,7 +471,6 @@ export default function StaffDashboardPage() {
         </>
       )}
 
-      {/* Forms Segment (Unchanged Structurally) */}
       {viewState === 'raising_ticket' && (
         <div className="space-y-6 max-w-2xl">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
