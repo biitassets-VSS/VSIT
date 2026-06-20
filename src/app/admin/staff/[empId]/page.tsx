@@ -40,11 +40,6 @@ export default function StaffProfileView() {
   const [hasProfile, setHasProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Checkbox & Activation States
-  const [showLoginSetup, setShowLoginSetup] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-
   // Edit Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<StaffDetail>>({});
@@ -53,8 +48,9 @@ export default function StaffProfileView() {
   useEffect(() => {
     if (!empId) return;
 
-    const fetchStaffData = async () => {
+    const fetchAndAutoSync = async () => {
       try {
+        // 1. Fetch Staff Directory Record
         const { data: staffData, error: staffError } = await supabase
           .from('staff')
           .select('*')
@@ -63,18 +59,76 @@ export default function StaffProfileView() {
 
         if (staffError) throw staffError;
         setStaff(staffData);
-        if (staffData?.password) setPasswordInput(staffData.password);
 
-        if (staffData?.email) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', staffData.email)
-            .maybeSingle();
-          
-          if (profileData) setHasProfile(true);
+        if (!staffData || !staffData.email) {
+          setIsLoading(false);
+          return;
         }
 
+        const cleanEmail = staffData.email.trim();
+
+        // 2. Check if they have a matching profile
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (profileData) {
+          setHasProfile(true);
+        } else {
+          // =========================================================
+          // ⚡ AUTOMATIC BACKGROUND ACCOUNT SYNC FOR BULK UPLOADS ⚡
+          // =========================================================
+          // If they exist in staff table but have no Auth account/profile,
+          // we use their pre-defined password or create a default secure one.
+          const loginPassword = (staffData.password || `Vsit@${staffData.emp_code || '2026'}`).trim();
+          
+          if (loginPassword.length >= 6) {
+            // Setup a detached client to prevent logging out Lakhwinder (Admin)
+            const authClient = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL!,
+              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+              { auth: { persistSession: false, autoRefreshToken: false } }
+            );
+
+            const { data: authData, error: authError } = await authClient.auth.signUp({
+              email: cleanEmail,
+              password: loginPassword,
+            });
+
+            let authUserId = authData?.user?.id;
+
+            if (authError) {
+              const msg = authError.message.toLowerCase();
+              // If account already exists in Auth tab, extract id from profiles if it exists
+              if (msg.includes('already registered') || msg.includes('exists')) {
+                const { data: fallbackProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
+                if (fallbackProfile) authUserId = fallbackProfile.id;
+              }
+            }
+
+            if (authUserId) {
+              // Create the profile mapping row seamlessly
+              await supabase.from('profiles').upsert({
+                id: authUserId,
+                email: cleanEmail,
+                name: staffData.name,
+                full_name: staffData.name,
+                emp_code: staffData.emp_code,
+                role: 'staff'
+              });
+
+              // Mark directory entry as active and fully configured
+              await supabase.from('staff').update({ status: 'Active', password: loginPassword }).eq('emp_code', staffData.emp_code);
+              
+              setHasProfile(true);
+              setStaff({ ...staffData, status: 'Active', password: loginPassword });
+            }
+          }
+        }
+
+        // 3. Load Assigned Assets
         const { data: assetsData } = await supabase
           .from('assets')
           .select('id, name, tag_id')
@@ -83,13 +137,13 @@ export default function StaffProfileView() {
         if (assetsData) setAssets(assetsData);
 
       } catch (error) {
-        console.error("Error fetching staff details:", error);
+        console.error("Error loading or auto-syncing profile data:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchStaffData();
+    fetchAndAutoSync();
   }, [empId]);
 
   const isAccessGranted = staff?.status === 'Active' && hasProfile;
@@ -142,12 +196,10 @@ export default function StaffProfileView() {
       }
 
       setStaff({ ...staff, ...editFormData } as StaffDetail);
-      if (editFormData.password) setPasswordInput(editFormData.password);
-
       alert("Staff details updated successfully!");
       setIsEditModalOpen(false);
     } catch (error: any) {
-      alert("Error updating staff: " + (error.message || "Unknown Error"));
+      alert("Error updating staff: " + error.message);
     } finally {
       setIsUpdating(false);
     }
@@ -156,104 +208,11 @@ export default function StaffProfileView() {
   // --- HANDLER: DEACTIVATE LOGIN ---
   const handleDeactivateLogin = async () => {
     if (!staff || !confirm("Are you sure you want to deactivate login access for this staff member?")) return;
-    setIsProcessing(true);
     try {
-      const { error } = await supabase.from('staff').update({ status: 'Inactive' }).eq('emp_code', staff.emp_code);
-      if (error) throw new Error(error.message);
-      
+      await supabase.from('staff').update({ status: 'Inactive' }).eq('emp_code', staff.emp_code);
       setStaff({ ...staff, status: 'Inactive' });
-      setShowLoginSetup(false);
     } catch (error: any) {
-      alert("Error deactivating: " + (error.message || "Unknown error"));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // --- HANDLER: GRANT LOGIN ACCESS ---
-  const handleEnableLogin = async () => {
-    if (!staff || !staff.email) return alert("Staff member must have a valid email address.");
-    
-    const cleanEmail = staff.email.trim();
-    const cleanPassword = passwordInput.trim();
-
-    if (!cleanPassword || cleanPassword.length < 6) {
-      return alert("Supabase requires passwords to be at least 6 characters long.");
-    }
-    
-    setIsProcessing(true);
-    try {
-      // 1. Create Supabase Auth User
-      const authClient = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false, autoRefreshToken: false } }
-      );
-
-      const { data: authData, error: authError } = await authClient.auth.signUp({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
-
-      let authUserId = authData?.user?.id;
-
-      // ERROR HANDLING & ID RETRIEVAL
-      if (authError) {
-        const detailedError = authError.message || String(authError);
-        const isSafeToIgnore = 
-          detailedError.toLowerCase().includes('already registered') || 
-          detailedError.toLowerCase().includes('user already exists') || 
-          detailedError === '{}';
-
-        if (!isSafeToIgnore) {
-          throw new Error(`Auth Detail: ${detailedError}`);
-        } else {
-          // If the user already exists in Auth, fetch their existing ID from the profiles table!
-          const { data: existingProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
-          if (existingProfile?.id) {
-            authUserId = existingProfile.id;
-          } else {
-            // Failsafe if they are in Auth but have no profile
-            throw new Error("User email exists in the system but is corrupted. Go to Supabase -> Authentication -> Users, delete this email, and try again.");
-          }
-        }
-      }
-
-      if (!authUserId) {
-        throw new Error("Failed to generate or retrieve a valid User ID.");
-      }
-
-      // 2. Save to Profiles Table (NOW INJECTING THE ID)
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: authUserId, // <--- This fixes the null constraint error!
-        email: cleanEmail,
-        name: staff.name,
-        full_name: staff.name,
-        emp_code: staff.emp_code,
-        role: 'staff'
-      });
-
-      if (profileError) throw new Error(`Profile creation failed: ${profileError.message}`);
-
-      // 3. Update Staff Status & Password
-      const { error: staffUpdateError } = await supabase.from('staff').update({ 
-        status: 'Active', 
-        password: cleanPassword 
-      }).eq('emp_code', staff.emp_code);
-
-      if (staffUpdateError) throw new Error(`Staff directory update failed: ${staffUpdateError.message}`);
-
-      // Success Updates
-      setHasProfile(true);
-      setStaff({ ...staff, status: 'Active', password: cleanPassword });
-      setShowLoginSetup(false);
-      alert("Login access granted successfully!");
-
-    } catch (error: any) {
-      console.error("Full Login Grant Error:", error);
-      alert("Action halted: " + (error.message || "Unknown error occurred."));
-    } finally {
-      setIsProcessing(false);
+      alert("Error deactivating: " + error.message);
     }
   };
 
@@ -261,11 +220,10 @@ export default function StaffProfileView() {
   const handleDeleteStaff = async () => {
     if (!staff || !confirm("Are you sure you want to completely delete this staff member? This cannot be undone.")) return;
     try {
-      const { error } = await supabase.from('staff').delete().eq('emp_code', staff.emp_code);
-      if (error) throw new Error(error.message);
+      await supabase.from('staff').delete().eq('emp_code', staff.emp_code);
       router.push('/admin/staff');
     } catch (error: any) {
-      alert("Error deleting staff: " + (error.message || "Unknown error"));
+      alert("Error deleting staff: " + error.message);
     }
   };
 
@@ -282,9 +240,7 @@ export default function StaffProfileView() {
         <ArrowLeft size={16} /> Back to Staff List
       </Link>
 
-      {/* ========================================== */}
-      {/* HEADER CARD                                */}
-      {/* ========================================== */}
+      {/* HEADER CARD */}
       <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
         <div className={`absolute top-0 right-0 w-96 h-96 opacity-10 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2 ${isAccessGranted ? 'bg-green-500' : 'bg-red-500'}`} />
 
@@ -301,11 +257,11 @@ export default function StaffProfileView() {
               
               {isAccessGranted ? (
                 <span className="bg-[#e6f7eb] text-[#008a4b] font-black text-xs px-2.5 py-1 rounded-md border border-green-200 uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
-                  <ShieldCheck size={14} /> ACTIVE
+                  <ShieldCheck size={14} /> ACTIVE LOGIN
                 </span>
               ) : (
                 <span className="bg-red-50 text-red-700 font-black text-xs px-2.5 py-1 rounded-md border border-red-200 uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
-                  <ShieldAlert size={14} /> DEACTIVATED
+                  <ShieldAlert size={14} /> CONFIGURING
                 </span>
               )}
             </div>
@@ -314,8 +270,8 @@ export default function StaffProfileView() {
 
         <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
           {isAccessGranted && (
-            <button onClick={handleDeactivateLogin} disabled={isProcessing} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-sm font-bold rounded-xl transition-all">
-              {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <Power size={16}/>} Deactivate Login
+            <button onClick={handleDeactivateLogin} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-sm font-bold rounded-xl transition-all">
+              <Power size={16}/> Deactivate Login
             </button>
           )}
           <button onClick={handleOpenEdit} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 text-sm font-bold rounded-xl transition-all">
@@ -328,15 +284,10 @@ export default function StaffProfileView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* ========================================== */}
-        {/* LEFT COLUMN: DETAILS & LOGIN CONTROLS      */}
-        {/* ========================================== */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-6">
-          
           <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
             <h2 className="text-xl font-black text-[#002B49] mb-6 border-b border-gray-100 pb-3">Personal & Contact Info</h2>
-            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8">
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Email Address</p>
@@ -369,74 +320,27 @@ export default function StaffProfileView() {
             <h2 className="text-xl font-black text-[#002B49] mb-6 border-b border-gray-100 pb-3 flex items-center gap-2">
               <Briefcase className="text-blue-600" size={20}/> Work Information
             </h2>
-            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8">
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Department</p>
                 <p className="text-sm font-bold text-gray-900">{staff.department}</p>
               </div>
-
               {staff.password && (
                 <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">System Password</p>
-                  <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm font-bold text-gray-700 max-w-[200px] flex items-center gap-2">
-                    <Lock size={14} className="text-gray-400"/>
-                    {staff.password}
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Live Account Password</p>
+                  <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm font-bold text-gray-700 max-w-[240px] flex items-center gap-2">
+                    <Lock size={14} className="text-[#008a4b]"/>
+                    <span className="font-mono text-xs">{staff.password}</span>
                   </div>
                 </div>
               )}
             </div>
-
-            {!isAccessGranted && (
-              <div className="mt-8 pt-6 border-t border-gray-100">
-                <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                  <input 
-                    type="checkbox" 
-                    id="enableLogin" 
-                    checked={showLoginSetup} 
-                    onChange={e => setShowLoginSetup(e.target.checked)} 
-                    className="w-5 h-5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
-                  />
-                  <label htmlFor="enableLogin" className="text-sm font-black text-[#002B49] cursor-pointer tracking-wide">
-                    Account is Active (Can Login Staff User)
-                  </label>
-                </div>
-                
-                {showLoginSetup && (
-                  <div className="mt-4 p-5 border border-teal-100 bg-teal-50/50 rounded-xl space-y-4 animate-in fade-in zoom-in duration-300">
-                    <div>
-                      <label className="block text-xs font-black text-teal-800 uppercase mb-2 tracking-wide">Assign Login Password</label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-                        <input 
-                          type="text" 
-                          value={passwordInput} 
-                          onChange={e => setPasswordInput(e.target.value)} 
-                          placeholder="Type a secure password (min 6 characters)..." 
-                          className="w-full pl-10 pr-4 py-3 rounded-lg border border-teal-200 outline-none focus:border-teal-500 text-sm font-bold shadow-sm bg-white"
-                        />
-                      </div>
-                    </div>
-                    <button 
-                      onClick={handleEnableLogin} 
-                      disabled={isProcessing} 
-                      className="w-full py-3.5 bg-[#006456] hover:bg-teal-800 text-white font-black text-sm rounded-xl transition-colors shadow-sm flex justify-center items-center gap-2"
-                    >
-                      {isProcessing ? <Loader2 className="animate-spin" size={18} /> : <><ShieldCheck size={18}/> Save Profile & Grant Login Access</>}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* RIGHT COLUMN: ASSIGNED ASSETS              */}
-        {/* ========================================== */}
+        {/* RIGHT COLUMN */}
         <div className="lg:col-span-1">
           <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 h-full min-h-[300px]">
-            
             <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
               <h2 className="text-lg font-black text-[#002B49] flex items-center gap-2">
                 <Package className="text-blue-600" size={20}/> Assigned Assets
@@ -454,10 +358,10 @@ export default function StaffProfileView() {
             ) : (
               <div className="space-y-3">
                 {assets.map((asset) => (
-                  <Link key={asset.id} href="/admin/assets" className="block p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-teal-300 hover:shadow-sm transition-all group">
-                    <h4 className="text-sm font-black text-[#002B49] group-hover:text-teal-700 transition-colors">{asset.name}</h4>
+                  <div key={asset.id} className="block p-4 rounded-xl border border-gray-100 bg-gray-50">
+                    <h4 className="text-sm font-black text-[#002B49]">{asset.name}</h4>
                     <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">{asset.tag_id}</p>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
@@ -465,9 +369,7 @@ export default function StaffProfileView() {
         </div>
       </div>
 
-      {/* ========================================= */}
-      {/* EDIT STAFF MODAL                            */}
-      {/* ========================================= */}
+      {/* EDIT MODAL */}
       <AnimatePresence>
         {isEditModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -482,44 +384,35 @@ export default function StaffProfileView() {
               </div>
 
               <form onSubmit={handleUpdateStaff} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-                
                 <h3 className="text-sm font-black text-[#002B49] border-b border-gray-100 pb-2">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide">Full Name</label>
-                    <input type="text" required value={editFormData.name || ''} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-bold"/>
+                    <label className="block text-xs font-black text-gray-500 uppercase mb-2">Full Name</label>
+                    <input type="text" required value={editFormData.name || ''} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm font-bold"/>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide">Phone Number</label>
-                    <input type="tel" value={editFormData.contact_number || ''} onChange={(e) => setEditFormData({...editFormData, contact_number: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-bold"/>
+                    <label className="block text-xs font-black text-gray-500 uppercase mb-2">Phone Number</label>
+                    <input type="tel" value={editFormData.contact_number || ''} onChange={(e) => setEditFormData({...editFormData, contact_number: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm font-bold"/>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide flex items-center gap-1.5"><CalendarDays size={14}/> Date of Birth</label>
-                    <input type="date" value={editFormData.dob || ''} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-bold"/>
+                    <label className="block text-xs font-black text-gray-500 uppercase mb-2"><CalendarDays size={14}/> Date of Birth</label>
+                    <input type="date" value={editFormData.dob || ''} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm font-bold"/>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide flex items-center gap-1.5"><CalendarDays size={14}/> Joining Date</label>
-                    <input type="date" value={editFormData.joining_date || ''} onChange={(e) => setEditFormData({...editFormData, joining_date: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-bold"/>
+                    <label className="block text-xs font-black text-gray-500 uppercase mb-2"><CalendarDays size={14}/> Joining Date</label>
+                    <input type="date" value={editFormData.joining_date || ''} onChange={(e) => setEditFormData({...editFormData, joining_date: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm font-bold"/>
                   </div>
                 </div>
 
                 <h3 className="text-sm font-black text-[#002B49] border-b border-gray-100 pb-2 pt-2">Work Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide">Department</label>
-                    <select required value={editFormData.department || ''} onChange={(e) => setEditFormData({...editFormData, department: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-bold">
-                      <option value="">Select Department...</option>
-                      <option value="IT Department">IT Department</option>
-                      <option value="Migrations">Migrations</option>
-                      <option value="Accounts">Accounts</option>
-                      <option value="Edu Calling">Edu Calling</option>
-                      <option value="HR">HR</option>
-                    </select>
+                    <label className="block text-xs font-black text-gray-500 uppercase mb-2">Department</label>
+                    <input type="text" required value={editFormData.department || ''} onChange={(e) => setEditFormData({...editFormData, department: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm font-bold"/>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-wide flex items-center gap-1.5"><Lock size={14}/> Update System Password</label>
-                    <input type="text" placeholder="Assign a new secure password" value={editFormData.password || ''} onChange={(e) => setEditFormData({...editFormData, password: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-bold"/>
-                    <p className="text-[10px] text-gray-400 mt-1 font-bold italic">*Note: This only updates the directory password record.</p>
+                    <label className="block text-xs font-black text-gray-500 uppercase mb-2"><Lock size={14}/> Update System Password</label>
+                    <input type="text" value={editFormData.password || ''} onChange={(e) => setEditFormData({...editFormData, password: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-sm font-bold"/>
                   </div>
                 </div>
 
@@ -534,7 +427,6 @@ export default function StaffProfileView() {
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
