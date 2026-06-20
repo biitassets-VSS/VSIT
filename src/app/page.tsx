@@ -20,25 +20,24 @@ export default function LoginPage() {
     try {
       const cleanEmail = email.trim().toLowerCase();
 
-      // 1. Log into Supabase Authentication Core
+      // 1. Log into Supabase Authentication Tab
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password.trim(),
       });
 
       if (authError) throw new Error(authError.message);
-      if (!authData?.user) throw new Error("Login failed. User data empty.");
+      if (!authData?.user) throw new Error("Login failed. User session empty.");
 
       const userId = authData.user.id;
 
-      // 2. Safely check or create profile row
+      // 2. Safely check profiles table without throwing breaking error messages
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, name, full_name')
         .eq('id', userId)
         .maybeSingle();
 
-      // Determine role safely without blocking the user at the login page
       let userRole = 'staff';
       let displayName = 'Staff Member';
 
@@ -46,21 +45,28 @@ export default function LoginPage() {
         userRole = profile.role || 'staff';
         displayName = profile.full_name || profile.name || 'Staff Member';
       } else {
-        // If profile row is missing, force-heal it directly so they are unblocked
+        // SELF-HEALING FALLBACK: Build row mapping right on the fly from bulk staff directory
+        const { data: staffData } = await supabase
+          .from('staff')
+          .select('*')
+          .ilike('email', cleanEmail)
+          .maybeSingle();
+
         await supabase.from('profiles').upsert({
           id: userId,
           email: cleanEmail,
-          name: 'Staff Member',
-          full_name: 'Staff Member',
+          name: staffData?.name || 'Staff Member',
+          full_name: staffData?.name || 'Staff Member',
+          emp_code: staffData?.emp_code || 'N/A',
           role: 'staff'
         });
       }
 
-      // 3. Save details to local cache
+      // 3. Cache session properties
       localStorage.setItem('userName', displayName);
       localStorage.setItem('userEmail', cleanEmail);
 
-      // 4. Direct Routing - Absolute path split
+      // 4. Clean Direct Routing Paths
       if (cleanEmail === 'lakhwinder.bi@outlook.com' || userRole === 'admin') {
         router.push('/admin');
       } else {
@@ -69,7 +75,7 @@ export default function LoginPage() {
 
     } catch (error: any) {
       setErrorMsg(error.message || "Invalid Email or Password");
-    } bits: {
+    } finally {
       setIsLoading(false);
     }
   };
