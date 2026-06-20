@@ -2,13 +2,23 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Ticket, AlertCircle, Clock, CheckCircle2, 
-  PauseCircle, ArrowLeft, MessageSquare, Send, 
-  Tag, Timer, Loader2, User, ShieldAlert, Filter
+  Package, CheckCircle2, Camera, ArrowLeft, Trash2, 
+  MessageSquare, ShieldAlert, Send, Ticket, PlusCircle, 
+  Timer, PauseCircle, MonitorUp, ImagePlus, RefreshCw, ClipboardCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
+interface AssignedAsset {
+  id: string;
+  tagId: string;
+  name: string;
+  category: string;
+  status: string;
+  inspectionStatus: 'Due' | 'Pending Approval' | 'Passed' | 'Failed' | 'Pending Repair' | 'Re-inspection';
+  adminFeedback?: string;
+}
+
 interface TicketReply {
   id: string;
   sender: 'Admin' | 'Staff';
@@ -17,196 +27,281 @@ interface TicketReply {
   date: string;
 }
 
-interface SupportTicket {
+interface StaffTicket {
   id: string;
   title: string;
   description: string;
   status: 'Open' | 'In Progress' | 'Hold' | 'Resolved';
-  estimatedTime?: string; 
+  estimatedTime?: string;
   date: string;
   replies: TicketReply[];
 }
 
-export default function StaffTicketsPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'In Progress' | 'Hold' | 'Resolved'>('All');
+interface StaffUser {
+  name: string;
+  empCode: string;
+  email: string;
+}
+
+export default function StaffDashboardPage() {
+  const [staffUser, setStaffUser] = useState<StaffUser>({ name: 'Loading...', empCode: '...', email: '' });
+  const [assets, setAssets] = useState<AssignedAsset[]>([]);
+  const [recentTickets, setRecentTickets] = useState<StaffTicket[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const [staffName, setStaffName] = useState('Staff Member');
-  const [empCode, setEmpCode] = useState('');
+  const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset' | 'replacing_asset'>('dashboard');
+  const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
   
-  const [replyText, setReplyText] = useState('');
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. FETCH LIVE TICKETS WITH EXACT DATES
+  // Forms
+  const [ticketForm, setTicketForm] = useState({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
+  const [ticketPhoto, setTicketPhoto] = useState<string | null>(null);
+  const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
+  const [assetReplaceForm, setAssetReplaceForm] = useState({ assetId: '', reason: '' });
+
+  // 1. FETCH LIVE DATA (WITH ASSET DRAGNET SEARCH)
   useEffect(() => {
-    const fetchMyTickets = async () => {
+    const loadData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         const userEmail = user?.email || localStorage.getItem('userEmail');
 
         if (!userEmail) {
+          setStaffUser({ name: 'Guest User', empCode: 'GUEST-000', email: 'Please log in' });
           setIsLoaded(true);
           return;
         }
 
         const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).maybeSingle();
 
-        const currentName = profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member';
-        const currentEmpCode = profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A';
+        const currentUser = { 
+          name: profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member', 
+          empCode: profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A', 
+          email: profile?.email || userEmail 
+        };
         
-        setStaffName(currentName);
-        setEmpCode(currentEmpCode);
+        setStaffUser(currentUser);
 
-        if (currentEmpCode !== 'N/A') {
-          const { data: ticketData, error } = await supabase
+        // --- FETCH TICKETS ---
+        if (currentUser.empCode !== 'N/A') {
+          const { data: ticketRes } = await supabase
             .from('tickets')
             .select('*')
-            .eq('emp_code', currentEmpCode)
-            .order('created_at', { ascending: false });
+            .eq('emp_code', currentUser.empCode)
+            .order('created_at', { ascending: false })
+            .limit(3);
 
-          if (error) throw error;
-
-          if (ticketData) {
-            setTickets(ticketData.map((t: any) => ({
+          if (ticketRes) {
+            setRecentTickets(ticketRes.map((t: any) => ({
               id: t.id,
               title: t.subject || t.title || 'No Subject',
-              description: t.description || 'No description provided.',
+              description: t.description || '',
               status: t.status || 'Open',
-              estimatedTime: t.waiting_time || t.estimated_time || '', 
-              date: t.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'Unknown Date',
+              estimatedTime: t.waiting_time || t.estimated_time || '',
+              date: t.created_at ? new Date(t.created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date',
               replies: t.replies || []
             })));
           }
         }
+
+        // --- FETCH ASSETS (DRAGNET METHOD) ---
+        // We check Emp Code first, then fallback to Name, then fallback to Email.
+        let fetchedAssets: any[] = [];
+        
+        // Try 1: By Employee Code
+        if (currentUser.empCode !== 'N/A') {
+          const { data, error } = await supabase.from('assets').select('*').eq('emp_code', currentUser.empCode);
+          if (!error && data && data.length > 0) fetchedAssets = data;
+        }
+
+        // Try 2: By Name (assigned_to)
+        if (fetchedAssets.length === 0) {
+          const { data, error } = await supabase.from('assets').select('*').eq('assigned_to', currentUser.name);
+          if (!error && data && data.length > 0) fetchedAssets = data;
+        }
+
+        // Try 3: By Name (staff_name - alternative column)
+        if (fetchedAssets.length === 0) {
+          const { data, error } = await supabase.from('assets').select('*').eq('staff_name', currentUser.name);
+          if (!error && data && data.length > 0) fetchedAssets = data;
+        }
+
+        // Try 4: By Email
+        if (fetchedAssets.length === 0) {
+          const { data, error } = await supabase.from('assets').select('*').eq('email', currentUser.email);
+          if (!error && data && data.length > 0) fetchedAssets = data;
+        }
+
+        // Map the found assets into the UI
+        if (fetchedAssets.length > 0) {
+          setAssets(fetchedAssets.map((a: any) => ({
+            id: a.id,
+            tagId: a.tag_id || a.asset_tag || 'N/A',
+            name: a.name || a.asset_name || 'Unnamed Asset',
+            category: a.category || 'Hardware',
+            status: a.status || 'Assigned',
+            inspectionStatus: a.inspection_status || 'Due',
+            adminFeedback: a.inspection_notes || ''
+          })));
+        }
+
       } catch (err) {
-        console.error("Error fetching my tickets:", err);
+        console.error("Dashboard Load Error:", err);
       } finally {
         setIsLoaded(true);
       }
     };
 
-    fetchMyTickets();
+    loadData();
   }, []);
 
-  const handleSendReply = async () => {
-    if (!selectedTicket || !replyText.trim()) return;
+  // --- Handlers ---
+  const openInspection = (asset: AssignedAsset) => {
+    setSelectedAsset(asset);
+    setPhotos({});
+    setNotes('');
+    setViewState('inspecting');
+  };
+
+  const scrollToAssets = () => {
+    document.getElementById('my-assets-section')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleSubmitTicket = async () => {
+    if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
     setIsSubmitting(true);
-
-    const newReplies = [...(selectedTicket.replies || [])];
-    newReplies.push({
-      id: Date.now().toString(),
-      sender: 'Staff',
-      name: staffName,
-      text: replyText.trim(),
-      date: new Date().toLocaleString()
-    });
-
     try {
-      const { data, error } = await supabase.from('tickets').update({ replies: newReplies }).eq('id', selectedTicket.id).select();
-      if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Could not update. Check database permissions.");
-
-      const updatedTicket = { ...selectedTicket, replies: newReplies };
-      setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-      setSelectedTicket(updatedTicket);
-      setReplyText('');
+      await supabase.from('tickets').insert([{
+        subject: ticketForm.title,
+        description: ticketForm.description,
+        category: ticketForm.category,
+        priority: ticketForm.priority,
+        status: 'Open',
+        emp_code: staffUser.empCode,
+        screenshot: ticketPhoto 
+      }]);
+      alert('Ticket raised successfully!');
+      window.location.reload();
     } catch (error: any) {
-      alert("Failed to send reply: " + error.message);
+      alert("Error: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filteredTickets = tickets.filter(t => filterStatus === 'All' || t.status === filterStatus);
-  const openCount = tickets.filter(t => t.status === 'Open').length;
-  const inProgressCount = tickets.filter(t => t.status === 'In Progress').length;
-  const resolvedCount = tickets.filter(t => t.status === 'Resolved').length;
+  const handleSubmitAssetRequest = async () => {
+    if (!assetRequestForm.reason) return alert("Please provide a reason.");
+    setIsSubmitting(true);
+    try {
+      await supabase.from('tickets').insert([{
+        subject: `Asset Request: ${assetRequestForm.category}`,
+        description: `Reason: ${assetRequestForm.reason}`,
+        category: 'Hardware Request',
+        priority: 'Medium',
+        status: 'Open',
+        emp_code: staffUser.empCode
+      }]);
+      alert('Asset request submitted to Admin!');
+      window.location.reload();
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  if (!isLoaded) {
-    return (
-      <div className="p-10 text-center font-bold text-gray-500 flex items-center justify-center gap-2">
-        <Loader2 className="animate-spin text-teal-600" size={24} /> Loading My Tickets...
-      </div>
-    );
-  }
+  const handleSubmitAssetReplace = async () => {
+    if (!assetReplaceForm.assetId || !assetReplaceForm.reason) return alert("Please select an asset and provide a reason.");
+    setIsSubmitting(true);
+    const assetToReplace = assets.find(a => a.id === assetReplaceForm.assetId);
+    try {
+      await supabase.from('tickets').insert([{
+        subject: `Replace Asset: ${assetToReplace?.name} (${assetToReplace?.tagId})`,
+        description: `Reason for replacement: ${assetReplaceForm.reason}`,
+        category: 'Hardware Replacement',
+        priority: 'Medium',
+        status: 'Open',
+        emp_code: staffUser.empCode
+      }]);
+      alert('Asset replacement request submitted to Admin!');
+      window.location.reload();
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const needsInspectionCount = assets.filter(a => a.inspectionStatus === 'Due' || a.inspectionStatus === 'Re-inspection').length;
+  const inRepairCount = assets.filter(a => a.inspectionStatus === 'Pending Repair').length;
+
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Dashboard...</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-5xl mx-auto px-4 sm:px-0">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-6xl mx-auto px-4 sm:px-0">
       
-      {!selectedTicket ? (
+      {viewState === 'dashboard' && (
         <>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center shrink-0">
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-black text-[#002B49]">Welcome back, {staffUser.name}! 👋</h1>
+            <p className="text-sm font-bold text-gray-500">
+              ID: <span className="text-gray-900">{staffUser.empCode}</span> | Here is your IT workspace overview.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <button onClick={() => setViewState('raising_ticket')} className="bg-white py-6 sm:py-8 px-3 sm:px-4 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 sm:gap-4 hover:border-blue-200 hover:shadow-md transition-all group">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-blue-50 text-blue-600 group-hover:scale-110 transition-transform shrink-0">
                 <Ticket className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black text-gray-900">My IT Tickets</h1>
-                <p className="text-xs sm:text-sm font-bold text-gray-500 mt-0.5">Track your requests and communicate with IT.</p>
+              <span className="font-black text-gray-900 text-[11px] sm:text-[13px] uppercase tracking-wide text-center leading-tight">Raise Ticket</span>
+            </button>
+
+            <button onClick={scrollToAssets} className="bg-orange-50/30 py-6 sm:py-8 px-3 sm:px-4 rounded-2xl sm:rounded-3xl shadow-sm border border-orange-100 flex flex-col items-center justify-center gap-3 sm:gap-4 hover:border-orange-200 hover:shadow-md transition-all group">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-orange-100 text-orange-600 group-hover:scale-110 transition-transform shrink-0">
+                <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-            </div>
-            
-            <div className="flex gap-2 w-full md:w-auto">
-              <div className="bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
-                <p className="text-[9px] sm:text-[10px] font-bold text-red-600 uppercase">Open</p>
-                <p className="text-sm sm:text-base font-black text-red-900">{openCount}</p>
+              <span className="font-black text-orange-900 text-[11px] sm:text-[13px] uppercase tracking-wide text-center leading-tight">Submit Inspection</span>
+            </button>
+
+            <button onClick={() => setViewState('requesting_asset')} className="bg-white py-6 sm:py-8 px-3 sm:px-4 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 sm:gap-4 hover:border-teal-200 hover:shadow-md transition-all group">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-teal-50 text-teal-600 group-hover:scale-110 transition-transform shrink-0">
+                <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div className="bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
-                <p className="text-[9px] sm:text-[10px] font-bold text-blue-600 uppercase">Process</p>
-                <p className="text-sm sm:text-base font-black text-blue-900">{inProgressCount}</p>
+              <span className="font-black text-gray-900 text-[11px] sm:text-[13px] uppercase tracking-wide text-center leading-tight">Request Asset</span>
+            </button>
+
+            <button onClick={() => setViewState('replacing_asset')} className="bg-white py-6 sm:py-8 px-3 sm:px-4 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 sm:gap-4 hover:border-red-200 hover:shadow-md transition-all group">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-red-50 text-red-600 group-hover:scale-110 transition-transform shrink-0">
+                <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div className="bg-green-50 border border-green-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
-                <p className="text-[9px] sm:text-[10px] font-bold text-green-600 uppercase">Resolved</p>
-                <p className="text-sm sm:text-base font-black text-green-900">{resolvedCount}</p>
-              </div>
-            </div>
+              <span className="font-black text-gray-900 text-[11px] sm:text-[13px] uppercase tracking-wide text-center leading-tight">Replace Asset</span>
+            </button>
           </div>
 
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            
-            <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-2 overflow-x-auto">
-              <Filter size={16} className="text-gray-400 shrink-0" />
-              {['All', 'Open', 'In Progress', 'Hold', 'Resolved'].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status as any)}
-                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-[11px] sm:text-xs font-black whitespace-nowrap transition-colors ${
-                    filterStatus === status 
-                      ? 'bg-gray-900 text-white shadow-sm' 
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
+            <div className="p-5 sm:p-6 border-b border-gray-100">
+              <h2 className="text-base sm:text-lg font-black text-[#002B49] flex items-center gap-2">
+                <Ticket size={20} className="text-[#006456]" /> My IT Tickets
+              </h2>
             </div>
-
-            {filteredTickets.length === 0 ? (
-              <div className="p-12 text-center flex flex-col items-center justify-center">
-                <CheckCircle2 size={48} className="text-gray-300 mb-4" />
-                <h3 className="text-lg font-black text-gray-900">No Tickets Found</h3>
-              </div>
+            {recentTickets.length === 0 ? (
+               <div className="p-8 text-center text-gray-400 font-bold text-sm">No recent tickets.</div>
             ) : (
-              <div className="p-4 sm:p-6 space-y-5">
-                {filteredTickets.map(ticket => {
+              <div className="p-4 sm:p-6 space-y-4">
+                {recentTickets.map(ticket => {
                   const latestAdminReply = [...ticket.replies].reverse().find(r => r.sender === 'Admin');
-
                   return (
-                    <div 
-                      key={ticket.id} 
-                      onClick={() => setSelectedTicket(ticket)} 
-                      className="border border-gray-100 p-5 sm:p-6 rounded-2xl hover:border-teal-300 hover:shadow-md cursor-pointer transition-all group bg-white"
-                    >
-                      {/* Flex Row matching Screenshot Layout exactly */}
-                      <div className="flex justify-between items-start mb-4 gap-4">
+                    <div key={ticket.id} className="border border-gray-100 p-4 sm:p-5 rounded-2xl bg-white hover:border-teal-300 hover:shadow-sm transition-all">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 sm:gap-4">
                         <div className="min-w-0 w-full">
-                          <h3 className="text-lg sm:text-xl font-black text-[#002B49] group-hover:text-teal-600 transition-colors">{ticket.title}</h3>
-                          <p className="text-xs sm:text-sm font-medium text-gray-500 mt-1">{ticket.date}</p>
+                          <h3 className="text-base sm:text-lg font-black text-[#002B49] truncate pr-2">{ticket.title}</h3>
+                          <p className="text-[11px] sm:text-xs font-medium text-gray-500 mt-0.5">{ticket.date}</p>
                         </div>
-                        
-                        <div className={`px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider shrink-0 w-fit shadow-sm ${
+                        <div className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider shrink-0 w-fit ${
                           ticket.status === 'Resolved' ? 'bg-[#e6f7eb] text-[#008a4b]' :
                           ticket.status === 'Open' ? 'bg-red-50 text-red-700' :
                           ticket.status === 'In Progress' ? 'bg-blue-50 text-blue-700' :
@@ -216,13 +311,12 @@ export default function StaffTicketsPage() {
                         </div>
                       </div>
 
-                      {/* LATEST UPDATE FROM ADMIN - EXACT SCREENSHOT STYLING */}
                       {latestAdminReply && (
-                        <div className="bg-[#f0fcf6] border border-[#d1f0e0] p-4 rounded-xl mt-2">
-                          <p className="text-xs font-black text-[#006456] uppercase flex items-center gap-1.5 mb-2 tracking-wide">
-                            <MessageSquare size={14}/> LATEST UPDATE FROM ADMIN
+                        <div className="bg-[#f0fcf6] border border-[#d1f0e0] p-3 sm:p-4 rounded-xl mt-2">
+                          <p className="text-[9px] sm:text-[10px] font-black text-[#006456] uppercase flex items-center gap-1.5 mb-1.5 tracking-wide">
+                            <MessageSquare size={12}/> LATEST UPDATE FROM ADMIN
                           </p>
-                          <p className="text-[15px] font-medium text-[#004d40] leading-relaxed">
+                          <p className="text-xs sm:text-[15px] font-medium text-[#004d40] leading-relaxed">
                             {latestAdminReply.text}
                           </p>
                         </div>
@@ -233,100 +327,271 @@ export default function StaffTicketsPage() {
               </div>
             )}
           </div>
-        </>
-      ) : (
-        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-          <button onClick={() => setSelectedTicket(null)} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to My Tickets
-          </button>
 
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start mb-6 border-b border-gray-100 pb-6 gap-4">
+          <div id="my-assets-section" className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-6">
+            <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-50 text-gray-500 rounded-xl flex items-center justify-center shrink-0"><MonitorUp size={20}/></div>
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-teal-600 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                    <Tag size={10} /> {selectedTicket.id.substring(0, 8)}
-                  </span>
-                  <span className="text-xs font-bold text-gray-400">Submitted: {selectedTicket.date}</span>
-                </div>
-                <h2 className="text-2xl font-black text-[#002B49]">{selectedTicket.title}</h2>
-              </div>
-              
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl border bg-gray-50 shadow-sm">
-                  {selectedTicket.status === 'Open' && <AlertCircle size={16} className="text-red-500" />}
-                  {selectedTicket.status === 'In Progress' && <Clock size={16} className="text-blue-500" />}
-                  {selectedTicket.status === 'Hold' && <PauseCircle size={16} className="text-orange-500" />}
-                  {selectedTicket.status === 'Resolved' && <CheckCircle2 size={16} className="text-green-500" />}
-                  <span className={
-                    selectedTicket.status === 'Open' ? 'text-red-600' : 
-                    selectedTicket.status === 'In Progress' ? 'text-blue-600' : 
-                    selectedTicket.status === 'Hold' ? 'text-orange-600' : 'text-green-600'
-                  }>{selectedTicket.status}</span>
-                </div>
+                <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-wider">My Assets</p>
+                <p className="text-xl sm:text-2xl font-black text-[#002B49]">{assets.length}</p>
               </div>
             </div>
+            <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center shrink-0"><ShieldAlert size={20}/></div>
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-wider">Needs Inspection</p>
+                <p className="text-xl sm:text-2xl font-black text-[#002B49]">{needsInspectionCount}</p>
+              </div>
+            </div>
+            <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0"><RefreshCw size={20}/></div>
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-wider">In Repair</p>
+                <p className="text-xl sm:text-2xl font-black text-[#002B49]">{inRepairCount}</p>
+              </div>
+            </div>
+          </div>
 
-            <div className="mb-8">
-              <h3 className="text-sm font-black text-gray-900 mb-2">Original Request</h3>
-              <p className="text-sm font-medium text-gray-700 leading-relaxed bg-gray-50 p-5 rounded-2xl border border-gray-200 whitespace-pre-wrap">
-                {selectedTicket.description}
-              </p>
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mt-2">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-black text-[#002B49] flex items-center gap-2">
+                <Package size={20} className="text-[#006456]" /> Assigned Asset Details
+              </h2>
             </div>
-            
-            <div className="mt-8 pt-8 border-t border-gray-100">
-              <h3 className="text-base font-black text-[#006456] mb-6 flex items-center gap-2">
-                <MessageSquare size={18} /> Support Chat
-              </h3>
-              
-              <div className="space-y-4 mb-6 max-h-[400px] overflow-y-auto pr-2">
-                {selectedTicket.replies.length === 0 ? (
-                  <div className="text-center p-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    <p className="text-sm font-bold text-gray-400">No replies yet. Admin will respond shortly.</p>
-                  </div>
-                ) : (
-                  selectedTicket.replies.map((reply, idx) => (
-                    <div key={idx} className={`p-4 rounded-2xl border text-sm max-w-[85%] ${reply.sender === 'Staff' ? 'bg-teal-50 border-teal-100 ml-auto' : 'bg-[#f0fcf6] border-[#d1f0e0] mr-auto'}`}>
-                      <div className="flex justify-between items-center mb-1.5 gap-4">
-                        <span className="font-bold text-gray-900 flex items-center gap-1.5">
-                          {reply.sender === 'Admin' ? <ShieldAlert size={14} className="text-[#006456]"/> : <User size={14} className="text-gray-500"/>}
-                          {reply.name}
-                        </span>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{reply.date}</span>
+            {assets.length === 0 ? (
+               <div className="p-10 text-center text-gray-400 font-bold text-sm">No assets assigned yet.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
+                {assets.map((asset) => (
+                  <div key={asset.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-200 flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-xs font-black bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-gray-600 uppercase tracking-wider">{asset.category}</span>
+                        {asset.inspectionStatus === 'Passed' && <CheckCircle2 size={20} className="text-[#008a4b]" />}
+                        {asset.inspectionStatus === 'Re-inspection' && <ShieldAlert size={20} className="text-orange-500 animate-pulse" />}
                       </div>
-                      <p className="text-[#004d40] whitespace-pre-wrap leading-relaxed">{reply.text}</p>
+                      <h3 className="text-lg font-black text-[#002B49] mb-1">{asset.name}</h3>
+                      <p className="text-sm font-bold text-gray-500 uppercase">{asset.tagId}</p>
                     </div>
-                  ))
-                )}
+                    <div className="mt-6 pt-5 border-t border-gray-200 flex items-center justify-between">
+                      <span className={`text-xs font-black uppercase tracking-wider ${
+                        asset.inspectionStatus === 'Due' ? 'text-blue-600' : 
+                        asset.inspectionStatus === 'Re-inspection' ? 'text-orange-600' : 
+                        asset.inspectionStatus === 'Pending Approval' ? 'text-yellow-600' : 
+                        asset.inspectionStatus === 'Failed' ? 'text-red-600' : 'text-[#008a4b]'
+                      }`}>
+                        {asset.inspectionStatus}
+                      </span>
+                      {(asset.inspectionStatus === 'Due' || asset.inspectionStatus === 'Re-inspection') ? (
+                        <button onClick={() => openInspection(asset)} className="bg-[#006456] hover:bg-teal-800 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-colors flex items-center gap-2">
+                          <Camera size={14} /> Start Inspection
+                        </button>
+                      ) : asset.inspectionStatus === 'Pending Approval' ? (
+                        <span className="text-xs font-bold text-gray-400">Waiting for Admin...</span>
+                      ) : <span className="text-xs font-bold text-gray-400">Up to date</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
+        </>
+      )}
 
-              {selectedTicket.status !== 'Resolved' ? (
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-3">
-                  <textarea 
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Type a message to Admin..."
-                    className="flex-1 bg-white border border-gray-200 p-3 rounded-xl text-sm font-medium focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 resize-none"
-                    rows={2}
-                  />
-                  <button 
-                    onClick={handleSendReply}
-                    disabled={isSubmitting || !replyText.trim()}
-                    className={`px-6 py-3 font-black rounded-xl shadow-sm transition-all flex justify-center items-center gap-2 h-fit self-end sm:self-auto ${isSubmitting || !replyText.trim() ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#008a4b] hover:bg-green-700 text-white'}`}
+      {/* Forms code remains exactly the same to preserve functionality */}
+      {viewState === 'raising_ticket' && (
+        <div className="space-y-6 max-w-2xl">
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-2xl font-black text-gray-900 mb-6 border-b border-gray-100 pb-4">Raise IT Ticket</h2>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Issue Title</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Laptop screen flickering" 
+                  value={ticketForm.title}
+                  onChange={(e) => setTicketForm({...ticketForm, title: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Category</label>
+                  <select 
+                    value={ticketForm.category}
+                    onChange={(e) => setTicketForm({...ticketForm, category: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold"
                   >
-                    <Send size={16} /> {isSubmitting ? 'Sending...' : 'Reply'}
-                  </button>
+                    <option value="Hardware">Hardware Issue</option>
+                    <option value="Internet">Internet / Network</option>
+                    <option value="Software">Software</option>
+                  </select>
                 </div>
-              ) : (
-                <div className="bg-[#e6f7eb] border border-green-200 p-4 rounded-2xl text-center flex flex-col items-center justify-center">
-                  <CheckCircle2 size={24} className="text-[#008a4b] mb-2" />
-                  <p className="text-sm font-bold text-[#006456]">This ticket has been resolved and is now closed.</p>
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase mb-2">Priority</label>
+                  <select 
+                    value={ticketForm.priority}
+                    onChange={(e) => setTicketForm({...ticketForm, priority: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High (Urgent)</option>
+                  </select>
                 </div>
-              )}
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Description</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Provide more details..." 
+                  value={ticketForm.description}
+                  onChange={(e) => setTicketForm({...ticketForm, description: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium"
+                />
+              </div>
+              <button 
+                onClick={handleSubmitTicket}
+                disabled={isSubmitting}
+                className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Ticket'}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {viewState === 'requesting_asset' && (
+        <div className="space-y-6 max-w-2xl">
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+            <div className="mb-6 border-b border-gray-100 pb-4">
+              <div className="w-12 h-12 bg-teal-50 text-[#006456] rounded-2xl flex items-center justify-center mb-4">
+                <PlusCircle size={24} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900">Request New Asset</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Submit a request to Admin for new hardware.</p>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">What do you need?</label>
+                <select 
+                  value={assetRequestForm.category}
+                  onChange={(e) => setAssetRequestForm({...assetRequestForm, category: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                >
+                  <option value="Mouse">Mouse</option>
+                  <option value="Keyboard">Keyboard</option>
+                  <option value="Monitor">Monitor</option>
+                  <option value="Headphones">Headphones</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason for Request</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Why do you need this asset?" 
+                  value={assetRequestForm.reason}
+                  onChange={(e) => setAssetRequestForm({...assetRequestForm, reason: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+
+              <button 
+                onClick={handleSubmitAssetRequest}
+                disabled={isSubmitting}
+                className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl"
+              >
+                {isSubmitting ? 'Submitting...' : 'Send Request to Admin'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewState === 'replacing_asset' && (
+        <div className="space-y-6 max-w-2xl">
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+            <div className="mb-6 border-b border-gray-100 pb-4">
+              <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4">
+                <RefreshCw size={24} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900">Replace Asset</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Request a replacement for a broken or outdated asset.</p>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Select Asset to Replace</label>
+                {assets.length === 0 ? (
+                  <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-bold">
+                    You have no assets currently assigned to you to replace.
+                  </div>
+                ) : (
+                  <select 
+                    value={assetReplaceForm.assetId}
+                    onChange={(e) => setAssetReplaceForm({...assetReplaceForm, assetId: e.target.value})}
+                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="">-- Select an Asset --</option>
+                    {assets.map(asset => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.name} ({asset.tagId})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason for Replacement</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Is it broken? Outdated? Won't turn on?" 
+                  value={assetReplaceForm.reason}
+                  onChange={(e) => setAssetReplaceForm({...assetReplaceForm, reason: e.target.value})}
+                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+
+              <button 
+                onClick={handleSubmitAssetReplace}
+                disabled={isSubmitting || assets.length === 0}
+                className={`w-full py-4 font-black rounded-xl ${isSubmitting || assets.length === 0 ? 'bg-gray-300 text-gray-500' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Replacement Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewState === 'inspecting' && selectedAsset && (
+        <div className="space-y-6">
+           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+             <h2 className="text-2xl font-black text-gray-900 mb-2">Inspection: {selectedAsset.name}</h2>
+             <p className="text-sm text-gray-500 font-bold mb-6">Tag: {selectedAsset.tagId}</p>
+             <div className="p-10 border-2 border-dashed border-gray-200 rounded-2xl text-center text-gray-400 font-bold">
+                 Camera tools will load here.
+             </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
