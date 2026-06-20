@@ -41,7 +41,7 @@ export default function StaffProfileView() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Explicit diagnostic state strings to bypass {} stringify issue
+  // High-performance fallback string diagnostic collector
   const [errorDetails, setErrorDetails] = useState<string>('');
 
   // Edit Modal States
@@ -103,15 +103,22 @@ export default function StaffProfileView() {
       const loginPassword = (staff.password || `Vsit@2026`).replace(/\s+/g, '');
 
       if (loginPassword.length < 6) {
-        setErrorDetails("Password Validation: Length must be at least 6 characters.");
+        setErrorDetails("Validation Error: Password must be at least 6 characters.");
         setIsProcessing(false);
         return;
       }
 
+      // Explicit isolated client initialization to prevent auth state pollution
       const authClient = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false, autoRefreshToken: false } }
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        }
       );
 
       const { data: authData, error: authError } = await authClient.auth.signUp({
@@ -122,32 +129,40 @@ export default function StaffProfileView() {
       let authUserId = authData?.user?.id;
 
       if (authError) {
-        // Direct string property inspection to unmask native engine errors
-        const detailedMsg = authError.message || authError.status?.toString() || "Unknown Auth Error";
-        
-        if (detailedMsg.toLowerCase().includes('already registered') || detailedMsg.toLowerCase().includes('exists')) {
+        // Deep error structural check to strip hidden values
+        let nativeMsg = "";
+        if (typeof authError === 'object' && authError !== null) {
+          nativeMsg = authError.message || (authError as any).error_description || (authError as any).msg || "";
+          if (!nativeMsg && Object.keys(authError).length === 0) {
+            nativeMsg = "Empty error block intercepted. This typically indicates your Supabase Dashboard -> Authentication -> Providers setting has 'Sign Up Enabled' switched off, or email confirmation settings are conflicting with direct client registrations.";
+          }
+        } else {
+          nativeMsg = String(authError);
+        }
+
+        if (nativeMsg.toLowerCase().includes('already registered') || nativeMsg.toLowerCase().includes('exists')) {
           const { data: existingProfile } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
           if (existingProfile?.id) {
             authUserId = existingProfile.id;
           } else {
-            setErrorDetails(`Auth Block: User account exists in Authentication -> Users dashboard but has no profile row. Please remove the email address "${cleanEmail}" from your Supabase Auth dashboard, then try again.`);
+            setErrorDetails(`User duplicate: "${cleanEmail}" exists in Auth, but has no matching row in your Profiles table. Drop the user via the Supabase Auth User dashboard and re-trigger sync.`);
             setIsProcessing(false);
             return;
           }
         } else {
-          setErrorDetails(`Supabase Auth Core Rejection: ${detailedMsg}`);
+          setErrorDetails(nativeMsg);
           setIsProcessing(false);
           return;
         }
       }
 
       if (!authUserId) {
-        setErrorDetails("Data Alignment Issue: Auth user creation did not return a valid unique ID.");
+        setErrorDetails("Engine Error: The server completed the authentication query but left the unique tracking UID undefined.");
         setIsProcessing(false);
         return;
       }
 
-      // Insert target row into profiles
+      // Sync data changes directly to profiles layout table
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: authUserId,
         email: cleanEmail,
@@ -158,27 +173,27 @@ export default function StaffProfileView() {
       });
 
       if (profileError) {
-        setErrorDetails(`Profiles Table Policy Block (RLS): ${profileError.message || 'Row Level Security violation'}`);
+        setErrorDetails(`Profiles Table Error (Check RLS Policies): ${profileError.message}`);
         setIsProcessing(false);
         return;
       }
 
-      // Sync active tracking directory state
+      // Push confirmation back to active directory data array
       const { error: staffUpdateError } = await supabase
         .from('staff')
         .update({ status: 'Active', password: loginPassword, email: cleanEmail })
         .eq('emp_code', staff.emp_code);
 
       if (staffUpdateError) {
-        setErrorDetails(`Staff Table Directory Update Failed: ${staffUpdateError.message}`);
+        setErrorDetails(`Directory State Synch Failure: ${staffUpdateError.message}`);
         setIsProcessing(false);
         return;
       }
       
-      alert("Account activated successfully!");
+      alert("Account synchronized and activated successfully!");
       fetchStaffData();
     } catch (error: any) {
-      setErrorDetails(`Execution exception intercepted: ${error?.message || 'Check browser developer tools console tab'}`);
+      setErrorDetails(`Runtime Exception: ${error?.message || 'Unknown code interruption occurred.'}`);
     } finally {
       setIsProcessing(false);
     }
@@ -273,11 +288,11 @@ export default function StaffProfileView() {
         <ArrowLeft size={16} /> Back to Staff List
       </Link>
 
-      {/* 🚨 VISIBLE TEXT LOG SYSTEM 🚨 */}
+      {/* 🚨 UNMASKED GRAPHIC DIAGNOSTIC BOX 🚨 */}
       {errorDetails && (
-        <div className="bg-red-50 border-2 border-red-500 p-5 rounded-2xl shadow-sm text-red-900">
+        <div className="bg-red-50 border-2 border-red-500 p-5 rounded-2xl shadow-sm text-red-900 animate-in fade-in duration-300">
           <p className="font-black uppercase tracking-wide text-red-700 mb-2">Sync Diagnostic Log:</p>
-          <div className="font-mono text-xs bg-white p-3 rounded-xl border border-red-200 whitespace-pre-wrap">
+          <div className="font-mono text-xs bg-white p-4 rounded-xl border border-red-200 whitespace-pre-wrap leading-relaxed">
             {errorDetails}
           </div>
         </div>
