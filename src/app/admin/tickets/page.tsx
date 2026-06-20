@@ -6,7 +6,6 @@ import {
   AlertCircle, MessageSquare, ArrowLeft, 
   User, ShieldAlert, Tag, Filter, Send, Timer, PauseCircle, Loader2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
 
 // --- Interfaces ---
@@ -44,19 +43,23 @@ export default function AdminTicketsPage() {
   const [newStatus, setNewStatus] = useState<'Open' | 'In Progress' | 'Hold' | 'Resolved'>('Open');
   const [eta, setEta] = useState<string>('');
 
-  // 1. FETCH TICKETS AND STAFF DATA FROM SUPABASE
+  // 1. FETCH TICKETS AND PROFILE DATA FROM SUPABASE
   useEffect(() => {
     const fetchTicketsAndStaff = async () => {
       try {
-        // Fetch all staff to map emp_code to their actual names
-        const { data: staffData } = await supabase
-          .from('staff')
-          .select('emp_code, name');
+        // FIXED: Fetching from "profiles" instead of "staff" using the Dragnet approach
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*');
 
         const staffMap: Record<string, string> = {};
-        if (staffData) {
-          staffData.forEach((staff: any) => {
-            staffMap[staff.emp_code] = staff.name;
+        if (profileData) {
+          profileData.forEach((profile: any) => {
+            const code = profile.emp_code || profile.employee_code || profile.employee_id || profile.emp_id || 'N/A';
+            const name = profile.full_name || profile.name || profile.first_name || 'Staff Member';
+            if (code !== 'N/A') {
+              staffMap[code] = name;
+            }
           });
         }
 
@@ -75,8 +78,11 @@ export default function AdminTicketsPage() {
             description: t.description || 'No description',
             priority: t.priority || 'Medium',
             status: t.status || 'Open',
-            estimatedTime: t.waiting_time || '', // PERFECT MATCH TO YOUR DATABASE
+            estimatedTime: t.waiting_time || '', // Perfect match to your database
+            
+            // FIXED: It will now accurately find the name using the map we built above!
             submittedBy: staffMap[t.emp_code] || 'Unknown User', 
+            
             empCode: t.emp_code || 'N/A',
             date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
             replies: t.replies || [] 
@@ -120,12 +126,11 @@ export default function AdminTicketsPage() {
 
     const dbPayload = {
       status: newStatus,
-      waiting_time: eta, // PERFECT MATCH TO YOUR DATABASE
+      waiting_time: eta, // Perfect match to your database
       replies: newReplies
     };
 
     try {
-      // ADDED .select() to force Supabase to return the updated row
       const { data, error } = await supabase
         .from('tickets')
         .update(dbPayload)
@@ -134,7 +139,6 @@ export default function AdminTicketsPage() {
 
       if (error) throw error;
 
-      // Catch silent RLS failures where error is null but nothing updated
       if (!data || data.length === 0) {
         throw new Error("Database blocked the update. Check your Supabase RLS 'UPDATE' policy for the tickets table.");
       }
