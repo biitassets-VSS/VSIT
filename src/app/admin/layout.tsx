@@ -110,9 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (isCheckingAuth) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-10 h-10 text-orange-500 animate-spin" /></div>;
 
   // --- BADGE COUNTS ---
-  // Count unread items by their 'type' column
   const unreadTotal = notifications.filter(n => !n.is_read).length;
-  // Make sure to lowercase the type to match safely
   const unreadTickets = notifications.filter(n => !n.is_read && n.type?.toLowerCase() === 'ticket').length;
   const unreadInspections = notifications.filter(n => !n.is_read && n.type?.toLowerCase() === 'inspection').length;
 
@@ -161,7 +159,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <Icon size={20} className={isActive ? 'text-orange-500' : 'text-gray-400'} /> {link.name}
                 </div>
                 
-                {/* MENU TAB BADGE */}
                 {link.badge && link.badge > 0 ? (
                   <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300">
                     {link.badge}
@@ -172,40 +169,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* NOTIFICATIONS & PROFILE */}
-        <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2 space-y-2">
-          
-          <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="w-full flex items-center justify-between p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Bell size={20} className="text-gray-600" />
-                {unreadTotal > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white animate-pulse"></span>}
-              </div>
-              <span className="text-sm font-bold text-gray-700">All Alerts</span>
-            </div>
-            {unreadTotal > 0 && <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{unreadTotal} New</span>}
-          </button>
-
-          {isNotifOpen && (
-            <div className="absolute bottom-[130%] left-4 right-4 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 max-h-80 overflow-y-auto">
-              <div className="p-2 border-b border-gray-50 mb-2 flex justify-between items-center">
-                <h3 className="text-xs font-black text-gray-900 uppercase">Recent Alerts</h3>
-                <button onClick={() => setIsNotifOpen(false)} className="text-gray-400 hover:text-gray-800"><X size={14}/></button>
-              </div>
-              {notifications.length === 0 ? (
-                <p className="text-xs text-center text-gray-500 py-4 font-medium">No new notifications.</p>
-              ) : (
-                notifications.map(n => (
-                  <div key={n.id} onClick={() => markAsRead(n.id)} className={`p-3 rounded-xl cursor-pointer transition-colors mb-1 ${n.is_read ? 'bg-white opacity-60' : 'bg-orange-50/50 border border-orange-100'}`}>
-                    <p className="text-[11px] font-bold text-orange-600 mb-0.5 uppercase tracking-wider">{n.type}</p>
-                    <p className="text-xs font-black text-gray-900">{n.title}</p>
-                    <p className="text-[10px] text-gray-600 mt-1 line-clamp-2">{n.message}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
+        {/* PROFILE FOOTER ONLY (BOTTOM BELL REMOVED) */}
+        <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-full flex items-center justify-between p-2 rounded-2xl transition-all hover:bg-gray-50">
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-black text-sm shadow-sm">{adminProfile.initials}</div>
@@ -214,6 +179,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <p className="text-[11px] font-bold text-orange-600 truncate">{adminProfile.email}</p>
               </div>
             </div>
+            <ChevronDown size={16} className={`text-gray-500 shrink-0 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
           
           {isProfileOpen && (
@@ -224,19 +190,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT WORKSPACE */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 shadow-sm shrink-0">
-          <img src="/logo.png" alt="Logo" className="h-8" />
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsNotifOpen(true)} className="relative p-2 text-gray-500">
-              <Bell size={20} />
-              {unreadTotal > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
+        
+        {/* ✨ RESTORED & ADJUSTED DESIGN: DUAL DESKTOP/MOBILE TOP RIGHT BAR CONTAINER */}
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg lg:hidden">
+            <Menu size={24} />
+          </button>
+
+          {/* Desktop Top Right Actions */}
+          <div className="flex items-center gap-4 ml-auto relative">
+            <button 
+              onClick={() => setIsNotifOpen(!isNotifOpen)} 
+              className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 border border-gray-100 text-gray-600 hover:text-orange-500 transition-colors"
+            >
+              <Bell size={22} />
+              {unreadTotal > 0 && (
+                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full ring-2 ring-white animate-pulse" />
+              )}
             </button>
-            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg"><Menu size={24} /></button>
+
+            {/* Top Right Header Dropdown Panel */}
+            {isNotifOpen && (
+              <div className="absolute top-[115%] right-0 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 max-h-96 overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-2 border-b border-gray-50 mb-2 flex justify-between items-center">
+                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-wide">Recent Alerts</h3>
+                  {unreadTotal > 0 && <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{unreadTotal} New</span>}
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="text-xs text-center text-gray-500 py-6 font-medium">No new notifications.</p>
+                ) : (
+                  notifications.map(n => (
+                    <div key={n.id} onClick={() => markAsRead(n.id)} className={`p-3 rounded-xl cursor-pointer transition-colors mb-1 ${n.is_read ? 'bg-white opacity-60' : 'bg-orange-50/50 border border-orange-100/60'}`}>
+                      <p className="text-[10px] font-bold text-orange-600 mb-0.5 uppercase tracking-wider">{n.type}</p>
+                      <p className="text-xs font-black text-gray-900">{n.title}</p>
+                      <p className="text-[11px] text-gray-600 mt-1 line-clamp-2">{n.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto relative">{children}</main>
+
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto relative bg-[#F8FAFC]">
+          {children}
+        </main>
       </div>
     </div>
   );
