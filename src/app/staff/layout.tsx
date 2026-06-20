@@ -132,7 +132,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* BOTTOM USER PROFILE CONTROL ONLY (ALERT REMOVED) */}
+        {/* BOTTOM USER PROFILE CONTROL ONLY */}
         <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-full flex items-center justify-between p-2 rounded-2xl transition-all hover:bg-gray-50">
             <div className="flex items-center gap-3 overflow-hidden">
@@ -156,17 +156,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* MAIN LAYOUT BODY */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         
-        {/* ✨ UNIFIED DESKTOP & MOBILE TOP NAVIGATION CORNER BAR */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40">
+        {/* UNIFIED TOP NAVIGATION CORNER BAR */}
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-40">
+          {/* Mobile hamburger menu (hidden on desktop) */}
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-[#ff9800] rounded-xl lg:hidden">
             <Menu size={24} />
           </button>
 
+          {/* Logo placeholder for mobile header alignment */}
+          <img src="/logo.png" alt="Logo" className="h-8 lg:hidden" />
+
+          {/* Top Right Bell Action (Unified for both screen types) */}
           <div className="flex items-center gap-4 ml-auto relative">
-            {/* Top Right Bell Icon Dropdown Trigger */}
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)} 
-              className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-100 text-gray-600 hover:text-orange-500"
+              className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-100 text-gray-600 hover:text-[#ff9800]"
             >
               <Bell size={22} />
               {unreadCount > 0 && (
@@ -174,7 +178,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               )}
             </button>
 
-            {/* Top Right Dropdown Box Panel */}
+            {/* Notification Dropdown Box */}
             {isNotifOpen && (
               <div className="absolute top-[115%] right-0 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 max-h-96 overflow-y-auto">
                 <div className="p-2 border-b border-gray-50 mb-2 flex justify-between items-center">
