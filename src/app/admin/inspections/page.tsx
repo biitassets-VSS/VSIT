@@ -32,17 +32,28 @@ export default function AdminInspectionsPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchInspections = async () => {
       try {
-        const { data: staffData } = await supabase.from('staff').select('emp_code, name');
+        // FIXED: Using Profile table dragnet to guarantee accurate Staff Names
+        const { data: profileData } = await supabase.from('profiles').select('*');
         const staffMap: Record<string, string> = {};
-        if (staffData) staffData.forEach((s: any) => staffMap[s.emp_code] = s.name);
+        
+        if (profileData) {
+          profileData.forEach((p: any) => {
+            const code = p.emp_code || p.employee_code || p.employee_id || p.emp_id || 'N/A';
+            const name = p.full_name || p.name || 'Staff Member';
+            if (code !== 'N/A') staffMap[code] = name;
+          });
+        }
 
         const { data: assetData } = await supabase.from('assets').select('*').not('inspection_status', 'is', null).order('updated_at', { ascending: false });
-        if (assetData) {
+        
+        if (isMounted && assetData) {
           setAssets(assetData.map((a: any) => ({
             ...a,
-            staff_name: staffMap[a.emp_code] || 'Unassigned',
+            staff_name: staffMap[a.emp_code] || a.assigned_to || a.staff_name || 'Unassigned',
             photos: a.photos || [],
             inspection_notes: a.inspection_notes || 'No notes provided.'
           })));
@@ -50,19 +61,22 @@ export default function AdminInspectionsPage() {
       } catch (error) {
         console.error("Error fetching inspections:", error);
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
     fetchInspections();
 
-    // REAL-TIME LISTENER FOR ADMIN INSPECTIONS
+    // REAL-TIME LISTENER FOR ADMIN INSPECTIONS (Now listens to both INSERT and UPDATE)
     const channel = supabase.channel('admin_assets_realtime')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, () => {
-        fetchInspections(); // Refresh instantly
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
+        fetchInspections(); // Refresh instantly when staff submits or admin updates
       }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      isMounted = false;
+      supabase.removeChannel(channel); 
+    };
   }, []);
 
   const handleReviewAction = async (newStatus: string) => {
@@ -70,16 +84,25 @@ export default function AdminInspectionsPage() {
     setIsUpdating(true);
 
     try {
-      const { error } = await supabase
+      // Changed to .select() to ensure the database successfully updated before changing UI
+      const { data, error } = await supabase
         .from('assets')
         .update({ inspection_status: newStatus })
-        .eq('id', selectedAsset.id);
+        .eq('id', selectedAsset.id)
+        .select();
 
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Database update failed. Check RLS permissions.");
 
-      // Update Local State
+      // Update Local State instantly
       setAssets(prev => prev.map(a => a.id === selectedAsset.id ? { ...a, inspection_status: newStatus } : a));
       setSelectedAsset(null);
+      
+      // Auto-switch filter if there are no more pending items to keep UI clean
+      if (newStatus !== 'Pending Admin Review' && pendingCount <= 1) {
+          setFilter('All');
+      }
+
       alert(`Asset marked as ${newStatus}!`);
       
     } catch (error: any) {
@@ -100,9 +123,12 @@ export default function AdminInspectionsPage() {
       {/* HEADER */}
       <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <ClipboardCheck size={28} className="text-orange-500" /> Inspection Reviews
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+              <ClipboardCheck size={28} className="text-orange-500" /> Inspection Reviews
+            </h1>
+            <span className="text-[10px] bg-orange-50 text-orange-600 font-bold px-2 py-0.5 rounded-full animate-pulse">Live Sync Active</span>
+          </div>
           <p className="text-sm font-medium text-gray-500 mt-1">Review condition reports and photos sent by staff.</p>
         </div>
         <div className="bg-orange-50 border border-orange-100 px-4 py-2 rounded-xl text-center">
