@@ -131,17 +131,19 @@ export default function StaffProfileView() {
         })
         .eq('emp_code', staff.emp_code);
 
-      if (staffError) throw staffError;
+      if (staffError) throw new Error(staffError.message);
 
       // 2. Update Profiles table (if they have login access)
       if (hasProfile) {
-        await supabase
+        const { error: profileError } = await supabase
           .from('profiles')
           .update({
             name: editFormData.name,
             full_name: editFormData.name,
           })
           .eq('emp_code', staff.emp_code);
+          
+        if (profileError) throw new Error(profileError.message);
       }
 
       // Update UI instantly
@@ -151,7 +153,7 @@ export default function StaffProfileView() {
       alert("Staff details updated successfully!");
       setIsEditModalOpen(false);
     } catch (error: any) {
-      alert("Error updating staff: " + error.message);
+      alert("Error updating staff: " + (error.message || "Unknown Error"));
     } finally {
       setIsUpdating(false);
     }
@@ -162,11 +164,13 @@ export default function StaffProfileView() {
     if (!staff || !confirm("Are you sure you want to deactivate login access for this staff member?")) return;
     setIsProcessing(true);
     try {
-      await supabase.from('staff').update({ status: 'Inactive' }).eq('emp_code', staff.emp_code);
+      const { error } = await supabase.from('staff').update({ status: 'Inactive' }).eq('emp_code', staff.emp_code);
+      if (error) throw new Error(error.message);
+      
       setStaff({ ...staff, status: 'Inactive' });
       setShowLoginSetup(false);
     } catch (error: any) {
-      alert("Error deactivating: " + error.message);
+      alert("Error deactivating: " + (error.message || "Unknown error"));
     } finally {
       setIsProcessing(false);
     }
@@ -185,10 +189,11 @@ export default function StaffProfileView() {
     
     setIsProcessing(true);
     try {
+      // 1. Create Supabase Auth User (Silently)
       const authClient = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false } }
+        { auth: { persistSession: false, autoRefreshToken: false } }
       );
 
       const { error: authError } = await authClient.auth.signUp({
@@ -196,13 +201,19 @@ export default function StaffProfileView() {
         password: cleanPassword,
       });
 
+      // Safely parse Supabase Auth Errors
       if (authError) {
-        const errorText = authError.message || JSON.stringify(authError);
-        if (!errorText.toLowerCase().includes('already registered')) {
-          throw new Error("Supabase Auth Error: " + errorText);
+        const errorMsg = authError.message || String(authError);
+        
+        // If the user already exists in the Auth tab from previous testing, we ignore the error and force activation!
+        const isAlreadyRegistered = errorMsg.toLowerCase().includes('already registered') || errorMsg.toLowerCase().includes('user already exists');
+        
+        if (!isAlreadyRegistered) {
+          throw new Error(`Auth Error: ${errorMsg}`);
         }
       }
 
+      // 2. Save to Profiles Table
       const { error: profileError } = await supabase.from('profiles').upsert({
         email: cleanEmail,
         name: staff.name,
@@ -211,22 +222,25 @@ export default function StaffProfileView() {
         role: 'staff'
       });
 
-      if (profileError) throw new Error("Profile creation failed: " + profileError.message);
+      if (profileError) throw new Error(`Profile creation failed: ${profileError.message}`);
 
+      // 3. Update Staff Status & Password
       const { error: staffUpdateError } = await supabase.from('staff').update({ 
         status: 'Active', 
         password: cleanPassword 
       }).eq('emp_code', staff.emp_code);
 
-      if (staffUpdateError) throw new Error("Staff update failed: " + staffUpdateError.message);
+      if (staffUpdateError) throw new Error(`Staff update failed: ${staffUpdateError.message}`);
 
+      // Success Updates
       setHasProfile(true);
       setStaff({ ...staff, status: 'Active', password: cleanPassword });
       setShowLoginSetup(false);
       alert("Login access granted successfully!");
 
     } catch (error: any) {
-      alert("Error granting access: " + (error.message || JSON.stringify(error)));
+      console.error("Full Login Grant Error:", error);
+      alert("Error granting access: " + (error.message || "Unknown error occurred."));
     } finally {
       setIsProcessing(false);
     }
@@ -236,10 +250,11 @@ export default function StaffProfileView() {
   const handleDeleteStaff = async () => {
     if (!staff || !confirm("Are you sure you want to completely delete this staff member? This cannot be undone.")) return;
     try {
-      await supabase.from('staff').delete().eq('emp_code', staff.emp_code);
+      const { error } = await supabase.from('staff').delete().eq('emp_code', staff.emp_code);
+      if (error) throw new Error(error.message);
       router.push('/admin/staff');
     } catch (error: any) {
-      alert("Error deleting staff: " + error.message);
+      alert("Error deleting staff: " + (error.message || "Unknown error"));
     }
   };
 
