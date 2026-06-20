@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   Package, Users, ClipboardCheck, 
   Activity, AlertTriangle, ArrowRight,
-  CheckCircle2, Wrench, UserCheck, Trash2, Bell
+  CheckCircle2, Wrench, UserCheck, Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -15,12 +15,6 @@ interface Asset {
   name: string;
   tagId: string;
   status: string;
-}
-
-interface StaffProfile {
-  id: string;
-  name: string;
-  init: string;
 }
 
 export default function AdminDashboardPage() {
@@ -34,20 +28,28 @@ export default function AdminDashboardPage() {
     overdueInspections: 0
   });
   
-  // LIVE DATA STATES
-  const [realStaffList, setRealStaffList] = useState<StaffProfile[]>([]);
+  // LIVE PRESENCE STATE
   const [onlineIds, setOnlineIds] = useState<string[]>([]);
   const [recentAssets, setRecentAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Mock Thumbnails for Staff (Fallback if no real images exist)
+  const staffThumbnails = [
+    { init: 'AK', bg: 'bg-blue-100 text-blue-700' },
+    { init: 'JD', bg: 'bg-teal-100 text-teal-700' },
+    { init: 'SR', bg: 'bg-purple-100 text-purple-700' },
+    { init: 'MJ', bg: 'bg-orange-100 text-orange-700' }
+  ];
 
   useEffect(() => {
     let isMounted = true;
 
     const fetchDashboardData = async () => {
       try {
+        // Fetch Assets and Staff (Profiles) concurrently from real database
         const [assetsResponse, staffResponse] = await Promise.all([
           supabase.from('assets').select('*').order('created_at', { ascending: false }),
-          supabase.from('profiles').select('id, full_name, name, first_name') 
+          supabase.from('profiles').select('id') // using profiles to accurately match auth IDs
         ]);
 
         if (assetsResponse.error) throw assetsResponse.error;
@@ -56,14 +58,9 @@ export default function AdminDashboardPage() {
         const assetsData = assetsResponse.data || [];
         const staffData = staffResponse.data || [];
 
-        const formattedStaff = staffData.map((s: any) => {
-          const fullName = s.full_name || s.name || s.first_name || 'Staff Member';
-          const init = fullName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
-          return { id: s.id, name: fullName, init };
-        });
-
+        // Check for overdue inspections (dates in the past)
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0); // Normalize to midnight
         
         const overdueCount = assetsData.filter((a: any) => {
           if (!a.next_inspection_date || a.next_inspection_date === '-') return false;
@@ -71,9 +68,8 @@ export default function AdminDashboardPage() {
           return nextDate < today;
         }).length;
 
+        // Calculate real stats
         if (isMounted) {
-          setRealStaffList(formattedStaff);
-          
           setStats({
             totalAssets: assetsData.length,
             inStock: assetsData.filter((a: any) => a.status === 'Available' || a.status === 'In Stock (Available)').length,
@@ -84,6 +80,7 @@ export default function AdminDashboardPage() {
             overdueInspections: overdueCount
           });
 
+          // Map the 4 most recent assets for the activity feed
           const mappedRecentAssets = assetsData.slice(0, 4).map((a: any) => ({
             id: a.id,
             name: a.name,
@@ -102,6 +99,7 @@ export default function AdminDashboardPage() {
 
     fetchDashboardData();
 
+    // LIVE SUPABASE REALTIME PRESENCE (Microsoft Teams-style engine)
     const presenceRoom = supabase.channel('online-users');
 
     presenceRoom
@@ -120,40 +118,33 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  const sortedStaffList = [...realStaffList].sort((a, b) => {
-    const aOnline = onlineIds.includes(a.id) ? 1 : 0;
-    const bOnline = onlineIds.includes(b.id) ? 1 : 0;
-    return bOnline - aOnline; 
-  });
-
+  // Calculate live online/offline counts
+  // We cap onlineCount to totalStaff just in case guests hit the room
   const activeOnlineCount = Math.min(onlineIds.length, stats.totalStaff); 
   const offlineCount = Math.max(0, stats.totalStaff - activeOnlineCount);
-  const thumbColors = ['bg-blue-100 text-blue-700', 'bg-teal-100 text-teal-700', 'bg-purple-100 text-purple-700', 'bg-orange-100 text-orange-700'];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* HEADER WITH BELL ICON */}
-      <div className="flex justify-between items-center w-full bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Welcome Back, Admin 👋</h1>
-          <p className="text-sm font-medium text-gray-500 mt-1 hidden sm:block">Here is the detailed overview of your inventory and staff.</p>
+          <p className="text-sm font-medium text-gray-500 mt-1">Here is the detailed overview of your inventory and staff.</p>
         </div>
-        
-        {/* BELL NOTIFICATION */}
-        <button className="relative p-3 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors shrink-0 cursor-pointer">
-          <Bell size={24} className="text-gray-600" />
-          {stats.overdueInspections > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
-          )}
-        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* ========================================== */}
+        {/* LEFT COLUMN (DETAILED STATS & RECENT)      */}
+        {/* ========================================== */}
         <div className="lg:col-span-2 space-y-6">
+          
+          {/* ADVANCED STATS GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             
-            {/* ASSET OVERVIEW CARD */}
+            {/* 1. ASSET OVERVIEW CARD */}
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -165,6 +156,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               
+              {/* Asset Status Breakdown */}
               <div className="grid grid-cols-2 gap-3 mt-2">
                 <div className="bg-green-50/50 border border-green-100 p-3 rounded-2xl flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -200,7 +192,7 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* STAFF OVERVIEW CARD */}
+            {/* 2. STAFF OVERVIEW CARD (NOW WITH LIVE WEBSOCKET PRESENCE) */}
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -214,32 +206,21 @@ export default function AdminDashboardPage() {
                   <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-2">
                     <Users size={24} />
                   </div>
-                  
-                  {!isLoading && (
-                    <div className="flex -space-x-3 items-center">
-                      {sortedStaffList.slice(0, 4).map((staff, i) => {
-                        const isOnline = onlineIds.includes(staff.id);
-                        const bgClass = thumbColors[i % thumbColors.length];
-                        
-                        return (
-                          <div key={staff.id} className="relative z-10 hover:z-50 transition-all cursor-pointer" title={staff.name}>
-                            <div className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black ${bgClass} shadow-sm`}>
-                              {staff.init}
-                            </div>
-                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${isOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
-                          </div>
-                        );
-                      })}
-                      {stats.totalStaff > 4 && (
-                        <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-500 shadow-sm z-0">
-                          +{stats.totalStaff - 4}
-                        </div>
-                      )}
+                  {/* Overlapping Thumbnails */}
+                  <div className="flex -space-x-3">
+                    {staffThumbnails.map((staff, i) => (
+                      <div key={i} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black ${staff.bg} shadow-sm z-${40-i*10}`}>
+                        {staff.init}
+                      </div>
+                    ))}
+                    <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-500 shadow-sm z-0">
+                      +{stats.totalStaff > 4 ? stats.totalStaff - 4 : 0}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
+              {/* Live Staff Status Breakdown */}
               <div className="space-y-3 mt-2">
                 <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
                   <div className="flex items-center gap-3">
@@ -261,6 +242,7 @@ export default function AdminDashboardPage() {
 
           </div>
 
+          {/* RECENT ASSETS WIDGET */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -303,7 +285,12 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+        {/* ========================================== */}
+        {/* RIGHT COLUMN (QUICK ACTIONS & ALERTS)      */}
+        {/* ========================================== */}
         <div className="space-y-6">
+          
+          {/* QUICK ACTIONS WIDGET */}
           <div className="bg-white rounded-[32px] p-7 sm:p-8 shadow-sm border border-gray-100">
             <h2 className="text-[22px] font-black text-[#0f172a] mb-6">Quick Actions</h2>
             
@@ -325,6 +312,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
+          {/* DYNAMIC ALERTS WIDGET */}
           <div className="bg-red-50/50 rounded-3xl p-6 border border-red-100 shadow-sm">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center shrink-0">
@@ -341,7 +329,9 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           </div>
+
         </div>
+
       </div>
     </div>
   );
