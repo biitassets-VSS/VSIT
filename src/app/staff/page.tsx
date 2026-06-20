@@ -5,7 +5,7 @@ import {
   Package, CheckCircle2, Camera, ArrowLeft, Trash2, 
   MessageSquare, ShieldAlert, Send, Ticket, PlusCircle, 
   Timer, PauseCircle, MonitorUp, ImagePlus, RefreshCw, ClipboardCheck,
-  AlertCircle, Loader2
+  AlertCircle, Loader2, History
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -58,12 +58,14 @@ interface StaffUser {
 export default function StaffDashboardPage() {
   const [staffUser, setStaffUser] = useState<StaffUser>({ name: 'Loading...', empCode: '...', email: '' });
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
-  const [recentTickets, setRecentTickets] = useState<StaffTicket[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
   
+  // Ticket States
+  const [recentTickets, setRecentTickets] = useState<StaffTicket[]>([]);
+  const [assetHistory, setAssetHistory] = useState<StaffTicket[]>([]); // New state for Request/Replace History
+  
+  const [isLoaded, setIsLoaded] = useState(false);
   const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset' | 'replacing_asset'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Forms
@@ -103,17 +105,16 @@ export default function StaffDashboardPage() {
         
         if (isMounted) setStaffUser(currentUser);
 
-        // --- FETCH TICKETS ---
+        // --- FETCH TICKETS (ALL TICKETS FOR SMART FILTERING) ---
         if (currentUser.empCode !== 'N/A') {
           const { data: ticketRes } = await supabase
             .from('tickets')
             .select('*')
             .eq('emp_code', currentUser.empCode)
-            .order('created_at', { ascending: false })
-            .limit(3);
+            .order('created_at', { ascending: false });
 
           if (isMounted && ticketRes) {
-            setRecentTickets(ticketRes.map((t: any) => ({
+            const mappedTickets = ticketRes.map((t: any) => ({
               id: t.id,
               title: t.subject || t.title || 'No Subject',
               description: t.description || '',
@@ -121,7 +122,16 @@ export default function StaffDashboardPage() {
               estimatedTime: t.waiting_time || t.estimated_time || '',
               date: t.created_at ? new Date(t.created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date',
               replies: t.replies || []
-            })));
+            }));
+
+            // Split into General Recent Tickets (max 3) and Asset Request History
+            setRecentTickets(mappedTickets.slice(0, 3));
+            
+            // Filter out ONLY the Asset Requests & Replacements for the History Tab
+            const hardwareHistory = mappedTickets.filter((t: StaffTicket) => 
+              t.title.includes('Asset Request:') || t.title.includes('Replace Asset:')
+            );
+            setAssetHistory(hardwareHistory);
           }
         }
 
@@ -210,20 +220,6 @@ export default function StaffDashboardPage() {
       }]).select();
 
       if (error) throw error;
-
-      if (data && data.length > 0) {
-        const newTicket: StaffTicket = {
-          id: data[0].id,
-          title: data[0].subject || data[0].title || 'No Subject',
-          description: data[0].description || '',
-          status: formatStatus(data[0].status),
-          estimatedTime: data[0].waiting_time || data[0].estimated_time || '',
-          date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          replies: data[0].replies || []
-        };
-        setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
-      }
-
       alert('Ticket raised successfully!');
       setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
       setViewState('dashboard');
@@ -247,23 +243,8 @@ export default function StaffDashboardPage() {
       }]).select();
 
       if (error) throw error;
-
-      if (data && data.length > 0) {
-        const newTicket: StaffTicket = {
-          id: data[0].id,
-          title: data[0].subject,
-          description: data[0].description,
-          status: formatStatus(data[0].status),
-          estimatedTime: '',
-          date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          replies: []
-        };
-        setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
-      }
-
       alert('Asset request submitted to Admin!');
       setAssetRequestForm({ category: 'Mouse', reason: '' });
-      setViewState('dashboard');
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -286,23 +267,8 @@ export default function StaffDashboardPage() {
       }]).select();
 
       if (error) throw error;
-
-      if (data && data.length > 0) {
-        const newTicket: StaffTicket = {
-          id: data[0].id,
-          title: data[0].subject,
-          description: data[0].description,
-          status: formatStatus(data[0].status),
-          estimatedTime: '',
-          date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          replies: []
-        };
-        setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
-      }
-
       alert('Asset replacement request submitted to Admin!');
       setAssetReplaceForm({ assetId: '', reason: '' });
-      setViewState('dashboard');
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -310,7 +276,7 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 4. INSPECTION CAMERA & SUBMISSION LOGIC
+  // 4. INSPECTION CAMERA
   const handlePhotoCaptureWithWatermark = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !selectedAsset) return;
@@ -373,6 +339,66 @@ export default function StaffDashboardPage() {
 
   const needsInspectionCount = assets.filter(a => a.inspectionStatus === 'Due' || a.inspectionStatus === 'Re-inspection').length;
   const inRepairCount = assets.filter(a => a.inspectionStatus === 'Pending Repair').length;
+
+  // --- REUSABLE HISTORY COMPONENT ---
+  const AssetHistoryLog = () => (
+    <div className="mt-8 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-black text-[#002B49] flex items-center gap-2">
+          <History className="text-teal-600"/> Request & Replacement History
+        </h3>
+        <span className="text-xs font-bold bg-gray-100 text-gray-500 px-3 py-1 rounded-full">{assetHistory.length} Records</span>
+      </div>
+      
+      {assetHistory.length === 0 ? (
+        <div className="text-center p-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+          <p className="text-sm font-bold text-gray-400">You have not requested or replaced any assets yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {assetHistory.map(ticket => {
+            const latestAdminReply = [...ticket.replies].reverse().find(r => r.sender === 'Admin');
+            const isReplace = ticket.title.includes('Replace Asset');
+            
+            return (
+              <div key={ticket.id} className="border border-gray-100 p-4 sm:p-5 rounded-2xl bg-white hover:border-teal-300 hover:shadow-sm transition-all">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2 sm:gap-4">
+                  <div className="min-w-0 w-full flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isReplace ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-600'}`}>
+                      {isReplace ? <RefreshCw size={18} /> : <PlusCircle size={18} />}
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-[#002B49] truncate">{ticket.title}</h3>
+                      <p className="text-[11px] sm:text-xs font-medium text-gray-500 mt-0.5">{ticket.date}</p>
+                    </div>
+                  </div>
+                  <div className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider shrink-0 w-fit ${
+                    ticket.status === 'Resolved' ? 'bg-[#e6f7eb] text-[#008a4b]' :
+                    ticket.status === 'Open' ? 'bg-red-50 text-red-700' :
+                    ticket.status === 'In Progress' ? 'bg-blue-50 text-blue-700' :
+                    'bg-orange-50 text-orange-700'
+                  }`}>
+                    {ticket.status}
+                  </div>
+                </div>
+
+                {latestAdminReply && (
+                  <div className="bg-[#f0fcf6] border border-[#d1f0e0] p-3 sm:p-4 rounded-xl mt-2">
+                    <p className="text-[9px] sm:text-[10px] font-black text-[#006456] uppercase flex items-center gap-1.5 mb-1.5 tracking-wide">
+                      <MessageSquare size={12}/> ADMIN UPDATE
+                    </p>
+                    <p className="text-xs sm:text-[14px] font-medium text-[#004d40] leading-relaxed">
+                      {latestAdminReply.text}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500">Loading Dashboard...</div>;
 
@@ -577,9 +603,11 @@ export default function StaffDashboardPage() {
         </div>
       )}
 
+      {/* NEW ASSET REQUEST VIEW */}
       {viewState === 'requesting_asset' && (
-        <div className="space-y-6 max-w-2xl">
+        <div className="space-y-6 max-w-4xl">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Dashboard</button>
+          
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
             <div className="mb-6 border-b border-gray-100 pb-4">
               <div className="w-12 h-12 bg-teal-50 text-[#006456] rounded-2xl flex items-center justify-center mb-4"><PlusCircle size={24} /></div>
@@ -599,12 +627,16 @@ export default function StaffDashboardPage() {
               <button onClick={handleSubmitAssetRequest} disabled={isSubmitting} className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl">{isSubmitting ? 'Submitting...' : 'Send Request'}</button>
             </div>
           </div>
+          
+          <AssetHistoryLog />
         </div>
       )}
 
+      {/* REPLACE ASSET VIEW */}
       {viewState === 'replacing_asset' && (
-        <div className="space-y-6 max-w-2xl">
+        <div className="space-y-6 max-w-4xl">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Dashboard</button>
+          
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
             <div className="mb-6 border-b border-gray-100 pb-4">
               <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4"><RefreshCw size={24} /></div>
@@ -629,10 +661,11 @@ export default function StaffDashboardPage() {
               <button onClick={handleSubmitAssetReplace} disabled={isSubmitting || assets.length === 0} className={`w-full py-4 font-black rounded-xl ${isSubmitting || assets.length === 0 ? 'bg-gray-300 text-gray-500' : 'bg-red-600 hover:bg-red-700 text-white'}`}>{isSubmitting ? 'Submitting...' : 'Submit Request'}</button>
             </div>
           </div>
+
+          <AssetHistoryLog />
         </div>
       )}
 
-      {/* FULLY RESTORED INSPECTION CAMERA TOOLS */}
       {viewState === 'inspecting' && selectedAsset && (
         <div className="space-y-6 max-w-2xl">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
