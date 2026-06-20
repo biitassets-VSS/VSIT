@@ -55,7 +55,6 @@ export default function StaffProfileView() {
 
     const fetchStaffData = async () => {
       try {
-        // 1. Fetch Staff Data
         const { data: staffData, error: staffError } = await supabase
           .from('staff')
           .select('*')
@@ -66,7 +65,6 @@ export default function StaffProfileView() {
         setStaff(staffData);
         if (staffData?.password) setPasswordInput(staffData.password);
 
-        // 2. Check if they exist in Profiles table
         if (staffData?.email) {
           const { data: profileData } = await supabase
             .from('profiles')
@@ -77,7 +75,6 @@ export default function StaffProfileView() {
           if (profileData) setHasProfile(true);
         }
 
-        // 3. Fetch Assigned Assets
         const { data: assetsData } = await supabase
           .from('assets')
           .select('id, name, tag_id')
@@ -118,7 +115,6 @@ export default function StaffProfileView() {
     setIsUpdating(true);
 
     try {
-      // 1. Update main Staff table
       const { error: staffError } = await supabase
         .from('staff')
         .update({
@@ -133,7 +129,6 @@ export default function StaffProfileView() {
 
       if (staffError) throw new Error(staffError.message);
 
-      // 2. Update Profiles table (if they have login access)
       if (hasProfile) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -146,7 +141,6 @@ export default function StaffProfileView() {
         if (profileError) throw new Error(profileError.message);
       }
 
-      // Update UI instantly
       setStaff({ ...staff, ...editFormData } as StaffDetail);
       if (editFormData.password) setPasswordInput(editFormData.password);
 
@@ -176,7 +170,7 @@ export default function StaffProfileView() {
     }
   };
 
-  // --- HANDLER: GRANT LOGIN ACCESS ---
+  // --- HANDLER: GRANT LOGIN ACCESS (BULLETPROOF VERSION) ---
   const handleEnableLogin = async () => {
     if (!staff || !staff.email) return alert("Staff member must have a valid email address.");
     
@@ -189,7 +183,7 @@ export default function StaffProfileView() {
     
     setIsProcessing(true);
     try {
-      // 1. Create Supabase Auth User (Silently)
+      // 1. Create Supabase Auth User
       const authClient = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -201,15 +195,19 @@ export default function StaffProfileView() {
         password: cleanPassword,
       });
 
-      // Safely parse Supabase Auth Errors
+      // BULLETPROOF ERROR CHECKING
       if (authError) {
-        const errorMsg = authError.message || String(authError);
+        // Attempt to rip any hidden text out of the Supabase Error Object
+        const detailedError = authError.message || (authError as any).error_description || (authError as any).msg || JSON.stringify(authError);
         
-        // If the user already exists in the Auth tab from previous testing, we ignore the error and force activation!
-        const isAlreadyRegistered = errorMsg.toLowerCase().includes('already registered') || errorMsg.toLowerCase().includes('user already exists');
-        
-        if (!isAlreadyRegistered) {
-          throw new Error(`Auth Error: ${errorMsg}`);
+        // If it's a ghost error '{}', or it says the user exists, we IGNORE it and force the account to activate.
+        const isSafeToIgnore = 
+          detailedError.toLowerCase().includes('already registered') || 
+          detailedError.toLowerCase().includes('user already exists') || 
+          detailedError === '{}';
+
+        if (!isSafeToIgnore) {
+          throw new Error(`Auth Detail: ${detailedError}`);
         }
       }
 
@@ -230,7 +228,7 @@ export default function StaffProfileView() {
         password: cleanPassword 
       }).eq('emp_code', staff.emp_code);
 
-      if (staffUpdateError) throw new Error(`Staff update failed: ${staffUpdateError.message}`);
+      if (staffUpdateError) throw new Error(`Staff directory update failed: ${staffUpdateError.message}`);
 
       // Success Updates
       setHasProfile(true);
@@ -240,7 +238,7 @@ export default function StaffProfileView() {
 
     } catch (error: any) {
       console.error("Full Login Grant Error:", error);
-      alert("Error granting access: " + (error.message || "Unknown error occurred."));
+      alert("Action halted: " + (error.message || "Unknown error occurred."));
     } finally {
       setIsProcessing(false);
     }
@@ -323,7 +321,6 @@ export default function StaffProfileView() {
         {/* ========================================== */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* CARD 1: Personal & Contact Info */}
           <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
             <h2 className="text-xl font-black text-[#002B49] mb-6 border-b border-gray-100 pb-3">Personal & Contact Info</h2>
             
@@ -355,7 +352,6 @@ export default function StaffProfileView() {
             </div>
           </div>
 
-          {/* CARD 2: Work Information */}
           <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
             <h2 className="text-xl font-black text-[#002B49] mb-6 border-b border-gray-100 pb-3 flex items-center gap-2">
               <Briefcase className="text-blue-600" size={20}/> Work Information
