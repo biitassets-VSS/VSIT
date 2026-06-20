@@ -59,7 +59,7 @@ function StaffDashboardContent() {
   const searchParams = useSearchParams();
   const isGuest = searchParams.get('mode') === 'demo';
 
-  const [staffUser, setStaffUser] = useState<StaffUser>({ name: 'Loading...', empCode: '...', email: '' });
+  const [staffUser, setStaffUser] = useState<StaffUser>({ name: 'Loading Profile...', empCode: '...', email: '' });
   const [assets, setAssets] = useState<AssignedAsset[]>([]);
   const [recentTickets, setRecentTickets] = useState<StaffTicket[]>([]);
   const [assetHistory, setAssetHistory] = useState<StaffTicket[]>([]); 
@@ -101,11 +101,11 @@ function StaffDashboardContent() {
           ]);
           setIsLoaded(true);
         }
-        return; // STOP EXECUTION! Do not touch real database.
+        return; 
       }
 
       // ==========================================
-      // NORMAL REAL DATABASE LOAD 
+      // NORMAL REAL DATABASE LOAD (BULLETPROOF)
       // ==========================================
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -119,21 +119,32 @@ function StaffDashboardContent() {
           return;
         }
 
-        const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).maybeSingle();
+        // 1. Bulletproof Profile Search (Check both profiles and staff table)
+        const [profileRes, staffRes] = await Promise.all([
+          supabase.from('profiles').select('*').eq('email', userEmail).maybeSingle(),
+          supabase.from('staff').select('*').eq('email', userEmail).maybeSingle()
+        ]);
+
+        const profileData = profileRes.data;
+        const staffData = staffRes.data;
+
+        const resolvedEmpCode = profileData?.emp_code || staffData?.emp_code || 'N/A';
+        const resolvedName = profileData?.full_name || profileData?.name || staffData?.name || 'Staff Member';
 
         const currentUser = { 
-          name: profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member', 
-          empCode: profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A', 
-          email: profile?.email || userEmail 
+          name: resolvedName, 
+          empCode: resolvedEmpCode, 
+          email: userEmail 
         };
         
         if (isMounted) setStaffUser(currentUser);
 
-        if (currentUser.empCode !== 'N/A') {
+        // 2. Fetch Live Tickets
+        if (resolvedEmpCode !== 'N/A') {
           const { data: ticketRes } = await supabase
             .from('tickets')
             .select('*')
-            .eq('emp_code', currentUser.empCode)
+            .eq('emp_code', resolvedEmpCode)
             .order('created_at', { ascending: false });
 
           if (isMounted && ticketRes) {
@@ -148,7 +159,6 @@ function StaffDashboardContent() {
             }));
 
             setRecentTickets(mappedTickets.slice(0, 3));
-            
             const hardwareHistory = mappedTickets.filter((t: StaffTicket) => 
               t.title.toLowerCase().includes('request') || t.title.toLowerCase().includes('replace')
             );
@@ -156,13 +166,15 @@ function StaffDashboardContent() {
           }
         }
 
+        // 3. Fetch Live Assets explicitly tied to the emp_code
         let fetchedAssets: any[] = [];
-        if (currentUser.empCode !== 'N/A') {
-          const { data } = await supabase.from('assets').select('*').eq('emp_code', currentUser.empCode);
+        if (resolvedEmpCode !== 'N/A') {
+          const { data, error: assetErr } = await supabase.from('assets').select('*').eq('emp_code', resolvedEmpCode);
+          if (assetErr) console.error("Assets fetch error:", assetErr);
           if (data && data.length > 0) fetchedAssets = data;
         }
 
-        if (isMounted && fetchedAssets.length > 0) {
+        if (isMounted) {
           setAssets(fetchedAssets.map((a: any) => ({
             id: a.id,
             tagId: a.tag_id || a.asset_tag || 'N/A',
@@ -212,10 +224,6 @@ function StaffDashboardContent() {
     setViewState(view);
     setActiveTab('form'); 
   };
-
-  // ==========================================
-  // SAFE SUBMIT HANDLERS (PROTECTS DB IN DEMO MODE)
-  // ==========================================
 
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
