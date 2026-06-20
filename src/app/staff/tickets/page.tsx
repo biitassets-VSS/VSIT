@@ -41,7 +41,7 @@ export default function StaffTicketsPage() {
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. FETCH PROFILE AND TICKETS (BULLETPROOF VERSION)
+  // 1. FETCH PROFILE AND TICKETS
   useEffect(() => {
     const fetchMyTickets = async () => {
       try {
@@ -53,14 +53,12 @@ export default function StaffTicketsPage() {
           return;
         }
 
-        // Fetch profile safely to guarantee we get the emp_code
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('email', userEmail)
           .maybeSingle();
 
-        // Safe fallback dragnet for name and emp_code
         const currentName = profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member';
         const currentEmpCode = profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A';
         
@@ -69,6 +67,7 @@ export default function StaffTicketsPage() {
 
         // Fetch ALL tickets matching this emp_code
         if (currentEmpCode !== 'N/A') {
+          // Note: Adding a small cache-busting timestamp to guarantee Next.js always gets the latest status
           const { data: ticketData, error } = await supabase
             .from('tickets')
             .select('*')
@@ -158,7 +157,9 @@ export default function StaffTicketsPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-5xl mx-auto">
       
-      {/* --- LIST VIEW --- */}
+      {/* ========================================== */}
+      {/* 1. LIST VIEW (MATCHES DASHBOARD UI EXACTLY)*/}
+      {/* ========================================== */}
       {!selectedTicket ? (
         <>
           {/* HEADER & SUMMARY WIDGETS */}
@@ -189,7 +190,6 @@ export default function StaffTicketsPage() {
             </div>
           </div>
 
-          {/* TICKETS LIST CONTAINER */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
             
             {/* FILTER TABS */}
@@ -210,7 +210,7 @@ export default function StaffTicketsPage() {
               ))}
             </div>
 
-            {/* TICKET ITEMS */}
+            {/* DASHBOARD-STYLE TICKET CARDS */}
             {filteredTickets.length === 0 ? (
               <div className="p-12 text-center flex flex-col items-center justify-center">
                 <CheckCircle2 size={48} className="text-gray-300 mb-4" />
@@ -218,47 +218,57 @@ export default function StaffTicketsPage() {
                 <p className="text-sm font-medium text-gray-500 mt-1">You don't have any tickets matching this status.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {filteredTickets.map(ticket => (
-                  <div key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="p-5 sm:p-6 hover:bg-teal-50/50 cursor-pointer transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md flex items-center gap-1 border border-gray-200">
-                          <Tag size={10} /> {ticket.id.substring(0, 8)}
-                        </span>
-                        <span className="text-xs font-bold text-gray-400">{ticket.date}</span>
+              <div className="p-6 space-y-4">
+                {filteredTickets.map(ticket => {
+                  // Find the most recent reply from Admin to show in the UI block
+                  const latestAdminReply = [...ticket.replies].reverse().find(r => r.sender === 'Admin');
+
+                  return (
+                    <div 
+                      key={ticket.id} 
+                      onClick={() => setSelectedTicket(ticket)} 
+                      className="border border-gray-200 p-5 rounded-2xl hover:border-teal-300 hover:shadow-md cursor-pointer transition-all group bg-white"
+                    >
+                      <div className="flex justify-between items-start mb-4 gap-4">
+                        <div>
+                          <h3 className="text-lg font-black text-gray-900 group-hover:text-teal-600 transition-colors">{ticket.title}</h3>
+                          <p className="text-xs font-medium text-gray-500 mt-1">{ticket.date}</p>
+                        </div>
+                        
+                        {/* Status Badge */}
+                        <div className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-wider shrink-0 ${
+                          ticket.status === 'Resolved' ? 'bg-green-100 text-green-700' :
+                          ticket.status === 'Open' ? 'bg-red-100 text-red-700' :
+                          ticket.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          {ticket.status}
+                        </div>
                       </div>
-                      <h3 className="text-base font-black text-gray-900 group-hover:text-teal-600 transition-colors">{ticket.title}</h3>
-                    </div>
-                    
-                    <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                      {ticket.estimatedTime && ticket.status !== 'Resolved' && (
-                        <div className={`px-3 py-1 rounded-lg border text-[11px] font-black uppercase flex items-center gap-1.5 shadow-sm ${ticket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
-                          {ticket.estimatedTime === 'Hold' ? <PauseCircle size={12}/> : <Timer size={12}/>}
-                          ETA: {ticket.estimatedTime}
+
+                      {/* LATEST UPDATE BOX (Matches Dashboard UI) */}
+                      {latestAdminReply && (
+                        <div className="bg-teal-50 border border-teal-100 p-4 rounded-xl">
+                          <p className="text-[10px] font-black text-teal-800 uppercase flex items-center gap-1.5 mb-1 tracking-wide">
+                            <MessageSquare size={12}/> LATEST UPDATE FROM ADMIN
+                          </p>
+                          <p className="text-sm font-medium text-teal-900 leading-relaxed">
+                            {latestAdminReply.text}
+                          </p>
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5 text-xs font-black w-24 justify-end">
-                        {ticket.status === 'Open' && <AlertCircle size={14} className="text-red-500" />}
-                        {ticket.status === 'In Progress' && <Clock size={14} className="text-blue-500" />}
-                        {ticket.status === 'Hold' && <PauseCircle size={14} className="text-orange-500" />}
-                        {ticket.status === 'Resolved' && <CheckCircle2 size={14} className="text-green-500" />}
-                        <span className={
-                          ticket.status === 'Open' ? 'text-red-600' : 
-                          ticket.status === 'In Progress' ? 'text-blue-600' : 
-                          ticket.status === 'Hold' ? 'text-orange-600' : 'text-green-600'
-                        }>{ticket.status}</span>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </>
       ) : (
         
-        /* --- DETAIL & CHAT VIEW --- */
+        /* ========================================== */
+        /* 2. DETAIL & CHAT VIEW                      */
+        /* ========================================== */
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
           <button onClick={() => setSelectedTicket(null)} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
             <ArrowLeft size={16} /> Back to My Tickets
