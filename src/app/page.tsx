@@ -18,36 +18,76 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
-      // 1. Authenticate with Supabase
+      const cleanEmail = email.trim().toLowerCase();
+
+      // 1. Authenticate with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: cleanEmail,
         password: password.trim(),
       });
 
       if (authError) throw new Error(authError.message);
+      if (!authData?.user) throw new Error("Authentication failed. No user found.");
+
+      const userId = authData.user.id;
 
       // 2. Fetch User Role from Profiles
-      const { data: profile, error: profileError } = await supabase
+      let { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role, name')
-        .eq('email', email.trim())
+        .eq('id', userId)
         .maybeSingle();
 
-      if (profileError) console.warn("Profile fetch issue:", profileError);
+      // =========================================================
+      // ⚡ SELF-HEALING PROFILE RESCUE BLOCK FOR BULK UPLOADS ⚡
+      // =========================================================
+      if (!profile) {
+        console.log("Profile missing for user ID. Rescuing from staff table...");
+        
+        // Fetch their template details from the uploaded staff table
+        const { data: staffDirectory } = await supabase
+          .from('staff')
+          .select('*')
+          .ilike('email', cleanEmail)
+          .maybeSingle();
 
-      const userRole = profile?.role || 'staff'; // Default to staff if no role assigned
+        if (staffDirectory) {
+          // Force insert the profile row on the fly
+          const { data: newProfile, error: insertError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: userId,
+              email: cleanEmail,
+              name: staffDirectory.name,
+              full_name: staffDirectory.name,
+              emp_code: staffDirectory.emp_code,
+              role: 'staff'
+            })
+            .select()
+            .single();
 
-      // Save name for quick loading on dashboards
-      if (profile?.name) localStorage.setItem('userName', profile.name);
-      localStorage.setItem('userEmail', email.trim());
+          if (insertError) {
+            console.error("Profile rescue insertion failed:", insertError);
+          } else {
+            profile = newProfile;
+          }
+        }
+      }
 
-      // 3. Route to the correct dashboard!
+      // 3. Evaluate Routing Permissions
+      const userRole = profile?.role || 'staff'; 
+      const resolvedName = profile?.name || 'Staff Member';
+
+      localStorage.setItem('userName', resolvedName);
+      localStorage.setItem('userEmail', cleanEmail);
+
+      // 4. Send them to the correct layout dashboard
       if (userRole === 'admin') {
-        router.push('/admin'); // Admin goes to Admin Dashboard
+        router.push('/admin'); 
       } else if (userRole === 'guest') {
-        router.push('/staff?mode=demo'); // Guest goes to Staff Dashboard in Demo Mode
+        router.push('/staff?mode=demo'); 
       } else {
-        router.push('/staff'); // Normal Staff goes to normal Staff Dashboard
+        router.push('/staff'); 
       }
 
     } catch (error: any) {
