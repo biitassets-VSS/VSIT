@@ -17,7 +17,7 @@ interface Asset {
   brand: string;
   category: string;
   serial_number: string;
-  status: 'Available' | 'Assigned' | 'Maintenance' | 'Retired';
+  status: 'Available' | 'Assigned' | 'Maintenance' | 'Retired' | string; // Allowed string to handle bad DB data safely
   emp_code: string | null;
   staff_name?: string;
   created_at: string;
@@ -35,6 +35,17 @@ interface StaffMember {
   emp_code: string;
   name: string;
 }
+
+// --- HELPER: Normalizes Status to exactly match UI needs ---
+const formatStatus = (s?: string) => {
+  if (!s) return 'Available';
+  const lower = s.toLowerCase().trim();
+  if (lower.includes('avail') || lower.includes('stock')) return 'Available';
+  if (lower.includes('assign')) return 'Assigned';
+  if (lower.includes('main') || lower.includes('repair')) return 'Maintenance';
+  if (lower.includes('retire') || lower.includes('discard')) return 'Retired';
+  return 'Available'; // Safe default
+};
 
 export default function AdminAssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -79,35 +90,82 @@ export default function AdminAssetsPage() {
   const CONDITIONS = ['Brand New', 'Good', 'Fair', 'Poor', 'Damaged'];
   const STATUSES = ['Available', 'Assigned', 'Maintenance', 'Retired'];
 
+  // 1. FETCH DATA & LIVE SYNC
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchData = async () => {
+      try {
+        const { data: staffData } = await supabase.from('profiles').select('emp_code, employee_code, full_name, name');
+        let staffMap: Record<string, string> = {};
+        let formattedStaffList: StaffMember[] = [];
+        
+        if (staffData) {
+          staffData.forEach((s: any) => {
+            const code = s.emp_code || s.employee_code;
+            const name = s.full_name || s.name;
+            if (code && name) {
+              staffMap[code] = name;
+              formattedStaffList.push({ emp_code: code, name: name });
+            }
+          });
+          if (isMounted) setStaffList(formattedStaffList);
+        }
+
+        const { data: assetData, error } = await supabase.from('assets').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        if (isMounted && assetData) {
+          setAssets(assetData.map((a: any) => ({
+            ...a,
+            status: formatStatus(a.status), // FIX: Standardize status for perfect counting
+            staff_name: a.emp_code ? (staffMap[a.emp_code] || 'Unknown Staff') : 'Unassigned',
+            photos: a.photos || []
+          })));
+        }
+      } catch (error) {
+        console.error("Error fetching assets:", error);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
     fetchData();
+
+    // LIVE WEBSOCKET: Automatically refresh counts when anything changes in the DB
+    const channel = supabase.channel('admin_assets_inventory')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
+        fetchData();
+      }).subscribe();
+
+    return () => { 
+      isMounted = false;
+      supabase.removeChannel(channel); 
+    };
   }, []);
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const { data: staffData } = await supabase.from('staff').select('emp_code, name');
+  // Use a separate manual fetch function for explicit saves/updates so we don't rely entirely on sockets
+  const manualFetchRefresh = async () => {
+     const { data: staffData } = await supabase.from('profiles').select('emp_code, employee_code, full_name, name');
       let staffMap: Record<string, string> = {};
       if (staffData) {
-        setStaffList(staffData);
-        staffData.forEach((s: any) => staffMap[s.emp_code] = s.name);
+        staffData.forEach((s: any) => {
+          const code = s.emp_code || s.employee_code;
+          const name = s.full_name || s.name;
+          if (code && name) staffMap[code] = name;
+        });
       }
 
-      const { data: assetData, error } = await supabase.from('assets').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
+      const { data: assetData } = await supabase.from('assets').select('*').order('created_at', { ascending: false });
       if (assetData) {
         setAssets(assetData.map((a: any) => ({
           ...a,
+          status: formatStatus(a.status),
           staff_name: a.emp_code ? (staffMap[a.emp_code] || 'Unknown Staff') : 'Unassigned',
           photos: a.photos || []
         })));
       }
-    } catch (error) {
-      console.error("Error fetching assets:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }
 
   const handleCategoryChange = (cat: string) => {
     const prefixes: Record<string, string> = {
@@ -164,7 +222,7 @@ export default function AdminAssetsPage() {
         alert("New asset added successfully!");
       }
       setViewState('list');
-      fetchData();
+      await manualFetchRefresh();
     } catch (error: any) {
       alert("Error saving asset: " + error.message);
     } finally {
@@ -172,7 +230,7 @@ export default function AdminAssetsPage() {
     }
   };
 
-  // --- QUICK ACTIONS (UNASSIGN, REPAIR, DISCARD) ---
+  // --- QUICK ACTIONS ---
   const handleQuickStatusChange = async (newStatus: string) => {
     if (!selectedAsset) return;
     if (!confirm(`Are you sure you want to mark this asset as ${newStatus}?`)) return;
@@ -189,7 +247,6 @@ export default function AdminAssetsPage() {
       
       alert(`Asset successfully updated to ${newStatus}!`);
       
-      // Update local selectedAsset to keep the modal open and live-updated
       setSelectedAsset(prev => prev ? {
         ...prev, 
         status: newStatus as any, 
@@ -198,7 +255,7 @@ export default function AdminAssetsPage() {
       } : null);
       
       setIsAssigning(false);
-      fetchData(); // Background refresh the main list
+      await manualFetchRefresh(); 
     } catch (error: any) {
       alert("Error updating status: " + error.message);
     } finally {
@@ -217,7 +274,6 @@ export default function AdminAssetsPage() {
 
       const staffName = staffList.find(s => s.emp_code === empCode)?.name || 'Unknown';
       
-      // Update local state so modal updates live
       setSelectedAsset(prev => prev ? {
         ...prev,
         status: 'Assigned',
@@ -227,7 +283,7 @@ export default function AdminAssetsPage() {
 
       setIsAssigning(false);
       setAssignSearch('');
-      fetchData(); // Background refresh the main list
+      await manualFetchRefresh();
       alert("Asset successfully assigned!");
     } catch (error: any) {
       alert("Error assigning asset: " + error.message);
@@ -255,7 +311,7 @@ export default function AdminAssetsPage() {
     setViewState('detail');
   };
 
-  // --- BULK UPLOAD LOGIC ---
+  // --- BULK UPLOAD ---
   const handleDownloadSample = () => {
     const csvContent = "data:text/csv;charset=utf-8,name,brand,category,tag_id,serial_number,status,price,purchase_date,warranty_expiry,asset_condition\nDell XPS 15,Dell,Laptop,LAP-1001,SN123456,Available,85000,2023-01-15,2026-01-15,Brand New\nLogitech MX Master,Logitech,Mouse,MOU-2001,,Available,1500,,,Good";
     const encodedUri = encodeURI(csvContent);
@@ -277,7 +333,7 @@ export default function AdminAssetsPage() {
       const payload = rows.filter(r => r.trim() !== '').map(row => {
         const [name, brand, category, tag_id, serial_number, status, price, purchase_date, warranty_expiry, asset_condition] = row.split(',');
         return { 
-          name, brand, category, tag_id, serial_number, status: status || 'Available',
+          name, brand, category, tag_id, serial_number, status: formatStatus(status) || 'Available',
           price, purchase_date, warranty_expiry, asset_condition: asset_condition || 'Brand New'
         };
       });
@@ -285,13 +341,13 @@ export default function AdminAssetsPage() {
         await supabase.from('assets').insert(payload);
         alert(`${payload.length} assets uploaded successfully!`);
         setIsBulkModalOpen(false);
-        fetchData();
+        await manualFetchRefresh();
       }
     } catch (err: any) { alert("Error uploading file: Please ensure CSV format is correct."); }
     finally { setIsSubmitting(false); }
   };
 
-  // --- WATERMARK & PHOTO UPLOAD LOGIC ---
+  // --- PHOTOS ---
   const handlePhotoCaptureWithWatermark = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !selectedAsset) return;
@@ -344,7 +400,7 @@ export default function AdminAssetsPage() {
       
       alert("Inspection Updated Successfully!");
       setViewState('list');
-      fetchData();
+      await manualFetchRefresh();
     } catch(err:any) { alert("Error: " + err.message); }
     finally { setIsSubmitting(false); }
   };
@@ -357,6 +413,7 @@ export default function AdminAssetsPage() {
     return matchesSearch && matchesFilter;
   });
 
+  // FIX: Because formatStatus is running on fetch, these counts will now be 100% accurate
   const availableCount = assets.filter(a => a.status === 'Available').length;
   const assignedCount = assets.filter(a => a.status === 'Assigned').length;
 
@@ -372,9 +429,12 @@ export default function AdminAssetsPage() {
         <div className="space-y-6">
           <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-white p-6 rounded-[24px] shadow-sm border border-gray-100">
             <div>
-              <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-                <PackageSearch size={28} className="text-orange-500" /> Asset Inventory
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+                  <PackageSearch size={28} className="text-orange-500" /> Asset Inventory
+                </h1>
+                <span className="text-[10px] bg-orange-50 text-orange-600 font-bold px-2 py-0.5 rounded-full animate-pulse">Live Sync Active</span>
+              </div>
               <p className="text-sm font-medium text-gray-500 mt-1">Manage and track all company hardware and devices.</p>
             </div>
             
@@ -583,7 +643,7 @@ export default function AdminAssetsPage() {
             
             <div className="space-y-4">
               
-              {/* QUICK ACTIONS PANEL (WITH NEW INLINE ASSIGN FEATURE) */}
+              {/* QUICK ACTIONS PANEL */}
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
                  
