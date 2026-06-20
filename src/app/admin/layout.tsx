@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, PackageSearch, Settings, 
-  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, Loader2, Bell 
+  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, Loader2, Bell, ChevronDown 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -169,7 +169,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* PROFILE FOOTER ONLY (BOTTOM BELL REMOVED) */}
+        {/* PROFILE FOOTER ONLY */}
         <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-full flex items-center justify-between p-2 rounded-2xl transition-all hover:bg-gray-50">
             <div className="flex items-center gap-3 overflow-hidden">
@@ -193,7 +193,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* MAIN CONTENT WORKSPACE */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         
-        {/* ✨ RESTORED & ADJUSTED DESIGN: DUAL DESKTOP/MOBILE TOP RIGHT BAR CONTAINER */}
+        {/* TOP RIGHT BAR CONTAINER */}
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40">
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg lg:hidden">
             <Menu size={24} />
