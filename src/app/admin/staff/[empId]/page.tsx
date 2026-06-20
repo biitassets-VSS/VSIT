@@ -110,7 +110,14 @@ export default function StaffProfileView() {
   // --- HANDLER: GRANT LOGIN ACCESS ---
   const handleEnableLogin = async () => {
     if (!staff || !staff.email) return alert("Staff member must have a valid email address.");
-    if (!passwordInput) return alert("Please assign a secure password first.");
+    
+    // Clean inputs to prevent hidden spaces from breaking Supabase
+    const cleanEmail = staff.email.trim();
+    const cleanPassword = passwordInput.trim();
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      return alert("Supabase requires passwords to be at least 6 characters long.");
+    }
     
     setIsProcessing(true);
     try {
@@ -121,37 +128,47 @@ export default function StaffProfileView() {
         { auth: { persistSession: false } }
       );
 
-      const { error: authError } = await authClient.auth.signUp({
-        email: staff.email,
-        password: passwordInput,
+      const { data: authData, error: authError } = await authClient.auth.signUp({
+        email: cleanEmail,
+        password: cleanPassword,
       });
 
-      if (authError && !authError.message.includes('already registered')) {
-        throw new Error("Could not create login account: " + authError.message);
+      // Safely parse Supabase Auth Errors
+      if (authError) {
+        const errorText = authError.message || JSON.stringify(authError);
+        // If the user already exists in the Auth tab, we can skip throwing a hard error and just update their status below.
+        if (!errorText.toLowerCase().includes('already registered')) {
+          throw new Error("Supabase Auth Error: " + errorText);
+        }
       }
 
       // 2. Save to Profiles Table
-      await supabase.from('profiles').upsert({
-        email: staff.email,
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        email: cleanEmail,
         name: staff.name,
         full_name: staff.name,
         emp_code: staff.emp_code,
         role: 'staff'
       });
 
+      if (profileError) throw new Error("Profile creation failed: " + profileError.message);
+
       // 3. Update Staff Status & Password
-      await supabase.from('staff').update({ 
+      const { error: staffUpdateError } = await supabase.from('staff').update({ 
         status: 'Active', 
-        password: passwordInput 
+        password: cleanPassword 
       }).eq('emp_code', staff.emp_code);
 
+      if (staffUpdateError) throw new Error("Staff update failed: " + staffUpdateError.message);
+
       setHasProfile(true);
-      setStaff({ ...staff, status: 'Active', password: passwordInput });
+      setStaff({ ...staff, status: 'Active', password: cleanPassword });
       setShowLoginSetup(false);
       alert("Login access granted successfully!");
 
     } catch (error: any) {
-      alert("Error granting access: " + error.message);
+      console.error("Full Login Grant Error:", error);
+      alert("Error granting access: " + (error.message || JSON.stringify(error)));
     } finally {
       setIsProcessing(false);
     }
@@ -318,7 +335,7 @@ export default function StaffProfileView() {
                           type="text" 
                           value={passwordInput} 
                           onChange={e => setPasswordInput(e.target.value)} 
-                          placeholder="Type a secure password..." 
+                          placeholder="Type a secure password (min 6 characters)..." 
                           className="w-full pl-10 pr-4 py-3 rounded-lg border border-teal-200 outline-none focus:border-teal-500 text-sm font-bold shadow-sm bg-white"
                         />
                       </div>
