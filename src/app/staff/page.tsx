@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Package, CheckCircle2, Camera, ArrowLeft, Trash2, 
   MessageSquare, ShieldAlert, Send, Ticket, PlusCircle, 
-  Timer, PauseCircle, MonitorUp, ImagePlus, RefreshCw, ClipboardCheck
+  Timer, PauseCircle, MonitorUp, ImagePlus, RefreshCw, ClipboardCheck,
+  AlertCircle, Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -63,14 +64,17 @@ export default function StaffDashboardPage() {
   const [viewState, setViewState] = useState<'dashboard' | 'inspecting' | 'raising_ticket' | 'requesting_asset' | 'replacing_asset'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssignedAsset | null>(null);
   
-  const [photos, setPhotos] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Forms
   const [ticketForm, setTicketForm] = useState({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
   const [assetReplaceForm, setAssetReplaceForm] = useState({ assetId: '', reason: '' });
+
+  // Inspection Form States
+  const [inspectNotes, setInspectNotes] = useState('');
+  const [inspectPhotos, setInspectPhotos] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 1. FETCH DATA & START LIVE SYNC
   useEffect(() => {
@@ -186,20 +190,19 @@ export default function StaffDashboardPage() {
   // --- Handlers ---
   const openInspection = (asset: AssignedAsset) => {
     setSelectedAsset(asset);
-    setPhotos({});
-    setNotes('');
+    setInspectPhotos([]);
+    setInspectNotes('');
     setViewState('inspecting');
   };
 
   const scrollToAssets = () => document.getElementById('my-assets-section')?.scrollIntoView({ behavior: 'smooth' });
 
-  // 1. TICKET SUBMISSION (FIXED COLUMNS)
+  // 1. TICKET SUBMISSION 
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
     setIsSubmitting(true);
     try {
       const { data, error } = await supabase.from('tickets').insert([{
-        // Mapped Category and Priority directly into the Subject line to match DB Schema
         subject: `[${ticketForm.category}] ${ticketForm.title} (${ticketForm.priority} Priority)`,
         description: ticketForm.description,
         status: 'Open',
@@ -231,7 +234,7 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 2. ASSET REQUEST (FIXED COLUMNS)
+  // 2. ASSET REQUEST 
   const handleSubmitAssetRequest = async () => {
     if (!assetRequestForm.reason) return alert("Please provide a reason.");
     setIsSubmitting(true);
@@ -268,7 +271,7 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 3. ASSET REPLACE (FIXED COLUMNS)
+  // 3. ASSET REPLACE
   const handleSubmitAssetReplace = async () => {
     if (!assetReplaceForm.assetId || !assetReplaceForm.reason) return alert("Please select an asset and provide a reason.");
     setIsSubmitting(true);
@@ -304,6 +307,67 @@ export default function StaffDashboardPage() {
       alert("Error: " + error.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // 4. INSPECTION CAMERA & SUBMISSION LOGIC
+  const handlePhotoCaptureWithWatermark = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !selectedAsset) return;
+
+    const maxPhotos = selectedAsset.category === 'Laptop' ? 5 : 2;
+    if (inspectPhotos.length + files.length > maxPhotos) {
+      alert(`Error: ${selectedAsset.category}s require exactly ${maxPhotos} photos.`);
+      return;
+    }
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width; canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          ctx.drawImage(img, 0, 0);
+          ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+          ctx.fillRect(0, img.height - 60, img.width, 60);
+          ctx.font = "bold 24px Arial";
+          ctx.fillStyle = "white";
+          const timestamp = new Date().toLocaleString();
+          ctx.fillText(`Scanned: ${timestamp}`, 20, img.height - 20);
+          setInspectPhotos(prev => [...prev, canvas.toDataURL('image/jpeg', 0.8)]);
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleUpdateInspection = async () => {
+    if (!selectedAsset) return;
+    const reqPhotos = selectedAsset.category === 'Laptop' ? 5 : 2;
+    if (inspectPhotos.length !== reqPhotos) {
+      alert(`Please upload exactly ${reqPhotos} photos for this ${selectedAsset.category}.`);
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await supabase.from('assets').update({
+        inspection_status: 'Pending Admin Review',
+        inspection_notes: inspectNotes,
+        photos: inspectPhotos,
+        updated_at: new Date().toISOString()
+      }).eq('id', selectedAsset.id);
+      
+      alert("Inspection Submitted Successfully! Admin will review it shortly.");
+      setAssets(prev => prev.map(a => a.id === selectedAsset.id ? { ...a, inspectionStatus: 'Pending Approval' } : a));
+      setViewState('dashboard');
+    } catch(err:any) { 
+      alert("Error: " + err.message); 
+    } finally { 
+      setIsSubmitting(false); 
     }
   };
 
@@ -568,12 +632,75 @@ export default function StaffDashboardPage() {
         </div>
       )}
 
+      {/* FULLY RESTORED INSPECTION CAMERA TOOLS */}
       {viewState === 'inspecting' && selectedAsset && (
-        <div className="space-y-6">
-           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Dashboard</button>
+        <div className="space-y-6 max-w-2xl">
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft size={16} /> Back to Dashboard
+          </button>
+          
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-             <h2 className="text-2xl font-black text-gray-900 mb-2">Inspection: {selectedAsset.name}</h2>
-             <div className="p-10 border-2 border-dashed border-gray-200 rounded-2xl text-center text-gray-400 font-bold">Camera tools</div>
+            <div className="mb-6 border-b border-gray-100 pb-4">
+              <h2 className="text-2xl font-black text-[#002B49] flex items-center gap-2">
+                <ClipboardCheck className="text-orange-500"/> Inspection: {selectedAsset.name}
+              </h2>
+              <p className="text-sm font-bold text-gray-500 mt-1">Tag ID: {selectedAsset.tagId}</p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 text-xs font-bold text-orange-800 flex items-start gap-2">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                <p>Rules: {selectedAsset.category === 'Laptop' ? 'Laptops require exactly 5 photos.' : 'Other assets require exactly 2 photos.'} All photos will be automatically watermarked with the date and time.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Add Inspection Notes</label>
+                <textarea 
+                  rows={3} 
+                  placeholder="Describe the current physical condition..." 
+                  value={inspectNotes} 
+                  onChange={e => setInspectNotes(e.target.value)} 
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none text-sm font-medium resize-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">
+                  Upload Photos ({inspectPhotos.length} / {selectedAsset.category === 'Laptop' ? 5 : 2})
+                </label>
+                <div className="flex gap-4 items-center">
+                  <button onClick={() => fileInputRef.current?.click()} className="px-5 py-3 bg-white border border-gray-200 shadow-sm rounded-xl text-sm font-bold text-gray-700 flex items-center gap-2 hover:bg-gray-50 transition-colors">
+                    <Camera size={18}/> Choose Images
+                  </button>
+                  <input type="file" multiple accept="image/*" ref={fileInputRef} onChange={handlePhotoCaptureWithWatermark} className="hidden" />
+                  
+                  {inspectPhotos.length > 0 && (
+                    <span className="text-xs font-black text-green-600 flex items-center gap-1 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
+                      <CheckCircle2 size={14}/> Photos Ready
+                    </span>
+                  )}
+                </div>
+                
+                {inspectPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-4">
+                    {inspectPhotos.map((img, idx) => (
+                      <div key={idx} className="aspect-square rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button 
+                onClick={handleUpdateInspection} 
+                disabled={isSubmitting} 
+                className="w-full py-4 bg-orange-600 text-white font-black rounded-xl hover:bg-orange-700 transition-all shadow-sm flex items-center justify-center gap-2 text-sm mt-4"
+              >
+                {isSubmitting ? <Loader2 size={18} className="animate-spin"/> : 'Submit Inspection to Admin'}
+              </button>
+            </div>
           </div>
         </div>
       )}
