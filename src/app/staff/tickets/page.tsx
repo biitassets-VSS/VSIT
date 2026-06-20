@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Ticket, AlertCircle, Clock, CheckCircle2, 
   PauseCircle, ArrowLeft, MessageSquare, Send, 
-  Tag, Timer, Loader2, User
+  Tag, Timer, Loader2, User, ShieldAlert 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
