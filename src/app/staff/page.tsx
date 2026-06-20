@@ -8,6 +8,17 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
+// --- Smart Status Formatter (Fixes missing status designs) ---
+const formatStatus = (s?: string) => {
+  if (!s) return 'Open';
+  const lower = s.toLowerCase().trim();
+  if (lower.includes('resolve') || lower.includes('close')) return 'Resolved';
+  if (lower.includes('progress') || lower.includes('process')) return 'In Progress';
+  if (lower.includes('hold') || lower.includes('pause')) return 'Hold';
+  if (lower.includes('open')) return 'Open';
+  return s.charAt(0).toUpperCase() + s.slice(1); // Fallback capitalized
+};
+
 // --- Interfaces ---
 interface AssignedAsset {
   id: string;
@@ -31,7 +42,7 @@ interface StaffTicket {
   id: string;
   title: string;
   description: string;
-  status: 'Open' | 'In Progress' | 'Hold' | 'Resolved';
+  status: 'Open' | 'In Progress' | 'Hold' | 'Resolved' | string;
   estimatedTime?: string;
   date: string;
   replies: TicketReply[];
@@ -62,16 +73,20 @@ export default function StaffDashboardPage() {
   const [assetRequestForm, setAssetRequestForm] = useState({ category: 'Mouse', reason: '' });
   const [assetReplaceForm, setAssetReplaceForm] = useState({ assetId: '', reason: '' });
 
-  // 1. FETCH LIVE DATA 
+  // 1. FETCH DATA & START LIVE SYNC
   useEffect(() => {
+    let isMounted = true;
+
     const loadData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         const userEmail = user?.email || localStorage.getItem('userEmail');
 
         if (!userEmail) {
-          setStaffUser({ name: 'Guest User', empCode: 'GUEST-000', email: 'Please log in' });
-          setIsLoaded(true);
+          if (isMounted) {
+            setStaffUser({ name: 'Guest User', empCode: 'GUEST-000', email: 'Please log in' });
+            setIsLoaded(true);
+          }
           return;
         }
 
@@ -83,7 +98,7 @@ export default function StaffDashboardPage() {
           email: profile?.email || userEmail 
         };
         
-        setStaffUser(currentUser);
+        if (isMounted) setStaffUser(currentUser);
 
         // --- FETCH TICKETS ---
         if (currentUser.empCode !== 'N/A') {
@@ -94,12 +109,12 @@ export default function StaffDashboardPage() {
             .order('created_at', { ascending: false })
             .limit(3);
 
-          if (ticketRes) {
+          if (isMounted && ticketRes) {
             setRecentTickets(ticketRes.map((t: any) => ({
               id: t.id,
               title: t.subject || t.title || 'No Subject',
               description: t.description || '',
-              status: t.status || 'Open',
+              status: formatStatus(t.status), // Auto-normalize status
               estimatedTime: t.waiting_time || t.estimated_time || '',
               date: t.created_at ? new Date(t.created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date',
               replies: t.replies || []
@@ -107,7 +122,7 @@ export default function StaffDashboardPage() {
           }
         }
 
-        // --- FETCH ASSETS (DRAGNET METHOD) ---
+        // --- FETCH ASSETS (DRAGNET) ---
         let fetchedAssets: any[] = [];
         if (currentUser.empCode !== 'N/A') {
           const { data, error } = await supabase.from('assets').select('*').eq('emp_code', currentUser.empCode);
@@ -126,7 +141,7 @@ export default function StaffDashboardPage() {
           if (!error && data && data.length > 0) fetchedAssets = data;
         }
 
-        if (fetchedAssets.length > 0) {
+        if (isMounted && fetchedAssets.length > 0) {
           setAssets(fetchedAssets.map((a: any) => ({
             id: a.id,
             tagId: a.tag_id || a.asset_tag || 'N/A',
@@ -141,11 +156,33 @@ export default function StaffDashboardPage() {
       } catch (err) {
         console.error("Dashboard Load Error:", err);
       } finally {
-        setIsLoaded(true);
+        if (isMounted) setIsLoaded(true);
       }
     };
 
+    // Initial Load
     loadData();
+
+    // LIVE SUPABASE REALTIME SUBSCRIPTIONS
+    const ticketsChannel = supabase
+      .channel('realtime-tickets-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+        loadData(); // Instantly refresh data when Admin makes a change
+      })
+      .subscribe();
+
+    const assetsChannel = supabase
+      .channel('realtime-assets-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
+        loadData(); // Instantly refresh data if Admin assigns an asset
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(ticketsChannel);
+      supabase.removeChannel(assetsChannel);
+    };
   }, []);
 
   // --- Handlers ---
@@ -156,19 +193,12 @@ export default function StaffDashboardPage() {
     setViewState('inspecting');
   };
 
-  const scrollToAssets = () => {
-    document.getElementById('my-assets-section')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  // =========================================================================
-  // SEAMLESS REAL-TIME SUBMISSION HANDLERS (NO PAGE REFRESH NEEDED)
-  // =========================================================================
+  const scrollToAssets = () => document.getElementById('my-assets-section')?.scrollIntoView({ behavior: 'smooth' });
 
   const handleSubmitTicket = async () => {
     if (!ticketForm.title || !ticketForm.description) return alert("Please fill in all fields.");
     setIsSubmitting(true);
     try {
-      // Added .select() to grab the newly created ticket instantly
       const { data, error } = await supabase.from('tickets').insert([{
         subject: ticketForm.title,
         description: ticketForm.description,
@@ -181,24 +211,22 @@ export default function StaffDashboardPage() {
 
       if (error) throw error;
 
-      // Update local state instantly so it appears on the dashboard
       if (data && data.length > 0) {
         const newTicket: StaffTicket = {
           id: data[0].id,
           title: data[0].subject || data[0].title || 'No Subject',
           description: data[0].description || '',
-          status: data[0].status || 'Open',
+          status: formatStatus(data[0].status),
           estimatedTime: data[0].waiting_time || data[0].estimated_time || '',
           date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           replies: data[0].replies || []
         };
-        // Add new ticket to top of list, keep maximum of 3 for the preview
         setRecentTickets(prev => [newTicket, ...prev].slice(0, 3));
       }
 
       alert('Ticket raised successfully!');
-      setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' }); // Reset Form
-      setViewState('dashboard'); // Return to dashboard seamlessly
+      setTicketForm({ title: '', category: 'Hardware', priority: 'Medium', description: '' });
+      setViewState('dashboard');
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -226,7 +254,7 @@ export default function StaffDashboardPage() {
           id: data[0].id,
           title: data[0].subject,
           description: data[0].description,
-          status: data[0].status,
+          status: formatStatus(data[0].status),
           estimatedTime: '',
           date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           replies: []
@@ -266,7 +294,7 @@ export default function StaffDashboardPage() {
           id: data[0].id,
           title: data[0].subject,
           description: data[0].description,
-          status: data[0].status,
+          status: formatStatus(data[0].status),
           estimatedTime: '',
           date: new Date(data[0].created_at).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           replies: []
@@ -332,10 +360,11 @@ export default function StaffDashboardPage() {
           </div>
 
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-5 sm:p-6 border-b border-gray-100">
+            <div className="p-5 sm:p-6 border-b border-gray-100 flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black text-[#002B49] flex items-center gap-2">
-                <Ticket size={20} className="text-[#006456]" /> My IT Tickets
+                <Ticket size={20} className="text-[#006456]" /> My IT Tickets 
               </h2>
+              <span className="text-[10px] bg-teal-50 text-teal-600 font-bold px-2 py-0.5 rounded-full animate-pulse ml-auto">Live Sync Active</span>
             </div>
             {recentTickets.length === 0 ? (
                <div className="p-8 text-center text-gray-400 font-bold text-sm">No recent tickets.</div>
@@ -447,7 +476,7 @@ export default function StaffDashboardPage() {
         </>
       )}
 
-      {/* Forms code remains exactly the same to preserve functionality */}
+      {/* Forms Segment (Unchanged Structurally) */}
       {viewState === 'raising_ticket' && (
         <div className="space-y-6 max-w-2xl">
           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
@@ -458,22 +487,12 @@ export default function StaffDashboardPage() {
             <div className="space-y-5">
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase mb-2">Issue Title</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Laptop screen flickering" 
-                  value={ticketForm.title}
-                  onChange={(e) => setTicketForm({...ticketForm, title: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
-                />
+                <input type="text" placeholder="e.g. Laptop screen flickering" value={ticketForm.title} onChange={(e) => setTicketForm({...ticketForm, title: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"/>
               </div>
               <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-black text-gray-500 uppercase mb-2">Category</label>
-                  <select 
-                    value={ticketForm.category}
-                    onChange={(e) => setTicketForm({...ticketForm, category: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold"
-                  >
+                  <select value={ticketForm.category} onChange={(e) => setTicketForm({...ticketForm, category: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold">
                     <option value="Hardware">Hardware Issue</option>
                     <option value="Internet">Internet / Network</option>
                     <option value="Software">Software</option>
@@ -481,11 +500,7 @@ export default function StaffDashboardPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-black text-gray-500 uppercase mb-2">Priority</label>
-                  <select 
-                    value={ticketForm.priority}
-                    onChange={(e) => setTicketForm({...ticketForm, priority: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold"
-                  >
+                  <select value={ticketForm.priority} onChange={(e) => setTicketForm({...ticketForm, priority: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold">
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High (Urgent)</option>
@@ -494,19 +509,9 @@ export default function StaffDashboardPage() {
               </div>
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase mb-2">Description</label>
-                <textarea 
-                  rows={4}
-                  placeholder="Provide more details..." 
-                  value={ticketForm.description}
-                  onChange={(e) => setTicketForm({...ticketForm, description: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium"
-                />
+                <textarea rows={4} placeholder="Provide more details..." value={ticketForm.description} onChange={(e) => setTicketForm({...ticketForm, description: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium"/>
               </div>
-              <button 
-                onClick={handleSubmitTicket}
-                disabled={isSubmitting}
-                className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl"
-              >
+              <button onClick={handleSubmitTicket} disabled={isSubmitting} className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl">
                 {isSubmitting ? 'Submitting...' : 'Submit Ticket'}
               </button>
             </div>
@@ -516,51 +521,24 @@ export default function StaffDashboardPage() {
 
       {viewState === 'requesting_asset' && (
         <div className="space-y-6 max-w-2xl">
-          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to Dashboard
-          </button>
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Dashboard</button>
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
             <div className="mb-6 border-b border-gray-100 pb-4">
-              <div className="w-12 h-12 bg-teal-50 text-[#006456] rounded-2xl flex items-center justify-center mb-4">
-                <PlusCircle size={24} />
-              </div>
+              <div className="w-12 h-12 bg-teal-50 text-[#006456] rounded-2xl flex items-center justify-center mb-4"><PlusCircle size={24} /></div>
               <h2 className="text-2xl font-black text-gray-900">Request New Asset</h2>
-              <p className="text-sm font-medium text-gray-500 mt-1">Submit a request to Admin for new hardware.</p>
             </div>
-
             <div className="space-y-5">
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase mb-2">What do you need?</label>
-                <select 
-                  value={assetRequestForm.category}
-                  onChange={(e) => setAssetRequestForm({...assetRequestForm, category: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
-                >
-                  <option value="Mouse">Mouse</option>
-                  <option value="Keyboard">Keyboard</option>
-                  <option value="Monitor">Monitor</option>
-                  <option value="Headphones">Headphones</option>
+                <select value={assetRequestForm.category} onChange={(e) => setAssetRequestForm({...assetRequestForm, category: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none">
+                  <option value="Mouse">Mouse</option><option value="Keyboard">Keyboard</option><option value="Monitor">Monitor</option><option value="Headphones">Headphones</option>
                 </select>
               </div>
-              
               <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason for Request</label>
-                <textarea 
-                  rows={4}
-                  placeholder="Why do you need this asset?" 
-                  value={assetRequestForm.reason}
-                  onChange={(e) => setAssetRequestForm({...assetRequestForm, reason: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"
-                />
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason</label>
+                <textarea rows={4} value={assetRequestForm.reason} onChange={(e) => setAssetRequestForm({...assetRequestForm, reason: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"/>
               </div>
-
-              <button 
-                onClick={handleSubmitAssetRequest}
-                disabled={isSubmitting}
-                className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl"
-              >
-                {isSubmitting ? 'Submitting...' : 'Send Request to Admin'}
-              </button>
+              <button onClick={handleSubmitAssetRequest} disabled={isSubmitting} className="w-full py-4 bg-[#006456] hover:bg-teal-800 text-white font-black rounded-xl">{isSubmitting ? 'Submitting...' : 'Send Request'}</button>
             </div>
           </div>
         </div>
@@ -568,59 +546,29 @@ export default function StaffDashboardPage() {
 
       {viewState === 'replacing_asset' && (
         <div className="space-y-6 max-w-2xl">
-          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to Dashboard
-          </button>
+          <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Dashboard</button>
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
             <div className="mb-6 border-b border-gray-100 pb-4">
-              <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4">
-                <RefreshCw size={24} />
-              </div>
+              <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4"><RefreshCw size={24} /></div>
               <h2 className="text-2xl font-black text-gray-900">Replace Asset</h2>
-              <p className="text-sm font-medium text-gray-500 mt-1">Request a replacement for a broken or outdated asset.</p>
             </div>
-
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Select Asset to Replace</label>
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Select Asset</label>
                 {assets.length === 0 ? (
-                  <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-bold">
-                    You have no assets currently assigned to you to replace.
-                  </div>
+                  <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-bold">No assets assigned.</div>
                 ) : (
-                  <select 
-                    value={assetReplaceForm.assetId}
-                    onChange={(e) => setAssetReplaceForm({...assetReplaceForm, assetId: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none"
-                  >
+                  <select value={assetReplaceForm.assetId} onChange={(e) => setAssetReplaceForm({...assetReplaceForm, assetId: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-bold focus:border-teal-500 focus:outline-none">
                     <option value="">-- Select an Asset --</option>
-                    {assets.map(asset => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.name} ({asset.tagId})
-                      </option>
-                    ))}
+                    {assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name} ({asset.tagId})</option>)}
                   </select>
                 )}
               </div>
-              
               <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason for Replacement</label>
-                <textarea 
-                  rows={4}
-                  placeholder="Is it broken? Outdated? Won't turn on?" 
-                  value={assetReplaceForm.reason}
-                  onChange={(e) => setAssetReplaceForm({...assetReplaceForm, reason: e.target.value})}
-                  className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"
-                />
+                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Reason</label>
+                <textarea rows={4} value={assetReplaceForm.reason} onChange={(e) => setAssetReplaceForm({...assetReplaceForm, reason: e.target.value})} className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm font-medium focus:border-teal-500 focus:outline-none"/>
               </div>
-
-              <button 
-                onClick={handleSubmitAssetReplace}
-                disabled={isSubmitting || assets.length === 0}
-                className={`w-full py-4 font-black rounded-xl ${isSubmitting || assets.length === 0 ? 'bg-gray-300 text-gray-500' : 'bg-red-600 hover:bg-red-700 text-white'}`}
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Replacement Request'}
-              </button>
+              <button onClick={handleSubmitAssetReplace} disabled={isSubmitting || assets.length === 0} className={`w-full py-4 font-black rounded-xl ${isSubmitting || assets.length === 0 ? 'bg-gray-300 text-gray-500' : 'bg-red-600 hover:bg-red-700 text-white'}`}>{isSubmitting ? 'Submitting...' : 'Submit Request'}</button>
             </div>
           </div>
         </div>
@@ -628,19 +576,13 @@ export default function StaffDashboardPage() {
 
       {viewState === 'inspecting' && selectedAsset && (
         <div className="space-y-6">
-           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to Dashboard
-          </button>
+           <button onClick={() => setViewState('dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"><ArrowLeft size={16} /> Back to Dashboard</button>
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
              <h2 className="text-2xl font-black text-gray-900 mb-2">Inspection: {selectedAsset.name}</h2>
-             <p className="text-sm text-gray-500 font-bold mb-6">Tag: {selectedAsset.tagId}</p>
-             <div className="p-10 border-2 border-dashed border-gray-200 rounded-2xl text-center text-gray-400 font-bold">
-                 Camera tools will load here.
-             </div>
+             <div className="p-10 border-2 border-dashed border-gray-200 rounded-2xl text-center text-gray-400 font-bold">Camera tools</div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
