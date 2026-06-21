@@ -69,19 +69,17 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
-  // 🎯 GENERATES THE REAL LINK (Frozen to Asset & Category only so QR never twitches when typing notes)
+  // 🎯 FIX: Automatically includes the typed text inside the QR code so the phone auto-fills it!
   useEffect(() => {
     if (selectedAsset) {
       let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-      
-      if (baseDomain.includes('localhost')) {
-        baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your local IPv4 network address if testing locally!
-      }
+      if (baseDomain.includes('localhost')) baseDomain = 'http://192.168.1.25:3000'; 
       
       const safeCategory = encodeURIComponent(selectedCategory);
-      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCategory}`);
+      const safeCondition = encodeURIComponent(assetCondition || 'Verified remotely via mobile camera.');
+      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCategory}&condition=${safeCondition}`);
     }
-  }, [selectedAsset, selectedCategory]);
+  }, [selectedAsset, selectedCategory, assetCondition]);
 
   useEffect(() => {
     if (searchParams.get('open_inspection') === 'true' && assignedAssets.length > 0) {
@@ -90,6 +88,8 @@ function DashboardContent() {
       setSelectedAsset(foundAsset);
       setIsAssetUnlocked(true); 
       setSelectedCategory(searchParams.get('category') || foundAsset.category || 'Mouse');
+      // Auto-fill the text box from the phone link!
+      setAssetCondition(searchParams.get('condition') || 'Verified remotely via mobile camera.');
       setIsInspectionOpen(true);
     }
   }, [searchParams, assignedAssets]);
@@ -111,12 +111,7 @@ function DashboardContent() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       const fullName = profile?.full_name || profile?.name || 'Mohit Bahuguna';
       const empCode = profile?.emp_code || profile?.emp_id || 'EMP-7783';
       const userEmail = user.email || 'students_app05@outlook.com';
@@ -137,36 +132,18 @@ function DashboardContent() {
         });
       }
 
-      if (localAssets.length === 0) {
-        localAssets = [{
-          id: 'hp-mouse-id',
-          asset_name: 'HP Wired Mouse 100-22VN',
-          serial_number: '7CH41322VN',
-          category: 'Mouse',
-          status: 'Assigned'
-        }];
-      }
-
       let overdueCounter = 0;
       const parsedAssets = localAssets.map(asset => {
-        const assetInsps = inspectionsRes.data 
-          ? inspectionsRes.data.filter((i: any) => String(i.asset_id) === String(asset.id))
-          : [];
+        const assetInsps = inspectionsRes.data ? inspectionsRes.data.filter((i: any) => String(i.asset_id) === String(asset.id)) : [];
         const latestInsp = assetInsps[0];
 
         const lastInspDate = asset.last_inspection_date || latestInsp?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const upcomingInspDate = asset.upcoming_inspection_date || new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-
         const isOverdue = new Date(upcomingInspDate).getTime() < Date.now();
         let computedStatus = asset.inspection_status || latestInsp?.status || 'Pending';
 
-        if (asset.status?.toUpperCase() === 'WAITING') {
-          computedStatus = 'Sent for Approval';
-        }
-
-        if (isOverdue && computedStatus !== 'Sent for Approval' && computedStatus !== 'Passed') {
-          overdueCounter++;
-        }
+        if (asset.status?.toUpperCase() === 'WAITING') computedStatus = 'Sent for Approval';
+        if (isOverdue && computedStatus !== 'Sent for Approval' && computedStatus !== 'Passed') overdueCounter++;
 
         return {
           ...asset,
@@ -175,7 +152,7 @@ function DashboardContent() {
           lastInspection: lastInspDate,
           upcomingInspection: upcomingInspDate,
           isOverdue,
-          cloudlarePhotosLog: latestInsp?.photos || null
+          publicPhotosLog: latestInsp?.photos || null
         };
       });
 
@@ -203,7 +180,6 @@ function DashboardContent() {
   const handleVerifyAssetLock = (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError('');
-
     if (!selectedAsset) return;
     const targetTag = String(selectedAsset.asset_tag || selectedAsset.tag || '').trim().toLowerCase();
     const targetSerial = String(selectedAsset.serial_number || selectedAsset.serial || '').trim().toLowerCase();
@@ -222,7 +198,7 @@ function DashboardContent() {
     setIsCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1000 } }, 
+        video: { facingMode: 'environment', width: { ideal: 1920 } }, 
         audio: false
       });
       streamRef.current = stream;
@@ -238,9 +214,9 @@ function DashboardContent() {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
       
-      const maxDim = 1000;
-      let w = video.videoWidth || 1000;
-      let h = video.videoHeight || 600;
+      const maxDim = 1200; // High quality compression
+      let w = video.videoWidth || 1200;
+      let h = video.videoHeight || 720;
       if (w > maxDim) {
         h = Math.round((h * maxDim) / w);
         w = maxDim;
@@ -251,18 +227,17 @@ function DashboardContent() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, w, h);
-
         const watermarkString = `${new Date().toLocaleString()} | STAFF: ${staffProfile.name} | CODE: ${staffProfile.emp_code}`;
-        const barHeight = Math.max(35, h * 0.055);
+        const barHeight = Math.max(45, h * 0.06);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, h - barHeight, w, barHeight);
 
         ctx.fillStyle = '#f97316'; 
-        ctx.font = `bold ${Math.max(11, h * 0.026)}px monospace`;
+        ctx.font = `bold ${Math.max(12, h * 0.03)}px monospace`;
         ctx.textBaseline = 'middle';
-        ctx.fillText(watermarkString, 15, h - (barHeight / 2));
+        ctx.fillText(watermarkString, 20, h - (barHeight / 2));
 
-        setPhotos(prev => ({ ...prev, [activeAngleTarget]: canvas.toDataURL('image/jpeg', 0.70) }));
+        setPhotos(prev => ({ ...prev, [activeAngleTarget]: canvas.toDataURL('image/jpeg', 0.75) }));
         stopLiveVideoStream();
       }
     }
@@ -309,26 +284,15 @@ function DashboardContent() {
         const binaryString = window.atob(base64Data);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
+        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
 
         const fileName = `${selectedAsset.id}-${angle}-${Date.now()}.jpg`;
         const filePath = `inspections/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('inspections') 
-          .upload(filePath, bytes.buffer, {
-            contentType: 'image/jpeg',
-            upsert: true
-          });
-
+        const { error: uploadError } = await supabase.storage.from('inspections').upload(filePath, bytes.buffer, { contentType: 'image/jpeg', upsert: true });
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('inspections')
-          .getPublicUrl(filePath);
-
+        const { data: { publicUrl } } = supabase.storage.from('inspections').getPublicUrl(filePath);
         uploadedPhotoUrls[angle] = publicUrl;
       }
 
@@ -339,6 +303,7 @@ function DashboardContent() {
         last_inspection_date: new Date().toISOString()
       }).eq('id', selectedAsset.id);
 
+      // Ensures the photos save correctly to the database now!
       await supabase.from('inspections').insert([{
         asset_id: selectedAsset.id,
         status: 'Pending Verification',
@@ -351,7 +316,7 @@ function DashboardContent() {
       setIsInspectionOpen(false);
       resetModalState();
       loadDashboardData();
-      alert('Inspection submitted successfully! Data synced to dashboard tables.');
+      alert('Inspection submitted successfully! Images are now permanently saved in the database.');
     } catch (err: any) {
       alert(err.message || 'Error executing upload commands');
     } finally {
@@ -363,7 +328,6 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8 font-sans max-w-7xl mx-auto p-2">
-      {/* BANNER */}
       <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
         <h1 className="text-2xl font-black text-[#002B49]">Welcome back, {staffProfile?.name}! 👋</h1>
         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 font-bold">
@@ -371,7 +335,6 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* QUICK LINKS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET</button>
         <button onClick={() => { if(assignedAssets.length > 0) { setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); } }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-orange-50 text-orange-500"><ClipboardCheck size={20} /></div> SUBMIT INSPECTION</button>
@@ -379,14 +342,12 @@ function DashboardContent() {
         <button onClick={() => router.push('/staff/inspections')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-rose-50 text-rose-500"><RefreshCw size={20} /></div> MY INSPECTIONS</button>
       </div>
 
-      {/* STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">MY ASSETS</p><p className="text-3xl font-black text-gray-900">{stats.myAssets}</p></div><div className="p-4 rounded-2xl text-white bg-blue-500"><Laptop size={22} /></div></div>
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">NEEDS INSPECTION</p><p className="text-3xl font-black text-gray-900">{stats.needsInspection}</p></div><div className="p-4 rounded-2xl text-white bg-orange-500"><AlertCircle size={22} /></div></div>
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">IN REPAIR</p><p className="text-3xl font-black text-gray-900">{stats.inRepair}</p></div><div className="p-4 rounded-2xl text-white bg-rose-500"><Clock size={22} /></div></div>
       </div>
 
-      {/* ASSIGNED ASSET DETAILS */}
       <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2"><Laptop size={18} className="text-emerald-500" /><h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2></div>
         <div className="p-6 space-y-4">
@@ -399,17 +360,16 @@ function DashboardContent() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-3 py-1 bg-green-100 text-green-700 border border-green-200 rounded-full text-[10px] font-black uppercase tracking-wider">{asset.displayStatus}</span>
-                  <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-wider ${getInspectionBadgeStyle(asset.inspectionStatus, asset.isOverdue)}`}>
-                    {asset.isOverdue && asset.inspectionStatus !== 'Sent for Approval' ? 'OVER DUE' : asset.inspectionStatus}
-                  </span>
+                  <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-wider ${getInspectionBadgeStyle(asset.inspectionStatus, asset.isOverdue)}`}>{asset.isOverdue && asset.inspectionStatus !== 'Sent for Approval' ? 'OVER DUE' : asset.inspectionStatus}</span>
                 </div>
               </div>
 
-              {asset.cloudlarePhotosLog && (
+              {/* PERMANENT IMAGE THUMBNAILS DISPLAY HERE */}
+              {asset.publicPhotosLog && (
                 <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-100">
                   <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Permanent Verification Snapshots</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {Object.entries(asset.cloudlarePhotosLog).map(([angle, url]: any) => (
+                    {Object.entries(asset.publicPhotosLog).map(([angle, url]: any) => (
                       <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-blue-600 transition-colors">
                         <img src={url} alt="" className="w-full h-full object-cover" />
                       </a>
@@ -419,30 +379,15 @@ function DashboardContent() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
-                  <Calendar size={16} className="text-gray-400" />
-                  <div><p className="text-[10px] font-bold text-gray-400 uppercase">Last Inspection</p><p className="text-xs font-bold text-gray-800">{new Date(asset.lastInspection).toLocaleDateString()}</p></div>
-                </div>
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
-                  <Clock size={16} className={asset.isOverdue ? 'text-red-500' : 'text-gray-400'} />
-                  <div><p className="text-[10px] font-bold text-gray-400 uppercase">Upcoming Due Date</p><p className={`text-xs font-bold ${asset.isOverdue ? 'text-red-600 font-extrabold' : 'text-gray-800'}`}>{new Date(asset.upcomingInspection).toLocaleDateString()}</p></div>
-                </div>
-                <div className="flex items-center justify-end">
-                  <button 
-                    onClick={() => { setSelectedAsset(asset); resetModalState(); setIsInspectionOpen(true); }}
-                    disabled={asset.inspectionStatus === 'Sent for Approval'}
-                    className="w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase border bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                  >
-                    {asset.inspectionStatus === 'Sent for Approval' ? 'Awaiting Approval' : 'Launch Popup Form'}
-                  </button>
-                </div>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Calendar size={16} className="text-gray-400" /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Last Inspection</p><p className="text-xs font-bold text-gray-800">{new Date(asset.lastInspection).toLocaleDateString()}</p></div></div>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Clock size={16} className={asset.isOverdue ? 'text-red-500' : 'text-gray-400'} /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Upcoming Due Date</p><p className={`text-xs font-bold ${asset.isOverdue ? 'text-red-600 font-extrabold' : 'text-gray-800'}`}>{new Date(asset.upcomingInspection).toLocaleDateString()}</p></div></div>
+                <div className="flex items-center justify-end"><button onClick={() => { setSelectedAsset(asset); resetModalState(); setIsInspectionOpen(true); }} disabled={asset.inspectionStatus === 'Sent for Approval'} className="w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase border bg-white text-gray-700 border-gray-200 hover:bg-gray-50">{asset.inspectionStatus === 'Sent for Approval' ? 'Awaiting Approval' : 'Launch Popup Form'}</button></div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* COMPLIANCE AUTOMATED MODAL POPUP */}
       {isInspectionOpen && selectedAsset && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-3xl w-full flex flex-col max-h-[85vh] shadow-2xl border border-gray-100">
@@ -487,15 +432,10 @@ function DashboardContent() {
                     <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-600 focus:bg-white text-gray-800 leading-relaxed" />
                   </div>
 
-                  {/* 🚀 BULLETPROOF STEP 4: USES REAL ONLINE QR API ENGINE */}
                   <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-6">
                     <div className="shrink-0 bg-white p-2 rounded-xl border border-blue-200 shadow-xs flex items-center justify-center min-w-[140px] min-h-[140px]">
                       {shareableSessionLink ? (
-                        <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareableSessionLink)}`} 
-                          alt="Real QR Code" 
-                          className="w-32 h-32 object-contain"
-                        />
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareableSessionLink)}`} alt="Real QR Code" className="w-32 h-32 object-contain" />
                       ) : (
                         <span className="text-[10px] text-gray-400 font-bold">Loading QR...</span>
                       )}
@@ -530,11 +470,7 @@ function DashboardContent() {
                                 <button type="button" onClick={() => setPhotos(prev => { const copy = {...prev}; delete copy[angle]; return copy; })} className="absolute top-1.5 right-1.5 bg-black/70 text-white p-1 rounded-full"><X size={12} /></button>
                               </>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => startLiveVideoStream(angle)}
-                                className="w-full h-full flex flex-col items-center justify-center text-center p-4 hover:bg-gray-100/40 transition-colors"
-                              >
+                              <button type="button" onClick={() => startLiveVideoStream(angle)} className="w-full h-full flex flex-col items-center justify-center text-center p-4 hover:bg-gray-100/40 transition-colors">
                                 <Camera className="mx-auto text-gray-300 group-hover:text-blue-600 transition-colors mb-1" size={22} />
                                 <span className="text-[10px] text-gray-400 font-black uppercase tracking-wide block">Phone Live Lens</span>
                               </button>
@@ -550,14 +486,7 @@ function DashboardContent() {
 
             <div className="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-3xl">
               <button type="button" onClick={() => { stopLiveVideoStream(); setIsInspectionOpen(false); }} className="px-4 py-2 text-xs font-bold hover:bg-gray-200 rounded-xl">Cancel</button>
-              <button 
-                type="submit"
-                onClick={handleInspectionSubmit} 
-                disabled={isSubmitting || !isAssetUnlocked || !assetCondition.trim()} 
-                className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs ${
-                  isAssetUnlocked && assetCondition.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'
-                }`}
-              >
+              <button type="submit" onClick={handleInspectionSubmit} disabled={isSubmitting || !isAssetUnlocked || !assetCondition.trim()} className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs ${isAssetUnlocked && assetCondition.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'}`}>
                 {isSubmitting ? 'Transmitting...' : 'Submit Verification'}
               </button>
             </div>
@@ -565,14 +494,24 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* SECURE OVERLAY INTERCEPTOR LENS */}
+      {/* 🚀 FIX: FULL SCREEN MOBILE CAMERA OVERLAY APP UI */}
       {isCameraActive && (
-        <div className="fixed inset-0 bg-black/90 z-60 flex flex-col items-center justify-center p-4">
-          <div className="relative w-full max-w-2xl bg-black rounded-2xl overflow-hidden border border-gray-800">
-            <video ref={videoRef} autoPlay playsInline className="w-full h-auto aspect-video object-cover" />
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 px-4">
-              <button type="button" onClick={stopLiveVideoStream} className="px-4 py-2.5 bg-gray-800 text-white rounded-xl text-xs font-bold uppercase">Close Stream</button>
-              <button type="button" onClick={captureSnapshotFrame} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wide flex items-center gap-1"><Camera size={14}/> Take Live Photo</button>
+        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+          <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
+          
+          <div className="relative z-10 w-full h-full flex flex-col justify-end p-8 bg-gradient-to-t from-black/90 via-transparent to-transparent">
+            <div className="flex justify-between items-center w-full max-w-md mx-auto mb-6">
+              
+              <button type="button" onClick={stopLiveVideoStream} className="w-14 h-14 bg-gray-800/80 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95">
+                <X size={24} />
+              </button>
+              
+              <button type="button" onClick={captureSnapshotFrame} className="w-20 h-20 bg-blue-600 border-4 border-blue-400 text-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(37,99,235,0.6)] transition-transform active:scale-95">
+                <Camera size={32}/>
+              </button>
+              
+              <div className="w-14 h-14" /> {/* Blank spacer to keep button perfectly centered */}
+
             </div>
           </div>
         </div>
