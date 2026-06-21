@@ -1,369 +1,199 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Ticket, AlertCircle, Clock, CheckCircle2, 
-  PauseCircle, ArrowLeft, MessageSquare, Send, 
-  Tag, Timer, Loader2, User, ShieldAlert, Filter
-} from 'lucide-react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { Ticket, ClipboardList, CheckCircle2, ArrowLeft, Loader2, X, Upload } from 'lucide-react';
 
-// --- Smart Status Formatter ---
-const formatStatus = (s?: string) => {
-  if (!s) return 'Open';
-  const lower = s.toLowerCase().trim();
-  if (lower.includes('resolve') || lower.includes('close')) return 'Resolved';
-  if (lower.includes('progress') || lower.includes('process')) return 'In Progress';
-  if (lower.includes('hold') || lower.includes('pause')) return 'Hold';
-  if (lower.includes('open')) return 'Open';
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
-
-interface TicketReply {
-  id: string;
-  sender: 'Admin' | 'Staff';
-  name: string;
-  text: string;
-  date: string;
-}
-
-interface SupportTicket {
-  id: string;
-  title: string;
-  description: string;
-  status: 'Open' | 'In Progress' | 'Hold' | 'Resolved' | string;
-  estimatedTime?: string; 
-  date: string;
-  replies: TicketReply[];
-}
-
-export default function StaffTicketsPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'In Progress' | 'Hold' | 'Resolved'>('All');
-  const [isLoaded, setIsLoaded] = useState(false);
-  
-  const [staffName, setStaffName] = useState('Staff Member');
-  const [empCode, setEmpCode] = useState('');
-  
-  const [replyText, setReplyText] = useState('');
+function ITTicketsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ticketHistory, setTicketHistory] = useState<any[]>([]);
+  
+  // Modal & Form States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('Hardware');
+  const [note, setNote] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  // 1. FETCH TICKETS & START LIVE SYNC
   useEffect(() => {
-    let isMounted = true;
+    fetchTicketHistory();
+    // ⚡ DASHBOARD INTERCEPTOR: Instantly open the form if clicked from the home shortcut
+    if (searchParams.get('action') === 'new') {
+      setIsModalOpen(true);
+    }
+  }, [searchParams]);
 
-    const fetchMyTickets = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const userEmail = user?.email || localStorage.getItem('userEmail');
-
-        if (!userEmail) {
-          if (isMounted) setIsLoaded(true);
-          return;
-        }
-
-        const { data: profile } = await supabase.from('profiles').select('*').eq('email', userEmail).maybeSingle();
-
-        const currentName = profile?.full_name || profile?.name || localStorage.getItem('userName') || 'Staff Member';
-        const currentEmpCode = profile?.emp_code || profile?.employee_code || profile?.employee_id || profile?.emp_id || 'N/A';
-        
-        if (isMounted) {
-          setStaffName(currentName);
-          setEmpCode(currentEmpCode);
-        }
-
-        if (currentEmpCode !== 'N/A') {
-          const { data: ticketData, error } = await supabase
-            .from('tickets')
-            .select('*')
-            .eq('emp_code', currentEmpCode)
-            .order('created_at', { ascending: false });
-
-          if (error) throw error;
-
-          if (isMounted && ticketData) {
-            const mappedTickets = ticketData.map((t: any) => ({
-              id: t.id,
-              title: t.subject || t.title || 'No Subject',
-              description: t.description || 'No description provided.',
-              status: formatStatus(t.status), // Auto-normalize status
-              estimatedTime: t.waiting_time || t.estimated_time || '', 
-              date: t.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'Unknown Date',
-              replies: t.replies || []
-            }));
-
-            setTickets(mappedTickets);
-
-            // Auto-update the open ticket viewer if the Admin changes status mid-chat!
-            setSelectedTicket(prev => {
-              if (!prev) return null;
-              const freshMatch = mappedTickets.find(mt => mt.id === prev.id);
-              return freshMatch || prev;
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching my tickets:", err);
-      } finally {
-        if (isMounted) setIsLoaded(true);
+  const fetchTicketHistory = async () => {
+    try {
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+      if (isGuest) {
+        setTicketHistory([
+          { id: 'tck-1', title: 'Keyboard keys unresponsive', category: 'Hardware', note: 'The spacebar and E key are failing.', status: 'in_repair', created_at: new Date().toISOString() },
+          { id: 'tck-2', title: 'VPN disconnecting constantly', category: 'Internet', note: 'Drops every 10 minutes.', status: 'resolved', created_at: new Date().toISOString() }
+        ]);
+        setIsLoading(false);
+        return;
       }
-    };
 
-    fetchMyTickets();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const userEmail = user.email || 'migration_canberra.bi@outlook.com';
 
-    // LIVE SUPABASE REALTIME SUBSCRIPTIONS
-    const ticketsChannel = supabase
-      .channel('realtime-tickets-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-        fetchMyTickets(); // Instantly refresh data when Admin makes a change
-      })
-      .subscribe();
+      const { data } = await supabase
+        .from('tickets')
+        .select('*')
+        .or(`raised_by.eq.${user.id},raised_by.eq.${userEmail}`)
+        .order('created_at', { ascending: false });
 
-    return () => {
-      isMounted = false;
-      supabase.removeChannel(ticketsChannel);
-    };
-  }, []);
+      if (data) setTicketHistory(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleSendReply = async () => {
-    if (!selectedTicket || !replyText.trim()) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsSubmitting(true);
-
-    const newReplies = [...(selectedTicket.replies || [])];
-    newReplies.push({
-      id: Date.now().toString(),
-      sender: 'Staff',
-      name: staffName,
-      text: replyText.trim(),
-      date: new Date().toLocaleString()
-    });
+    setSuccessMessage('');
 
     try {
-      const { data, error } = await supabase.from('tickets').update({ replies: newReplies }).eq('id', selectedTicket.id).select();
-      if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Could not update. Check database permissions.");
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+      if (isGuest) {
+        const newMock = { id: `tck-${Date.now()}`, title, category, note, status: 'pending', created_at: new Date().toISOString() };
+        setTicketHistory(prev => [newMock, ...prev]);
+        setTitle('');
+        setNote('');
+        setSuccessMessage('Demo service ticket submitted successfully!');
+        setTimeout(() => { setIsModalOpen(false); setSuccessMessage(''); router.replace('/staff/tickets'); }, 1200);
+        return;
+      }
 
-      const updatedTicket = { ...selectedTicket, replies: newReplies, status: formatStatus(data[0].status) };
-      setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-      setSelectedTicket(updatedTicket);
-      setReplyText('');
-    } catch (error: any) {
-      alert("Failed to send reply: " + error.message);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase.from('tickets').insert([
+        { title, category, note, status: 'pending', raised_by: user.email }
+      ]);
+      if (error) throw error;
+
+      setTitle('');
+      setNote('');
+      setSuccessMessage('IT service ticket submitted successfully!');
+      fetchTicketHistory();
+      setTimeout(() => { setIsModalOpen(false); setSuccessMessage(''); router.replace('/staff/tickets'); }, 1200);
+    } catch (err: any) {
+      alert(err.message || 'Submission error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filteredTickets = tickets.filter(t => filterStatus === 'All' || t.status === filterStatus);
-  const openCount = tickets.filter(t => t.status === 'Open').length;
-  const inProgressCount = tickets.filter(t => t.status === 'In Progress').length;
-  const resolvedCount = tickets.filter(t => t.status === 'Resolved').length;
+  const getStatusBadge = (status: string) => {
+    const cleanStatus = status?.toLowerCase();
+    if (cleanStatus === 'resolved' || cleanStatus === 'completed') return <span className="px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-black uppercase tracking-wider border border-green-200">Resolved</span>;
+    if (cleanStatus === 'in_repair') return <span className="px-2.5 py-0.5 bg-rose-100 text-rose-700 rounded-full text-[10px] font-black uppercase tracking-wider border border-rose-200">In Repair</span>;
+    return <span className="px-2.5 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider animate-pulse border border-amber-200">Pending Review</span>;
+  };
 
-  if (!isLoaded) {
-    return (
-      <div className="p-10 text-center font-bold text-gray-500 flex items-center justify-center gap-2">
-        <Loader2 className="animate-spin text-teal-600" size={24} /> Loading My Tickets...
-      </div>
-    );
-  }
+  if (isLoading) return <div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin text-orange-500" /></div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10 max-w-5xl mx-auto px-4 sm:px-0">
+    <div className="space-y-6 animate-in fade-in duration-500">
       
-      {!selectedTicket ? (
-        <>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center shrink-0">
-                <Ticket className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-xl sm:text-2xl font-black text-gray-900">My IT Tickets</h1>
-                  <span className="text-[10px] bg-teal-50 text-teal-600 font-bold px-2 py-0.5 rounded-full animate-pulse">Live Sync Active</span>
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-gray-500 mt-0.5">Track your requests and communicate with IT.</p>
-              </div>
-            </div>
-            
-            <div className="flex gap-2 w-full md:w-auto">
-              <div className="bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
-                <p className="text-[9px] sm:text-[10px] font-bold text-red-600 uppercase">Open</p>
-                <p className="text-sm sm:text-base font-black text-red-900">{openCount}</p>
-              </div>
-              <div className="bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
-                <p className="text-[9px] sm:text-[10px] font-bold text-blue-600 uppercase">Process</p>
-                <p className="text-sm sm:text-base font-black text-blue-900">{inProgressCount}</p>
-              </div>
-              <div className="bg-green-50 border border-green-100 px-3 py-1.5 rounded-xl text-center flex-1 md:flex-none">
-                <p className="text-[9px] sm:text-[10px] font-bold text-green-600 uppercase">Resolved</p>
-                <p className="text-sm sm:text-base font-black text-green-900">{resolvedCount}</p>
-              </div>
-            </div>
+      {/* HEADER BAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 gap-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push('/staff')} className="p-2.5 hover:bg-gray-50 rounded-xl border border-gray-100 text-gray-600"><ArrowLeft size={18} /></button>
+          <div>
+            <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">MY IT TICKETS DETAILS</h1>
+            <p className="text-xs text-gray-400 font-bold mt-0.5">Track your active IT service desk queries and resolutions</p>
           </div>
+        </div>
+        <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all"><Ticket size={16} /> Raise New Ticket</button>
+      </div>
 
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            
-            <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center gap-2 overflow-x-auto">
-              <Filter size={16} className="text-gray-400 shrink-0" />
-              {['All', 'Open', 'In Progress', 'Hold', 'Resolved'].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status as any)}
-                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-[11px] sm:text-xs font-black whitespace-nowrap transition-colors ${
-                    filterStatus === status 
-                      ? 'bg-gray-900 text-white shadow-sm' 
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  {status}
-                </button>
+      {/* TICKET LOGS LISTING */}
+      <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2 bg-gray-50/20"><ClipboardList size={18} className="text-[#ff9800]" /><h2 className="text-xs font-black text-gray-900 uppercase tracking-wider">Historical Ticket Records Log</h2></div>
+        <div className="p-6">
+          {ticketHistory.length === 0 ? (
+            <div className="text-center py-16"><CheckCircle2 size={36} className="text-gray-300 mx-auto mb-2" /><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">No historical service tickets logged.</p></div>
+          ) : (
+            <div className="space-y-3">
+              {ticketHistory.map((t) => (
+                <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100/60 gap-3 hover:bg-gray-100/40 transition-colors">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-extrabold text-gray-900">{t.title}</span>
+                      <span className="text-[10px] text-gray-400 font-bold">[{t.category}] ({new Date(t.created_at).toLocaleDateString()})</span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium leading-relaxed max-w-3xl">{t.note}</p>
+                  </div>
+                  <div className="sm:text-right shrink-0">{getStatusBadge(t.status)}</div>
+                </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
 
-            {filteredTickets.length === 0 ? (
-              <div className="p-12 text-center flex flex-col items-center justify-center">
-                <CheckCircle2 size={48} className="text-gray-300 mb-4" />
-                <h3 className="text-lg font-black text-gray-900">No Tickets Found</h3>
-              </div>
-            ) : (
-              <div className="p-4 sm:p-6 space-y-5">
-                {filteredTickets.map(ticket => {
-                  const latestAdminReply = [...ticket.replies].reverse().find(r => r.sender === 'Admin');
+      {/* FORM OVERLAY DIALOG MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-gray-100 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+              <h3 className="text-sm font-black uppercase text-gray-900 flex items-center gap-2"><Ticket size={16} className="text-blue-500" /> Raise IT Service Ticket</h3>
+              {/* Clean Close Handler resetting URL query string parameters perfectly */}
+              <button type="button" onClick={() => { setIsModalOpen(false); router.replace('/staff/tickets'); }} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={18}/></button>
+            </div>
 
-                  return (
-                    <div 
-                      key={ticket.id} 
-                      onClick={() => setSelectedTicket(ticket)} 
-                      className="border border-gray-100 p-5 sm:p-6 rounded-2xl hover:border-teal-300 hover:shadow-md cursor-pointer transition-all group bg-white"
-                    >
-                      <div className="flex justify-between items-start mb-4 gap-4">
-                        <div className="min-w-0 w-full">
-                          <h3 className="text-lg sm:text-xl font-black text-[#002B49] group-hover:text-teal-600 transition-colors">{ticket.title}</h3>
-                          <p className="text-xs sm:text-sm font-medium text-gray-500 mt-1">{ticket.date}</p>
-                        </div>
-                        
-                        <div className={`px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider shrink-0 w-fit shadow-sm ${
-                          ticket.status === 'Resolved' ? 'bg-[#e6f7eb] text-[#008a4b]' :
-                          ticket.status === 'Open' ? 'bg-red-50 text-red-700' :
-                          ticket.status === 'In Progress' ? 'bg-blue-50 text-blue-700' :
-                          'bg-orange-50 text-orange-700'
-                        }`}>
-                          {ticket.status}
-                        </div>
-                      </div>
+            {successMessage && <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs rounded-xl text-center font-bold">{successMessage}</div>}
 
-                      {latestAdminReply && (
-                        <div className="bg-[#f0fcf6] border border-[#d1f0e0] p-4 rounded-xl mt-2">
-                          <p className="text-xs font-black text-[#006456] uppercase flex items-center gap-1.5 mb-2 tracking-wide">
-                            <MessageSquare size={14}/> LATEST UPDATE FROM ADMIN
-                          </p>
-                          <p className="text-[15px] font-medium text-[#004d40] leading-relaxed">
-                            {latestAdminReply.text}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-          <button onClick={() => setSelectedTicket(null)} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to My Tickets
-          </button>
-
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start mb-6 border-b border-gray-100 pb-6 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-teal-600 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                    <Tag size={10} /> {selectedTicket.id.substring(0, 8)}
-                  </span>
-                  <span className="text-xs font-bold text-gray-400">Submitted: {selectedTicket.date}</span>
-                </div>
-                <h2 className="text-2xl font-black text-[#002B49]">{selectedTicket.title}</h2>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">What is the issue title?</label>
+                <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="Describe the issue briefly" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-orange-500 focus:bg-white text-gray-800" />
               </div>
-              
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl border bg-gray-50 shadow-sm">
-                  {selectedTicket.status === 'Open' && <AlertCircle size={16} className="text-red-500" />}
-                  {selectedTicket.status === 'In Progress' && <Clock size={16} className="text-blue-500" />}
-                  {selectedTicket.status === 'Hold' && <PauseCircle size={16} className="text-orange-500" />}
-                  {selectedTicket.status === 'Resolved' && <CheckCircle2 size={16} className="text-green-500" />}
-                  <span className={
-                    selectedTicket.status === 'Open' ? 'text-red-600' : 
-                    selectedTicket.status === 'In Progress' ? 'text-blue-600' : 
-                    selectedTicket.status === 'Hold' ? 'text-orange-600' : 'text-green-600'
-                  }>{selectedTicket.status}</span>
+              <div>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">Select Category Type</label>
+                <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-orange-500">
+                  <option value="Hardware">Hardware</option>
+                  <option value="Software">Software</option>
+                  <option value="Internet">Internet</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">Brief Notes Explanations</label>
+                <textarea rows={3} required value={note} onChange={e => setNote(e.target.value)} placeholder="Explain the problem details..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-orange-500 focus:bg-white text-gray-800" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">Share Error Screenshot (Optional)</label>
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors relative">
+                  <Upload size={18} className="mx-auto text-gray-400 mb-1" />
+                  <span className="text-xs text-gray-500 font-bold">Upload Snapshot Image</span>
+                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" />
                 </div>
               </div>
-            </div>
-
-            <div className="mb-8">
-              <h3 className="text-sm font-black text-gray-900 mb-2">Original Request</h3>
-              <p className="text-sm font-medium text-gray-700 leading-relaxed bg-gray-50 p-5 rounded-2xl border border-gray-200 whitespace-pre-wrap">
-                {selectedTicket.description}
-              </p>
-            </div>
-            
-            <div className="mt-8 pt-8 border-t border-gray-100">
-              <h3 className="text-base font-black text-[#006456] mb-6 flex items-center gap-2">
-                <MessageSquare size={18} /> Support Chat
-              </h3>
-              
-              <div className="space-y-4 mb-6 max-h-[400px] overflow-y-auto pr-2">
-                {selectedTicket.replies.length === 0 ? (
-                  <div className="text-center p-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    <p className="text-sm font-bold text-gray-400">No replies yet. Admin will respond shortly.</p>
-                  </div>
-                ) : (
-                  selectedTicket.replies.map((reply, idx) => (
-                    <div key={idx} className={`p-4 rounded-2xl border text-sm max-w-[85%] ${reply.sender === 'Staff' ? 'bg-teal-50 border-teal-100 ml-auto' : 'bg-[#f0fcf6] border-[#d1f0e0] mr-auto'}`}>
-                      <div className="flex justify-between items-center mb-1.5 gap-4">
-                        <span className="font-bold text-gray-900 flex items-center gap-1.5">
-                          {reply.sender === 'Admin' ? <ShieldAlert size={14} className="text-[#006456]"/> : <User size={14} className="text-gray-500"/>}
-                          {reply.name}
-                        </span>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{reply.date}</span>
-                      </div>
-                      <p className="text-[#004d40] whitespace-pre-wrap leading-relaxed">{reply.text}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {selectedTicket.status !== 'Resolved' ? (
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-3">
-                  <textarea 
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Type a message to Admin..."
-                    className="flex-1 bg-white border border-gray-200 p-3 rounded-xl text-sm font-medium focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 resize-none"
-                    rows={2}
-                  />
-                  <button 
-                    onClick={handleSendReply}
-                    disabled={isSubmitting || !replyText.trim()}
-                    className={`px-6 py-3 font-black rounded-xl shadow-sm transition-all flex justify-center items-center gap-2 h-fit self-end sm:self-auto ${isSubmitting || !replyText.trim() ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#008a4b] hover:bg-green-700 text-white'}`}
-                  >
-                    <Send size={16} /> {isSubmitting ? 'Sending...' : 'Reply'}
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-[#e6f7eb] border border-green-200 p-4 rounded-2xl text-center flex flex-col items-center justify-center">
-                  <CheckCircle2 size={24} className="text-[#008a4b] mb-2" />
-                  <p className="text-sm font-bold text-[#006456]">This ticket has been resolved and is now closed.</p>
-                </div>
-              )}
-            </div>
+              <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2">{isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Submit Service Ticket'}</button>
+            </form>
           </div>
         </div>
       )}
+
     </div>
+  );
+}
+
+export default function ITTicketsPage() {
+  return (
+    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin text-orange-500" /></div>}>
+      <ITTicketsContent />
+    </Suspense>
   );
 }

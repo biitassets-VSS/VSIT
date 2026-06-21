@@ -36,6 +36,18 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const verifyStaff = async () => {
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+      if (isGuest) {
+        setStaffProfile({
+          id: 'guest-mock-uuid',
+          name: 'Demo Guest User',
+          email: 'guest@vsit.com',
+          initials: 'GS'
+        });
+        setIsCheckingAuth(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
 
@@ -45,13 +57,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         .eq('id', user.id)
         .maybeSingle();
 
-      const profileName = userProfile?.full_name || userProfile?.name || 'Mohit Bahuguna';
-      const userInitials = profileName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+      const profileName = userProfile?.full_name || userProfile?.name || 'Lakhwinder Canberra';
+      const userInitials = profileName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'LC';
 
       setStaffProfile({
         id: user.id, 
         name: profileName,
-        email: user.email || 'students_app05@outlook.com',
+        email: user.email || 'migration_canberra.bi@outlook.com',
         initials: userInitials
       });
       
@@ -95,7 +107,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
     router.replace('/login');
   };
@@ -158,15 +170,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         
         {/* UNIFIED TOP NAVIGATION CORNER BAR */}
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-40">
-          {/* Mobile hamburger menu (hidden on desktop) */}
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-[#ff9800] rounded-xl lg:hidden">
             <Menu size={24} />
           </button>
 
-          {/* Logo placeholder for mobile header alignment */}
           <img src="/logo.png" alt="Logo" className="h-8 lg:hidden" />
 
-          {/* Top Right Bell Action (Unified for both screen types) */}
+          {/* Top Right Bell Action */}
           <div className="flex items-center gap-4 ml-auto relative">
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)} 

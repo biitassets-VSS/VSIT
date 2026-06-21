@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ShieldAlert, Users, Mail, Lock, MonitorSmartphone, ArrowLeft, UserCircle, Loader2 } from 'lucide-react';
+import { ShieldAlert, Users, Mail, Lock, MonitorSmartphone, UserCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function RootPage() {
@@ -21,13 +21,26 @@ export default function RootPage() {
     setIsLoading(true);
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
+
+      // ✨ GUEST ACCESSIBILITY INTERCEPTOR
+      if (loginType === 'guest') {
+        if (cleanEmail === 'guest@vsit.com' && password === 'guest123') {
+          localStorage.setItem('isGuestSession', 'true');
+          localStorage.setItem('userEmail', 'guest@vsit.com');
+          localStorage.setItem('userName', 'Demo Guest User');
+          router.push('/staff'); 
+          return;
+        } else {
+          throw new Error('Invalid Guest credentials. Use guest@vsit.com / guest123');
+        }
+      }
+
       if (!email || !password) {
         throw new Error('Please enter both email and password.');
       }
 
-      const cleanEmail = email.trim().toLowerCase();
-
-      // Secure Supabase session initiation
+      // STANDARD AUTHENTICATION FOR LIVE ADMIN/STAFF
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password.trim(),
@@ -36,11 +49,9 @@ export default function RootPage() {
       if (authError) throw new Error('Invalid email or password.');
       if (!authData?.user) throw new Error('Authentication returned an empty session.');
 
-      // Bypassing database schema column lookup constraints safely
       localStorage.setItem('userEmail', cleanEmail);
       localStorage.setItem('userName', 'Staff Member');
 
-      // Routing distribution matrix
       if (cleanEmail === 'lakhwinder.bi@outlook.com' || loginType === 'admin') {
         router.push('/admin'); 
       } else {
@@ -68,17 +79,14 @@ export default function RootPage() {
         transition={{ staggerChildren: 0.15 }}
         className="w-full max-w-[460px] relative"
       >
-        {/* DYNAMIC ORANGE NEON GLOW LIGHT BORDER EFFECT */}
         <div className={`absolute -inset-0.5 rounded-[2.2rem] blur-md opacity-75 animate-pulse transition-colors duration-500 ${
           loginType === 'admin' ? 'bg-gradient-to-r from-orange-500 via-orange-300 to-amber-500' :
           loginType === 'staff' ? 'bg-gradient-to-r from-blue-400 via-indigo-300 to-blue-500' :
           'bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500'
         }`}></div>
 
-        {/* MAIN SIGN-IN CONSOLE CONTAINER */}
         <div className="relative bg-white rounded-[2rem] shadow-2xl p-8 sm:p-10">
           
-          {/* LOGO FRAMEWAY ARCHITECTURE */}
           <motion.div variants={itemVariants} className="flex flex-col items-center mb-8">
             <div className="w-full flex justify-center mb-4">
               <img 
@@ -111,13 +119,12 @@ export default function RootPage() {
             </div>
           </motion.div>
 
-          {/* TOGGLE WORKSPACE SELECTOR */}
           <motion.div variants={itemVariants} className="flex bg-[#F4F5F7] p-1.5 rounded-xl mb-6 relative">
             <button
               type="button"
               onClick={() => { setLoginType('admin'); setError(''); }}
               className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 ${
-                loginType === 'admin' ? 'bg-white text-orange-600 shadow-md' : 'text-gray-500 hover:text-gray-700'
+                loginType === 'admin' ? 'bg-white text-orange-600 shadow-md font-extrabold' : 'text-gray-500 hover:text-gray-700 font-bold'
               }`}
             >
               <ShieldAlert size={16} className={loginType === 'admin' ? 'text-orange-600' : 'text-gray-400'} />
@@ -127,7 +134,7 @@ export default function RootPage() {
               type="button"
               onClick={() => { setLoginType('staff'); setError(''); }}
               className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 ${
-                loginType === 'staff' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:text-gray-700'
+                loginType === 'staff' ? 'bg-white text-blue-600 shadow-md font-extrabold' : 'text-gray-500 hover:text-gray-700 font-bold'
               }`}
             >
               <Users size={16} className={loginType === 'staff' ? 'text-blue-600' : 'text-gray-400'} />
@@ -137,13 +144,22 @@ export default function RootPage() {
               type="button"
               onClick={() => { setLoginType('guest'); setError(''); }}
               className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 ${
-                loginType === 'guest' ? 'bg-white text-emerald-600 shadow-md' : 'text-gray-500 hover:text-gray-700'
+                loginType === 'guest' ? 'bg-white text-emerald-600 shadow-md font-extrabold' : 'text-gray-500 hover:text-gray-700 font-bold'
               }`}
             >
               <UserCircle size={16} className={loginType === 'guest' ? 'text-emerald-600' : 'text-gray-400'} />
               Guest
             </button>
           </motion.div>
+
+          {/* PUBLIC DEMO DETAILS BANNER */}
+          {loginType === 'guest' && (
+            <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-center animate-in fade-in zoom-in-95 duration-200">
+              <p className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-1">💡 Public Demo Account Info</p>
+              <p className="text-xs font-semibold text-gray-600">Email: <span className="font-bold text-gray-900 select-all">guest@vsit.com</span></p>
+              <p className="text-xs font-semibold text-gray-600">Password: <span className="font-bold text-gray-900 select-all">guest123</span></p>
+            </div>
+          )}
 
           {error && (
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg text-center font-medium">
@@ -155,18 +171,13 @@ export default function RootPage() {
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
               <div className="relative group">
-                <Mail className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400`} size={18} />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input 
                   required 
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                  placeholder={
-                    loginType === 'admin' ? "admin@virtualstaffing.com" : 
-                    loginType === 'staff' ? "Students_app05@outlook.com" : 
-                    "guest@virtualstaffing.com"
-                  }
+                  placeholder={loginType === 'guest' ? "guest@vsit.com" : "name@virtualstaffing.com"}
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white text-gray-900 text-sm font-medium focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10"
                 />
               </div>
@@ -181,8 +192,7 @@ export default function RootPage() {
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  placeholder="••••••••" 
+                  placeholder={loginType === 'guest' ? "guest123" : "••••••••"} 
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white text-gray-900 text-sm font-medium focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10"
                 />
               </div>
@@ -193,9 +203,9 @@ export default function RootPage() {
                 type="submit" 
                 disabled={isLoading}
                 className={`w-full mt-4 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl shadow-lg text-sm font-bold text-white transition-all disabled:opacity-70 ${
-                  loginType === 'admin' ? 'bg-gradient-to-r from-orange-500 to-amber-500' : 
-                  loginType === 'staff' ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 
-                  'bg-gradient-to-r from-emerald-500 to-teal-500'
+                  loginType === 'admin' ? 'bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/20' : 
+                  loginType === 'staff' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/20' : 
+                  'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/20'
                 }`}
               >
                 {isLoading ? <><Loader2 className="animate-spin" size={18} /> Authenticating...</> : `Sign in as ${loginType.charAt(0).toUpperCase() + loginType.slice(1)}`}
