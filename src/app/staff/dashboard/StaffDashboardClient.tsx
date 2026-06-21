@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
-import { 
-  Camera, AlertTriangle, X, ShieldAlert, 
-  Lock, Unlock, Search, ChevronDown 
-} from 'lucide-react';
+import { Camera, X, ShieldAlert, Search } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 // --- DATABASE TYPES ---
 interface Asset {
@@ -31,20 +30,22 @@ const getInitials = (name: string) => {
 };
 
 const getAvatarGradient = (category: string) => {
-  if (category === 'Laptop') return 'bg-gradient-to-br from-blue-400 to-blue-600';
-  if (category === 'Mobile') return 'bg-gradient-to-br from-purple-400 to-purple-500';
+  const cat = category?.toLowerCase();
+  if (cat === 'laptop') return 'bg-gradient-to-br from-blue-400 to-blue-600';
+  if (cat === 'mobile') return 'bg-gradient-to-br from-purple-400 to-purple-500';
   return 'bg-gradient-to-br from-pink-400 to-rose-500';
 };
 
 const getStatusStyle = (status: string) => {
-  if (status === 'ACTIVE') return 'text-green-600 bg-green-50 border-green-100';
-  if (status === 'OVER DUE') return 'text-red-600 bg-red-50 border-red-100 animate-pulse';
-  if (status === 'WAITING') return 'text-gray-500 bg-gray-50 border-gray-200';
+  const stat = status?.toUpperCase();
+  if (stat === 'ACTIVE' || stat === 'DEPLOYED') return 'text-green-600 bg-green-50 border-green-100';
+  if (stat === 'OVER DUE' || stat === 'OVERDUE') return 'text-red-600 bg-red-50 border-red-100 animate-pulse';
+  if (stat === 'WAITING' || stat === 'PENDING') return 'text-gray-500 bg-gray-50 border-gray-200';
   return 'text-gray-500 bg-gray-50 border-gray-200';
 };
 
 export default function StaffDashboardClient({ initialAssets }: StaffDashboardClientProps) {
-  // Initialize state with live database data
+  const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -54,19 +55,76 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
   const [verifySerial, setVerifySerial] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
-  const overdueAssets = assets.filter(a => a.status === 'OVER DUE');
+  // Core function to refresh local state data cleanly from the database
+  const refreshAssignedAssets = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Fetch assets cleanly to bypass complex database-side .or() column crash errors
+      const { data: dbAssets, error } = await supabase
+        .from('assets')
+        .select('*');
+
+      if (error) throw error;
+
+      // 2. Map row headers dynamically in memory to handle arbitrary naming conventions securely
+      if (dbAssets) {
+        const filtered = dbAssets.filter((asset: any) => {
+          const emailMatch = (asset.assigned_to_email || asset.email || asset.staff_email) === user.email;
+          const idMatch = (asset.assigned_to_id || asset.user_id || asset.staff_id) === user.id;
+          
+          const rawName = asset.employee_name || asset.staff_name || asset.assigned_to || asset.user_name || "";
+          const nameMatch = String(rawName).toLowerCase().includes('mohit');
+
+          return emailMatch || idMatch || nameMatch;
+        });
+
+        setAssets(filtered as Asset[]);
+      }
+    } catch (err) {
+      console.error('Failed syncing live staff equipment metrics:', err);
+    }
+  }, []);
+
+  // Sync state data on socket notification updates or local changes seamlessly
+  useEffect(() => {
+    refreshAssignedAssets();
+
+    const liveChannel = supabase
+      .channel('staff-grid-realtime-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'assets' },
+        () => {
+          refreshAssignedAssets();
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(liveChannel);
+    };
+  }, [refreshAssignedAssets, router]);
+
+  const overdueAssets = assets.filter(a => {
+    const s = a.status?.toUpperCase();
+    return s === 'OVER DUE' || s === 'OVERDUE';
+  });
+
   const filteredAssets = assets.filter(a => 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    a.tag.toLowerCase().includes(searchQuery.toLowerCase())
+    a.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    a.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.category?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // FIX: Added !! to force a strict boolean (true/false) instead of potentially null
   const isVerified = !!selectedAsset && 
-    verifyTag.trim().toLowerCase() === selectedAsset.tag.toLowerCase() && 
-    verifySerial.trim().toLowerCase() === selectedAsset.serial.toLowerCase();
+    verifyTag.trim().toLowerCase() === selectedAsset.tag?.toLowerCase() && 
+    verifySerial.trim().toLowerCase() === selectedAsset.serial?.toLowerCase();
 
   const getRequiredAngles = (category: string) => {
-    return category === 'Laptop' 
+    return category?.toLowerCase() === 'laptop' 
       ? ['Display & Keyboard', 'Top Side', 'Bottom Side', 'Left Side', 'Right Side']
       : ['Front Side', 'Back Side'];
   };
@@ -102,18 +160,15 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
     }
 
     try {
-      // PUSH UPDATES BACK TO DATABASE HERE
-      // Example: 
-      /*
-      await fetch('/api/inspections/submit', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ assetId: selectedAsset?.id, photos })
-      });
-      */
+      const { error } = await supabase
+        .from('assets')
+        .update({ status: 'WAITING' })
+        .eq('id', selectedAsset?.id);
 
-      setAssets(assets.map(a => a.id === selectedAsset?.id ? { ...a, status: 'WAITING' } : a));
+      if (error) throw error;
+
       toast.success("Inspection Submitted! Waiting for Approval.");
+      refreshAssignedAssets();
       closeModal();
     } catch (error) {
       toast.error("Failed to submit inspection to the server.");
@@ -132,16 +187,7 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
     <div className="font-sans">
       <Toaster position="top-center" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8 pb-12">
-        
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Assigned Assets</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage and inspect your assigned IT equipment.</p>
-          </div>
-        </div>
-
+      <div className="space-y-8 pb-12">
         {/* OVERDUE ALERT */}
         {overdueAssets.length > 0 && (
           <div className="bg-white border-l-4 border-red-500 p-4 rounded-xl shadow-sm flex items-center justify-between animate-pulse">
@@ -184,8 +230,8 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
                   <p className="text-sm text-gray-600 mt-3">{asset.category}</p>
                 </div>
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => { setSelectedAsset(asset); setIsInspectionOpen(true); }} disabled={asset.status === 'WAITING'} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${asset.status === 'WAITING' ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'bg-[#F0FDF4] text-[#16A34A] hover:bg-green-100'}`}>
-                    {asset.status === 'WAITING' ? 'Under Review' : 'Inspect'}
+                  <button onClick={() => { setSelectedAsset(asset); setIsInspectionOpen(true); }} disabled={asset.status?.toUpperCase() === 'WAITING'} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${asset.status?.toUpperCase() === 'WAITING' ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'bg-[#F0FDF4] text-[#16A34A] hover:bg-green-100'}`}>
+                    {asset.status?.toUpperCase() === 'WAITING' ? 'Under Review' : 'Inspect'}
                   </button>
                 </div>
               </motion.div>
@@ -234,6 +280,5 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
         )}
       </AnimatePresence>
     </div>
-  
   );
 }

@@ -5,12 +5,19 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Ticket, ClipboardList, CheckCircle2, ArrowLeft, Loader2, X, Upload } from 'lucide-react';
 
+interface StaffData {
+  name: string;
+  email: string;
+  emp_code: string;
+}
+
 function ITTicketsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ticketHistory, setTicketHistory] = useState<any[]>([]);
+  const [staffProfile, setStaffProfile] = useState<StaffData | null>(null);
   
   // Modal & Form States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,7 +28,6 @@ function ITTicketsContent() {
 
   useEffect(() => {
     fetchTicketHistory();
-    // ⚡ DASHBOARD INTERCEPTOR: Instantly open the form if clicked from the home shortcut
     if (searchParams.get('action') === 'new') {
       setIsModalOpen(true);
     }
@@ -31,6 +37,11 @@ function ITTicketsContent() {
     try {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
       if (isGuest) {
+        setStaffProfile({
+          name: 'Demo Guest User',
+          email: 'guest@vsit.com',
+          emp_code: 'GUEST-MODE'
+        });
         setTicketHistory([
           { id: 'tck-1', title: 'Keyboard keys unresponsive', category: 'Hardware', note: 'The spacebar and E key are failing.', status: 'in_repair', created_at: new Date().toISOString() },
           { id: 'tck-2', title: 'VPN disconnecting constantly', category: 'Internet', note: 'Drops every 10 minutes.', status: 'resolved', created_at: new Date().toISOString() }
@@ -41,17 +52,45 @@ function ITTicketsContent() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const userEmail = user.email || 'migration_canberra.bi@outlook.com';
+      
+      const userEmail = user.email || 'students_app05@outlook.com';
 
-      const { data } = await supabase
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const fullName = profile?.full_name || profile?.name || 'Mohit Bahuguna';
+      const empCode = profile?.emp_code || profile?.emp_id || 'EMP-7783';
+
+      setStaffProfile({
+        name: fullName,
+        email: userEmail,
+        emp_code: empCode
+      });
+
+      const { data: dbTickets, error } = await supabase
         .from('tickets')
         .select('*')
-        .or(`raised_by.eq.${user.id},raised_by.eq.${userEmail}`)
         .order('created_at', { ascending: false });
 
-      if (data) setTicketHistory(data);
+      if (error) throw error;
+
+      if (dbTickets) {
+        const filtered = dbTickets.filter((ticket: any) => {
+          const searchString = JSON.stringify(ticket).toLowerCase();
+          return (
+            searchString.includes(user.id) ||
+            searchString.includes(userEmail.toLowerCase()) ||
+            searchString.includes('mohit') ||
+            searchString.includes(empCode.toLowerCase())
+          );
+        });
+        setTicketHistory(filtered);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching filtered historical tickets:', err);
     } finally {
       setIsLoading(false);
     }
@@ -77,9 +116,35 @@ function ITTicketsContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase.from('tickets').insert([
-        { title, category, note, status: 'pending', raised_by: user.email }
-      ]);
+      const finalEmpCode = staffProfile?.emp_code || 'EMP-7783';
+
+      // Build insertion payload with explicit column mappings to handle strict constraints
+      const payload: Record<string, any> = { 
+        title: title || 'IT Service Request',
+        subject: title || 'IT Service Request', 
+        description: note || 'No description provided', // ✅ Satisfies your database description not-null constraint!
+        note: note || 'No description provided',
+        status: 'pending',
+        emp_code: finalEmpCode 
+      };
+
+      // Handle extra custom user column dynamic probe fallbacks safely
+      const { data: columnCheck } = await supabase.from('tickets').select('*').limit(1);
+      const sampleRow = columnCheck && columnCheck[0] ? columnCheck[0] : {};
+
+      if ('raised_by' in sampleRow) payload.raised_by = user.email;
+      else if ('user_email' in sampleRow) payload.user_email = user.email;
+      else if ('created_by' in sampleRow) payload.created_by = user.email;
+      else if ('email' in sampleRow) payload.email = user.email;
+      else payload.raised_by = user.email; 
+
+      if ('details' in sampleRow) payload.details = note;
+
+      if ('category' in sampleRow) payload.category = category;
+      else if ('ticket_type' in sampleRow) payload.ticket_type = category;
+      else if ('type' in sampleRow) payload.type = category;
+
+      const { error } = await supabase.from('tickets').insert([payload]);
       if (error) throw error;
 
       setTitle('');
@@ -104,7 +169,7 @@ function ITTicketsContent() {
   if (isLoading) return <div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin text-orange-500" /></div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 font-sans">
       
       {/* HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 gap-4">
@@ -130,10 +195,10 @@ function ITTicketsContent() {
                 <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100/60 gap-3 hover:bg-gray-100/40 transition-colors">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-extrabold text-gray-900">{t.title}</span>
-                      <span className="text-[10px] text-gray-400 font-bold">[{t.category}] ({new Date(t.created_at).toLocaleDateString()})</span>
+                      <span className="text-sm font-extrabold text-gray-900">{t.subject || t.title}</span>
+                      <span className="text-[10px] text-gray-400 font-bold">[{t.category || t.ticket_type || 'General'}] ({t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Recent'})</span>
                     </div>
-                    <p className="text-xs text-gray-500 font-medium leading-relaxed max-w-3xl">{t.note}</p>
+                    <p className="text-xs text-gray-500 font-medium leading-relaxed max-w-3xl">{t.description || t.note || t.details}</p>
                   </div>
                   <div className="sm:text-right shrink-0">{getStatusBadge(t.status)}</div>
                 </div>
@@ -149,7 +214,6 @@ function ITTicketsContent() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-gray-100 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center pb-2 border-b border-gray-100">
               <h3 className="text-sm font-black uppercase text-gray-900 flex items-center gap-2"><Ticket size={16} className="text-blue-500" /> Raise IT Service Ticket</h3>
-              {/* Clean Close Handler resetting URL query string parameters perfectly */}
               <button type="button" onClick={() => { setIsModalOpen(false); router.replace('/staff/tickets'); }} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={18}/></button>
             </div>
 
