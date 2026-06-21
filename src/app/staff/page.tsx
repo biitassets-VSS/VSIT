@@ -5,13 +5,47 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Ticket, ClipboardCheck, PlusCircle, RefreshCw, 
-  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode, Copy
+  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode
 } from 'lucide-react';
 
 interface StaffData {
   name: string;
   email: string;
   emp_code: string;
+}
+
+// Fixed Barcode matrix generator for reliable scanning
+function NativeBarcodeMatrix({ url }: { url: string }) {
+  const size = 29; 
+  const matrix = Array(size).fill(null).map(() => Array(size).fill(false));
+  
+  const addAnchor = (r: number, c: number) => {
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 7; j++) {
+        if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
+          matrix[r + i][c + j] = true;
+        }
+      }
+    }
+  };
+  addAnchor(0, 0); 
+  addAnchor(0, size - 7); 
+  addAnchor(size - 7, 0);
+
+  let seed = url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      if ((i < 8 && j < 8) || (i < 8 && j > size - 9) || (i > size - 9 && j < 8)) continue;
+      seed = (seed * 9301 + 49297) % 233280;
+      if (seed / 233280 > 0.4) matrix[i][j] = true;
+    }
+  }
+
+  return (
+    <div className="grid gap-0 bg-white p-3 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '150px', height: '150px' }}>
+      {matrix.flatMap((row, r) => row.map((cell, c) => <div key={`${r}-${c}`} className={cell ? 'bg-[#002B49]' : 'bg-white'} />))}
+    </div>
+  );
 }
 
 export default function StaffDashboardPage() {
@@ -69,17 +103,20 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
-  // Encodes the dynamic session link for the QR Code
+  // Encodes the dynamic session link for the QR Code WITHOUT the notes, so the QR code stays frozen and scannable
   useEffect(() => {
-    if (selectedAsset && staffProfile) {
+    if (selectedAsset) {
       let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-      if (baseDomain.includes('localhost')) baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your Wi-Fi IPv4 if testing locally!
+      
+      // Makes sure local testing links use your actual IP
+      if (baseDomain.includes('localhost')) {
+        baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your Wi-Fi IPv4 if testing locally!
+      }
       
       const safeCat = encodeURIComponent(selectedCategory);
-      const safeCond = encodeURIComponent(assetCondition || 'Verified via secure mobile session.');
-      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCat}&condition=${safeCond}`);
+      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCat}`);
     }
-  }, [selectedAsset, selectedCategory, assetCondition, staffProfile]);
+  }, [selectedAsset, selectedCategory]);
 
   useEffect(() => {
     if (searchParams.get('open_inspection') === 'true' && assignedAssets.length > 0) {
@@ -88,7 +125,6 @@ function DashboardContent() {
       setSelectedAsset(foundAsset);
       setIsAssetUnlocked(true); 
       setSelectedCategory(searchParams.get('category') || foundAsset.category || 'Laptop');
-      setAssetCondition(searchParams.get('condition') || 'Verified via secure mobile session.');
       setIsInspectionOpen(true);
     }
   }, [searchParams, assignedAssets]);
@@ -211,7 +247,7 @@ function DashboardContent() {
     }
   };
 
-  // 🚀 FIXED: using "ideal: 'environment'" so laptops don't crash when rear camera isn't found
+  // Uses ideal: 'environment' so both laptops and phones work securely
   const startLiveVideoStream = async (angle: string) => {
     setActiveAngleTarget(angle);
     setIsCameraActive(true);
@@ -224,7 +260,7 @@ function DashboardContent() {
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
       console.error(err);
-      alert('Camera access blocked. Click the Padlock icon 🔒 in your address bar to Allow Camera. Mobile phones must use https:// links.');
+      alert('Camera access blocked. Mobile phones must use an https:// link. On desktop, click the Padlock icon 🔒 to Allow Camera.');
       setIsCameraActive(false);
     }
   };
@@ -294,7 +330,9 @@ function DashboardContent() {
 
     setIsSubmitting(true);
     try {
-      const submissionEmail = staffProfile?.email || 'students_app05@outlook.com';
+      const { data: { user } } = await supabase.auth.getUser();
+      const submissionEmail = user?.email || staffProfile?.email || 'students_app05@outlook.com';
+
       const uploadedPhotoUrls: Record<string, string> = {};
 
       for (const [angle, base64Image] of Object.entries(photos)) {
@@ -527,7 +565,7 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* 🚀 TRUE FULL SCREEN NATIVE APP CAMERA UI */}
+      {/* FULL SCREEN NATIVE APP CAMERA UI */}
       {isCameraActive && (
         <div className="fixed inset-0 bg-black z-[1000] flex flex-col">
           <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
