@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowLeft, ClipboardList, CheckCircle, AlertCircle, Clock, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ClipboardList, AlertCircle, Clock } from 'lucide-react';
 
 export default function MyInspectionsPage() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function MyInspectionsPage() {
 
           const compiledLogs = userAssets.map(asset => {
             const assetInsps = inspectionsRes.data 
-              ? inspectionsRes.data.filter((i: any) => i.asset_id === asset.id || i.tag === asset.tag)
+              ? inspectionsRes.data.filter((i: any) => String(i.asset_id) === String(asset.id))
               : [];
             
             const latestInsp = assetInsps[0];
@@ -87,7 +87,7 @@ export default function MyInspectionsPage() {
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
       
-      {/* HEADER BAR */}
+      {/* HEADER */}
       <div className="flex items-center gap-4 bg-white rounded-3xl p-5 border border-gray-100 shadow-sm">
         <button onClick={() => router.push('/staff')} className="p-2.5 hover:bg-gray-50 rounded-xl border border-gray-100 text-gray-600">
           <ArrowLeft size={17} />
@@ -98,7 +98,7 @@ export default function MyInspectionsPage() {
         </div>
       </div>
 
-      {/* INSPECTION LOGS LISTING */}
+      {/* LOG RECORDS MATRIX */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-50 bg-gray-50/40 flex items-center gap-2">
           <ClipboardList size={16} className="text-orange-500" />
@@ -116,7 +116,7 @@ export default function MyInspectionsPage() {
                     <p className="text-[10px] font-mono font-bold text-gray-400 mt-0.5">S/N: {log.serial_number || log.serial || 'N/A'}</p>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-gray-500">
-                    <span className="flex items-center gap-1"><Clock size={12}/> Last Check: {new Date(log.lastInspDate).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1"><Clock size={12}/> Last Check: {new Date(log.logInspDate || log.lastInspDate).toLocaleDateString()}</span>
                     <span className={log.finalStatus === 'Overdue' ? 'text-red-600 flex items-center gap-1' : 'flex items-center gap-1'}>
                       <AlertCircle size={12}/> Next Due: {new Date(log.upcomingInspDate).toLocaleDateString()}
                     </span>

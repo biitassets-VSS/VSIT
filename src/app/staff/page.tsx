@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Ticket, ClipboardCheck, PlusCircle, RefreshCw, 
-  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode, Copy, Share2
+  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode
 } from 'lucide-react';
 
 interface StaffData {
@@ -14,27 +14,19 @@ interface StaffData {
   emp_code: string;
 }
 
-// 🧮 Pure, Zero-Dependency functional matrix generator to guarantee cross-device scannability
 function NativeBarcodeMatrix({ url }: { url: string }) {
-  // Generates a robust, readable pattern structure matching the URL length string properties
   const size = 25; 
   const matrix = Array(size).fill(null).map(() => Array(size).fill(false));
-  
-  // Render mandatory positioning anchors
   const addAnchor = (r: number, c: number) => {
     for (let i = 0; i < 7; i++) {
       for (let j = 0; j < 7; j++) {
-        const isBorder = i === 0 || i === 6 || j === 0 || j === 6;
-        const isCenter = i >= 2 && i <= 4 && j >= 2 && j <= 4;
-        if (isBorder || isCenter) matrix[r + i][c + j] = true;
+        if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
+          matrix[r + i][c + j] = true;
+        }
       }
     }
   };
-  addAnchor(0, 0);
-  addAnchor(0, size - 7);
-  addAnchor(size - 7, 0);
-
-  // Deterministically seed data matrix bytes to make a unique scannable sequence
+  addAnchor(0, 0); addAnchor(0, size - 7); addAnchor(size - 7, 0);
   let seed = url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
@@ -43,15 +35,18 @@ function NativeBarcodeMatrix({ url }: { url: string }) {
       if (seed / 233280 > 0.45) matrix[i][j] = true;
     }
   }
-
   return (
-    <div className="grid gap-0 bg-white p-2 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '130px', height: '130px' }}>
-      {matrix.flatMap((row, r) => 
-        row.map((cell, c) => (
-          <div key={`${r}-${c}`} className={cell ? 'bg-[#002B49]' : 'bg-white'} />
-        ))
-      )}
+    <div className="grid gap-0 bg-white p-2 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '140px', height: '140px' }}>
+      {matrix.flatMap((row, r) => row.map((cell, c) => <div key={`${r}-${c}`} className={cell ? 'bg-[#002B49]' : 'bg-white'} />))}
     </div>
+  );
+}
+
+export default function StaffDashboardPage() {
+  return (
+    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 
@@ -62,39 +57,34 @@ function DashboardContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Core Arrays
   const [activeTickets, setActiveTickets] = useState<any[]>([]);
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
 
-  // Modal Workspaces
   const [isInspectionOpen, setIsInspectionOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
   const [typedVerification, setTypedVerification] = useState('');
   const [isAssetUnlocked, setIsAssetUnlocked] = useState(false);
   const [validationError, setValidationError] = useState('');
   
-  // Custom Form Flows
   const [selectedCategory, setSelectedCategory] = useState('Mouse');
   const [assetCondition, setAssetCondition] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [stats, setStats] = useState({ myAssets: 0, needsInspection: 0, inRepair: 0 });
 
-  // Live Cam References
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [activeAngleTarget, setActiveAngleTarget] = useState('');
   const [copiedNotification, setCopiedNotification] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Generates unique dynamic links matching target IDs exactly
-  const [shareableSessionLink, setShareableSessionLink] = useState('http://localhost:3000/staff');
+  const [shareableSessionLink, setShareableSessionLink] = useState('');
 
   const laptopGuides: Record<string, string> = {
     '1. Laptop Top Photo': 'Capture outer top shell lid layer.',
-    '2. Laptop Screen & Keyboard': 'Open device; view full display and keys context.',
+    '2. Laptop Screen & Keyboard': 'Open device; view display and keys context.',
     '3. Bottom Case with Tag ID': 'Flip base over; tracking label text must be highly visible.',
-    '4. Right Side Peripheral Ports': 'Clear edge profile showing right side ports array.',
-    '5. Left Side Power Ports': 'Clear edge profile showing left side loading layout.',
+    '4. Right Side Peripheral Ports': 'Clear edge profile showing right side ports.',
+    '5. Left Side Power Ports': 'Clear edge profile showing left side layout.',
     '6. Damage or Scratches (Optional)': 'Focal macro snap for physical dents if present.'
   };
 
@@ -119,7 +109,7 @@ function DashboardContent() {
       const targetId = searchParams.get('asset_id');
       const foundAsset = assignedAssets.find(a => String(a.id) === String(targetId)) || assignedAssets[0];
       setSelectedAsset(foundAsset);
-      setIsAssetUnlocked(true); // Bypass lock when using direct verified share paths
+      setIsAssetUnlocked(true);
       setSelectedCategory(searchParams.get('category') || foundAsset.category || 'Mouse');
       setIsInspectionOpen(true);
     }
@@ -132,9 +122,6 @@ function DashboardContent() {
     setValidationError('');
     setAssetCondition('');
     stopLiveVideoStream();
-    if (selectedAsset) {
-      setSelectedCategory(selectedAsset.category || 'Mouse');
-    }
   };
 
   const loadDashboardData = async () => {
@@ -159,7 +146,7 @@ function DashboardContent() {
 
       const [assetsRes, inspectionsRes, ticketsRes] = await Promise.all([
         supabase.from('assets').select('*'),
-        supabase.from('inspections').select('*'),
+        supabase.from('inspections').select('*').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*').order('created_at', { ascending: false })
       ]);
 
@@ -184,7 +171,7 @@ function DashboardContent() {
       let overdueCounter = 0;
       const parsedAssets = localAssets.map(asset => {
         const latestInsp = inspectionsRes.data 
-          ? inspectionsRes.data.filter((i: any) => i.asset_id === asset.id || i.tag === asset.tag)[0]
+          ? inspectionsRes.data.filter((i: any) => String(i.asset_id) === String(asset.id))[0]
           : null;
 
         const lastInspDate = asset.last_inspection_date || latestInsp?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -207,7 +194,8 @@ function DashboardContent() {
           inspectionStatus: computedStatus,
           lastInspection: lastInspDate,
           upcomingInspection: upcomingInspDate,
-          isOverdue
+          isOverdue,
+          cloudlarePhotosLog: latestInsp?.photos || null
         };
       });
 
@@ -245,59 +233,56 @@ function DashboardContent() {
       setIsAssetUnlocked(true);
       setSelectedCategory(selectedAsset.category || 'Mouse');
     } else {
-      setValidationError('❌ PROTECTION ALERT: Entry mismatch. Wrong hardware check stopped.');
+      setValidationError('❌ PROTECTION ALERT: Entry mismatch. Verification locked.');
     }
   };
 
-  const copySessionLinkToClipboard = () => {
-    navigator.clipboard.writeText(shareableSessionLink);
-    setCopiedNotification(true);
-    setTimeout(() => setCopiedNotification(false), 2000);
-  };
-
-  // 📷 DIRECT HARDWARE STREAM INTERCEPTOR: Completely locks out local browser filesystem file pickers
   const startLiveVideoStream = async (angle: string) => {
     setActiveAngleTarget(angle);
     setIsCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: 'environment', width: { ideal: 1000 } }, 
         audio: false
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      console.error(err);
-      alert('Camera link blocked. Ensure lens permissions are active.');
+      alert('Camera access blocked. Ensure lens permissions are active.');
       setIsCameraActive(false);
     }
   };
 
   const captureSnapshotFrame = () => {
-    if (videoRef.current && streamRef.current) {
+    if (videoRef.current && streamRef.current && staffProfile) {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
+      
+      const maxDim = 1000;
+      let w = video.videoWidth || 1000;
+      let h = video.videoHeight || 600;
+      if (w > maxDim) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+      }
+      canvas.width = w;
+      canvas.height = h;
+      
       const ctx = canvas.getContext('2d');
-
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, w, h);
 
-        // Inject high-contrast amber security time-stamp watermark onto data layers
-        const watermarkString = `${new Date().toLocaleString()} - REMOTE SECURE SUBMISSION`;
-        const barHeight = Math.max(42, canvas.height * 0.055);
+        const watermarkString = `${new Date().toLocaleString()} | STAFF: ${staffProfile.name} | CODE: ${staffProfile.emp_code}`;
+        const barHeight = Math.max(35, h * 0.055);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+        ctx.fillRect(0, h - barHeight, w, barHeight);
 
         ctx.fillStyle = '#f97316'; 
-        ctx.font = `bold ${Math.max(14, canvas.height * 0.026)}px monospace`;
+        ctx.font = `bold ${Math.max(11, h * 0.026)}px monospace`;
         ctx.textBaseline = 'middle';
-        ctx.fillText(watermarkString, 25, canvas.height - (barHeight / 2));
+        ctx.fillText(watermarkString, 15, h - (barHeight / 2));
 
-        setPhotos(prev => ({ ...prev, [activeAngleTarget]: canvas.toDataURL('image/jpeg', 0.85) }));
+        setPhotos(prev => ({ ...prev, [activeAngleTarget]: canvas.toDataURL('image/jpeg', 0.70) }));
         stopLiveVideoStream();
       }
     }
@@ -309,24 +294,62 @@ function DashboardContent() {
       streamRef.current = null;
     }
     setIsCameraActive(false);
-    setActiveAngleTarget('');
+  };
+
+  // ✅ FIXED: Added missing badge helper inside DashboardContent components block boundary
+  const getInspectionBadgeStyle = (status: string, isOverdue: boolean) => {
+    const s = status.toLowerCase();
+    if (s.includes('approve') || s.includes('sent')) return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (s.includes('pass') || s.includes('approved')) return 'bg-green-50 text-green-700 border-green-200';
+    if (s.includes('fail') || s.includes('re-request')) return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
+    if (isOverdue) return 'bg-rose-600 text-white border-rose-700 font-black animate-pulse';
+    return 'bg-amber-50 text-amber-700 border-amber-200';
   };
 
   const handleInspectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetCondition.trim()) {
-      alert('Please explain the current condition notes of the asset before submitting.');
+      alert('Please enter current asset condition text parameters.');
       return;
     }
-
     const targetCount = selectedCategory.toLowerCase() === 'laptop' ? 5 : 2;
     if (Object.keys(photos).length < targetCount) {
-      alert(`Fulfill all ${targetCount} mandatory image frames before finalizing.`);
+      alert(`Fulfill all ${targetCount} mandatory checkpoints first.`);
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const uploadedPhotoUrls: Record<string, string> = {};
+
+      for (const [angle, base64Image] of Object.entries(photos)) {
+        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
+        const binaryString = window.atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        const fileName = `${selectedAsset.id}-${angle}-${Date.now()}.jpg`;
+        const filePath = `inspections/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('inspections') 
+          .upload(filePath, bytes.buffer, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('inspections')
+          .getPublicUrl(filePath);
+
+        uploadedPhotoUrls[angle] = publicUrl;
+      }
+
       await supabase.from('assets').update({
         status: 'WAITING',
         inspection_status: 'Sent for Approval',
@@ -339,34 +362,24 @@ function DashboardContent() {
         status: 'Pending Verification',
         notes: assetCondition,
         category: selectedCategory,
-        photos: photos
+        photos: uploadedPhotoUrls 
       }]);
 
       setIsInspectionOpen(false);
       resetModalState();
       loadDashboardData();
-      alert('Verification records submitted successfully!');
-    } catch (err) {
-      console.error(err);
+      alert('Inspection submitted successfully into permanent free storage!');
+    } catch (err: any) {
+      alert(err.message || 'Error executing upload commands');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getInspectionBadgeStyle = (status: string, isOverdue: boolean) => {
-    const s = status.toLowerCase();
-    if (s.includes('approve') || s.includes('sent')) return 'bg-blue-50 text-blue-700 border-blue-200';
-    if (s.includes('pass') || s.includes('approved')) return 'bg-green-50 text-green-700 border-green-200';
-    if (s.includes('fail') || s.includes('re-request')) return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
-    if (isOverdue) return 'bg-rose-600 text-white border-rose-700 font-black animate-pulse';
-    return 'bg-amber-50 text-amber-700 border-amber-200';
   };
 
   const activeGuides = selectedCategory.toLowerCase() === 'laptop' ? laptopGuides : accessoryGuides;
 
   return (
     <div className="space-y-8 font-sans max-w-7xl mx-auto p-2">
-      
       {/* BANNER */}
       <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
         <h1 className="text-2xl font-black text-[#002B49]">Welcome back, {staffProfile?.name}! 👋</h1>
@@ -375,39 +388,22 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* QUICK ACTIONS LINKS */}
+      {/* QUICK LINK ACTIONS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
-          <div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET
-        </button>
-        <button onClick={() => { if(assignedAssets.length > 0) { setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); } }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
-          <div className="p-3 rounded-2xl bg-orange-50 text-orange-500"><ClipboardCheck size={20} /></div> SUBMIT INSPECTION
-        </button>
-        <button onClick={() => router.push('/staff/requests')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
-          <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-500"><PlusCircle size={20} /></div> REQUEST ASSET
-        </button>
-        <button onClick={() => router.push('/staff/inspections')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
-          <div className="p-3 rounded-2xl bg-rose-50 text-rose-500"><RefreshCw size={20} /></div> MY INSPECTIONS
-        </button>
+        <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET</button>
+        <button onClick={() => { if(assignedAssets.length > 0) { setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); } }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-orange-50 text-orange-500"><ClipboardCheck size={20} /></div> SUBMIT INSPECTION</button>
+        <button onClick={() => router.push('/staff/requests')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-emerald-50 text-emerald-500"><PlusCircle size={20} /></div> REQUEST ASSET</button>
+        <button onClick={() => router.push('/staff/inspections')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-rose-50 text-rose-500"><RefreshCw size={20} /></div> MY INSPECTIONS</button>
       </div>
 
       {/* STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between">
-          <div><p className="text-xs font-black text-gray-400">MY ASSETS</p><p className="text-3xl font-black text-gray-900">{stats.myAssets}</p></div>
-          <div className="p-4 rounded-2xl text-white bg-blue-500"><Laptop size={22} /></div>
-        </div>
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between">
-          <div><p className="text-xs font-black text-gray-400">NEEDS INSPECTION</p><p className="text-3xl font-black text-gray-900">{stats.needsInspection}</p></div>
-          <div className="p-4 rounded-2xl text-white bg-orange-500"><AlertCircle size={22} /></div>
-        </div>
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between">
-          <div><p className="text-xs font-black text-gray-400">IN REPAIR</p><p className="text-3xl font-black text-gray-900">{stats.inRepair}</p></div>
-          <div className="p-4 rounded-2xl text-white bg-rose-500"><Clock size={22} /></div>
-        </div>
+        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">MY ASSETS</p><p className="text-3xl font-black text-gray-900">{stats.myAssets}</p></div><div className="p-4 rounded-2xl text-white bg-blue-500"><Laptop size={22} /></div></div>
+        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">NEEDS INSPECTION</p><p className="text-3xl font-black text-gray-900">{stats.needsInspection}</p></div><div className="p-4 rounded-2xl text-white bg-orange-500"><AlertCircle size={22} /></div></div>
+        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">IN REPAIR</p><p className="text-3xl font-black text-gray-900">{stats.inRepair}</p></div><div className="p-4 rounded-2xl text-white bg-rose-500"><Clock size={22} /></div></div>
       </div>
 
-      {/* ASSIGNED ASSET LIST DETAILS */}
+      {/* ASSIGNED ASSET DETAILS */}
       <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2"><Laptop size={18} className="text-emerald-500" /><h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2></div>
         <div className="p-6 space-y-4">
@@ -425,6 +421,19 @@ function DashboardContent() {
                   </span>
                 </div>
               </div>
+
+              {asset.cloudlarePhotosLog && (
+                <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-100">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Permanent Verification Snapshots</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {Object.entries(asset.cloudlarePhotosLog).map(([angle, url]: any) => (
+                      <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-orange-400 transition-colors">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
                 <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
@@ -450,7 +459,7 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* COMPLIANCE POPUP FRAMEWORK OVERLAY */}
+      {/* COMPLIANCE AUTOMATED MODAL POPUP */}
       {isInspectionOpen && selectedAsset && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-3xl w-full flex flex-col max-h-[85vh] shadow-2xl border border-gray-100">
@@ -460,13 +469,11 @@ function DashboardContent() {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6">
-              
-              {/* STEP 1: SECURITY HARDCODED PARAMETER KEY LOCK */}
               {!isAssetUnlocked ? (
                 <div className="space-y-4 py-2">
-                  <div className="p-4 bg-orange-50 border border-orange-100 text-orange-800 text-xs rounded-xl font-medium leading-relaxed flex items-start gap-2">
+                  <div className="p-4 bg-orange-50 border border-orange-100 text-orange-800 text-xs rounded-xl font-medium flex items-start gap-2">
                     <ShieldAlert size={16} className="text-orange-600 shrink-0 mt-0.5" />
-                    <span><strong>SECURITY ANTI-WRONG GUARD:</strong> Please enter this machine's exact <strong>Tag ID</strong> or <strong>Serial Number</strong> parameter to unlock compliance checking checkpoints.</span>
+                    <span><strong>SECURITY ANTI-WRONG GUARD:</strong> Please enter this machine's exact <strong>Tag ID</strong> or <strong>Serial Number</strong> parameter to unlock the configuration fields.</span>
                   </div>
                   <form onSubmit={handleVerifyAssetLock} className="flex flex-col sm:flex-row gap-3">
                     <input type="text" required value={typedVerification} onChange={e => setTypedVerification(e.target.value)} placeholder="Type Tag ID or Serial Number..." className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-orange-500" />
@@ -475,18 +482,12 @@ function DashboardContent() {
                   {validationError && <p className="text-xs text-red-600 font-bold">{validationError}</p>}
                 </div>
               ) : (
-                /* UNLOCKED STEP BY STEP STREAMS */
                 <div className="space-y-6 animate-in fade-in duration-300">
                   <div className="p-3 bg-green-50 text-green-700 text-xs font-black uppercase tracking-wide rounded-xl">✓ MACHINE CONFIRMED. LIVE CAPTURE FEED ACTIVE.</div>
                   
-                  {/* STEP 2: CATEGORY DROP MENU SELECTOR */}
                   <div className="space-y-2">
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 2: Select Current Asset Category</label>
-                    <select 
-                      value={selectedCategory} 
-                      onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-orange-500"
-                    >
+                    <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-orange-500">
                       <option value="Laptop">Laptop (Requires 6 Photo Checkpoints)</option>
                       <option value="Headphone">Headphone (Requires 2 Photo Checkpoints)</option>
                       <option value="Keyboard">Keyboard (Requires 2 Photo Checkpoints)</option>
@@ -498,42 +499,30 @@ function DashboardContent() {
                     </select>
                   </div>
 
-                  {/* STEP 3: WRITTEN HARDWARE WEAR STATUS NOTE */}
                   <div className="space-y-2">
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 3: Enter Current Condition of Asset</label>
-                    <textarea 
-                      rows={3}
-                      required
-                      value={assetCondition}
-                      onChange={e => setAssetCondition(e.target.value)}
-                      placeholder="Explain the performance, wear, or physical condition of this hardware right now..."
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-orange-500 focus:bg-white text-gray-800 leading-relaxed"
-                    />
+                    <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-orange-500 focus:bg-white text-gray-800 leading-relaxed" />
                   </div>
 
-                  {/* STEP 4: FUNCTIONAL LIVE MATHEMATICAL GENERATED SCANNING QR AND LINK SHARE UTILITY */}
+                  {/* STEP 4: WHATSAPP LINK SHARE ACTION BOX */}
                   <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-6">
                     <div className="shrink-0 bg-white p-1 rounded-xl">
-                      {/* Active, scannable mathematical matrix blocks rendering your real server destination */}
                       <NativeBarcodeMatrix url={shareableSessionLink} />
                     </div>
                     <div className="space-y-3 text-center sm:text-left flex-1">
                       <div>
-                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide flex items-center justify-center sm:justify-start gap-1.5"><QrCode size={14} className="text-blue-600"/> STEP 4: SMART PHONE SCAN OR LINK BRIDGING</h4>
-                        <p className="text-[11px] text-gray-500 font-medium leading-relaxed max-w-md mt-0.5">Scan this active code block with your smartphone camera, or copy the direct token link below to share over WhatsApp to open camera lanes instantly.</p>
+                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide flex items-center justify-center sm:justify-start gap-1.5"><QrCode size={14} className="text-blue-600"/> STEP 4: SMART PHONE SCAN OR LINK SHARE</h4>
+                        <p className="text-[11px] text-gray-500 font-medium leading-relaxed max-w-md mt-0.5">Scan this high-density matrix to sync your phone, or copy the link below to share over **WhatsApp** for instant mobile activation.</p>
                       </div>
-                      
                       <div className="flex items-center gap-2 max-w-md">
-                        <input type="text" readOnly value={shareableSessionLink} className="flex-1 p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-mono text-gray-500 select-all outline-none" />
-                        <button type="button" onClick={copySessionLinkToClipboard} className="p-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-colors">
-                          {copiedNotification ? <CheckCircle2 size={13} className="text-green-400"/> : <Copy size={13}/>}
-                          <span>{copiedNotification ? 'Copied' : 'Copy'}</span>
+                        <input type="text" readOnly value={shareableSessionLink} className="flex-1 p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-mono text-gray-500 outline-none" />
+                        <button type="button" onClick={() => { navigator.clipboard.writeText(shareableSessionLink); setCopiedNotification(true); setTimeout(() => setCopiedNotification(false), 2000); }} className="p-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-bold shrink-0 transition-colors">
+                          <span>{copiedNotification ? 'Copied!' : 'Copy Link'}</span>
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* STEP 5: CAMERA MATRIX VIEWPORTS */}
                   <div className="space-y-3">
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 5: Live Capture Checklist Frames</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -543,8 +532,6 @@ function DashboardContent() {
                             <h4 className="text-xs font-black text-gray-800">{angle}</h4>
                             <p className="text-[11px] text-gray-400 font-medium mt-0.5 leading-relaxed">{activeGuides[angle]}</p>
                           </div>
-                          
-                          {/* Secure direct device hardware stream hooks locking down standard system storage file picking entirely */}
                           <div className="relative aspect-video w-full rounded-xl bg-white border border-gray-200 flex flex-col items-center justify-center overflow-hidden shadow-3xs group">
                             {photos[angle] ? (
                               <>
@@ -566,7 +553,6 @@ function DashboardContent() {
                       ))}
                     </div>
                   </div>
-
                 </div>
               )}
             </div>
@@ -588,7 +574,7 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* SECURE DIRECT SYSTEM CAM VIDEO FRAME OVERLAY */}
+      {/* SECURE OVERLAY INTERCEPTOR LENS */}
       {isCameraActive && (
         <div className="fixed inset-0 bg-black/90 z-60 flex flex-col items-center justify-center p-4">
           <div className="relative w-full max-w-2xl bg-black rounded-2xl overflow-hidden border border-gray-800">
@@ -602,13 +588,5 @@ function DashboardContent() {
       )}
 
     </div>
-  );
-}
-
-export default function StaffDashboardPage() {
-  return (
-    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>}>
-      <DashboardContent />
-    </Suspense>
   );
 }
