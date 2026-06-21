@@ -1,338 +1,259 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { 
-  Package, Users, ClipboardCheck, 
-  Activity, AlertTriangle, ArrowRight,
-  CheckCircle2, Wrench, UserCheck, Trash2
-} from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-
-// --- Interfaces ---
-interface Asset {
-  id: string;
-  name: string;
-  tagId: string;
-  status: string;
-}
+import { 
+  Users, Laptop, ClipboardCheck, Ticket, 
+  Activity, ArrowRight, ShieldCheck, AlertCircle, Clock
+} from 'lucide-react';
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [adminName, setAdminName] = useState('Admin');
+  
+  // Dashboard Stats
   const [stats, setStats] = useState({
     totalAssets: 0,
-    inStock: 0,
-    assigned: 0,
-    repair: 0,
-    discard: 0,
-    totalStaff: 0,
-    overdueInspections: 0
+    pendingInspections: 0,
+    activeTickets: 0,
+    totalStaff: 0
   });
-  
-  // LIVE PRESENCE STATE
-  const [onlineIds, setOnlineIds] = useState<string[]>([]);
-  const [recentAssets, setRecentAssets] = useState<Asset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock Thumbnails for Staff (Fallback if no real images exist)
-  const staffThumbnails = [
-    { init: 'AK', bg: 'bg-blue-100 text-blue-700' },
-    { init: 'JD', bg: 'bg-teal-100 text-teal-700' },
-    { init: 'SR', bg: 'bg-purple-100 text-purple-700' },
-    { init: 'MJ', bg: 'bg-orange-100 text-orange-700' }
-  ];
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchDashboardData = async () => {
-      try {
-        // Fetch Assets and Staff (Profiles) concurrently from real database
-        const [assetsResponse, staffResponse] = await Promise.all([
-          supabase.from('assets').select('*').order('created_at', { ascending: false }),
-          supabase.from('profiles').select('id') // using profiles to accurately match auth IDs
-        ]);
-
-        if (assetsResponse.error) throw assetsResponse.error;
-        if (staffResponse.error) throw staffResponse.error;
-
-        const assetsData = assetsResponse.data || [];
-        const staffData = staffResponse.data || [];
-
-        // Check for overdue inspections (dates in the past)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Normalize to midnight
-        
-        const overdueCount = assetsData.filter((a: any) => {
-          if (!a.next_inspection_date || a.next_inspection_date === '-') return false;
-          const nextDate = new Date(a.next_inspection_date);
-          return nextDate < today;
-        }).length;
-
-        // Calculate real stats
-        if (isMounted) {
-          setStats({
-            totalAssets: assetsData.length,
-            inStock: assetsData.filter((a: any) => a.status === 'Available' || a.status === 'In Stock (Available)').length,
-            assigned: assetsData.filter((a: any) => a.status === 'Assigned').length,
-            repair: assetsData.filter((a: any) => a.status === 'Maintenance').length,
-            discard: assetsData.filter((a: any) => a.status === 'Retired').length,
-            totalStaff: staffData.length,
-            overdueInspections: overdueCount
-          });
-
-          // Map the 4 most recent assets for the activity feed
-          const mappedRecentAssets = assetsData.slice(0, 4).map((a: any) => ({
-            id: a.id,
-            name: a.name,
-            tagId: a.tag_id,
-            status: a.status
-          }));
-          
-          setRecentAssets(mappedRecentAssets);
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-
-    // LIVE SUPABASE REALTIME PRESENCE (Microsoft Teams-style engine)
-    const presenceRoom = supabase.channel('online-users');
-
-    presenceRoom
-      .on('presence', { event: 'sync' }, () => {
-        if (isMounted) {
-          const newState = presenceRoom.presenceState();
-          const activeUserIds = Object.keys(newState);
-          setOnlineIds(activeUserIds);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      isMounted = false;
-      supabase.removeChannel(presenceRoom);
-    };
+    loadAdminData();
   }, []);
 
-  // Calculate live online/offline counts
-  // We cap onlineCount to totalStaff just in case guests hit the room
-  const activeOnlineCount = Math.min(onlineIds.length, stats.totalStaff); 
-  const offlineCount = Math.max(0, stats.totalStaff - activeOnlineCount);
+  const loadAdminData = async () => {
+    setLoading(true);
+
+    // 1. Authenticate & Get Profile
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    try {
+      const { data: profile } = await supabase.from('profiles').select('full_name, name').eq('id', user.id).maybeSingle();
+      if (profile) setAdminName(profile.full_name || profile.name || 'System Admin');
+    } catch (e) { console.warn('Profile load skipped'); }
+
+    // 2. Safe Fetch: Assets
+    let assetCount = 0;
+    try {
+      const { count } = await supabase.from('assets').select('*', { count: 'exact', head: true });
+      assetCount = count || 0;
+    } catch (e) { console.warn('Asset fetch failed'); }
+
+    // 3. Safe Fetch: Pending Inspections
+    let pendingCount = 0;
+    let recentLogs: any[] = [];
+    try {
+      const { data: inspections } = await supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false });
+      if (inspections) {
+        pendingCount = inspections.filter(i => i.status?.toLowerCase().includes('pending')).length;
+        recentLogs = inspections.slice(0, 5); // Grab latest 5 for the activity feed
+      }
+    } catch (e) { console.warn('Inspection fetch failed'); }
+
+    // 4. Safe Fetch: Tickets
+    let ticketCount = 0;
+    try {
+      const { data: tickets } = await supabase.from('tickets').select('*');
+      if (tickets) {
+        ticketCount = tickets.filter(t => t.status === 'open' || t.status === 'in_repair' || t.status === 'pending').length;
+      }
+    } catch (e) { console.warn('Ticket fetch failed'); }
+
+    // 5. Safe Fetch: Staff Profiles
+    let staffCount = 0;
+    try {
+      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+      staffCount = count || 0;
+    } catch (e) { console.warn('Staff fetch failed'); }
+
+    setStats({
+      totalAssets: assetCount,
+      pendingInspections: pendingCount,
+      activeTickets: ticketCount,
+      totalStaff: staffCount
+    });
+    setRecentActivity(recentLogs);
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-[#002B49]"></div>
+        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Initializing Command Center...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 font-sans">
       
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+      {/* 🚀 ENTERPRISE HEADER */}
+      <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Welcome Back, Admin 👋</h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Here is the detailed overview of your inventory and staff.</p>
+          <div className="flex items-center gap-3 mb-1">
+            <ShieldCheck size={28} className="text-blue-600" />
+            <h1 className="text-3xl font-black text-[#002B49] tracking-tight">Systems Overview</h1>
+          </div>
+          <p className="text-sm font-bold text-gray-500">Welcome back, {adminName}. Here is your IT infrastructure status.</p>
+        </div>
+        <div className="px-5 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-2xs">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          All Systems Operational
         </div>
       </div>
 
+      {/* 📊 HIGH-LEVEL STATS GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-blue-200 transition-colors">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors"><Laptop size={24} /></div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Inventory</span>
+          </div>
+          <div>
+            <h2 className="text-4xl font-black text-gray-900">{stats.totalAssets}</h2>
+            <p className="text-xs font-bold text-gray-500 mt-1">Total hardware units</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-orange-200 transition-colors relative overflow-hidden">
+          {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-bl-full" />}
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-orange-50 text-orange-500 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-colors">
+              {stats.pendingInspections > 0 ? <AlertCircle size={24} /> : <ClipboardCheck size={24} />}
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Verifications</span>
+          </div>
+          <div>
+            <h2 className={`text-4xl font-black ${stats.pendingInspections > 0 ? 'text-orange-600' : 'text-gray-900'}`}>{stats.pendingInspections}</h2>
+            <p className="text-xs font-bold text-gray-500 mt-1">Pending approval</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-rose-200 transition-colors">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl group-hover:bg-rose-500 group-hover:text-white transition-colors"><Ticket size={24} /></div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Helpdesk</span>
+          </div>
+          <div>
+            <h2 className="text-4xl font-black text-gray-900">{stats.activeTickets}</h2>
+            <p className="text-xs font-bold text-gray-500 mt-1">Active IT tickets</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-emerald-200 transition-colors">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Users size={24} /></div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Network</span>
+          </div>
+          <div>
+            <h2 className="text-4xl font-black text-gray-900">{stats.totalStaff}</h2>
+            <p className="text-xs font-bold text-gray-500 mt-1">Active staff accounts</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 🧭 NAVIGATION ACTION CARDS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* ========================================== */}
-        {/* LEFT COLUMN (DETAILED STATS & RECENT)      */}
-        {/* ========================================== */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* ADVANCED STATS GRID */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        {/* Left Column: Quick Links */}
+        <div className="lg:col-span-2 space-y-4">
+          <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 pl-2">System Modules</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            {/* 1. ASSET OVERVIEW CARD */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-sm font-bold text-gray-500 mb-1">Total Assets</p>
-                  <h3 className="text-4xl font-black text-gray-900">{isLoading ? '-' : stats.totalAssets}</h3>
-                </div>
-                <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center text-teal-600">
-                  <Package size={24} />
-                </div>
+            <button onClick={() => router.push('/admin/inspections')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center"><ClipboardCheck size={20} /></div>
+                <h4 className="text-sm font-black text-gray-900">Review Inspections</h4>
               </div>
-              
-              {/* Asset Status Breakdown */}
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <div className="bg-green-50/50 border border-green-100 p-3 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-green-600"/>
-                    <span className="text-xs font-bold text-green-800">In Stock</span>
-                  </div>
-                  <span className="text-sm font-black text-green-900">{isLoading ? '-' : stats.inStock}</span>
-                </div>
-                
-                <div className="bg-blue-50/50 border border-blue-100 p-3 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <UserCheck size={16} className="text-blue-600"/>
-                    <span className="text-xs font-bold text-blue-800">Assigned</span>
-                  </div>
-                  <span className="text-sm font-black text-blue-900">{isLoading ? '-' : stats.assigned}</span>
-                </div>
-
-                <div className="bg-orange-50/50 border border-orange-100 p-3 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Wrench size={16} className="text-orange-600"/>
-                    <span className="text-xs font-bold text-orange-800">Repair</span>
-                  </div>
-                  <span className="text-sm font-black text-orange-900">{isLoading ? '-' : stats.repair}</span>
-                </div>
-
-                <div className="bg-red-50/50 border border-red-100 p-3 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Trash2 size={16} className="text-red-500"/>
-                    <span className="text-xs font-bold text-red-800">Discard</span>
-                  </div>
-                  <span className="text-sm font-black text-red-900">{isLoading ? '-' : stats.discard}</span>
-                </div>
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Audit smartphone visual submissions and approve hardware.</p>
+                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-orange-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
               </div>
-            </div>
+            </button>
 
-            {/* 2. STAFF OVERVIEW CARD (NOW WITH LIVE WEBSOCKET PRESENCE) */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-sm font-bold text-gray-500 mb-1 flex items-center gap-2">
-                    Total Staff 
-                    <span className="text-[9px] bg-green-50 text-green-600 font-bold px-1.5 py-0.5 rounded-full animate-pulse tracking-wider uppercase">Live Sync</span>
-                  </p>
-                  <h3 className="text-4xl font-black text-gray-900">{isLoading ? '-' : stats.totalStaff}</h3>
-                </div>
-                <div className="flex flex-col items-end">
-                  <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-2">
-                    <Users size={24} />
-                  </div>
-                  {/* Overlapping Thumbnails */}
-                  <div className="flex -space-x-3">
-                    {staffThumbnails.map((staff, i) => (
-                      <div key={i} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black ${staff.bg} shadow-sm z-${40-i*10}`}>
-                        {staff.init}
-                      </div>
-                    ))}
-                    <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-500 shadow-sm z-0">
-                      +{stats.totalStaff > 4 ? stats.totalStaff - 4 : 0}
-                    </div>
-                  </div>
-                </div>
+            <button onClick={() => router.push('/admin/assets')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Laptop size={20} /></div>
+                <h4 className="text-sm font-black text-gray-900">Asset Registry</h4>
               </div>
-
-              {/* Live Staff Status Breakdown */}
-              <div className="space-y-3 mt-2">
-                <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-                    <span className="text-sm font-bold text-gray-700">Online / Active</span>
-                  </div>
-                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : activeOnlineCount}</span>
-                </div>
-
-                <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
-                    <span className="text-sm font-bold text-gray-700">Offline / Away</span>
-                  </div>
-                  <span className="text-sm font-black text-gray-900">{isLoading ? '-' : offlineCount}</span>
-                </div>
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Manage full hardware lifecycle, assignments, and serial tags.</p>
+                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
               </div>
-            </div>
+            </button>
 
-          </div>
+            <button onClick={() => router.push('/admin/tickets')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center"><Ticket size={20} /></div>
+                <h4 className="text-sm font-black text-gray-900">IT Helpdesk</h4>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Resolve staff hardware issues and repair requests.</p>
+                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-rose-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
+              </div>
+            </button>
 
-          {/* RECENT ASSETS WIDGET */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                <Activity size={20} className="text-teal-600" /> Recently Added
-              </h2>
-              <Link href="/admin/assets" className="text-sm font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1">
-                View All <ArrowRight size={16} />
-              </Link>
-            </div>
+            <button onClick={() => router.push('/admin/staff')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center"><Users size={20} /></div>
+                <h4 className="text-sm font-black text-gray-900">Staff Directory</h4>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Manage employee access codes and profile data.</p>
+                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-emerald-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
+              </div>
+            </button>
 
-            <div className="space-y-4">
-              {isLoading ? (
-                <div className="text-center p-4 text-gray-400 font-bold text-sm">Loading Database...</div>
-              ) : recentAssets.length === 0 ? (
-                <div className="text-center p-6 text-gray-400 font-bold text-sm bg-gray-50 rounded-2xl">No assets found in inventory.</div>
-              ) : (
-                recentAssets.map((asset, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors rounded-2xl">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 font-mono text-[10px] font-black">
-                        {asset.tagId.split('-')[1] || 'AST'}
-                      </div>
-                      <div>
-                        <p className="font-black text-sm text-gray-900">{asset.name}</p>
-                        <p className="text-[11px] font-bold text-gray-500 uppercase">{asset.tagId}</p>
-                      </div>
-                    </div>
-                    <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg border ${
-                      asset.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
-                      asset.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-100' : 
-                      asset.status === 'Retired' ? 'bg-red-50 text-red-700 border-red-100' : 
-                      'bg-green-50 text-green-700 border-green-100'
-                    }`}>
-                      {asset.status === 'Maintenance' ? 'Repair' : asset.status === 'Retired' ? 'Discard' : asset.status}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* RIGHT COLUMN (QUICK ACTIONS & ALERTS)      */}
-        {/* ========================================== */}
-        <div className="space-y-6">
-          
-          {/* QUICK ACTIONS WIDGET */}
-          <div className="bg-white rounded-[32px] p-7 sm:p-8 shadow-sm border border-gray-100">
-            <h2 className="text-[22px] font-black text-[#0f172a] mb-6">Quick Actions</h2>
+        {/* Right Column: Mini Activity Feed */}
+        <div className="space-y-4">
+          <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 pl-2">Live Activity Log</h3>
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 h-[300px] overflow-hidden flex flex-col">
             
-            <div className="space-y-3.5">
-              <Link href="/admin/assets" className="flex items-center justify-between p-5 bg-[#f0fcf9] hover:bg-[#e1f8f3] transition-colors rounded-2xl group">
-                <span className="font-black text-[15px] text-[#0d7a66] tracking-tight">Manage Assets</span>
-                <Package size={22} className="text-[#0d7a66] opacity-90 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
-              </Link>
-
-              <Link href="/admin/staff" className="flex items-center justify-between p-5 bg-[#f8fafc] hover:bg-[#f1f5f9] transition-colors rounded-2xl group border border-transparent hover:border-gray-100">
-                <span className="font-black text-[15px] text-[#334155] tracking-tight">Register Staff</span>
-                <Users size={22} className="text-[#94a3b8] group-hover:text-[#64748b] group-hover:scale-110 transition-all" strokeWidth={2.5} />
-              </Link>
-
-              <Link href="/admin/inspections" className="flex items-center justify-between p-5 bg-[#f8fafc] hover:bg-[#f1f5f9] transition-colors rounded-2xl group border border-transparent hover:border-gray-100">
-                <span className="font-black text-[15px] text-[#334155] tracking-tight">Review Inspections</span>
-                <ClipboardCheck size={22} className="text-[#94a3b8] group-hover:text-[#64748b] group-hover:scale-110 transition-all" strokeWidth={2.5} />
-              </Link>
-            </div>
-          </div>
-
-          {/* DYNAMIC ALERTS WIDGET */}
-          <div className="bg-red-50/50 rounded-3xl p-6 border border-red-100 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center shrink-0">
-                <AlertTriangle size={20} />
+            {recentActivity.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50">
+                <Activity size={32} className="text-gray-300 mb-2" />
+                <p className="text-xs font-bold text-gray-500">No recent network activity</p>
               </div>
-              <div>
-                <h3 className="text-sm font-black text-red-900 mb-1">Attention Required</h3>
-                <p className="text-xs font-bold text-red-700/80 leading-relaxed mb-3">
-                  You have <span className="text-red-600 font-black px-1">{isLoading ? '-' : stats.overdueInspections}</span> assets with overdue inspections that need your review.
-                </p>
-                <Link href="/admin/assets" className="text-xs font-black text-red-700 bg-red-100 px-4 py-2 rounded-lg hover:bg-red-200 transition-colors inline-block">
-                  Review Now
-                </Link>
+            ) : (
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+                {recentActivity.map((log) => (
+                  <div key={log.id} className="flex gap-3 relative pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                    <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                      <Clock size={12} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-gray-800">
+                        {log.user_email?.split('@')[0] || 'A user'} <span className="font-bold text-gray-400">submitted an inspection.</span>
+                      </p>
+                      <p className="text-[10px] font-mono text-gray-400 mt-1">{new Date(log.created_at).toLocaleTimeString()}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
+            
+            <button onClick={() => router.push('/admin/inspections')} className="mt-4 w-full py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-[11px] font-black uppercase tracking-wider text-gray-600 transition-colors">
+              View All Logs
+            </button>
           </div>
-
         </div>
 
       </div>
+
     </div>
   );
 }
