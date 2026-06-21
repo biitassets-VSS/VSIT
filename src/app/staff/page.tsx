@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Ticket, ClipboardCheck, PlusCircle, RefreshCw, 
-  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode
+  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode, Copy
 } from 'lucide-react';
 
 interface StaffData {
@@ -14,43 +14,9 @@ interface StaffData {
   emp_code: string;
 }
 
-// 🧮 FIX: Clean matrix array block generation for instant camera scanning
-function NativeBarcodeMatrix({ url }: { url: string }) {
-  const size = 29; 
-  const matrix = Array(size).fill(null).map(() => Array(size).fill(false));
-  
-  const addAnchor = (r: number, c: number) => {
-    for (let i = 0; i < 7; i++) {
-      for (let j = 0; j < 7; j++) {
-        if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
-          matrix[r + i][c + j] = true;
-        }
-      }
-    }
-  };
-  addAnchor(0, 0); 
-  addAnchor(0, size - 7); 
-  addAnchor(size - 7, 0);
-
-  let seed = url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  for (let i = 0; i < size; i++) {
-    for (let j = 0; j < size; j++) {
-      if ((i < 8 && j < 8) || (i < 8 && j > size - 9) || (i > size - 9 && j < 8)) continue;
-      seed = (seed * 9301 + 49297) % 233280;
-      if (seed / 233280 > 0.4) matrix[i][j] = true;
-    }
-  }
-
-  return (
-    <div className="grid gap-0 bg-white p-3 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '150px', height: '150px' }}>
-      {matrix.flatMap((row, r) => row.map((cell, c) => <div key={`${r}-${c}`} className={cell ? 'bg-[#002B49]' : 'bg-white'} />))}
-    </div>
-  );
-}
-
 export default function StaffDashboardPage() {
   return (
-    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>}>
+    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
       <DashboardContent />
     </Suspense>
   );
@@ -103,13 +69,13 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
-  // 🎯 FIX: Removed assetCondition from dependencies so QR code stays frozen and scannable
+  // 🎯 GENERATES THE REAL LINK (Frozen to Asset & Category only so QR never twitches when typing notes)
   useEffect(() => {
     if (selectedAsset) {
       let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
       
       if (baseDomain.includes('localhost')) {
-        baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your Wi-Fi network configuration address
+        baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your local IPv4 network address if testing locally!
       }
       
       const safeCategory = encodeURIComponent(selectedCategory);
@@ -333,7 +299,6 @@ function DashboardContent() {
 
     setIsSubmitting(true);
     try {
-      // 🔐 FIX: Re-verify current session user inside the submission block to maintain data ownership
       const { data: { user } } = await supabase.auth.getUser();
       const submissionEmail = user?.email || staffProfile?.email || 'students_app05@outlook.com';
 
@@ -374,7 +339,6 @@ function DashboardContent() {
         last_inspection_date: new Date().toISOString()
       }).eq('id', selectedAsset.id);
 
-      // 🔐 FIX: Push accurate inspection record tied to user context so admin dashboard fetches it seamlessly
       await supabase.from('inspections').insert([{
         asset_id: selectedAsset.id,
         status: 'Pending Verification',
@@ -399,7 +363,7 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8 font-sans max-w-7xl mx-auto p-2">
-      {/* BANNER ROW */}
+      {/* BANNER */}
       <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
         <h1 className="text-2xl font-black text-[#002B49]">Welcome back, {staffProfile?.name}! 👋</h1>
         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 font-bold">
@@ -446,7 +410,7 @@ function DashboardContent() {
                   <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Permanent Verification Snapshots</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                     {Object.entries(asset.cloudlarePhotosLog).map(([angle, url]: any) => (
-                      <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-orange-400 transition-colors">
+                      <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-blue-600 transition-colors">
                         <img src={url} alt="" className="w-full h-full object-cover" />
                       </a>
                     ))}
@@ -490,12 +454,12 @@ function DashboardContent() {
             <div className="p-6 overflow-y-auto space-y-6">
               {!isAssetUnlocked ? (
                 <div className="space-y-4 py-2">
-                  <div className="p-4 bg-orange-50 border border-orange-100 text-orange-800 text-xs rounded-xl font-medium flex items-start gap-2">
-                    <ShieldAlert size={16} className="text-orange-600 shrink-0 mt-0.5" />
+                  <div className="p-4 bg-blue-50 border border-blue-100 text-blue-900 text-xs rounded-xl font-medium flex items-start gap-2">
+                    <ShieldAlert size={16} className="text-blue-600 shrink-0 mt-0.5" />
                     <span><strong>SECURITY ANTI-WRONG GUARD:</strong> Please enter this machine's exact <strong>Tag ID</strong> or <strong>Serial Number</strong> parameter to unlock the configuration fields.</span>
                   </div>
                   <form onSubmit={handleVerifyAssetLock} className="flex flex-col sm:flex-row gap-3">
-                    <input type="text" required value={typedVerification} onChange={e => setTypedVerification(e.target.value)} placeholder="Type Tag ID or Serial Number..." className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-orange-500" />
+                    <input type="text" required value={typedVerification} onChange={e => setTypedVerification(e.target.value)} placeholder="Type Tag ID or Serial Number..." className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-600" />
                     <button type="submit" className="px-6 py-3 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl">Verify Asset</button>
                   </form>
                   {validationError && <p className="text-xs text-red-600 font-bold">{validationError}</p>}
@@ -506,7 +470,7 @@ function DashboardContent() {
                   
                   <div className="space-y-2">
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 2: Select Current Asset Category</label>
-                    <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-orange-500">
+                    <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-blue-600">
                       <option value="Laptop">Laptop (Requires 6 Photo Checkpoints)</option>
                       <option value="Headphone">Headphone (Requires 2 Photo Checkpoints)</option>
                       <option value="Keyboard">Keyboard (Requires 2 Photo Checkpoints)</option>
@@ -520,18 +484,26 @@ function DashboardContent() {
 
                   <div className="space-y-2">
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 3: Enter Current Condition of Asset</label>
-                    <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-orange-500 focus:bg-white text-gray-800 leading-relaxed" />
+                    <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-600 focus:bg-white text-gray-800 leading-relaxed" />
                   </div>
 
-                  {/* STEP 4: SCAN OR LINK BRIDGING */}
+                  {/* 🚀 BULLETPROOF STEP 4: USES REAL ONLINE QR API ENGINE */}
                   <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-6">
-                    <div className="shrink-0 bg-white p-1 rounded-xl">
-                      <NativeBarcodeMatrix url={shareableSessionLink} />
+                    <div className="shrink-0 bg-white p-2 rounded-xl border border-blue-200 shadow-xs flex items-center justify-center min-w-[140px] min-h-[140px]">
+                      {shareableSessionLink ? (
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareableSessionLink)}`} 
+                          alt="Real QR Code" 
+                          className="w-32 h-32 object-contain"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-gray-400 font-bold">Loading QR...</span>
+                      )}
                     </div>
                     <div className="space-y-3 text-center sm:text-left flex-1">
                       <div>
                         <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide flex items-center justify-center sm:justify-start gap-1.5"><QrCode size={14} className="text-blue-600"/> STEP 4: SMART PHONE SCAN OR LINK SHARE</h4>
-                        <p className="text-[11px] text-gray-500 font-medium leading-relaxed max-w-md mt-0.5">Scan this high-density matrix to sync your phone, or copy the link below to share over **WhatsApp** for instant mobile activation.</p>
+                        <p className="text-[11px] text-gray-500 font-medium leading-relaxed max-w-md mt-0.5">Scan this official ISO QR Code with your phone camera, or copy the link below to share over **WhatsApp** for instant mobile activation.</p>
                       </div>
                       <div className="flex items-center gap-2 max-w-md">
                         <input type="text" readOnly value={shareableSessionLink} className="flex-1 p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-mono text-gray-500 outline-none" />
@@ -563,7 +535,7 @@ function DashboardContent() {
                                 onClick={() => startLiveVideoStream(angle)}
                                 className="w-full h-full flex flex-col items-center justify-center text-center p-4 hover:bg-gray-100/40 transition-colors"
                               >
-                                <Camera className="mx-auto text-gray-300 group-hover:text-orange-500 transition-colors mb-1" size={22} />
+                                <Camera className="mx-auto text-gray-300 group-hover:text-blue-600 transition-colors mb-1" size={22} />
                                 <span className="text-[10px] text-gray-400 font-black uppercase tracking-wide block">Phone Live Lens</span>
                               </button>
                             )}
@@ -600,7 +572,7 @@ function DashboardContent() {
             <video ref={videoRef} autoPlay playsInline className="w-full h-auto aspect-video object-cover" />
             <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 px-4">
               <button type="button" onClick={stopLiveVideoStream} className="px-4 py-2.5 bg-gray-800 text-white rounded-xl text-xs font-bold uppercase">Close Stream</button>
-              <button type="button" onClick={captureSnapshotFrame} className="px-6 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wide flex items-center gap-1"><Camera size={14}/> Take Live Photo</button>
+              <button type="button" onClick={captureSnapshotFrame} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wide flex items-center gap-1"><Camera size={14}/> Take Live Photo</button>
             </div>
           </div>
         </div>
