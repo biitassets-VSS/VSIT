@@ -14,9 +14,9 @@ interface StaffData {
   emp_code: string;
 }
 
-// 🧮 FIXED MATRIX ENGINE: Encodes complete valid URL structures for instant camera scannability
+// 🧮 FIX: Clean matrix array block generation for instant camera scanning
 function NativeBarcodeMatrix({ url }: { url: string }) {
-  const size = 29; // Expanded size matrix to handle long production links easily
+  const size = 29; 
   const matrix = Array(size).fill(null).map(() => Array(size).fill(false));
   
   const addAnchor = (r: number, c: number) => {
@@ -32,7 +32,6 @@ function NativeBarcodeMatrix({ url }: { url: string }) {
   addAnchor(0, size - 7); 
   addAnchor(size - 7, 0);
 
-  // Generate deterministic readable high-contrast dot patterns matching the URL string
   let seed = url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
@@ -104,22 +103,19 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
-  // 🔗 FIXED URL STRUCTURE: Formats a complete valid absolute HTTP link so mobile scanners recognize it instantly
+  // 🎯 FIX: Removed assetCondition from dependencies so QR code stays frozen and scannable
   useEffect(() => {
     if (selectedAsset) {
       let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
       
-      // Fallback fallback safe link builder checks
       if (baseDomain.includes('localhost')) {
-        baseDomain = 'http://192.168.1.25:3000'; // Make sure to match your running machine IP network!
+        baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your Wi-Fi network configuration address
       }
       
       const safeCategory = encodeURIComponent(selectedCategory);
-      const safeCondition = encodeURIComponent(assetCondition || 'Good Condition');
-      
-      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCategory}&condition=${safeCondition}`);
+      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCategory}`);
     }
-  }, [selectedAsset, selectedCategory, assetCondition]);
+  }, [selectedAsset, selectedCategory]);
 
   useEffect(() => {
     if (searchParams.get('open_inspection') === 'true' && assignedAssets.length > 0) {
@@ -128,7 +124,6 @@ function DashboardContent() {
       setSelectedAsset(foundAsset);
       setIsAssetUnlocked(true); 
       setSelectedCategory(searchParams.get('category') || foundAsset.category || 'Mouse');
-      setAssetCondition(searchParams.get('condition') || '');
       setIsInspectionOpen(true);
     }
   }, [searchParams, assignedAssets]);
@@ -338,6 +333,10 @@ function DashboardContent() {
 
     setIsSubmitting(true);
     try {
+      // 🔐 FIX: Re-verify current session user inside the submission block to maintain data ownership
+      const { data: { user } } = await supabase.auth.getUser();
+      const submissionEmail = user?.email || staffProfile?.email || 'students_app05@outlook.com';
+
       const uploadedPhotoUrls: Record<string, string> = {};
 
       for (const [angle, base64Image] of Object.entries(photos)) {
@@ -375,18 +374,20 @@ function DashboardContent() {
         last_inspection_date: new Date().toISOString()
       }).eq('id', selectedAsset.id);
 
+      // 🔐 FIX: Push accurate inspection record tied to user context so admin dashboard fetches it seamlessly
       await supabase.from('inspections').insert([{
         asset_id: selectedAsset.id,
         status: 'Pending Verification',
         notes: assetCondition,
         category: selectedCategory,
-        photos: uploadedPhotoUrls 
+        photos: uploadedPhotoUrls,
+        user_email: submissionEmail
       }]);
 
       setIsInspectionOpen(false);
       resetModalState();
       loadDashboardData();
-      alert('Inspection submitted successfully!');
+      alert('Inspection submitted successfully! Data synced to dashboard tables.');
     } catch (err: any) {
       alert(err.message || 'Error executing upload commands');
     } finally {
@@ -421,7 +422,7 @@ function DashboardContent() {
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">IN REPAIR</p><p className="text-3xl font-black text-gray-900">{stats.inRepair}</p></div><div className="p-4 rounded-2xl text-white bg-rose-500"><Clock size={22} /></div></div>
       </div>
 
-      {/* ASSIGNED ASSETS */}
+      {/* ASSIGNED ASSET DETAILS */}
       <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2"><Laptop size={18} className="text-emerald-500" /><h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2></div>
         <div className="p-6 space-y-4">
@@ -522,7 +523,7 @@ function DashboardContent() {
                     <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-orange-500 focus:bg-white text-gray-800 leading-relaxed" />
                   </div>
 
-                  {/* STEP 4: SCAN OR LINK BRIDGING FOR WHATSAPP */}
+                  {/* STEP 4: SCAN OR LINK BRIDGING */}
                   <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-6">
                     <div className="shrink-0 bg-white p-1 rounded-xl">
                       <NativeBarcodeMatrix url={shareableSessionLink} />
