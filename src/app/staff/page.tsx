@@ -29,22 +29,24 @@ export default function StaffDashboard() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // Fetch user profile securely matching the logged-in user
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .maybeSingle();
 
-        const fullName = profile?.full_name || profile?.name || 'Mohit Bahuguna';
-        const empCode = profile?.emp_code || 'EMP-7783';
+        // Dynamically parse name or email prefix if full name field is empty
+        const fullName = profile?.full_name || profile?.name || user.email?.split('@')[0] || 'Staff Member';
+        const empCode = profile?.emp_code || 'EMP-' + user.id.slice(0, 4).toUpperCase();
 
         setStaffProfile({
           name: fullName,
-          email: user.email || 'students_app05@outlook.com',
+          email: user.email || '',
           emp_code: empCode
         });
 
-        // Fetch counts for dashboard widgets
+        // Fetch counts dynamically from the live database for this specific user
         const { count: assetsCount } = await supabase
           .from('assets')
           .select('*', { count: 'exact', head: true })
@@ -89,7 +91,7 @@ export default function StaffDashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      {/* WELCOME BANNER CARD - FIXED & CLEAN */}
+      {/* ✨ DYNAMIC HERO WELCOME BANNER CARD RESTORED */}
       <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-[#0f172a] flex items-center gap-2">
@@ -101,7 +103,6 @@ export default function StaffDashboard() {
             <span>Email: {staffProfile?.email}</span>
           </div>
         </div>
-        {/* The secondary bell button element has been completely stripped out of this container wrapper */}
       </div>
 
       {/* QUICK LINKS GRID */}
