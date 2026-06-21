@@ -1,12 +1,32 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+// 🚀 PERFORMANCE FIX: Preloads the Inter font at the server level to prevent layout shifts
+const inter = Inter({ 
+  subsets: ['latin'], 
+  variable: '--font-inter',
+  display: 'swap', // Ensures text remains visible while webfont is loading
+});
 
+// 📱 MOBILE OPTIMIZATION: Prevents users from accidentally zooming in when tapping buttons
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#002B49', // Sets the top mobile browser bar to match your brand color
+};
+
+// 🌍 SEO & METADATA: Controls how your app looks when shared in Slack/WhatsApp
 export const metadata: Metadata = {
-  title: 'IT Assets Management System',
-  description: 'Virtual Staffing Solutions',
+  title: 'Virtual Staffing | IT Asset Management',
+  description: 'Enterprise IT Asset Verification and Tracking Dashboard',
+  appleWebApp: {
+    title: 'VSIT Assets',
+    statusBarStyle: 'black-translucent',
+    capable: true,
+  },
 };
 
 export default function RootLayout({
@@ -15,17 +35,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} relative min-h-screen`}>
-        {children}
-
-        {/* GLOBAL FLOATING COPYRIGHT FOR EVERY SINGLE PAGE */}
-        <div className="fixed bottom-4 right-6 z-[9999] pointer-events-none">
-          <p className="text-[11px] font-medium text-gray-500 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-gray-200">
-            Design by <span className="text-orange-500 font-bold tracking-wide">AinodeArt</span>
-          </p>
-        </div>
-        
+    <html lang="en" className="scroll-smooth">
+      {/* 🎨 ENTERPRISE STYLING APPLIED GLOBALLY:
+        - antialiased: Makes text ultra-crisp
+        - bg-[#F8FAFC]: The professional "slate" background
+        - text-gray-900: Pure contrast text
+      */}
+      <body className={`${inter.variable} font-sans antialiased bg-[#F8FAFC] text-gray-900 min-h-screen selection:bg-blue-200 selection:text-blue-900`}>
+        {/* Main App Content Injection */}
+        <main className="w-full h-full">
+          {children}
+        </main>
       </body>
     </html>
   );
