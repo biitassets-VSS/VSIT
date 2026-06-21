@@ -69,11 +69,11 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
-  // 🎯 GENERATES THE PHONE QR LINK DYNAMICALLY
+  // Encodes the dynamic session link for the QR Code
   useEffect(() => {
     if (selectedAsset && staffProfile) {
       let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-      if (baseDomain.includes('localhost')) baseDomain = 'http://192.168.1.25:3000'; // Match local IP
+      if (baseDomain.includes('localhost')) baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your Wi-Fi IPv4 if testing locally!
       
       const safeCat = encodeURIComponent(selectedCategory);
       const safeCond = encodeURIComponent(assetCondition || 'Verified via secure mobile session.');
@@ -102,20 +102,17 @@ function DashboardContent() {
     stopLiveVideoStream();
   };
 
-  // 🛡️ BULLETPROOF DATA LOADER: Decoupled try/catch blocks guarantee the page populates!
   const loadDashboardData = async () => {
     setIsLoading(true);
 
-    // 1. Get Auth User safely
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push('/login');
       return;
     }
 
-    const userEmail = user.email || 'migration_canberra.bi@outlook.com';
+    const userEmail = user.email || 'students_app05@outlook.com';
 
-    // 2. Fetch Profile safely without crashing thread
     let fullName = 'Lakhwinder Canberra';
     let empCode = 'EMP-002';
     try {
@@ -128,21 +125,18 @@ function DashboardContent() {
 
     setStaffProfile({ name: fullName, email: userEmail, emp_code: empCode });
 
-    // 3. Fetch Assets safely
     let rawAssets: any[] = [];
     try {
       const { data } = await supabase.from('assets').select('*');
       if (data) rawAssets = data;
     } catch (e) { console.warn('Assets fetch fallback'); }
 
-    // 4. Fetch Inspections safely
     let rawInspections: any[] = [];
     try {
       const { data } = await supabase.from('inspections').select('*').order('created_at', { ascending: false });
       if (data) rawInspections = data;
     } catch (e) { console.warn('Inspections fetch fallback'); }
 
-    // 5. Fetch Tickets safely
     let rawTickets: any[] = [];
     try {
       const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
@@ -151,13 +145,11 @@ function DashboardContent() {
 
     setActiveTickets(rawTickets);
 
-    // 🚀 UNBREAKABLE ASSET RESOLVER
     let myAssets = rawAssets.filter((a: any) => {
       const s = JSON.stringify(a).toLowerCase();
       return s.includes(userEmail.toLowerCase()) || s.includes(fullName.toLowerCase()) || s.includes(empCode.toLowerCase());
     });
 
-    // 🚨 IF DATABASE RETURNS 0 ASSETS FOR LAKHWINDER, FORCE-INJECT A PERMANENT HARDWARE RECORD!
     if (myAssets.length === 0) {
       myAssets = [{
         id: `auto-device-${user.id.slice(0,6)}`,
@@ -219,18 +211,20 @@ function DashboardContent() {
     }
   };
 
+  // 🚀 FIXED: using "ideal: 'environment'" so laptops don't crash when rear camera isn't found
   const startLiveVideoStream = async (angle: string) => {
     setActiveAngleTarget(angle);
     setIsCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 } }, 
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, 
         audio: false
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      alert('Camera access blocked. Ensure lens permissions are active.');
+      console.error(err);
+      alert('Camera access blocked. Click the Padlock icon 🔒 in your address bar to Allow Camera. Mobile phones must use https:// links.');
       setIsCameraActive(false);
     }
   };
@@ -361,7 +355,6 @@ function DashboardContent() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET</button>
         
-        {/* 🚀 FIX: Unlocked Button triggers modal 100% of the time, even if assignedAssets is [] */}
         <button 
           onClick={() => { 
             const target = assignedAssets[0] || {
