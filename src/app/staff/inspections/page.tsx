@@ -20,7 +20,7 @@ export default function MyInspectionsPage() {
 
         const [assetsRes, inspectionsRes] = await Promise.all([
           supabase.from('assets').select('*'),
-          supabase.from('inspections').select('*')
+          supabase.from('inspections').select('*').order('created_at', { ascending: false })
         ]);
 
         if (assetsRes.data) {
@@ -52,7 +52,8 @@ export default function MyInspectionsPage() {
               finalStatus,
               lastInspDate,
               upcomingInspDate,
-              isOverdue
+              isOverdue,
+              photosArray: latestInsp?.photos || null
             };
           });
 
@@ -109,30 +110,43 @@ export default function MyInspectionsPage() {
             <p className="text-xs font-bold text-gray-400 text-center py-8">No assigned hardware inspection tracks found.</p>
           ) : (
             inspectionLogs.map((log) => (
-              <div key={log.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <div>
-                    <h4 className="text-sm font-extrabold text-gray-900">{log.asset_name || log.name}</h4>
-                    <p className="text-[10px] font-mono font-bold text-gray-400 mt-0.5">S/N: {log.serial_number || log.serial || 'N/A'}</p>
+              <div key={log.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-2">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-gray-900">{log.asset_name || log.name}</h4>
+                      <p className="text-[10px] font-mono font-bold text-gray-400 mt-0.5">S/N: {log.serial_number || log.serial || 'N/A'}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-gray-500">
+                      <span className="flex items-center gap-1"><Clock size={12}/> Last Check: {new Date(log.lastInspDate).toLocaleDateString()}</span>
+                      <span className={log.finalStatus === 'Overdue' ? 'text-red-600 flex items-center gap-1' : 'flex items-center gap-1'}>
+                        <AlertCircle size={12}/> Next Due: {new Date(log.upcomingInspDate).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-gray-500">
-                    <span className="flex items-center gap-1"><Clock size={12}/> Last Check: {new Date(log.logInspDate || log.lastInspDate).toLocaleDateString()}</span>
-                    <span className={log.finalStatus === 'Overdue' ? 'text-red-600 flex items-center gap-1' : 'flex items-center gap-1'}>
-                      <AlertCircle size={12}/> Next Due: {new Date(log.upcomingInspDate).toLocaleDateString()}
-                    </span>
+                  <div className="flex items-center gap-3 self-start md:self-center">
+                    {getStatusBadge(log.finalStatus)}
+                    {(log.finalStatus === 'Overdue' || log.finalStatus.includes('fail')) && (
+                      <button 
+                        onClick={() => router.push('/staff?open_inspection=true')}
+                        className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition-all"
+                      >
+                        Inspect Now
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 self-start md:self-center">
-                  {getStatusBadge(log.finalStatus)}
-                  {(log.finalStatus === 'Overdue' || log.finalStatus.includes('fail')) && (
-                    <button 
-                      onClick={() => router.push('/staff?open_inspection=true')}
-                      className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition-all"
-                    >
-                      Inspect Now
-                    </button>
-                  )}
-                </div>
+
+                {/* HISTORICAL IMAGE DISPLAY SUBGRID */}
+                {log.photosArray && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 pt-2 border-t border-gray-200/60">
+                    {Object.entries(log.photosArray).map(([angle, url]: any) => (
+                      <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border border-gray-200 rounded-lg overflow-hidden bg-white">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             ))
           )}

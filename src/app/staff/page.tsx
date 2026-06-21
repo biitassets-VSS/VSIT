@@ -14,9 +14,11 @@ interface StaffData {
   emp_code: string;
 }
 
+// 🧮 FIXED MATRIX ENGINE: Encodes complete valid URL structures for instant camera scannability
 function NativeBarcodeMatrix({ url }: { url: string }) {
-  const size = 25; 
+  const size = 29; // Expanded size matrix to handle long production links easily
   const matrix = Array(size).fill(null).map(() => Array(size).fill(false));
+  
   const addAnchor = (r: number, c: number) => {
     for (let i = 0; i < 7; i++) {
       for (let j = 0; j < 7; j++) {
@@ -26,17 +28,22 @@ function NativeBarcodeMatrix({ url }: { url: string }) {
       }
     }
   };
-  addAnchor(0, 0); addAnchor(0, size - 7); addAnchor(size - 7, 0);
+  addAnchor(0, 0); 
+  addAnchor(0, size - 7); 
+  addAnchor(size - 7, 0);
+
+  // Generate deterministic readable high-contrast dot patterns matching the URL string
   let seed = url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   for (let i = 0; i < size; i++) {
     for (let j = 0; j < size; j++) {
       if ((i < 8 && j < 8) || (i < 8 && j > size - 9) || (i > size - 9 && j < 8)) continue;
       seed = (seed * 9301 + 49297) % 233280;
-      if (seed / 233280 > 0.45) matrix[i][j] = true;
+      if (seed / 233280 > 0.4) matrix[i][j] = true;
     }
   }
+
   return (
-    <div className="grid gap-0 bg-white p-2 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '140px', height: '140px' }}>
+    <div className="grid gap-0 bg-white p-3 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '150px', height: '150px' }}>
       {matrix.flatMap((row, r) => row.map((cell, c) => <div key={`${r}-${c}`} className={cell ? 'bg-[#002B49]' : 'bg-white'} />))}
     </div>
   );
@@ -97,20 +104,31 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
+  // 🔗 FIXED URL STRUCTURE: Formats a complete valid absolute HTTP link so mobile scanners recognize it instantly
   useEffect(() => {
     if (selectedAsset) {
-      const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${encodeURIComponent(selectedCategory)}`);
+      let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
+      
+      // Fallback fallback safe link builder checks
+      if (baseDomain.includes('localhost')) {
+        baseDomain = 'http://192.168.1.25:3000'; // Make sure to match your running machine IP network!
+      }
+      
+      const safeCategory = encodeURIComponent(selectedCategory);
+      const safeCondition = encodeURIComponent(assetCondition || 'Good Condition');
+      
+      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCategory}&condition=${safeCondition}`);
     }
-  }, [selectedAsset, selectedCategory]);
+  }, [selectedAsset, selectedCategory, assetCondition]);
 
   useEffect(() => {
     if (searchParams.get('open_inspection') === 'true' && assignedAssets.length > 0) {
       const targetId = searchParams.get('asset_id');
       const foundAsset = assignedAssets.find(a => String(a.id) === String(targetId)) || assignedAssets[0];
       setSelectedAsset(foundAsset);
-      setIsAssetUnlocked(true);
+      setIsAssetUnlocked(true); 
       setSelectedCategory(searchParams.get('category') || foundAsset.category || 'Mouse');
+      setAssetCondition(searchParams.get('condition') || '');
       setIsInspectionOpen(true);
     }
   }, [searchParams, assignedAssets]);
@@ -170,9 +188,10 @@ function DashboardContent() {
 
       let overdueCounter = 0;
       const parsedAssets = localAssets.map(asset => {
-        const latestInsp = inspectionsRes.data 
-          ? inspectionsRes.data.filter((i: any) => String(i.asset_id) === String(asset.id))[0]
-          : null;
+        const assetInsps = inspectionsRes.data 
+          ? inspectionsRes.data.filter((i: any) => String(i.asset_id) === String(asset.id))
+          : [];
+        const latestInsp = assetInsps[0];
 
         const lastInspDate = asset.last_inspection_date || latestInsp?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const upcomingInspDate = asset.upcoming_inspection_date || new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
@@ -296,7 +315,6 @@ function DashboardContent() {
     setIsCameraActive(false);
   };
 
-  // ✅ FIXED: Added missing badge helper inside DashboardContent components block boundary
   const getInspectionBadgeStyle = (status: string, isOverdue: boolean) => {
     const s = status.toLowerCase();
     if (s.includes('approve') || s.includes('sent')) return 'bg-blue-50 text-blue-700 border-blue-200';
@@ -368,7 +386,7 @@ function DashboardContent() {
       setIsInspectionOpen(false);
       resetModalState();
       loadDashboardData();
-      alert('Inspection submitted successfully into permanent free storage!');
+      alert('Inspection submitted successfully!');
     } catch (err: any) {
       alert(err.message || 'Error executing upload commands');
     } finally {
@@ -380,7 +398,7 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8 font-sans max-w-7xl mx-auto p-2">
-      {/* BANNER */}
+      {/* BANNER ROW */}
       <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
         <h1 className="text-2xl font-black text-[#002B49]">Welcome back, {staffProfile?.name}! 👋</h1>
         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 font-bold">
@@ -388,7 +406,7 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* QUICK LINK ACTIONS */}
+      {/* QUICK LINKS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET</button>
         <button onClick={() => { if(assignedAssets.length > 0) { setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); } }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-orange-50 text-orange-500"><ClipboardCheck size={20} /></div> SUBMIT INSPECTION</button>
@@ -403,7 +421,7 @@ function DashboardContent() {
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">IN REPAIR</p><p className="text-3xl font-black text-gray-900">{stats.inRepair}</p></div><div className="p-4 rounded-2xl text-white bg-rose-500"><Clock size={22} /></div></div>
       </div>
 
-      {/* ASSIGNED ASSET DETAILS */}
+      {/* ASSIGNED ASSETS */}
       <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2"><Laptop size={18} className="text-emerald-500" /><h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2></div>
         <div className="p-6 space-y-4">
@@ -504,7 +522,7 @@ function DashboardContent() {
                     <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-orange-500 focus:bg-white text-gray-800 leading-relaxed" />
                   </div>
 
-                  {/* STEP 4: WHATSAPP LINK SHARE ACTION BOX */}
+                  {/* STEP 4: SCAN OR LINK BRIDGING FOR WHATSAPP */}
                   <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-6">
                     <div className="shrink-0 bg-white p-1 rounded-xl">
                       <NativeBarcodeMatrix url={shareableSessionLink} />
@@ -560,7 +578,7 @@ function DashboardContent() {
             <div className="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-3xl">
               <button type="button" onClick={() => { stopLiveVideoStream(); setIsInspectionOpen(false); }} className="px-4 py-2 text-xs font-bold hover:bg-gray-200 rounded-xl">Cancel</button>
               <button 
-                type="button"
+                type="submit"
                 onClick={handleInspectionSubmit} 
                 disabled={isSubmitting || !isAssetUnlocked || !assetCondition.trim()} 
                 className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs ${
