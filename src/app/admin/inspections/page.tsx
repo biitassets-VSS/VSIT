@@ -68,29 +68,25 @@ export default function AdminInspectionReviewPage() {
     }
   };
 
-  // 🚀 THE MAGIC "TWO-WAY" STATUS UPDATER
   const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Passed' | 'Failed (Re-Request)') => {
     if (!confirm(`Are you sure you want to mark this submission as "${verdict}"?`)) return;
 
     setUpdatingId(inspectionId);
     try {
-      // 1. Update the Inspection record log
       await supabase
         .from('inspections')
         .update({ status: verdict })
         .eq('id', inspectionId);
 
-      // 2. CRITICAL: Update the original Asset row so the Staff member's screen changes instantly!
       await supabase
         .from('assets')
         .update({ 
           inspection_status: verdict,
-          status: 'Assigned', // Unlocks asset from "WAITING" mode
+          status: 'Assigned',
           last_inspection_date: new Date().toISOString()
         })
         .eq('id', assetId);
 
-      // 3. Update local React UI state instantly without requiring a page refresh
       setInspections(prev => prev.map(item => 
         item.id === inspectionId ? { ...item, status: verdict } : item
       ));
@@ -103,7 +99,6 @@ export default function AdminInspectionReviewPage() {
     }
   };
 
-  // Filter pipeline
   const filteredList = inspections.filter(item => {
     const matchesTab = 
       filterTab === 'all' ? true :
@@ -126,7 +121,6 @@ export default function AdminInspectionReviewPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6 font-sans">
       
-      {/* COMMAND CENTER HEADER */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors">
@@ -155,7 +149,6 @@ export default function AdminInspectionReviewPage() {
         </button>
       </div>
 
-      {/* FILTER TABS & SEARCH BAR */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-2xs">
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
           <button onClick={() => setFilterTab('pending')} className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide shrink-0 transition-all ${filterTab === 'pending' ? 'bg-orange-500 text-white shadow-xs' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -184,7 +177,6 @@ export default function AdminInspectionReviewPage() {
         </div>
       </div>
 
-      {/* SUBMISSION REVIEW FEED */}
       {loading ? (
         <div className="w-full py-24 flex flex-col items-center justify-center gap-3 bg-white rounded-3xl border border-gray-100">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div>
@@ -212,7 +204,6 @@ export default function AdminInspectionReviewPage() {
               >
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                   
-                  {/* LEFT: EMPLOYEE & DEVICE INFO */}
                   <div className="space-y-3 min-w-[280px]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm border border-blue-100 shrink-0">
@@ -238,7 +229,6 @@ export default function AdminInspectionReviewPage() {
                     </div>
                   </div>
 
-                  {/* MIDDLE: ATTACHED PERMANENT PHOTO THUMBNAILS & NOTES */}
                   <div className="flex-1 w-full lg:w-auto bg-gray-50/50 p-4 rounded-2xl border border-gray-100 space-y-3">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1">Employee Condition Declaration:</span>
@@ -264,7 +254,8 @@ export default function AdminInspectionReviewPage() {
                             >
                               <img src={url} alt={angle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-1">
-                                <Eye size={16} mb={0.5} />
+                                {/* 🚀 FIX: Removed the invalid `mb={0.5}` and applied it as a className */}
+                                <Eye size={16} className="mb-1" />
                                 <span className="text-[8px] font-black uppercase text-center leading-none">{angle.split(' ')[0]}</span>
                               </div>
                             </button>
@@ -274,7 +265,6 @@ export default function AdminInspectionReviewPage() {
                     </div>
                   </div>
 
-                  {/* RIGHT: VERDICT ACTION CONTROLS */}
                   <div className="flex lg:flex-col items-center justify-end gap-3 w-full lg:w-auto shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-100">
                     {isPending ? (
                       <div className="flex flex-row lg:flex-col gap-2.5 w-full sm:w-auto">
@@ -315,7 +305,6 @@ export default function AdminInspectionReviewPage() {
         </div>
       )}
 
-      {/* 🔍 HIGH-RES LIGHTBOX MODAL VIEWER */}
       {previewPhotoModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4">
           <button 
