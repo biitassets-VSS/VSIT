@@ -7,7 +7,7 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, Calendar, X, Save, Eye, Hash, RefreshCw, Tag, 
   Download, Printer, Edit2, ShieldCheck, AlertCircle, Camera, 
-  Upload, FileSpreadsheet, DollarSign, Package, Mouse, Keyboard, Headphones, SlidersHorizontal
+  Upload, FileSpreadsheet, DollarSign, Package, Mouse, Keyboard, Headphones, SlidersHorizontal, Filter
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -261,22 +261,18 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
-  // 🚀 ADAPTIVE HTML PRINTER ENGINE (Micro, Vertical, Standard)
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const cat = (asset.category || '').toLowerCase();
     
-    // Default to Laptop/Standard Settings
     let printW = '50mm', printH = '50mm';
     let qrSize = '28mm', tagSize = '14px', modelSize = '7px';
     let layoutType = 'standard';
 
-    // Micro Size (Mice / Headphones)
     if (cat.includes('mouse') || cat.includes('headphone')) {
       printW = '25mm'; printH = '25mm'; 
       qrSize = '14mm'; tagSize = '8px'; modelSize = '4px';
       layoutType = 'micro';
     } 
-    // Vertical Size (Keyboards)
     else if (cat.includes('keyboard')) {
       printW = '25mm'; printH = '50mm'; 
       qrSize = '18mm'; tagSize = '10px'; modelSize = '6px';
@@ -315,7 +311,6 @@ export default function AssetRegistryPage() {
     printWindow.document.open(); printWindow.document.write(printableMarkup); printWindow.document.close();
   };
 
-  // 🚀 ADAPTIVE CANVAS PNG DOWNLOAD ENGINE (Micro, Vertical, Standard)
   const handleDownloadStickerImage = async (asset: any, cleanTag: string) => {
     try {
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
@@ -331,7 +326,6 @@ export default function AssetRegistryPage() {
       const cat = (asset.category || '').toLowerCase();
       
       if (cat.includes('mouse') || cat.includes('headphone')) {
-        // MICRO SIZE (300x300)
         canvas.width = 300; canvas.height = 300;
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#002B49'; ctx.lineWidth = 6; ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
@@ -348,7 +342,6 @@ export default function AssetRegistryPage() {
         };
 
       } else if (cat.includes('keyboard')) {
-        // VERTICAL TALL SIZE (300x600)
         canvas.width = 300; canvas.height = 600;
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#002B49'; ctx.lineWidth = 8; ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
@@ -365,7 +358,6 @@ export default function AssetRegistryPage() {
         };
 
       } else {
-        // STANDARD LAPTOP SIZE (600x750)
         canvas.width = 600; canvas.height = 750;
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#002B49'; ctx.lineWidth = 12; ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
