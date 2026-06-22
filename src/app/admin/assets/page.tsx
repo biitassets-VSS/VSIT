@@ -7,7 +7,8 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, Calendar, X, Save, Eye, Hash, RefreshCw, Tag, 
   Download, Printer, Edit2, ShieldCheck, AlertCircle, Camera, 
-  Upload, FileSpreadsheet, DollarSign, Building2, CheckCircle2
+  Upload, FileSpreadsheet, DollarSign, Building2, CheckCircle2,
+  Filter, Mouse, Keyboard, Headphones, Package, SlidersHorizontal
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -16,7 +17,12 @@ export default function AssetRegistryPage() {
   const [loading, setLoading] = useState(true);
   const [assets, setAssets] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
+  
+  // 🔍 THE NEW 4-WAY FILTER MATRIX STATE
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All'); // All, Laptop, Mouse, Keyboard, Headphone, Other
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');     // All, In Stock, Assigned, In Repair, Demo Use, Discard
+  const [selectedCondition, setSelectedCondition] = useState<string>('All'); // All, New, Refurbished, Repaired
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -24,7 +30,7 @@ export default function AssetRegistryPage() {
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
-  // 1. NEW ASSET ENTERPRISE FORM STATE
+  // New Asset Form State
   const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
   const [newAssetId, setNewAssetId] = useState('');
   const [newAssetName, setNewAssetName] = useState('');
@@ -34,8 +40,8 @@ export default function AssetRegistryPage() {
   const [newAssetWarranty, setNewAssetWarranty] = useState('');
   const [newAssetPrice, setNewAssetPrice] = useState('');
   const [newAssetVendor, setNewAssetVendor] = useState('');
-  const [newAssetCondition, setNewAssetCondition] = useState('New'); // New, Refurbished, Repaired
-  const [newAssetStatus, setNewAssetStatus] = useState('In Stock (Unassigned)'); // In Stock, Assigned, In Repair, Demo Use, Discard
+  const [newAssetCondition, setNewAssetCondition] = useState('New');
+  const [newAssetStatus, setNewAssetStatus] = useState('In Stock (Unassigned)');
   const [newAssetAssignee, setNewAssetAssignee] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -117,16 +123,10 @@ export default function AssetRegistryPage() {
     setViewAssetModal(asset);
     setIsEditingAsset(false);
     setEditForm({
-      name: asset.asset_name || '',
-      brand: asset.brand || '',
-      serial: asset.serial_number || '',
-      purchase_date: asset.purchase_date || '',
-      warranty_expiry: asset.warranty_expiry || '',
-      price: asset.price || '',
-      vendor: asset.vendor || '',
-      condition: asset.asset_condition || 'New',
-      status: asset.status || 'In Stock (Unassigned)',
-      assignee: asset.assigned_to || ''
+      name: asset.asset_name || '', brand: asset.brand || '', serial: asset.serial_number || '',
+      purchase_date: asset.purchase_date || '', warranty_expiry: asset.warranty_expiry || '',
+      price: asset.price || '', vendor: asset.vendor || '', condition: asset.asset_condition || 'New',
+      status: asset.status || 'In Stock (Unassigned)', assignee: asset.assigned_to || ''
     });
 
     setAssetInspectionLog(null);
@@ -148,27 +148,16 @@ export default function AssetRegistryPage() {
       const resolvedStatus = newAssetAssignee ? 'Assigned' : newAssetStatus;
 
       const { error } = await supabase.from('assets').insert([{
-        id: newAssetId,
-        asset_tag: newAssetId,
-        asset_name: newAssetName,
-        brand: newAssetBrand || 'Unknown Brand',
-        serial_number: newAssetSerial,
-        category: newAssetCategory,
-        purchase_date: cleanPurchase,
-        warranty_expiry: cleanWarranty,
-        price: cleanPrice,
-        vendor: newAssetVendor || 'General Supplier',
-        asset_condition: newAssetCondition,
-        status: resolvedStatus,
-        assigned_to: newAssetAssignee || null,
-        inspection_status: 'Pending Verification',
+        id: newAssetId, asset_tag: newAssetId, asset_name: newAssetName, brand: newAssetBrand || 'Unknown Brand',
+        serial_number: newAssetSerial, category: newAssetCategory, purchase_date: cleanPurchase, warranty_expiry: cleanWarranty,
+        price: cleanPrice, vendor: newAssetVendor || 'General Supplier', asset_condition: newAssetCondition,
+        status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Pending Verification',
         upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       }]);
 
       if (error) throw error;
       alert(`Hardware ${newAssetId} fully logged into Enterprise Ledger!`);
       setIsAddModalOpen(false);
-      
       setNewAssetName(''); setNewAssetBrand(''); setNewAssetSerial(''); setNewAssetPrice(''); setNewAssetVendor(''); setNewAssetAssignee('');
       fetchRegistryData();
     } catch (err: any) { alert(`Database Error: ${err.message}`); } finally { setIsSaving(false); }
@@ -186,34 +175,23 @@ export default function AssetRegistryPage() {
       if (!editForm.assignee && resolvedStatus === 'Assigned') resolvedStatus = 'In Stock (Unassigned)';
 
       const { error } = await supabase.from('assets').update({
-        asset_name: editForm.name,
-        brand: editForm.brand,
-        serial_number: editForm.serial,
-        purchase_date: cleanPurchase,
-        warranty_expiry: cleanWarranty,
-        price: cleanPrice,
-        vendor: editForm.vendor,
-        asset_condition: editForm.condition,
-        status: resolvedStatus,
+        asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
+        purchase_date: cleanPurchase, warranty_expiry: cleanWarranty, price: cleanPrice,
+        vendor: editForm.vendor, asset_condition: editForm.condition, status: resolvedStatus,
         assigned_to: editForm.assignee || null
       }).eq('id', viewAssetModal.id);
 
       if (error) throw error;
-
       const selectedStaff = staffList.find(s => s.id === editForm.assignee) || {};
       const updatedStaffName = selectedStaff.full_name || selectedStaff.name || editForm.assignee || 'Unassigned';
 
       setViewAssetModal((prev: any) => ({
-        ...prev,
-        asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
-        purchase_date: cleanPurchase, warranty_expiry: cleanWarranty, price: cleanPrice,
-        vendor: editForm.vendor, asset_condition: editForm.condition, status: resolvedStatus,
-        assigned_to: editForm.assignee, staff_name: updatedStaffName
+        ...prev, asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
+        purchase_date: cleanPurchase, warranty_expiry: cleanWarranty, price: cleanPrice, vendor: editForm.vendor,
+        asset_condition: editForm.condition, status: resolvedStatus, assigned_to: editForm.assignee, staff_name: updatedStaffName
       }));
 
-      setIsEditingAsset(false);
-      fetchRegistryData();
-      alert("Asset file successfully updated!");
+      setIsEditingAsset(false); fetchRegistryData(); alert("Asset file successfully updated!");
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
@@ -251,19 +229,10 @@ export default function AssetRegistryPage() {
         const numPrice = col['price'] ? parseFloat(col['price']) : null;
 
         batchPayload.push({
-          id: newId,
-          asset_tag: newId,
-          asset_name: col['modelname'],
-          brand: col['brand'] || 'Standard',
-          serial_number: col['serialnumber'],
-          category: cat,
-          purchase_date: pDate,
-          warranty_expiry: wDate,
-          price: numPrice,
-          vendor: col['vendor'] || 'Bulk Import',
-          asset_condition: col['condition'] || 'New',
-          status: 'In Stock (Unassigned)',
-          inspection_status: 'Pending Verification',
+          id: newId, asset_tag: newId, asset_name: col['modelname'], brand: col['brand'] || 'Standard',
+          serial_number: col['serialnumber'], category: cat, purchase_date: pDate, warranty_expiry: wDate,
+          price: numPrice, vendor: col['vendor'] || 'Bulk Import', asset_condition: col['condition'] || 'New',
+          status: 'In Stock (Unassigned)', inspection_status: 'Pending Verification',
           upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         });
       }
@@ -274,9 +243,7 @@ export default function AssetRegistryPage() {
       if (error) throw error;
 
       alert(`🎉 Successfully imported ${batchPayload.length} hardware assets!`);
-      setIsBulkModalOpen(false);
-      setBulkFile(null);
-      fetchRegistryData();
+      setIsBulkModalOpen(false); setBulkFile(null); fetchRegistryData();
     } catch (err: any) { alert(`Bulk Import Failed: ${err.message}`); } finally { setIsImporting(false); }
   };
 
@@ -288,13 +255,6 @@ export default function AssetRegistryPage() {
     if (rawId.length > 20) return `TAG-${rawId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
     return rawId.toUpperCase();
   };
-
-  const filteredAssets = assets.filter(a => {
-    const q = searchQuery.toLowerCase();
-    return a.id.toLowerCase().includes(q) || a.asset_name?.toLowerCase().includes(q) || 
-           a.serial_number?.toLowerCase().includes(q) || a.staff_name?.toLowerCase().includes(q) ||
-           a.brand?.toLowerCase().includes(q) || a.status?.toLowerCase().includes(q);
-  });
 
   const getAssetViewUrl = (asset: any) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
@@ -338,23 +298,18 @@ export default function AssetRegistryPage() {
   const handleDownloadStickerImage = async (asset: any, cleanTag: string) => {
     try {
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
-      const res = await fetch(qrUrl);
-      const blob = await res.blob();
+      const res = await fetch(qrUrl); const blob = await res.blob();
       const base64Qr = await new Promise<string>((resolve) => {
         const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.readAsDataURL(blob);
       });
 
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
+      const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); if (!ctx) return;
       canvas.width = 600; canvas.height = 750;
       ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.strokeStyle = '#002B49'; ctx.lineWidth = 12; ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
       ctx.fillStyle = '#002B49'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING IT ASSET', canvas.width / 2, 65);
 
-      const qrImg = new Image();
-      qrImg.src = base64Qr;
+      const qrImg = new Image(); qrImg.src = base64Qr;
       qrImg.onload = () => {
         ctx.drawImage(qrImg, 100, 95, 400, 400);
         ctx.fillStyle = '#002B49'; ctx.font = '900 56px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 560);
@@ -367,13 +322,59 @@ export default function AssetRegistryPage() {
     } catch (err) { alert("Error rendering sticker image."); }
   };
 
+  // 🧮 DYNAMIC LIVE CATEGORY COUNTERS
+  const getCatCount = (catName: string) => {
+    if (catName === 'All') return assets.length;
+    if (catName === 'Other') return assets.filter(a => !['Laptop', 'Mouse', 'Keyboard', 'Headphone'].includes(a.category)).length;
+    return assets.filter(a => a.category?.toLowerCase() === catName.toLowerCase()).length;
+  };
+
+  // 🚀 THE MASTER MULTI-FILTER PIPELINE
+  const filteredAssets = assets.filter(a => {
+    // 1. Search Bar Match
+    const q = searchQuery.toLowerCase();
+    const cleanTag = getCleanDisplayTag(a).toLowerCase();
+    const matchesSearch = !q || (
+      a.id.toLowerCase().includes(q) || cleanTag.includes(q) ||
+      a.asset_name?.toLowerCase().includes(q) || a.serial_number?.toLowerCase().includes(q) ||
+      a.staff_name?.toLowerCase().includes(q) || a.brand?.toLowerCase().includes(q)
+    );
+
+    // 2. Category Pill Match
+    const matchesCat = selectedCategory === 'All' || (
+      selectedCategory === 'Other' 
+        ? !['Laptop', 'Mouse', 'Keyboard', 'Headphone'].includes(a.category)
+        : a.category?.toLowerCase() === selectedCategory.toLowerCase()
+    );
+
+    // 3. Status Dropdown Match
+    const matchesStat = selectedStatus === 'All' || (
+      selectedStatus === 'In Stock' ? (a.status || '').toLowerCase().includes('stock') :
+      selectedStatus === 'Assigned' ? (a.status || '').toLowerCase().includes('assigned') && !(a.status || '').includes('Stock') :
+      selectedStatus === 'In Repair' ? (a.status || '').toLowerCase().includes('repair') :
+      selectedStatus === 'Demo Use' ? (a.status || '').toLowerCase().includes('demo') :
+      (a.status || '').toLowerCase().includes('discard')
+    );
+
+    // 4. Condition Dropdown Match
+    const matchesCond = selectedCondition === 'All' || (a.asset_condition || 'New').toLowerCase() === selectedCondition.toLowerCase();
+
+    return matchesSearch && matchesCat && matchesStat && matchesCond;
+  });
+
+  const hasActiveFilters = selectedCategory !== 'All' || selectedStatus !== 'All' || selectedCondition !== 'All' || searchQuery !== '';
+
+  const resetAllFilters = () => {
+    setSelectedCategory('All'); setSelectedStatus('All'); setSelectedCondition('All'); setSearchQuery('');
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* 🚀 COMMAND HEADER */}
+      {/* HEADER */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors">
+          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors cursor-pointer">
             <ArrowLeft size={20} />
           </button>
           <div>
@@ -388,39 +389,127 @@ export default function AssetRegistryPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto w-full md:w-auto">
-          <button 
-            onClick={() => setIsBulkModalOpen(true)}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all"
-          >
-            <FileSpreadsheet size={15} />
-            <span>Bulk Upload CSV</span>
+          <button onClick={() => setIsBulkModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer">
+            <FileSpreadsheet size={15} /> <span>Bulk Upload CSV</span>
           </button>
-
-          <button 
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-[#002B49]/20"
-          >
-            <PlusCircle size={16} />
-            <span>Register Asset</span>
+          <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-[#002B49]/20 cursor-pointer">
+            <PlusCircle size={16} /> <span>Register Asset</span>
           </button>
         </div>
       </div>
 
-      {/* SEARCH */}
-      <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-2xs flex items-center">
-        <div className="relative w-full">
+      {/* 🚀 TIER 1: CATEGORY PILL TABS */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+        {[
+          { name: 'All', icon: <Package size={14}/> },
+          { name: 'Laptop', icon: <Laptop size={14}/> },
+          { name: 'Mouse', icon: <Mouse size={14}/> },
+          { name: 'Keyboard', icon: <Keyboard size={14}/> },
+          { name: 'Headphone', icon: <Headphones size={14}/> },
+          { name: 'Other', icon: <SlidersHorizontal size={14}/> },
+        ].map(cat => {
+          const count = getCatCount(cat.name);
+          const isSelected = selectedCategory === cat.name;
+          return (
+            <button
+              key={cat.name} onClick={() => setSelectedCategory(cat.name)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer ${
+                isSelected 
+                  ? 'bg-[#002B49] text-white shadow-md shadow-[#002B49]/20 scale-102' 
+                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80'
+              }`}
+            >
+              {cat.icon}
+              <span>{cat.name === 'Headphone' ? 'Audio' : cat.name}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white font-mono' : 'bg-gray-100 text-gray-500 font-mono'}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 🚀 TIER 2: SEARCH + LOGISTICS FILTERS BAR */}
+      <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+        
+        {/* Search Input */}
+        <div className="relative flex-1">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
             type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by Asset ID, Model, Brand, Serial, Staff, or Status (e.g. 'In Repair')..." 
-            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
+            placeholder="Search Tag ID, Model, Brand, Serial, or Staff Name..." 
+            className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
           />
         </div>
+
+        {/* Status Selector */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200/80 rounded-2xl shrink-0">
+            <Filter size={13} className="text-gray-400" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Stock:</span>
+            <select 
+              value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)}
+              className="bg-transparent text-xs font-black text-[#002B49] uppercase tracking-wider outline-none cursor-pointer"
+            >
+              <option value="All">⚡ All Statuses</option>
+              <option value="In Stock">📦 In Stock (Unassigned)</option>
+              <option value="Assigned">👤 Assigned to Staff</option>
+              <option value="In Repair">⚠️ In Repair</option>
+              <option value="Demo Use">🧪 Demo / Office Use</option>
+              <option value="Discard">🗑️ Discarded / Discard</option>
+            </select>
+          </div>
+
+          {/* Condition Selector */}
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200/80 rounded-2xl shrink-0">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Condition:</span>
+            <select 
+              value={selectedCondition} onChange={e => setSelectedCondition(e.target.value)}
+              className="bg-transparent text-xs font-black text-gray-800 uppercase tracking-wider outline-none cursor-pointer"
+            >
+              <option value="All">✨ All Conditions</option>
+              <option value="New">✨ New</option>
+              <option value="Refurbished">🔄 Refurbished</option>
+              <option value="Repaired">🛠️ Repaired</option>
+            </select>
+          </div>
+
+          {/* Instant Reset Button */}
+          {hasActiveFilters && (
+            <button 
+              onClick={resetAllFilters}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border border-rose-200 shrink-0 cursor-pointer animate-in fade-in zoom-in-95 duration-150"
+            >
+              <X size={14} /> <span>Reset</span>
+            </button>
+          )}
+        </div>
+
+      </div>
+
+      {/* FILTER METADATA BANNER (Shows what user is currently looking at) */}
+      <div className="flex items-center justify-between px-2">
+        <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">
+          Showing <strong className="text-[#002B49]">{filteredAssets.length}</strong> units matching parameters
+        </span>
+        
+        {hasActiveFilters && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-xl">
+            Active Filter: [{selectedCategory}] + [{selectedStatus}] + [{selectedCondition}]
+          </span>
+        )}
       </div>
 
       {/* ASSETS GRID */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
+      ) : filteredAssets.length === 0 ? (
+        <div className="w-full py-20 bg-white rounded-3xl border border-gray-100 text-center space-y-3 shadow-2xs">
+          <Package size={44} className="mx-auto text-gray-300" />
+          <h3 className="text-base font-black text-[#002B49] uppercase tracking-wide">Zero Assets Found</h3>
+          <p className="text-xs text-gray-400 font-medium max-w-sm mx-auto">No hardware items match your selected combination of Category, Status, and Search keywords.</p>
+          <button onClick={resetAllFilters} className="mt-2 px-5 py-2.5 bg-[#002B49] text-white rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer">Clear Filters & Show All</button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredAssets.map(asset => {
@@ -431,14 +520,14 @@ export default function AssetRegistryPage() {
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-black">
-                      <Laptop size={18} />
+                      {asset.category?.toLowerCase().includes('laptop') ? <Laptop size={18}/> : asset.category?.toLowerCase().includes('mouse') ? <Mouse size={18}/> : asset.category?.toLowerCase().includes('keyboard') ? <Keyboard size={18}/> : asset.category?.toLowerCase().includes('headphone') ? <Headphones size={18}/> : <Package size={18}/>}
                     </div>
                     <div className="overflow-hidden">
                       <h3 className="text-sm font-black text-gray-900 leading-tight truncate max-w-[170px]">{asset.asset_name}</h3>
                       <p className="text-[11px] font-bold text-gray-400 truncate">{asset.brand || 'Standard Brand'}</p>
                     </div>
                   </div>
-                  <button onClick={() => openAssetViewModal(asset)} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0">
+                  <button onClick={() => openAssetViewModal(asset)} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0 cursor-pointer">
                     <QrCode size={16} />
                   </button>
                 </div>
@@ -478,7 +567,6 @@ export default function AssetRegistryPage() {
             </div>
 
             <form onSubmit={handleSaveNewAsset} className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
-              
               <div className="bg-blue-50/40 p-4 rounded-2xl border border-blue-100 space-y-4">
                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-800 block">1. Hardware Identity</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -565,7 +653,7 @@ export default function AssetRegistryPage() {
                 </div>
               </div>
 
-              <button type="submit" disabled={isSaving} className="w-full py-4 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-lg">
+              <button type="submit" disabled={isSaving} className="w-full py-4 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-lg cursor-pointer">
                 {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
                 <span>{isSaving ? 'Writing to Postgres...' : 'Confirm Enterprise Registration'}</span>
               </button>
@@ -584,7 +672,7 @@ export default function AssetRegistryPage() {
             </div>
 
             <div className="space-y-3 text-left">
-              <button onClick={downloadSampleCsvTemplate} className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors">
+              <button onClick={downloadSampleCsvTemplate} className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer">
                 <Download size={15}/> <span>1. Download CSV formatted Template</span>
               </button>
               <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Fill out the Excel template. Do not rename the top column headers. The script will automatically assign secure `VS-LAP-` tags to every row.</p>
@@ -602,7 +690,7 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🚀 3. OVERHAULED COMMAND MODAL (View + Status Toggles + Live Edit + Compliance) */}
+      {/* 🚀 3. OVERHAULED COMMAND MODAL */}
       {viewAssetModal && (() => {
         const cleanModalTag = getCleanDisplayTag(viewAssetModal);
         const logPhotos = assetInspectionLog?.photos ? Object.entries(assetInspectionLog.photos) : [];
@@ -611,7 +699,6 @@ export default function AssetRegistryPage() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border border-gray-200">
               
-              {/* LEFT COLUMN: QR LABEL & STICKER ENGINE */}
               <div className="w-full md:w-1/3 bg-gradient-to-b from-blue-50/80 to-white p-8 flex flex-col items-center border-b md:border-b-0 md:border-r border-gray-100 relative shrink-0">
                 <button onClick={() => setViewAssetModal(null)} className="absolute md:hidden top-4 right-4 text-gray-400 hover:text-gray-900 bg-gray-100 p-1.5 rounded-full"><X size={14}/></button>
                 <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] mb-6">Sticker Matrix</h3>
@@ -625,18 +712,15 @@ export default function AssetRegistryPage() {
                 </div>
 
                 <div className="flex w-full gap-2 mt-auto">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, cleanModalTag)} className="flex-1 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex justify-center items-center gap-1.5 shadow-md"><Printer size={14} /> Print</button>
-                  <button onClick={() => handleDownloadStickerImage(viewAssetModal, cleanModalTag)} className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex justify-center items-center gap-1.5 shadow-md"><Download size={14} /> PNG</button>
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, cleanModalTag)} className="flex-1 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex justify-center items-center gap-1.5 shadow-md cursor-pointer"><Printer size={14} /> Print</button>
+                  <button onClick={() => handleDownloadStickerImage(viewAssetModal, cleanModalTag)} className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex justify-center items-center gap-1.5 shadow-md cursor-pointer"><Download size={14} /> PNG</button>
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: SPECS, LIVE STATUS SWITCHER, EDITING, & COMPLIANCE */}
               <div className="w-full md:w-2/3 flex flex-col overflow-y-auto custom-scrollbar relative">
-                <button onClick={() => setViewAssetModal(null)} className="hidden md:flex absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full transition-colors z-10"><X size={16}/></button>
+                <button onClick={() => setViewAssetModal(null)} className="hidden md:flex absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full transition-colors z-10 cursor-pointer"><X size={16}/></button>
 
                 <div className="p-8 space-y-8">
-                  
-                  {/* TOP BAR: QUICK STOCK STATUS & CONDITION CONTROLS */}
                   <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200/60 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Logistics State:</span>
@@ -646,13 +730,12 @@ export default function AssetRegistryPage() {
                     </div>
 
                     {!isEditingAsset && (
-                      <button onClick={() => setIsEditingAsset(true)} className="px-4 py-2 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs ml-auto">
+                      <button onClick={() => setIsEditingAsset(true)} className="px-4 py-2 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs ml-auto cursor-pointer">
                         <Edit2 size={13} /> Edit Full Ledger
                       </button>
                     )}
                   </div>
 
-                  {/* SECTION 1: Details Grid vs Editor */}
                   <div>
                     {isEditingAsset ? (
                       <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-200 space-y-4 animate-in fade-in duration-200">
@@ -700,8 +783,8 @@ export default function AssetRegistryPage() {
                         </div>
 
                         <div className="flex gap-2 pt-2">
-                          <button onClick={() => setIsEditingAsset(false)} className="px-5 py-2.5 bg-white border text-gray-600 rounded-xl text-xs font-black uppercase">Cancel</button>
-                          <button onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 shadow-md">
+                          <button onClick={() => setIsEditingAsset(false)} className="px-5 py-2.5 bg-white border text-gray-600 rounded-xl text-xs font-black uppercase cursor-pointer">Cancel</button>
+                          <button onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 shadow-md cursor-pointer">
                             {isUpdating ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />} Save Updates
                           </button>
                         </div>
@@ -734,7 +817,6 @@ export default function AssetRegistryPage() {
 
                   <hr className="border-gray-100" />
 
-                  {/* SECTION 2: Compliance Portal */}
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-widest text-gray-800 mb-4 flex items-center gap-2">
                       <ShieldCheck size={18} className="text-emerald-500" /> Last Mobile Audit Log
@@ -773,7 +855,6 @@ export default function AssetRegistryPage() {
         );
       })()}
 
-      {/* 🔍 HIGH-RES PHOTO LIGHTBOX MODAL */}
       {previewPhotoModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4">
           <button onClick={() => setPreviewPhotoModal(null)} className="absolute top-6 right-6 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full flex items-center justify-center cursor-pointer shadow-xl"><X size={24} /></button>
