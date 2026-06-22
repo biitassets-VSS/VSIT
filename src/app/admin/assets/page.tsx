@@ -7,8 +7,7 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, Calendar, X, Save, Eye, Hash, RefreshCw, Tag, 
   Download, Printer, Edit2, ShieldCheck, AlertCircle, Camera, 
-  Upload, FileSpreadsheet, DollarSign, Building2, CheckCircle2,
-  Filter, Mouse, Keyboard, Headphones, Package, SlidersHorizontal
+  Upload, FileSpreadsheet, DollarSign, Package, Mouse, Keyboard, Headphones, SlidersHorizontal
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -18,11 +17,11 @@ export default function AssetRegistryPage() {
   const [assets, setAssets] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   
-  // 🔍 THE NEW 4-WAY FILTER MATRIX STATE
+  // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All'); // All, Laptop, Mouse, Keyboard, Headphone, Other
-  const [selectedStatus, setSelectedStatus] = useState<string>('All');     // All, In Stock, Assigned, In Repair, Demo Use, Discard
-  const [selectedCondition, setSelectedCondition] = useState<string>('All'); // All, New, Refurbished, Repaired
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedCondition, setSelectedCondition] = useState<string>('All');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -30,7 +29,7 @@ export default function AssetRegistryPage() {
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
-  // New Asset Form State
+  // Add Form
   const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
   const [newAssetId, setNewAssetId] = useState('');
   const [newAssetName, setNewAssetName] = useState('');
@@ -45,11 +44,11 @@ export default function AssetRegistryPage() {
   const [newAssetAssignee, setNewAssetAssignee] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Bulk Importer State
+  // Bulk Importer
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // Asset Edit State inside View Modal
+  // Edit State
   const [isEditingAsset, setIsEditingAsset] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
   const [assetInspectionLog, setAssetInspectionLog] = useState<any>(null);
@@ -262,7 +261,28 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
+  // 🚀 ADAPTIVE HTML PRINTER ENGINE (Micro, Vertical, Standard)
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
+    const cat = (asset.category || '').toLowerCase();
+    
+    // Default to Laptop/Standard Settings
+    let printW = '50mm', printH = '50mm';
+    let qrSize = '28mm', tagSize = '14px', modelSize = '7px';
+    let layoutType = 'standard';
+
+    // Micro Size (Mice / Headphones)
+    if (cat.includes('mouse') || cat.includes('headphone')) {
+      printW = '25mm'; printH = '25mm'; 
+      qrSize = '14mm'; tagSize = '8px'; modelSize = '4px';
+      layoutType = 'micro';
+    } 
+    // Vertical Size (Keyboards)
+    else if (cat.includes('keyboard')) {
+      printW = '25mm'; printH = '50mm'; 
+      qrSize = '18mm'; tagSize = '10px'; modelSize = '6px';
+      layoutType = 'vertical';
+    }
+
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=400,height=400');
     if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print stickers.");
@@ -274,17 +294,17 @@ export default function AssetRegistryPage() {
           <title>Sticker_${cleanTag}</title>
           <style>
             body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; font-family: monospace; background: #fff; color: #000; }
-            .label-box { width: 55mm; height: 55mm; padding: 4mm; box-sizing: border-box; text-align: center; border: 1px dashed #ccc; }
-            .header { font-size: 9px; font-weight: bold; margin-bottom: 2px; }
-            .qr { width: 30mm; height: 30mm; margin: 0 auto; display: block; }
-            .tag { font-size: 16px; font-weight: 900; margin-top: 3px; }
-            .model { font-size: 8px; color: #444; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            @media print { @page { size: 55mm 55mm; margin: 0; } body { padding: 0; } .label-box { border: none; } }
+            .label-box { width: ${printW}; height: ${printH}; padding: 2mm; box-sizing: border-box; text-align: center; border: 1px dashed #ccc; display: flex; flex-direction: column; justify-content: center; }
+            .header { font-size: ${layoutType === 'micro' ? '4px' : '7px'}; font-weight: bold; margin-bottom: 2px; }
+            .qr { width: ${qrSize}; height: ${qrSize}; margin: 0 auto; display: block; }
+            .tag { font-size: ${tagSize}; font-weight: 900; margin-top: 2px; line-height: 1; }
+            .model { font-size: ${modelSize}; color: #444; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
+            @media print { @page { size: ${printW} ${printH}; margin: 0; } body { padding: 0; } .label-box { border: none; } }
           </style>
         </head>
         <body>
           <div class="label-box">
-            <div class="header">VIRTUAL STAFFING IT</div>
+            <div class="header">VIRTUAL STAFFING</div>
             <img class="qr" src="${qrUrl}" onload="window.print(); window.close();" />
             <div class="tag">${cleanTag}</div>
             <div class="model">${asset.asset_name || 'Hardware Asset'}</div>
@@ -295,6 +315,7 @@ export default function AssetRegistryPage() {
     printWindow.document.open(); printWindow.document.write(printableMarkup); printWindow.document.close();
   };
 
+  // 🚀 ADAPTIVE CANVAS PNG DOWNLOAD ENGINE (Micro, Vertical, Standard)
   const handleDownloadStickerImage = async (asset: any, cleanTag: string) => {
     try {
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
@@ -303,35 +324,73 @@ export default function AssetRegistryPage() {
         const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.readAsDataURL(blob);
       });
 
-      const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); if (!ctx) return;
-      canvas.width = 600; canvas.height = 750;
-      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = '#002B49'; ctx.lineWidth = 12; ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-      ctx.fillStyle = '#002B49'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING IT ASSET', canvas.width / 2, 65);
+      const canvas = document.createElement('canvas'); 
+      const ctx = canvas.getContext('2d'); 
+      if (!ctx) return;
 
-      const qrImg = new Image(); qrImg.src = base64Qr;
-      qrImg.onload = () => {
-        ctx.drawImage(qrImg, 100, 95, 400, 400);
-        ctx.fillStyle = '#002B49'; ctx.font = '900 56px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 560);
-        ctx.fillStyle = '#475569'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 36) || 'Hardware Asset', canvas.width / 2, 620);
-        ctx.fillStyle = '#64748b'; ctx.font = '18px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 665);
-        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif'; ctx.fillText('Property of Virtual Staffing Solutions — Do Not Remove', canvas.width / 2, 715);
+      const cat = (asset.category || '').toLowerCase();
+      
+      if (cat.includes('mouse') || cat.includes('headphone')) {
+        // MICRO SIZE (300x300)
+        canvas.width = 300; canvas.height = 300;
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#002B49'; ctx.lineWidth = 6; ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+        
+        ctx.fillStyle = '#002B49'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING', canvas.width / 2, 35);
+        
+        const qrImg = new Image(); qrImg.src = base64Qr;
+        qrImg.onload = () => {
+          ctx.drawImage(qrImg, 75, 45, 150, 150);
+          ctx.fillStyle = '#002B49'; ctx.font = '900 32px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 235);
+          ctx.fillStyle = '#475569'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 25) || 'Asset', canvas.width / 2, 260);
+          ctx.fillStyle = '#64748b'; ctx.font = '10px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 280);
+          const link = document.createElement('a'); link.download = `MicroSticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
+        };
 
-        const link = document.createElement('a'); link.download = `Sticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
-      };
+      } else if (cat.includes('keyboard')) {
+        // VERTICAL TALL SIZE (300x600)
+        canvas.width = 300; canvas.height = 600;
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#002B49'; ctx.lineWidth = 8; ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+        
+        ctx.fillStyle = '#002B49'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING', canvas.width / 2, 50);
+        
+        const qrImg = new Image(); qrImg.src = base64Qr;
+        qrImg.onload = () => {
+          ctx.drawImage(qrImg, 40, 80, 220, 220);
+          ctx.fillStyle = '#002B49'; ctx.font = '900 38px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 360);
+          ctx.fillStyle = '#475569'; ctx.font = 'bold 16px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 30) || 'Asset', canvas.width / 2, 410);
+          ctx.fillStyle = '#64748b'; ctx.font = '14px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 450);
+          const link = document.createElement('a'); link.download = `VertSticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
+        };
+
+      } else {
+        // STANDARD LAPTOP SIZE (600x750)
+        canvas.width = 600; canvas.height = 750;
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#002B49'; ctx.lineWidth = 12; ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+        ctx.fillStyle = '#002B49'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING IT ASSET', canvas.width / 2, 65);
+
+        const qrImg = new Image(); qrImg.src = base64Qr;
+        qrImg.onload = () => {
+          ctx.drawImage(qrImg, 100, 95, 400, 400);
+          ctx.fillStyle = '#002B49'; ctx.font = '900 56px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 560);
+          ctx.fillStyle = '#475569'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 36) || 'Hardware Asset', canvas.width / 2, 620);
+          ctx.fillStyle = '#64748b'; ctx.font = '18px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 665);
+          ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif'; ctx.fillText('Property of Virtual Staffing Solutions — Do Not Remove', canvas.width / 2, 715);
+          const link = document.createElement('a'); link.download = `Sticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
+        };
+      }
     } catch (err) { alert("Error rendering sticker image."); }
   };
 
-  // 🧮 DYNAMIC LIVE CATEGORY COUNTERS
   const getCatCount = (catName: string) => {
     if (catName === 'All') return assets.length;
     if (catName === 'Other') return assets.filter(a => !['Laptop', 'Mouse', 'Keyboard', 'Headphone'].includes(a.category)).length;
     return assets.filter(a => a.category?.toLowerCase() === catName.toLowerCase()).length;
   };
 
-  // 🚀 THE MASTER MULTI-FILTER PIPELINE
   const filteredAssets = assets.filter(a => {
-    // 1. Search Bar Match
     const q = searchQuery.toLowerCase();
     const cleanTag = getCleanDisplayTag(a).toLowerCase();
     const matchesSearch = !q || (
@@ -340,14 +399,12 @@ export default function AssetRegistryPage() {
       a.staff_name?.toLowerCase().includes(q) || a.brand?.toLowerCase().includes(q)
     );
 
-    // 2. Category Pill Match
     const matchesCat = selectedCategory === 'All' || (
       selectedCategory === 'Other' 
         ? !['Laptop', 'Mouse', 'Keyboard', 'Headphone'].includes(a.category)
         : a.category?.toLowerCase() === selectedCategory.toLowerCase()
     );
 
-    // 3. Status Dropdown Match
     const matchesStat = selectedStatus === 'All' || (
       selectedStatus === 'In Stock' ? (a.status || '').toLowerCase().includes('stock') :
       selectedStatus === 'Assigned' ? (a.status || '').toLowerCase().includes('assigned') && !(a.status || '').includes('Stock') :
@@ -356,22 +413,17 @@ export default function AssetRegistryPage() {
       (a.status || '').toLowerCase().includes('discard')
     );
 
-    // 4. Condition Dropdown Match
     const matchesCond = selectedCondition === 'All' || (a.asset_condition || 'New').toLowerCase() === selectedCondition.toLowerCase();
 
     return matchesSearch && matchesCat && matchesStat && matchesCond;
   });
 
   const hasActiveFilters = selectedCategory !== 'All' || selectedStatus !== 'All' || selectedCondition !== 'All' || searchQuery !== '';
-
-  const resetAllFilters = () => {
-    setSelectedCategory('All'); setSelectedStatus('All'); setSelectedCondition('All'); setSearchQuery('');
-  };
+  const resetAllFilters = () => { setSelectedCategory('All'); setSelectedStatus('All'); setSelectedCondition('All'); setSearchQuery(''); };
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* HEADER */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors cursor-pointer">
@@ -398,7 +450,6 @@ export default function AssetRegistryPage() {
         </div>
       </div>
 
-      {/* 🚀 TIER 1: CATEGORY PILL TABS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
         {[
           { name: 'All', icon: <Package size={14}/> },
@@ -429,10 +480,8 @@ export default function AssetRegistryPage() {
         })}
       </div>
 
-      {/* 🚀 TIER 2: SEARCH + LOGISTICS FILTERS BAR */}
       <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
         
-        {/* Search Input */}
         <div className="relative flex-1">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
@@ -442,7 +491,6 @@ export default function AssetRegistryPage() {
           />
         </div>
 
-        {/* Status Selector */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200/80 rounded-2xl shrink-0">
             <Filter size={13} className="text-gray-400" />
@@ -460,7 +508,6 @@ export default function AssetRegistryPage() {
             </select>
           </div>
 
-          {/* Condition Selector */}
           <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200/80 rounded-2xl shrink-0">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Condition:</span>
             <select 
@@ -474,7 +521,6 @@ export default function AssetRegistryPage() {
             </select>
           </div>
 
-          {/* Instant Reset Button */}
           {hasActiveFilters && (
             <button 
               onClick={resetAllFilters}
@@ -487,7 +533,6 @@ export default function AssetRegistryPage() {
 
       </div>
 
-      {/* FILTER METADATA BANNER (Shows what user is currently looking at) */}
       <div className="flex items-center justify-between px-2">
         <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">
           Showing <strong className="text-[#002B49]">{filteredAssets.length}</strong> units matching parameters
@@ -500,7 +545,6 @@ export default function AssetRegistryPage() {
         )}
       </div>
 
-      {/* ASSETS GRID */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : filteredAssets.length === 0 ? (
@@ -557,7 +601,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🟢 1. ENTERPRISE REGISTER ASSET MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100">
@@ -662,7 +705,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🟢 2. BULK CSV IMPORTER MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-6 text-center">
@@ -675,7 +717,7 @@ export default function AssetRegistryPage() {
               <button onClick={downloadSampleCsvTemplate} className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer">
                 <Download size={15}/> <span>1. Download CSV formatted Template</span>
               </button>
-              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Fill out the Excel template. Do not rename the top column headers. The script will automatically assign secure `VS-LAP-` tags to every row.</p>
+              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Fill out the Excel template. Do not rename the top column headers. The script will automatically assign secure tags to every row.</p>
             </div>
 
             <div className="p-6 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-gray-100/80 transition-colors flex flex-col items-center justify-center gap-3">
@@ -690,7 +732,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🚀 3. OVERHAULED COMMAND MODAL */}
       {viewAssetModal && (() => {
         const cleanModalTag = getCleanDisplayTag(viewAssetModal);
         const logPhotos = assetInspectionLog?.photos ? Object.entries(assetInspectionLog.photos) : [];
