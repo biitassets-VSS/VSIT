@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
-  User, Calendar, X, Save, Eye, Hash, RefreshCw
+  User, Calendar, X, Save, Eye, Hash, RefreshCw, Tag
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -32,18 +32,16 @@ export default function AssetRegistryPage() {
     fetchRegistryData();
   }, []);
 
-  // Watches Category and generates ID
   useEffect(() => {
     if (isAddModalOpen) {
       generateAssetId(newAssetCategory);
     }
   }, [newAssetCategory, isAddModalOpen]);
 
-  // Checks if someone scanned a QR code and landed here
   useEffect(() => {
     const scanId = searchParams.get('view');
     if (scanId && assets.length > 0) {
-      const foundAsset = assets.find(a => a.id === scanId);
+      const foundAsset = assets.find(a => a.id === scanId || a.asset_tag === scanId);
       if (foundAsset) setViewAssetModal(foundAsset);
     }
   }, [searchParams, assets]);
@@ -88,6 +86,32 @@ export default function AssetRegistryPage() {
     }
   };
 
+  // 🏷️ SMART TAG FORMATTER: Turns ugly long UUIDs into gorgeous 8-character tags
+  const getCleanDisplayTag = (asset: any) => {
+    if (!asset) return 'NO-TAG';
+
+    // 1. If it has an explicit custom tag saved, use it
+    if (asset.asset_tag && asset.asset_tag.includes('VS-')) return asset.asset_tag.toUpperCase();
+    if (asset.id && asset.id.includes('VS-')) return asset.id.toUpperCase();
+
+    // 2. If it's a 36-character Supabase UUID (like your screenshot), format it cleanly!
+    const rawId = String(asset.asset_tag || asset.id || '');
+    if (rawId.length > 20) {
+      const cleanChunk = rawId.replace(/-/g, '').slice(0, 6).toUpperCase();
+      
+      let prefix = 'TAG';
+      const cat = (asset.category || '').toLowerCase();
+      if (cat.includes('laptop')) prefix = 'LAP';
+      else if (cat.includes('mouse')) prefix = 'MOU';
+      else if (cat.includes('keyboard')) prefix = 'KEY';
+      else if (cat.includes('headphone')) prefix = 'HDP';
+
+      return `${prefix}-${cleanChunk}`;
+    }
+
+    return rawId.toUpperCase();
+  };
+
   const handleSaveNewAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAssetName || !newAssetSerial) return alert("Name and Serial Number required.");
@@ -96,6 +120,7 @@ export default function AssetRegistryPage() {
     try {
       const { error } = await supabase.from('assets').insert([{
         id: newAssetId,
+        asset_tag: newAssetId, // <-- Double-saved to guarantee the nice tag survives strict DB schemas
         asset_name: newAssetName,
         serial_number: newAssetSerial,
         category: newAssetCategory,
@@ -124,15 +149,18 @@ export default function AssetRegistryPage() {
 
   const filteredAssets = assets.filter(a => {
     const q = searchQuery.toLowerCase();
+    const cleanTag = getCleanDisplayTag(a).toLowerCase();
     return a.id.toLowerCase().includes(q) || 
+           cleanTag.includes(q) ||
            a.asset_name?.toLowerCase().includes(q) || 
            a.serial_number?.toLowerCase().includes(q) ||
            a.staff_name?.toLowerCase().includes(q);
   });
 
-  const getAssetViewUrl = (id: string) => {
+  const getAssetViewUrl = (asset: any) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    return `${baseDomain}/admin/assets?view=${id}`;
+    const targetRef = asset.asset_tag || asset.id;
+    return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
   return (
@@ -165,7 +193,7 @@ export default function AssetRegistryPage() {
             type="text" 
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by Asset ID (VS-LAP-12345), Name, Serial, or Staff..." 
+            placeholder="Search by Asset ID (VS-LAP-12345), Short Tag, Name, Serial, or Staff..." 
             className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
           />
         </div>
@@ -175,48 +203,51 @@ export default function AssetRegistryPage() {
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredAssets.map(asset => (
-            <div key={asset.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-blue-200 transition-colors">
-              
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Laptop size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-gray-900 leading-tight truncate max-w-[160px]">{asset.asset_name}</h3>
-                    <div className="flex items-center gap-1 mt-0.5 text-gray-400">
-                      <Hash size={10} />
-                      <span className="text-[10px] font-mono font-bold tracking-wider">{asset.id}</span>
+          {filteredAssets.map(asset => {
+            const cleanDisplayTag = getCleanDisplayTag(asset);
+            return (
+              <div key={asset.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-blue-200 transition-colors">
+                
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <Laptop size={18} />
+                    </div>
+                    <div className="overflow-hidden">
+                      <h3 className="text-sm font-black text-gray-900 leading-tight truncate max-w-[180px]">{asset.asset_name}</h3>
+                      <div className="flex items-center gap-1 mt-1 text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-md w-fit">
+                        <Tag size={10} />
+                        <span className="text-[10px] font-mono font-black tracking-wider">{cleanDisplayTag}</span>
+                      </div>
                     </div>
                   </div>
+                  <button onClick={() => setViewAssetModal(asset)} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0">
+                    <QrCode size={16} />
+                  </button>
                 </div>
-                <button onClick={() => setViewAssetModal(asset)} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
-                  <QrCode size={16} />
-                </button>
-              </div>
 
-              <div className="space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-100/50">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[9px]">Serial No:</span>
-                  <span className="font-mono font-black text-gray-700">{asset.serial_number || 'N/A'}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[9px]">Assigned To:</span>
-                  <span className="font-black text-gray-900">{asset.staff_name}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-gray-400 uppercase tracking-wider text-[9px]">Status:</span>
-                  <span className={`px-2 py-0.5 rounded-full font-black text-[9px] uppercase tracking-wider ${
-                    asset.status === 'Assigned' ? 'bg-green-100 text-green-700' : 
-                    asset.status === 'Available' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'
-                  }`}>
-                    {asset.status || 'Available'}
-                  </span>
+                <div className="space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-100/50">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[9px]">Serial No:</span>
+                    <span className="font-mono font-black text-gray-700 truncate max-w-[150px]">{asset.serial_number || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[9px]">Assigned To:</span>
+                    <span className="font-black text-gray-900 truncate max-w-[150px]">{asset.staff_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-400 uppercase tracking-wider text-[9px]">Status:</span>
+                    <span className={`px-2 py-0.5 rounded-full font-black text-[9px] uppercase tracking-wider ${
+                      asset.status === 'Assigned' ? 'bg-green-100 text-green-700' : 
+                      asset.status === 'Available' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {asset.status || 'Available'}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -229,7 +260,6 @@ export default function AssetRegistryPage() {
             </div>
 
             <form onSubmit={handleSaveNewAsset} className="p-6 space-y-5">
-              
               <div className="flex gap-4">
                 <div className="flex-1 space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">1. Category</label>
@@ -278,22 +308,29 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
+      {/* 🟢 OVERHAULED QR LABEL MODAL */}
       {viewAssetModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-gray-100 text-center">
             
-            <div className="bg-blue-50 p-8 flex flex-col items-center justify-center border-b border-blue-100 relative">
-              <button onClick={() => setViewAssetModal(null)} className="absolute top-4 right-4 text-blue-400 hover:text-blue-800 bg-white p-1 rounded-full shadow-sm"><X size={16}/></button>
+            <div className="bg-gradient-to-b from-blue-50/80 to-white p-8 flex flex-col items-center justify-center border-b border-gray-100 relative">
+              <button onClick={() => setViewAssetModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-900 bg-gray-100 p-1.5 rounded-full transition-colors"><X size={14}/></button>
               
-              <div className="bg-white p-3 rounded-2xl shadow-sm border border-blue-100 mb-4">
+              <div className="bg-white p-3 rounded-2xl shadow-sm border border-blue-100 mb-4 inline-block">
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal.id))}`} 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} 
                   alt="Asset QR Code" 
-                  className="w-32 h-32 object-contain"
+                  className="w-36 h-36 object-contain mx-auto"
                 />
               </div>
-              <h2 className="text-xl font-mono font-black text-[#002B49] tracking-widest">{viewAssetModal.id}</h2>
-              <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-1">Official Asset Label</p>
+
+              {/* 🚀 THE BEAUTIFULLY FORMATTED 1-LINE TAG */}
+              <div className="bg-[#002B49] text-white py-2 px-6 rounded-xl shadow-md mb-1 inline-block">
+                <h2 className="text-2xl font-mono font-black tracking-widest">
+                  {getCleanDisplayTag(viewAssetModal)}
+                </h2>
+              </div>
+              <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">Official Hardware Tag</p>
             </div>
 
             <div className="p-6 space-y-4 text-left">
@@ -303,20 +340,20 @@ export default function AssetRegistryPage() {
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 overflow-hidden">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Serial Number</p>
                   <p className="text-xs font-mono font-bold text-gray-900 truncate">{viewAssetModal.serial_number}</p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 overflow-hidden">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Assignment</p>
                   <p className="text-xs font-bold text-gray-900 truncate">{viewAssetModal.staff_name}</p>
                 </div>
               </div>
 
               <div className="pt-2">
-                <button onClick={() => window.print()} className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2">
+                <button onClick={() => window.print()} className="w-full py-3.5 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-md">
                   <QrCode size={16} />
-                  <span>Print Label</span>
+                  <span>Print Sticker Label</span>
                 </button>
               </div>
             </div>
