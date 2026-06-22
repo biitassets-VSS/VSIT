@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
-  User, Calendar, X, Save, Eye, Hash
+  User, Calendar, X, Save, Eye, Hash, RefreshCw
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -32,7 +32,7 @@ export default function AssetRegistryPage() {
     fetchRegistryData();
   }, []);
 
-  // 🎯 THE AUTO-GENERATOR ENGINE: Watches the Category and generates the ID
+  // Watches Category and generates ID
   useEffect(() => {
     if (isAddModalOpen) {
       generateAssetId(newAssetCategory);
@@ -58,7 +58,6 @@ export default function AssetRegistryPage() {
     else if (cat.includes('headphone')) prefix = 'VS-HP';
     else if (cat.includes('cleaning')) prefix = 'VS-CLN';
     
-    // Generates a 5-digit random number to append to the prefix
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     setNewAssetId(`${prefix}-${randomSuffix}`);
   };
@@ -66,10 +65,7 @@ export default function AssetRegistryPage() {
   const fetchRegistryData = async () => {
     setLoading(true);
     try {
-      // Fetch Assets
       const { data: assetData } = await supabase.from('assets').select('*').order('created_at', { ascending: false });
-      
-      // Fetch Staff for Assignment Dropdown
       const { data: staffData } = await supabase.from('profiles').select('*');
       
       if (staffData) setStaffList(staffData);
@@ -99,14 +95,14 @@ export default function AssetRegistryPage() {
     setIsSaving(true);
     try {
       const { error } = await supabase.from('assets').insert([{
-        id: newAssetId, // Using our custom generated ID!
+        id: newAssetId,
         asset_name: newAssetName,
         serial_number: newAssetSerial,
         category: newAssetCategory,
         status: newAssetAssignee ? 'Assigned' : 'Available',
         assigned_to: newAssetAssignee || null,
         inspection_status: 'Pending Verification',
-        upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Next month
+        upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       }]);
 
       if (error) throw error;
@@ -114,7 +110,6 @@ export default function AssetRegistryPage() {
       alert(`Asset ${newAssetId} successfully registered!`);
       setIsAddModalOpen(false);
       
-      // Reset form
       setNewAssetName('');
       setNewAssetSerial('');
       setNewAssetAssignee('');
@@ -135,7 +130,6 @@ export default function AssetRegistryPage() {
            a.staff_name?.toLowerCase().includes(q);
   });
 
-  // Helper to build the Scannable View URL
   const getAssetViewUrl = (id: string) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     return `${baseDomain}/admin/assets?view=${id}`;
@@ -144,7 +138,6 @@ export default function AssetRegistryPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* HEADER */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors">
@@ -165,7 +158,6 @@ export default function AssetRegistryPage() {
         </button>
       </div>
 
-      {/* SEARCH BAR */}
       <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-2xs flex items-center">
         <div className="relative w-full">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -179,7 +171,6 @@ export default function AssetRegistryPage() {
         </div>
       </div>
 
-      {/* ASSET LIST GRID */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : (
@@ -229,7 +220,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🟢 NEW ASSET REGISTRATION MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100">
@@ -288,7 +278,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🔍 ASSET VIEW & QR CODE MODAL */}
       {viewAssetModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-gray-100 text-center">

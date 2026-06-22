@@ -1,396 +1,140 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Ticket, Search, Clock, CheckCircle2, 
-  AlertCircle, MessageSquare, ArrowLeft, 
-  User, ShieldAlert, Tag, Filter, Send, Timer, PauseCircle, Loader2
-} from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { 
+  ArrowLeft, Search, Users, Mail, 
+  Hash, Shield, UserCheck
+} from 'lucide-react';
 
-// --- Interfaces ---
-interface TicketReply {
-  id: string;
-  sender: 'Admin' | 'Staff';
-  name: string;
-  text: string;
-  date: string;
-}
+export default function AdminStaffDirectoryPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
-interface SupportTicket {
-  id: string;
-  title: string;
-  description: string;
-  priority: 'High' | 'Medium' | 'Low';
-  status: 'Open' | 'In Progress' | 'Resolved' | 'Hold';
-  estimatedTime?: string; 
-  submittedBy: string;
-  empCode: string;
-  date: string;
-  replies: TicketReply[];
-}
-
-export default function AdminTicketsPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [viewState, setViewState] = useState<'list' | 'detail'>('list');
-  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'In Progress' | 'Hold' | 'Resolved'>('All');
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  
-  // Admin Action State
-  const [replyText, setReplyText] = useState('');
-  const [newStatus, setNewStatus] = useState<'Open' | 'In Progress' | 'Hold' | 'Resolved'>('Open');
-  const [eta, setEta] = useState<string>('');
-
-  // 1. FETCH TICKETS AND PROFILE DATA FROM SUPABASE
   useEffect(() => {
-    const fetchTicketsAndStaff = async () => {
-      try {
-        // FIXED: Fetching from "profiles" instead of "staff" using the Dragnet approach
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*');
-
-        const staffMap: Record<string, string> = {};
-        if (profileData) {
-          profileData.forEach((profile: any) => {
-            const code = profile.emp_code || profile.employee_code || profile.employee_id || profile.emp_id || 'N/A';
-            const name = profile.full_name || profile.name || profile.first_name || 'Staff Member';
-            if (code !== 'N/A') {
-              staffMap[code] = name;
-            }
-          });
-        }
-
-        // Fetch tickets
-        const { data: ticketData, error } = await supabase
-          .from('tickets')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (ticketData) {
-          const mappedTickets: SupportTicket[] = ticketData.map((t: any) => ({
-            id: t.id,
-            title: t.subject || t.title || 'No Subject Provided', 
-            description: t.description || 'No description',
-            priority: t.priority || 'Medium',
-            status: t.status || 'Open',
-            estimatedTime: t.waiting_time || '', // Perfect match to your database
-            
-            // FIXED: It will now accurately find the name using the map we built above!
-            submittedBy: staffMap[t.emp_code] || 'Unknown User', 
-            
-            empCode: t.emp_code || 'N/A',
-            date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
-            replies: t.replies || [] 
-          }));
-          setTickets(mappedTickets);
-        }
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-      } finally {
-        setIsLoaded(true);
-      }
-    };
-
-    fetchTicketsAndStaff();
+    fetchStaff();
   }, []);
 
-  const openTicket = (ticket: SupportTicket) => {
-    setSelectedTicket(ticket);
-    setNewStatus(ticket.status);
-    setEta(ticket.estimatedTime || '');
-    setReplyText('');
-    setViewState('detail');
-  };
-
-  // 2. UPDATE TICKET IN SUPABASE
-  const handleUpdateTicket = async () => {
-    if (!selectedTicket) return;
-    setIsUpdating(true);
-
-    const newReplies = [...(selectedTicket.replies || [])];
-    
-    if (replyText.trim()) {
-      newReplies.push({
-        id: Date.now().toString(),
-        sender: 'Admin',
-        name: 'IT Admin',
-        text: replyText,
-        date: new Date().toLocaleString()
-      });
-    }
-
-    const dbPayload = {
-      status: newStatus,
-      waiting_time: eta, // Perfect match to your database
-      replies: newReplies
-    };
-
+  const fetchStaff = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('tickets')
-        .update(dbPayload)
-        .eq('id', selectedTicket.id)
-        .select();
+      // Fetch Profiles
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      // Fetch Assets to count assignments
+      const { data: assetData } = await supabase.from('assets').select('assigned_to');
 
-      if (!data || data.length === 0) {
-        throw new Error("Database blocked the update. Check your Supabase RLS 'UPDATE' policy for the tickets table.");
+      if (profileData) {
+        const enhancedStaff = profileData.map(user => {
+          // Count how many assets are assigned to this user ID
+          const assetCount = (assetData || []).filter(a => a.assigned_to === user.id).length;
+          return { ...user, assetCount };
+        });
+        setStaff(enhancedStaff);
       }
-
-      // Update local state to reflect changes instantly
-      const updatedTicket = { 
-        ...selectedTicket, 
-        status: newStatus,
-        estimatedTime: eta,
-        replies: newReplies
-      };
-
-      setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-      setSelectedTicket(updatedTicket);
-      setReplyText('');
-      
-      alert(`Ticket updated successfully!`);
-    } catch (error: any) {
-      console.error("Failed to update ticket:", error);
-      alert("Failed to update ticket: " + error.message);
+    } catch (err) {
+      console.error(err);
     } finally {
-      setIsUpdating(false);
+      setLoading(false);
     }
   };
 
-  const filteredTickets = tickets.filter(t => filterStatus === 'All' || t.status === filterStatus);
-  const openCount = tickets.filter(t => t.status === 'Open').length;
-  const inProgressCount = tickets.filter(t => t.status === 'In Progress').length;
-
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500 flex items-center justify-center gap-2"><Loader2 className="animate-spin text-teal-600" size={24} /> Loading Support Tickets...</div>;
+  const filteredStaff = staff.filter(s => {
+    const q = searchQuery.toLowerCase();
+    return s.full_name?.toLowerCase().includes(q) || 
+           s.name?.toLowerCase().includes(q) || 
+           s.email?.toLowerCase().includes(q) ||
+           s.emp_code?.toLowerCase().includes(q);
+  });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <Ticket size={28} className="text-teal-600" />
-            IT Support Tickets
-          </h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Manage and resolve staff issues. Set ETAs to keep them updated.</p>
-        </div>
-        <div className="flex gap-3">
-          <div className="bg-red-50 border border-red-100 px-4 py-2 rounded-xl text-center">
-            <p className="text-xs font-bold text-red-600 uppercase">Open</p>
-            <p className="text-lg font-black text-red-900">{openCount}</p>
-          </div>
-          <div className="bg-blue-50 border border-blue-100 px-4 py-2 rounded-xl text-center">
-            <p className="text-xs font-bold text-blue-600 uppercase">In Progress</p>
-            <p className="text-lg font-black text-blue-900">{inProgressCount}</p>
+      <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">Staff Directory</h1>
+              <span className="px-3 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 font-black text-xs rounded-full">
+                {staff.length} Members
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 font-bold mt-0.5">Manage employee network access and view account profiles</p>
           </div>
         </div>
       </div>
 
-      {viewState === 'list' && (
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0">
-              <Filter size={16} className="text-gray-400" />
-              {['All', 'Open', 'In Progress', 'Hold', 'Resolved'].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status as any)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition-colors ${
-                    filterStatus === status 
-                      ? 'bg-gray-900 text-white shadow-sm' 
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="p-4 text-xs font-black text-gray-500 uppercase">Issue & ID</th>
-                  <th className="p-4 text-xs font-black text-gray-500 uppercase hidden sm:table-cell">Staff</th>
-                  <th className="p-4 text-xs font-black text-gray-500 uppercase">Status & ETA</th>
-                  <th className="p-4 text-xs font-black text-gray-500 uppercase text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTickets.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-gray-500 font-bold">No tickets found matching this filter.</td>
-                  </tr>
-                ) : (
-                  filteredTickets.map((ticket) => (
-                    <tr key={ticket.id} className="border-b border-gray-50 hover:bg-teal-50/30 transition-colors">
-                      <td className="p-4">
-                        <div className="font-black text-sm text-gray-900 truncate max-w-[200px]" title={ticket.title}>{ticket.title}</div>
-                        <div className="text-[11px] font-bold text-teal-600 bg-teal-50 inline-flex items-center gap-1 px-2 py-0.5 rounded-md mt-1 border border-teal-100">
-                          <Tag size={10} /> {ticket.id.substring(0, 8).toUpperCase()}...
-                        </div>
-                      </td>
-                      <td className="p-4 hidden sm:table-cell">
-                        <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                          <User size={14} className="text-gray-400"/> {ticket.submittedBy}
-                        </div>
-                        <div className="text-xs text-gray-500 font-medium ml-5">{ticket.empCode}</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <div className="flex items-center gap-1.5 text-xs font-black">
-                            {ticket.status === 'Open' && <AlertCircle size={14} className="text-red-500" />}
-                            {ticket.status === 'In Progress' && <Clock size={14} className="text-blue-500" />}
-                            {ticket.status === 'Hold' && <PauseCircle size={14} className="text-orange-500" />}
-                            {ticket.status === 'Resolved' && <CheckCircle2 size={14} className="text-green-500" />}
-                            <span className={
-                              ticket.status === 'Open' ? 'text-red-600' : 
-                              ticket.status === 'In Progress' ? 'text-blue-600' : 
-                              ticket.status === 'Hold' ? 'text-orange-600' : 'text-green-600'
-                            }>{ticket.status}</span>
-                          </div>
-                          {ticket.estimatedTime && ticket.status !== 'Resolved' && (
-                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${ticket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-700' : 'bg-teal-50 text-teal-700'}`}>
-                               <Timer size={10}/> ETA: {ticket.estimatedTime}
-                             </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button onClick={() => openTicket(ticket)} className="px-4 py-2 bg-gray-900 hover:bg-teal-600 text-white text-xs font-black rounded-lg transition-colors shadow-sm">
-                          Manage
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* SEARCH */}
+      <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-2xs flex items-center">
+        <div className="relative w-full">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input 
+            type="text" 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by Employee Name, Email, or EMP Code..." 
+            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-[#002B49] focus:bg-white transition-all"
+          />
         </div>
-      )}
+      </div>
 
-      {viewState === 'detail' && selectedTicket && (
-        <div className="space-y-6">
-          <button onClick={() => setViewState('list')} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={16} /> Back to Tickets
-          </button>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* LEFT: TICKET INFO & THREAD */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
-                  <div>
-                    <h2 className="text-2xl font-black text-gray-900">{selectedTicket.title}</h2>
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className="text-sm font-bold text-gray-500 flex items-center gap-1"><User size={14}/> {selectedTicket.submittedBy} ({selectedTicket.empCode})</span>
-                    </div>
-                  </div>
-                  {selectedTicket.estimatedTime && selectedTicket.status !== 'Resolved' && (
-                    <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 font-black text-xs uppercase ${selectedTicket.estimatedTime === 'Hold' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
-                      <Timer size={14}/> ETA: {selectedTicket.estimatedTime}
-                    </div>
-                  )}
+      {/* STAFF GRID */}
+      {loading ? (
+        <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
+      ) : filteredStaff.length === 0 ? (
+        <div className="w-full py-20 bg-white rounded-3xl border border-gray-100 text-center space-y-2">
+          <Users size={40} className="mx-auto text-gray-300" />
+          <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide">No Staff Found</h3>
+          <p className="text-xs text-gray-400 font-medium">No matching profiles exist in the database.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredStaff.map(user => (
+            <div key={user.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:border-emerald-200 transition-colors flex flex-col gap-4">
+              
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-lg border border-emerald-100 shrink-0">
+                  {user.full_name?.charAt(0) || user.name?.charAt(0) || <UserCheck size={20} />}
                 </div>
-                <div>
-                  <h3 className="text-sm font-black text-gray-900 mb-2">Description</h3>
-                  <p className="text-sm font-medium text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-200 whitespace-pre-wrap">
-                    {selectedTicket.description}
-                  </p>
-                </div>
-                
-                {selectedTicket.replies && selectedTicket.replies.length > 0 && (
-                  <div className="mt-6 pt-6 border-t border-gray-100">
-                    <h3 className="text-sm font-black text-gray-900 mb-4 flex items-center gap-2"><MessageSquare size={16} /> Conversation History</h3>
-                    <div className="space-y-3">
-                      {selectedTicket.replies.map((reply, idx) => (
-                        <div key={idx} className={`p-4 rounded-2xl border text-sm ${reply.sender === 'Admin' ? 'bg-teal-50 border-teal-100 ml-8' : 'bg-gray-50 border-gray-100 mr-8'}`}>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-gray-900">{reply.name} <span className="text-xs text-gray-500 font-medium">({reply.sender})</span></span>
-                            <span className="text-xs text-gray-400">{reply.date}</span>
-                          </div>
-                          <p className="text-gray-700 whitespace-pre-wrap">{reply.text}</p>
-                        </div>
-                      ))}
-                    </div>
+                <div className="overflow-hidden">
+                  <h3 className="text-sm font-black text-gray-900 truncate">{user.full_name || user.name || 'Unnamed User'}</h3>
+                  <div className="flex items-center gap-1 text-[10px] font-black text-gray-400 uppercase tracking-wider mt-0.5">
+                    <Shield size={10} className="text-emerald-500" />
+                    <span>{user.role || 'Staff Member'}</span>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT: ACTION PANEL WITH ETA DROPDOWN */}
-            <div className="space-y-6">
-              <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 sticky top-6">
-                <h3 className="text-lg font-black text-gray-900 mb-6 border-b border-gray-100 pb-3">Update Ticket</h3>
-                
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2">Status</label>
-                    <select 
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value as any)}
-                      className="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm font-bold rounded-xl px-4 py-3 focus:outline-none focus:border-teal-500"
-                    >
-                      <option value="Open">Open</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Hold">Hold</option>
-                      <option value="Resolved">Resolved</option>
-                    </select>
-                  </div>
-
-                  {newStatus !== 'Resolved' && (
-                    <div>
-                      <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1"><Timer size={14}/> Resolution Time</label>
-                      <select 
-                        value={eta}
-                        onChange={(e) => setEta(e.target.value)}
-                        className="w-full bg-white border border-gray-200 text-teal-800 text-sm font-bold rounded-xl px-4 py-3 shadow-sm focus:outline-none focus:border-teal-500"
-                      >
-                        <option value="">Select Time / Status</option>
-                        <option value="10 Min">10 Min</option>
-                        <option value="15 Min">15 Min</option>
-                        <option value="30 Min">30 Min</option>
-                        <option value="45 Min">45 Min</option>
-                        <option value="1 Hour">1 Hour</option>
-                        <option value="Hold">Hold (Paused)</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2">Reply to Staff</label>
-                    <textarea 
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Type a response..."
-                      className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-medium focus:outline-none focus:border-teal-500"
-                      rows={3}
-                    />
-                  </div>
-
-                  <button 
-                    onClick={handleUpdateTicket}
-                    disabled={isUpdating}
-                    className={`w-full py-3.5 font-black rounded-xl shadow-md transition-all flex justify-center items-center gap-2 ${isUpdating ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
-                  >
-                    <Send size={18} /> {isUpdating ? 'Updating...' : 'Update Ticket'}
-                  </button>
                 </div>
               </div>
-            </div>
 
-          </div>
+              <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border border-gray-100/50">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
+                  <Hash size={14} className="text-gray-400" />
+                  <span>{user.emp_code || user.emp_id || 'NO-CODE-ASSIGNED'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
+                  <Mail size={14} className="text-gray-400" />
+                  <span className="truncate">{user.email}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-50 flex items-center justify-between">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Hardware Held:</span>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${user.assetCount > 0 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                  {user.assetCount} Assets
+                </span>
+              </div>
+
+            </div>
+          ))}
         </div>
       )}
 
