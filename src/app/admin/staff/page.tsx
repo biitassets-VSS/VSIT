@@ -19,7 +19,7 @@ export default function AdminStaffDirectoryPage() {
   const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
-  // Form State (Handles BOTH Create and Edit)
+  // Form State
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({
     id: '', full_name: '', email: '', emp_code: '', 
@@ -56,7 +56,6 @@ export default function AdminStaffDirectoryPage() {
     });
   };
 
-  // 👤 OPEN MODAL TRIGGERS
   const handleOpenAdd = () => {
     setIsEditing(false);
     setFormData({ id: '', full_name: '', email: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', status: 'Active' });
@@ -73,7 +72,6 @@ export default function AdminStaffDirectoryPage() {
     setIsDossierModalOpen(true);
   };
 
-  // 💾 MASTER SAVE HANDLER (Creates OR Updates)
   const handleSaveDossier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.full_name || !formData.email) return alert("Name and Email required.");
@@ -91,27 +89,20 @@ export default function AdminStaffDirectoryPage() {
       };
 
       if (isEditing) {
-        // UPDATE EXISTING
         const { error } = await supabase.from('profiles').update(payload).eq('id', formData.id);
         if (error) throw error;
         alert(`Dossier for ${formData.full_name} updated successfully!`);
       } else {
-        // CREATE NEW
         const { error } = await supabase.from('profiles').insert([{ ...payload, id: generateSafeUuid() }]);
-        
-        // Catch the specific Unique Email error for manual entry
         if (error?.code === '23505') throw new Error(`The email address ${payload.email} is already registered to another employee.`);
         if (error) throw error;
-        
         alert(`New employee ${formData.full_name} activated!`);
       }
 
-      setIsDossierModalOpen(false);
-      fetchStaff();
+      setIsDossierModalOpen(false); fetchStaff();
     } catch (err: any) { alert(`Save Failed: ${err.message}`); } finally { setIsSaving(false); }
   };
 
-  // ⚡ QUICK TOGGLE LOGIN STATUS DIRECTLY FROM CARD
   const handleToggleStatus = async (user: any) => {
     const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
     if (!window.confirm(`Are you sure you want to change ${user.full_name}'s network access to ${newStatus}?`)) return;
@@ -123,10 +114,10 @@ export default function AdminStaffDirectoryPage() {
     } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
   };
 
-  // 📦 SMART BULK IMPORTER (NOW WITH COLLISION DETECTION)
+  // 📦 THE BULLETPROOF JAVASCRIPT PRE-FILTER IMPORTER
   const downloadStaffCsvTemplate = () => {
     const headers = "FullName,Email,EmpCode,Role,Department,Phone\n";
-    const sample = "Alexander Vance,a.vance@company.com,EMP-901,Senior Developer,Engineering,+1-555-0192";
+    const sample = "Alexander Vance,a.vance@company.com,EMP-901,Senior Developer,Engineering,+1-555-0192\nSamantha Traylor,s.traylor@company.com,EMP-902,Logistics Officer,Warehouse,+1-555-0144";
     const blob = new Blob([headers + sample], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
@@ -141,8 +132,16 @@ export default function AdminStaffDirectoryPage() {
       const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
       if (lines.length < 2) throw new Error("CSV file contains headers but zero rows.");
 
+      // 🛡️ STEP 1: FETCH EVERY SINGLE EXISTING EMAIL IN SUPABASE FIRST
+      const { data: registeredUsers, error: fetchErr } = await supabase.from('profiles').select('email');
+      if (fetchErr) throw new Error(`Could not query existing emails: ${fetchErr.message}`);
+
+      // Turn them into an instantly searchable hash-set
+      const existingEmailSet = new Set((registeredUsers || []).map(u => (u.email || '').toLowerCase().trim()));
+
       const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const batchPayload: any[] = [];
+      const genuinelyNewStaff: any[] = [];
+      let skippedCount = 0;
 
       for (let i = 1; i < lines.length; i++) {
         const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
@@ -150,13 +149,21 @@ export default function AdminStaffDirectoryPage() {
         rawHeaders.forEach((h, idx) => { col[h] = (row[idx] || '').replace(/(^"|"$)/g, '').trim(); });
 
         const name = col['fullname'] || col['name'] || col['full_name'] || '';
-        const email = col['email'] || col['emailaddress'] || col['e-mail'] || '';
-        if (!email || !name) continue;
+        const rawEmail = col['email'] || col['emailaddress'] || col['e-mail'] || '';
+        const cleanEmail = rawEmail.toLowerCase().trim();
 
-        batchPayload.push({
+        if (!cleanEmail || !name) continue;
+
+        // 🛡️ STEP 2: THE FILTER SHIELD. If the database already owns this email, discard it instantly!
+        if (existingEmailSet.has(cleanEmail)) {
+          skippedCount++;
+          continue;
+        }
+
+        genuinelyNewStaff.push({
           id: generateSafeUuid(),
           full_name: name,
-          email: email.toLowerCase(),
+          email: cleanEmail,
           emp_code: (col['empcode'] || col['emp_code'] || `EMP-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase(),
           role: col['role'] || col['jobtitle'] || 'Staff Member',
           department: col['department'] || col['dept'] || 'General',
@@ -164,19 +171,22 @@ export default function AdminStaffDirectoryPage() {
           status: 'Active',
           created_at: new Date().toISOString()
         });
+
+        // Add it to our local tracking set instantly so the CSV cannot duplicate itself internally!
+        existingEmailSet.add(cleanEmail);
       }
 
-      if (batchPayload.length === 0) throw new Error("Could not detect any valid Name/Email rows.");
+      // If the CSV was just a sheet of people already in the database:
+      if (genuinelyNewStaff.length === 0) {
+        setIsBulkModalOpen(false); setBulkFile(null);
+        return alert(`⚠️ Notice: All ${skippedCount} emails in this CSV were already registered in your directory. No new profiles were added.`);
+      }
 
-      // 🚀 THE FIX: We use UPSERT and specifically tell Postgres to ignore duplicate emails!
-      const { error } = await supabase.from('profiles').upsert(batchPayload, { 
-        onConflict: 'email', 
-        ignoreDuplicates: true 
-      });
-      
-      if (error) throw new Error(`SUPABASE REJECTION: ${error.message}`);
+      // 🛡️ STEP 3: Safe, standard insert of ONLY the vetted newcomers
+      const { error: insertErr } = await supabase.from('profiles').insert(genuinelyNewStaff);
+      if (insertErr) throw insertErr;
 
-      alert(`🎉 SUCCESS! Batch processed. (Any rows with emails that already existed were safely skipped).`);
+      alert(`🎉 SUCCESS! Added ${genuinelyNewStaff.length} new employee profiles.\n(Safely skipped ${skippedCount} existing duplicate records).`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchStaff();
 
     } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
@@ -248,7 +258,6 @@ export default function AdminStaffDirectoryPage() {
               <div key={user.id} className={`bg-white p-6 rounded-3xl border shadow-2xs transition-all flex flex-col justify-between gap-4 group ${isActive ? 'border-gray-100 hover:border-[#002B49]' : 'border-rose-100 bg-rose-50/20'}`}>
                 
                 <div className="space-y-4">
-                  {/* Top Bar: Clickable Name & Avatar */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3.5 overflow-hidden">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shrink-0 shadow-sm ${isActive ? 'bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-blue-500/20' : 'bg-gray-200 text-gray-400'}`}>
