@@ -9,30 +9,34 @@ import { supabase } from '@/lib/supabaseClient';
 export default function LoginPage() {
   const router = useRouter();
   
-  // 🧭 UI & Auth State (Now includes Guest!)
+  // 🧭 UI & Auth State
   const [loginType, setLoginType] = useState<'admin' | 'staff' | 'guest'>('admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 🚀 THE MASTER-KEY AUTHENTICATION ENGINE
+  // 🚀 THE MASTER-KEY AUTHENTICATION ENGINE (Now with aggressive alert traps)
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault(); // Stop the page from ghost-refreshing
     setLoading(true);
     setErrorMsg('');
 
     try {
-      // 1. GUEST BYPASS (No password required)
+      console.log("1. Login button clicked. Type:", loginType);
+
+      // 1. GUEST BYPASS
       if (loginType === 'guest') {
         localStorage.setItem('vsit_guest_session', JSON.stringify({ role: 'guest', accessedAt: new Date().toISOString() }));
-        router.push('/guest'); // Routes to your Guest Dashboard
+        router.push('/guest'); 
         return;
       }
 
       // 2. ADMIN & STAFF AUTHENTICATION
       const cleanEmail = email.toLowerCase().trim();
       const cleanPass = password.trim();
+      
+      console.log("2. Reaching out to Supabase for:", cleanEmail);
 
       const { data: user, error } = await supabase
         .from('profiles')
@@ -41,11 +45,28 @@ export default function LoginPage() {
         .eq('password', cleanPass)
         .maybeSingle();
 
-      if (error) throw error;
-      if (!user) throw new Error("Invalid email or password. Please try again.");
-      if (user.status === 'Disabled') throw new Error("Your network access has been disabled by an Administrator.");
+      console.log("3. Supabase response received. User:", user, "Error:", error);
 
-      // 3. UNIVERSAL COOKIE & SESSION INJECTION (To stop the redirect loops)
+      // TRAP 1: Supabase configuration or network error
+      if (error) {
+        alert("CRITICAL SUPABASE ERROR: " + error.message);
+        throw error;
+      }
+      
+      // TRAP 2: Wrong credentials or user doesn't exist
+      if (!user) {
+        alert("DATABASE REJECTION: No user found with this exact email and password in the 'profiles' table.");
+        throw new Error("Invalid email or password. Please try again.");
+      }
+      
+      // TRAP 3: Disabled account
+      if (user.status === 'Disabled') {
+        alert("ACCOUNT DISABLED: This profile is turned off.");
+        throw new Error("Your network access has been disabled by an Administrator.");
+      }
+
+      // 3. UNIVERSAL COOKIE & SESSION INJECTION
+      console.log("4. Valid user found! Setting cookies...");
       const webDossier = {
         id: user.id, 
         name: user.full_name || user.name || 'Staff Member', 
@@ -55,29 +76,38 @@ export default function LoginPage() {
         role: user.role
       };
 
-      // Force-feed the browser's localStorage with every possible keyword
       localStorage.setItem('vsit_staff_session', JSON.stringify(webDossier));
       localStorage.setItem('staff_session', JSON.stringify(webDossier));
       localStorage.setItem('user', JSON.stringify(webDossier));
       localStorage.setItem('profile', JSON.stringify(webDossier));
 
-      // Force-feed the Cookies so Next.js Middleware lets them through
       document.cookie = `vsit_auth=true; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `vsit_role=${loginType}; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `sb-access-token=${user.id}; path=/; max-age=86400; SameSite=Lax`;
 
       // 4. ROUTING EXECUTION
+      console.log("5. Attempting to route user...");
       if (loginType === 'admin') {
         const isUpperManagement = user.role?.toLowerCase().includes('admin') || user.department?.toLowerCase().includes('admin') || user.role?.toLowerCase().includes('developer');
-        if (!isUpperManagement) throw new Error("This profile does not hold Administrator clearance.");
+        if (!isUpperManagement) {
+          alert("ACCESS DENIED: You are logging in as Admin, but your database role is not Admin.");
+          throw new Error("This profile does not hold Administrator clearance.");
+        }
 
         localStorage.setItem('vsit_admin_session', JSON.stringify(user));
+        alert("ADMIN SUCCESS: Routing to /admin now...");
         router.push('/admin');
       } else if (loginType === 'staff') {
+        alert("STAFF SUCCESS: Everything worked perfectly. Sending you to /staff now! If you get bounced back after this popup, the bug is inside the /staff page.");
         router.push('/staff'); 
       }
 
     } catch (err: any) {
+      console.error("6. FATAL ERROR CAUGHT:", err);
+      // TRAP 4: The catch-all net for weird crashes
+      if (!err.message.includes("Invalid email")) {
+        alert("SYSTEM CRASH: " + err.message);
+      }
       setErrorMsg(err.message);
     } finally {
       setLoading(false);
