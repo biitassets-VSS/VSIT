@@ -14,40 +14,6 @@ interface StaffData {
   emp_code: string;
 }
 
-// Fixed Barcode matrix generator for reliable scanning
-function NativeBarcodeMatrix({ url }: { url: string }) {
-  const size = 29; 
-  const matrix = Array(size).fill(null).map(() => Array(size).fill(false));
-  
-  const addAnchor = (r: number, c: number) => {
-    for (let i = 0; i < 7; i++) {
-      for (let j = 0; j < 7; j++) {
-        if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
-          matrix[r + i][c + j] = true;
-        }
-      }
-    }
-  };
-  addAnchor(0, 0); 
-  addAnchor(0, size - 7); 
-  addAnchor(size - 7, 0);
-
-  let seed = url.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  for (let i = 0; i < size; i++) {
-    for (let j = 0; j < size; j++) {
-      if ((i < 8 && j < 8) || (i < 8 && j > size - 9) || (i > size - 9 && j < 8)) continue;
-      seed = (seed * 9301 + 49297) % 233280;
-      if (seed / 233280 > 0.4) matrix[i][j] = true;
-    }
-  }
-
-  return (
-    <div className="grid gap-0 bg-white p-3 border border-gray-200 rounded-xl shadow-xs" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`, width: '150px', height: '150px' }}>
-      {matrix.flatMap((row, r) => row.map((cell, c) => <div key={`${r}-${c}`} className={cell ? 'bg-[#002B49]' : 'bg-white'} />))}
-    </div>
-  );
-}
-
 export default function StaffDashboardPage() {
   return (
     <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
@@ -66,15 +32,23 @@ function DashboardContent() {
   const [activeTickets, setActiveTickets] = useState<any[]>([]);
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
 
+  // Modals State
   const [isInspectionOpen, setIsInspectionOpen] = useState(false);
+  const [isRequestOpen, setIsRequestOpen] = useState(false);
+
+  // Asset Request Form State
+  const [requestCategory, setRequestCategory] = useState('Laptop');
+  const [requestNotes, setRequestNotes] = useState('');
+
+  // Inspection Form State
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
   const [typedVerification, setTypedVerification] = useState('');
   const [isAssetUnlocked, setIsAssetUnlocked] = useState(false);
   const [validationError, setValidationError] = useState('');
-  
   const [selectedCategory, setSelectedCategory] = useState('Laptop');
   const [assetCondition, setAssetCondition] = useState('');
   const [photos, setPhotos] = useState<Record<string, string>>({});
+  
   const [stats, setStats] = useState({ myAssets: 0, needsInspection: 0, inRepair: 0 });
 
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -103,16 +77,10 @@ function DashboardContent() {
     loadDashboardData();
   }, []);
 
-  // Encodes the dynamic session link for the QR Code WITHOUT the notes, so the QR code stays frozen and scannable
   useEffect(() => {
     if (selectedAsset) {
       let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-      
-      // Makes sure local testing links use your actual IP
-      if (baseDomain.includes('localhost')) {
-        baseDomain = 'http://192.168.1.25:3000'; // Make sure this matches your Wi-Fi IPv4 if testing locally!
-      }
-      
+      if (baseDomain.includes('localhost')) baseDomain = 'http://192.168.1.25:3000'; 
       const safeCat = encodeURIComponent(selectedCategory);
       setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCat}`);
     }
@@ -141,9 +109,7 @@ function DashboardContent() {
   const loadDashboardData = async () => {
     setIsLoading(true);
 
-    // 🚀 FIXED AUTH CHECK: Read the session ticket created by your Login page
     const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-    
     if (!sessionString) {
       router.push('/login');
       return;
@@ -153,8 +119,8 @@ function DashboardContent() {
     const userEmail = activeUser.email || 'students_app05@outlook.com';
     const userId = activeUser.id || String(Date.now());
 
-    let fullName = 'Lakhwinder Canberra';
-    let empCode = 'EMP-002';
+    let fullName = activeUser.name || 'Staff Member';
+    let empCode = activeUser.emp_code || 'EMP-000';
     
     try {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
@@ -166,6 +132,7 @@ function DashboardContent() {
 
     setStaffProfile({ name: fullName, email: userEmail, emp_code: empCode });
 
+    // 🚀 FIX 3: REMOVED ALL DUMMY DATA. Fetching strict, real assets only.
     let rawAssets: any[] = [];
     try {
       const { data } = await supabase.from('assets').select('*');
@@ -186,23 +153,11 @@ function DashboardContent() {
 
     setActiveTickets(rawTickets);
 
+    // Finding assets strictly assigned to this user in the database
     let myAssets = rawAssets.filter((a: any) => {
       const s = JSON.stringify(a).toLowerCase();
       return s.includes(userEmail.toLowerCase()) || s.includes(fullName.toLowerCase()) || s.includes(empCode.toLowerCase());
     });
-
-    if (myAssets.length === 0) {
-      myAssets = [{
-        id: `auto-device-${String(userId).slice(0,6)}`,
-        asset_name: 'HP EliteBook 840 G8 Hardware',
-        serial_number: `S/N-CANBERRA-${Math.floor(1000 + Math.random() * 9000)}`,
-        category: 'Laptop',
-        status: 'Assigned',
-        inspection_status: 'Pending Verification',
-        last_inspection_date: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
-        upcoming_inspection_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
-      }];
-    }
 
     let overdueCounter = 0;
     const compiledAssets = myAssets.map(asset => {
@@ -229,11 +184,41 @@ function DashboardContent() {
     setAssignedAssets(compiledAssets);
     setStats({
       myAssets: compiledAssets.length,
-      needsInspection: overdueCounter > 0 ? overdueCounter : 1,
+      needsInspection: overdueCounter > 0 ? overdueCounter : 0,
       inRepair: rawTickets.filter(t => t.status === 'in_repair' || t.status === 'pending').length
     });
 
     setIsLoading(false);
+  };
+
+  // 🚀 FIX 1: Handle Asset Request Submission
+  const handleRequestAssetSubmit = async () => {
+    if (!requestNotes.trim()) {
+      alert("Please enter why you need this hardware allocation.");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await supabase.from('tickets').insert([{
+        title: `Asset Request: ${requestCategory}`,
+        description: requestNotes,
+        category: 'Hardware Request',
+        status: 'Open',
+        priority: 'Medium',
+        user_email: staffProfile?.email,
+        created_by: staffProfile?.name
+      }]);
+      
+      alert('Asset request submitted successfully!');
+      setIsRequestOpen(false);
+      setRequestNotes('');
+      loadDashboardData();
+    } catch (err: any) {
+      alert('Error submitting request: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleVerifyAssetLock = (e: React.FormEvent) => {
@@ -252,7 +237,6 @@ function DashboardContent() {
     }
   };
 
-  // Uses ideal: 'environment' so both laptops and phones work securely
   const startLiveVideoStream = async (angle: string) => {
     setActiveAngleTarget(angle);
     setIsCameraActive(true);
@@ -264,8 +248,7 @@ function DashboardContent() {
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      console.error(err);
-      alert('Camera access blocked. Mobile phones must use an https:// link. On desktop, click the Padlock icon 🔒 to Allow Camera.');
+      alert('Camera access blocked. Please allow camera permissions.');
       setIsCameraActive(false);
     }
   };
@@ -274,16 +257,11 @@ function DashboardContent() {
     if (videoRef.current && streamRef.current && staffProfile) {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      
       const maxDim = 1200; 
       let w = video.videoWidth || 1200;
       let h = video.videoHeight || 720;
-      if (w > maxDim) {
-        h = Math.round((h * maxDim) / w);
-        w = maxDim;
-      }
-      canvas.width = w;
-      canvas.height = h;
+      if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+      canvas.width = w; canvas.height = h;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -292,7 +270,6 @@ function DashboardContent() {
         const barHeight = Math.max(45, h * 0.06);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, h - barHeight, w, barHeight);
-
         ctx.fillStyle = '#f97316'; 
         ctx.font = `bold ${Math.max(12, h * 0.03)}px monospace`;
         ctx.textBaseline = 'middle';
@@ -323,22 +300,12 @@ function DashboardContent() {
 
   const handleInspectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assetCondition.trim()) {
-      alert('Please enter current asset condition text parameters.');
-      return;
-    }
+    if (!assetCondition.trim()) { alert('Please enter current asset condition text parameters.'); return; }
     const targetCount = selectedCategory.toLowerCase() === 'laptop' ? 5 : 2;
-    if (Object.keys(photos).length < targetCount) {
-      alert(`Fulfill all ${targetCount} mandatory checkpoints first.`);
-      return;
-    }
+    if (Object.keys(photos).length < targetCount) { alert(`Fulfill all ${targetCount} mandatory checkpoints first.`); return; }
 
     setIsSubmitting(true);
     try {
-      const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      const activeUser = sessionString ? JSON.parse(sessionString) : null;
-      const submissionEmail = activeUser?.email || staffProfile?.email || 'students_app05@outlook.com';
-
       const uploadedPhotoUrls: Record<string, string> = {};
 
       for (const [angle, base64Image] of Object.entries(photos)) {
@@ -371,13 +338,13 @@ function DashboardContent() {
         notes: assetCondition,
         category: selectedCategory,
         photos: uploadedPhotoUrls,
-        user_email: submissionEmail
+        user_email: staffProfile?.email
       }]);
 
       setIsInspectionOpen(false);
       resetModalState();
       loadDashboardData();
-      alert('Inspection submitted successfully! Images are permanently saved to database.');
+      alert('Inspection submitted successfully!');
     } catch (err: any) {
       alert(err.message || 'Error executing upload commands');
     } finally {
@@ -399,25 +366,25 @@ function DashboardContent() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET</button>
         
-        <button 
-          onClick={() => { 
-            const target = assignedAssets[0] || {
-              id: `manual-entry-${Date.now()}`,
-              asset_name: 'Unregistered Hardware Asset',
-              category: 'Laptop',
-              serial_number: 'SCAN-REQ-001'
-            };
-            setSelectedAsset(target); 
-            resetModalState(); 
-            setIsInspectionOpen(true); 
-          }} 
-          className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800 cursor-pointer"
-        >
+        <button onClick={() => { 
+            if (assignedAssets.length === 0) { alert("You have no assigned assets to inspect."); return; }
+            setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); 
+          }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800 cursor-pointer">
           <div className="p-3 rounded-2xl bg-orange-50 text-orange-500"><ClipboardCheck size={20} /></div> SUBMIT INSPECTION
         </button>
 
-        <button onClick={() => router.push('/staff/requests')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-emerald-50 text-emerald-500"><PlusCircle size={20} /></div> REQUEST ASSET</button>
-        <button onClick={() => router.push('/staff/inspections')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-rose-50 text-rose-500"><RefreshCw size={20} /></div> MY INSPECTIONS</button>
+        {/* 🚀 FIX 1: Open Request Asset pop-up */}
+        <button onClick={() => setIsRequestOpen(true)} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
+          <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-500"><PlusCircle size={20} /></div> REQUEST ASSET
+        </button>
+
+        {/* 🚀 FIX 2: My Inspections now opens the Inspection Modal Form instead of routing away */}
+        <button onClick={() => { 
+            if (assignedAssets.length === 0) { alert("You have no assigned assets to inspect."); return; }
+            setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); 
+          }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
+          <div className="p-3 rounded-2xl bg-rose-50 text-rose-500"><RefreshCw size={20} /></div> MY INSPECTIONS
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -428,49 +395,110 @@ function DashboardContent() {
 
       <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2"><Laptop size={18} className="text-emerald-500" /><h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2></div>
-        <div className="p-6 space-y-4">
-          {assignedAssets.map((asset) => (
-            <div key={asset.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-100 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-200/60">
-                <div>
-                  <p className="text-base font-extrabold text-gray-900">{asset.asset_name || asset.name}</p>
-                  <p className="text-[11px] text-gray-400 font-mono font-bold mt-0.5">S/N: {asset.serial_number || asset.serial}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-green-100 text-green-700 border border-green-200 rounded-full text-[10px] font-black uppercase tracking-wider">{asset.displayStatus}</span>
-                  <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-wider ${getInspectionBadgeStyle(asset.inspectionStatus, asset.isOverdue)}`}>{asset.isOverdue && asset.inspectionStatus !== 'Sent for Approval' ? 'OVER DUE' : asset.inspectionStatus}</span>
-                </div>
-              </div>
-
-              {asset.publicPhotosLog && (
-                <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-100">
-                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Permanent Verification Snapshots</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {Object.entries(asset.publicPhotosLog).map(([angle, url]: any) => (
-                      <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-blue-600 transition-colors">
-                        <img src={url} alt="" className="w-full h-full object-cover" />
-                      </a>
-                    ))}
+        
+        {/* 🚀 FIX 3: Display clean Empty State if database yields no assets */}
+        {assignedAssets.length === 0 ? (
+          <div className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="p-6 bg-gray-50 rounded-full mb-4">
+              <Laptop size={40} className="text-gray-300" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900">No Assets Assigned</h3>
+            <p className="text-sm text-gray-500 mt-2 max-w-sm">There are currently no hardware assets assigned to this email address in the database.</p>
+          </div>
+        ) : (
+          <div className="p-6 space-y-4">
+            {assignedAssets.map((asset) => (
+              <div key={asset.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-100 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-200/60">
+                  <div>
+                    <p className="text-base font-extrabold text-gray-900">{asset.asset_name || asset.name}</p>
+                    <p className="text-[11px] text-gray-400 font-mono font-bold mt-0.5">S/N: {asset.serial_number || asset.serial}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-green-100 text-green-700 border border-green-200 rounded-full text-[10px] font-black uppercase tracking-wider">{asset.displayStatus}</span>
+                    <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-wider ${getInspectionBadgeStyle(asset.inspectionStatus, asset.isOverdue)}`}>{asset.isOverdue && asset.inspectionStatus !== 'Sent for Approval' ? 'OVER DUE' : asset.inspectionStatus}</span>
                   </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Calendar size={16} className="text-gray-400" /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Last Inspection</p><p className="text-xs font-bold text-gray-800">{new Date(asset.lastInspection).toLocaleDateString()}</p></div></div>
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Clock size={16} className={asset.isOverdue ? 'text-red-500' : 'text-gray-400'} /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Upcoming Due Date</p><p className={`text-xs font-bold ${asset.isOverdue ? 'text-red-600 font-extrabold' : 'text-gray-800'}`}>{new Date(asset.upcomingInspection).toLocaleDateString()}</p></div></div>
-                <div className="flex items-center justify-end"><button onClick={() => { setSelectedAsset(asset); resetModalState(); setIsInspectionOpen(true); }} disabled={asset.inspectionStatus === 'Sent for Approval'} className="w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase border bg-white text-gray-700 border-gray-200 hover:bg-gray-50">{asset.inspectionStatus === 'Sent for Approval' ? 'Awaiting Approval' : 'Launch Popup Form'}</button></div>
+                {asset.publicPhotosLog && (
+                  <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-100">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Permanent Verification Snapshots</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                      {Object.entries(asset.publicPhotosLog).map(([angle, url]: any) => (
+                        <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-blue-600 transition-colors">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Calendar size={16} className="text-gray-400" /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Last Inspection</p><p className="text-xs font-bold text-gray-800">{new Date(asset.lastInspection).toLocaleDateString()}</p></div></div>
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Clock size={16} className={asset.isOverdue ? 'text-red-500' : 'text-gray-400'} /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Upcoming Due Date</p><p className={`text-xs font-bold ${asset.isOverdue ? 'text-red-600 font-extrabold' : 'text-gray-800'}`}>{new Date(asset.upcomingInspection).toLocaleDateString()}</p></div></div>
+                  <div className="flex items-center justify-end"><button onClick={() => { setSelectedAsset(asset); resetModalState(); setIsInspectionOpen(true); }} disabled={asset.inspectionStatus === 'Sent for Approval'} className="w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 cursor-pointer disabled:opacity-50">{asset.inspectionStatus === 'Sent for Approval' ? 'Awaiting Approval' : 'Launch Popup Form'}</button></div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* 🚀 FIX 1 MODAL: REQUEST ASSET ALLOCATION */}
+      {isRequestOpen && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
+              <h3 className="text-sm font-black uppercase text-gray-900 flex items-center gap-2">
+                <PlusCircle size={18} className="text-emerald-500"/> REQUEST ASSET ALLOCATION
+              </h3>
+              <button onClick={() => setIsRequestOpen(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer"><X size={18}/></button>
+            </div>
+            
+            <div className="p-6 space-y-5 bg-white">
+              <div>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-2">Select Asset Category</label>
+                <select value={requestCategory} onChange={e => setRequestCategory(e.target.value)} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 outline-none focus:border-emerald-500 focus:bg-white transition-colors cursor-pointer">
+                  <option value="Laptop">Laptop</option>
+                  <option value="Monitor">Monitor</option>
+                  <option value="Keyboard">Keyboard</option>
+                  <option value="Mouse">Mouse</option>
+                  <option value="Headphones">Headphones</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-2">Notes (What hardware are you using before?)</label>
+                <textarea 
+                  rows={4} 
+                  required
+                  value={requestNotes} 
+                  onChange={e => setRequestNotes(e.target.value)} 
+                  placeholder="Explain why you need this hardware item allocation..." 
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors"
+                />
+              </div>
+
+              <button 
+                onClick={handleRequestAssetSubmit} 
+                disabled={isSubmitting || !requestNotes.trim()} 
+                className={`w-full py-4 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${isSubmitting || !requestNotes.trim() ? 'bg-gray-300' : 'bg-[#009A66] hover:bg-[#008055] shadow-lg shadow-emerald-500/20'}`}
+              >
+                {isSubmitting ? 'Transmitting Request...' : 'File Request Record'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPLIANCE INSPECTION POP-UP */}
       {isInspectionOpen && selectedAsset && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-3xl w-full flex flex-col max-h-[85vh] shadow-2xl border border-gray-100">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-3xl">
               <div><h3 className="text-sm font-black uppercase text-gray-900">Compliance Pop-Up Framework</h3><p className="text-xs text-gray-400 font-bold mt-0.5">{selectedAsset.asset_name || selectedAsset.name}</p></div>
-              <button onClick={() => setIsInspectionOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+              <button onClick={() => setIsInspectionOpen(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer"><X size={18}/></button>
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6">
@@ -482,7 +510,7 @@ function DashboardContent() {
                   </div>
                   <form onSubmit={handleVerifyAssetLock} className="flex flex-col sm:flex-row gap-3">
                     <input type="text" required value={typedVerification} onChange={e => setTypedVerification(e.target.value)} placeholder="Type Tag ID or Serial Number..." className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-600" />
-                    <button type="submit" className="px-6 py-3 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl">Verify Asset</button>
+                    <button type="submit" className="px-6 py-3 bg-[#0B152A] hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer">Verify Asset</button>
                   </form>
                   {validationError && <p className="text-xs text-red-600 font-bold">{validationError}</p>}
                 </div>
@@ -492,7 +520,7 @@ function DashboardContent() {
                   
                   <div className="space-y-2">
                     <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 2: Select Current Asset Category</label>
-                    <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-blue-600">
+                    <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-blue-600 cursor-pointer">
                       <option value="Laptop">Laptop (Requires 6 Photo Checkpoints)</option>
                       <option value="Headphone">Headphone (Requires 2 Photo Checkpoints)</option>
                       <option value="Keyboard">Keyboard (Requires 2 Photo Checkpoints)</option>
@@ -524,7 +552,7 @@ function DashboardContent() {
                       </div>
                       <div className="flex items-center gap-2 max-w-md">
                         <input type="text" readOnly value={shareableSessionLink} className="flex-1 p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-mono text-gray-500 outline-none" />
-                        <button type="button" onClick={() => { navigator.clipboard.writeText(shareableSessionLink); setCopiedNotification(true); setTimeout(() => setCopiedNotification(false), 2000); }} className="p-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-bold shrink-0 transition-colors">
+                        <button type="button" onClick={() => { navigator.clipboard.writeText(shareableSessionLink); setCopiedNotification(true); setTimeout(() => setCopiedNotification(false), 2000); }} className="p-2 bg-[#0B152A] hover:bg-black text-white rounded-lg text-xs font-bold shrink-0 transition-colors cursor-pointer">
                           <span>{copiedNotification ? 'Copied!' : 'Copy Link'}</span>
                         </button>
                       </div>
@@ -544,7 +572,7 @@ function DashboardContent() {
                             {photos[angle] ? (
                               <>
                                 <img src={photos[angle]} className="w-full h-full object-cover" alt="" />
-                                <button type="button" onClick={() => setPhotos(prev => { const copy = {...prev}; delete copy[angle]; return copy; })} className="absolute top-1.5 right-1.5 bg-black/70 text-white p-1 rounded-full"><X size={12} /></button>
+                                <button type="button" onClick={() => setPhotos(prev => { const copy = {...prev}; delete copy[angle]; return copy; })} className="absolute top-1.5 right-1.5 bg-black/70 text-white p-1 rounded-full cursor-pointer"><X size={12} /></button>
                               </>
                             ) : (
                               <button type="button" onClick={() => startLiveVideoStream(angle)} className="w-full h-full flex flex-col items-center justify-center text-center p-4 hover:bg-gray-100/40 transition-colors cursor-pointer">
@@ -562,8 +590,8 @@ function DashboardContent() {
             </div>
 
             <div className="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-3xl">
-              <button type="button" onClick={() => { stopLiveVideoStream(); setIsInspectionOpen(false); }} className="px-4 py-2 text-xs font-bold hover:bg-gray-200 rounded-xl">Cancel</button>
-              <button type="submit" onClick={handleInspectionSubmit} disabled={isSubmitting || !isAssetUnlocked || !assetCondition.trim()} className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs ${isAssetUnlocked && assetCondition.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'}`}>
+              <button type="button" onClick={() => { stopLiveVideoStream(); setIsInspectionOpen(false); }} className="px-4 py-2 text-xs font-bold hover:bg-gray-200 rounded-xl cursor-pointer">Cancel</button>
+              <button type="submit" onClick={handleInspectionSubmit} disabled={isSubmitting || !isAssetUnlocked || !assetCondition.trim()} className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs cursor-pointer ${isAssetUnlocked && assetCondition.trim() ? 'bg-[#D1D5DB] text-gray-700 hover:bg-gray-300' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                 {isSubmitting ? 'Transmitting...' : 'Submit Verification'}
               </button>
             </div>
@@ -571,14 +599,13 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* FULL SCREEN NATIVE APP CAMERA UI */}
+      {/* FULL SCREEN CAMERA UI */}
       {isCameraActive && (
         <div className="fixed inset-0 bg-black z-[1000] flex flex-col">
           <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
-          
           <div className="relative z-10 w-full h-full flex flex-col justify-end p-8 bg-gradient-to-t from-black/90 via-transparent to-transparent">
             <div className="flex justify-between items-center w-full max-w-md mx-auto mb-6">
-              <button type="button" onClick={stopLiveVideoStream} className="w-14 h-14 bg-gray-800/80 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95">
+              <button type="button" onClick={stopLiveVideoStream} className="w-14 h-14 bg-gray-800/80 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer">
                 <X size={24} />
               </button>
               <button type="button" onClick={captureSnapshotFrame} className="w-20 h-20 bg-blue-600 border-4 border-blue-400 text-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(37,99,235,0.6)] transition-transform active:scale-95 cursor-pointer">
