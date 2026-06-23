@@ -19,6 +19,10 @@ export default function LoginPage() {
   // 🚀 THE MASTER-KEY AUTHENTICATION ENGINE (Now with aggressive alert traps)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); // Stop the page from ghost-refreshing
+    
+    // 👉 THE FLUSH COMMAND: Clear out any corrupted cookies/tokens before we try to log in
+    await supabase.auth.signOut().catch(() => {});
+    
     setLoading(true);
     setErrorMsg('');
 
@@ -83,7 +87,9 @@ export default function LoginPage() {
 
       document.cookie = `vsit_auth=true; path=/; max-age=86400; SameSite=Lax`;
       document.cookie = `vsit_role=${loginType}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `sb-access-token=${user.id}; path=/; max-age=86400; SameSite=Lax`;
+      
+      // 👉 THE FIX: Renamed cookie so Supabase stops crashing trying to parse a UUID as a JWT
+      document.cookie = `vsit_user_id=${user.id}; path=/; max-age=86400; SameSite=Lax`;
 
       // 4. ROUTING EXECUTION
       console.log("5. Attempting to route user...");
