@@ -7,7 +7,7 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
-  Keyboard, Headphones, SlidersHorizontal, Filter, Smartphone
+  Keyboard, Headphones, SlidersHorizontal, Smartphone
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -223,7 +223,7 @@ export default function AssetRegistryPage() {
   };
 
   // ==========================================
-  // 🟢 INDUSTRIAL FUZZY-MATCH BULK CSV PARSER
+  // 🟢 INDUSTRIAL BULK CSV PARSER & DOWNLOADER
   // ==========================================
   const downloadSampleCsvTemplate = () => {
     const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
@@ -244,11 +244,13 @@ export default function AssetRegistryPage() {
 
     try {
       const text = await bulkFile.text();
-      // Safely split lines across Mac (\r), Linux (\n), and Windows (\r\n) formats
-      const lines = text.split(/\r\n|\n|\r/).filter(line => line.trim().length > 0);
+      
+      // 1. BOM KILLER: Strips invisible Excel characters that break header reading
+      const cleanText = text.replace(/^\uFEFF/, '');
+      
+      const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.trim().length > 0);
       if (lines.length < 2) throw new Error("CSV contains no actual data rows.");
 
-      // Auto-Detect if Excel used semicolons (EU/IN localization) instead of commas
       const delimiter = lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
 
       const parseRow = (line: string) => {
@@ -265,53 +267,54 @@ export default function AssetRegistryPage() {
         return result.map(s => s.trim().replace(/^"|"$/g, ''));
       };
 
-      // Strip all spaces and symbols from headers so 'Serial Number (S/N)' becomes 'serialnumbersn'
       const rawHeaders = parseRow(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
       const batchPayload: any[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const row = parseRow(lines[i]);
+        if (row.length === 0 || (row.length === 1 && !row[0])) continue;
+
         const col: Record<string, string> = {};
         rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
 
-        // FUZZY MATCHER: Finds the column even if Excel renamed the header
         const findCol = (keywords: string[]) => {
           const key = Object.keys(col).find(k => keywords.some(kw => k.includes(kw)));
           return key ? col[key] : '';
         };
 
-        const modelName = findCol(['model', 'name', 'assetname']);
-        const serialNum = findCol(['serial', 'sn']);
-        const brandName = findCol(['brand', 'make']);
+        // 2. HARD INDEX FALLBACK: If Excel broke the headers, it falls back to the absolute template positions
+        const modelName = findCol(['model', 'name']) || row[2] || '';
+        const serialNum = findCol(['serial', 'sn']) || row[3] || '';
+        const brandName = findCol(['brand', 'make']) || row[1] || '';
 
-        // Skip completely empty Excel ghost-rows
+        // Skip completely empty ghost-rows
         if (!modelName && !serialNum && !brandName) continue; 
 
-        const cat = findCol(['category', 'type']) || 'Others';
-        const rawTag = findCol(['tag', 'id']);
+        const cat = findCol(['category', 'type']) || row[0] || 'Others';
+        const rawTag = findCol(['tag', 'id']) || row[4] || '';
         const finalAssetTag = rawTag.toUpperCase() || generateCategoryPrefix(cat);
 
-        const rawPrice = findCol(['price', 'cost', 'amount']);
+        const rawPrice = findCol(['price', 'cost', 'amount']) || row[5] || '';
         const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
         batchPayload.push({
-          id: generateSafeUuid(), // Postgres native UUID requirement
-          asset_tag: finalAssetTag, // Readable Human Tag
+          id: generateSafeUuid(), 
+          asset_tag: finalAssetTag, 
           asset_name: modelName || 'Standard Asset', 
           brand: brandName || 'Generic',
           serial_number: (serialNum || 'UNKNOWN-SN').toUpperCase(), 
           category: cat, 
-          purchase_date: findCol(['purchase', 'bought', 'date']) || null, 
-          warranty_expiry: findCol(['warranty', 'expiry', 'expire']) || null,
+          purchase_date: findCol(['purchase', 'bought', 'date']) || row[7] || null, 
+          warranty_expiry: findCol(['warranty', 'expiry']) || row[8] || null,
           price: isNaN(numPrice as number) ? null : numPrice, 
-          vendor: findCol(['vendor', 'supplier', 'merchant']) || 'Bulk Upload', 
-          asset_condition: findCol(['condition', 'state']) || 'New',
+          vendor: findCol(['vendor', 'supplier']) || row[6] || 'Bulk Upload', 
+          asset_condition: findCol(['condition', 'state']) || row[9] || 'New',
           status: 'In Stock (Unassigned)', 
           inspection_status: 'Logged'
         });
       }
 
-      if (batchPayload.length === 0) throw new Error("No valid hardware rows discovered. Please ensure your CSV has 'Model Name' or 'Serial Number' columns.");
+      if (batchPayload.length === 0) throw new Error("Could not extract rows. Please ensure you are using the exact Template format provided.");
 
       const { error } = await supabase.from('assets').insert(batchPayload);
       if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
@@ -421,7 +424,6 @@ export default function AssetRegistryPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* RESTORED HEADER WITH BULK UPLOAD BUTTON */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 cursor-pointer">
@@ -453,7 +455,6 @@ export default function AssetRegistryPage() {
         </div>
       </div>
 
-      {/* CATEGORY TABS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
         {[
           { name: 'All', icon: <Package size={14}/> },
@@ -475,7 +476,6 @@ export default function AssetRegistryPage() {
         ))}
       </div>
 
-      {/* SEARCH BAR */}
       <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-2xs flex items-center">
         <div className="relative w-full">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -487,7 +487,6 @@ export default function AssetRegistryPage() {
         </div>
       </div>
 
-      {/* ASSET GRID */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : (
@@ -525,7 +524,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* BULK UPLOAD MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-gray-100 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
@@ -566,7 +564,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* REGISTER MANUAL ASSET MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100">
@@ -632,7 +629,6 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* VIEW & EDIT MODAL */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
