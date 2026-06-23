@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Search, Users, Mail, Hash, Shield, 
   UserCheck, PlusCircle, Upload, Download, FileSpreadsheet, 
-  X, RefreshCw, Save, Building, Phone, AlertCircle
+  X, RefreshCw, Save, Building, Phone, Power, Edit2, Package
 } from 'lucide-react';
 
 export default function AdminStaffDirectoryPage() {
@@ -16,16 +16,15 @@ export default function AdminStaffDirectoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
-  // Single Manual Employee Form
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newEmpCode, setNewEmpCode] = useState('');
-  const [newRole, setNewRole] = useState('Staff Member');
-  const [newDept, setNewDept] = useState('Operations');
-  const [newPhone, setNewPhone] = useState('');
+  // Form State (Handles BOTH Create and Edit)
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState<any>({
+    id: '', full_name: '', email: '', emp_code: '', 
+    role: 'Staff Member', department: 'General', phone: '', status: 'Active'
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   // Bulk Importer State
@@ -50,7 +49,6 @@ export default function AdminStaffDirectoryPage() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  // Bulletproof fallback UUID generator for non-crypto browser contexts
   const generateSafeUuid = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -58,36 +56,73 @@ export default function AdminStaffDirectoryPage() {
     });
   };
 
-  // 👤 MANUAL SINGLE HIRE REGISTRATION
-  const handleRegisterSingleStaff = async (e: React.FormEvent) => {
+  // 👤 OPEN MODAL TRIGGERS
+  const handleOpenAdd = () => {
+    setIsEditing(false);
+    setFormData({ id: '', full_name: '', email: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', status: 'Active' });
+    setIsDossierModalOpen(true);
+  };
+
+  const handleOpenEdit = (user: any) => {
+    setIsEditing(true);
+    setFormData({
+      id: user.id, full_name: user.full_name || user.name || '', email: user.email || '',
+      emp_code: user.emp_code || '', role: user.role || 'Staff Member', department: user.department || 'General',
+      phone: user.phone || '', status: user.status || 'Active'
+    });
+    setIsDossierModalOpen(true);
+  };
+
+  // 💾 MASTER SAVE HANDLER (Creates OR Updates)
+  const handleSaveDossier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName || !newEmail) return alert("Name and Email required.");
+    if (!formData.full_name || !formData.email) return alert("Name and Email required.");
 
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('profiles').insert([{
-        id: generateSafeUuid(),
-        full_name: newName,
-        email: newEmail.toLowerCase().trim(),
-        emp_code: newEmpCode.toUpperCase().trim() || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
-        role: newRole,
-        department: newDept,
-        phone: newPhone || 'Unrecorded'
-      }]);
+      const payload = {
+        full_name: formData.full_name,
+        email: formData.email.toLowerCase().trim(),
+        emp_code: formData.emp_code.toUpperCase().trim() || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+        role: formData.role,
+        department: formData.department,
+        phone: formData.phone || 'Unrecorded',
+        status: formData.status
+      };
 
-      if (error) throw error;
+      if (isEditing) {
+        // UPDATE EXISTING
+        const { error } = await supabase.from('profiles').update(payload).eq('id', formData.id);
+        if (error) throw error;
+        alert(`Dossier for ${formData.full_name} updated successfully!`);
+      } else {
+        // CREATE NEW
+        const { error } = await supabase.from('profiles').insert([{ ...payload, id: generateSafeUuid() }]);
+        if (error) throw error;
+        alert(`New employee ${formData.full_name} activated!`);
+      }
 
-      alert(`Employee dossier for ${newName} successfully activated!`);
-      setIsAddModalOpen(false);
-      setNewName(''); setNewEmail(''); setNewEmpCode(''); setNewPhone('');
+      setIsDossierModalOpen(false);
       fetchStaff();
-    } catch (err: any) { alert(`Registration Failed: ${err.message}`); } finally { setIsSaving(false); }
+    } catch (err: any) { alert(`Save Failed: ${err.message}`); } finally { setIsSaving(false); }
   };
 
-  // 📦 THE OVERHAULED, LOUD CSV BATCH IMPORTER
+  // ⚡ QUICK TOGGLE LOGIN STATUS DIRECTLY FROM CARD
+  const handleToggleStatus = async (user: any) => {
+    const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
+    if (!window.confirm(`Are you sure you want to change ${user.full_name}'s network access to ${newStatus}?`)) return;
+
+    try {
+      const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('id', user.id);
+      if (error) throw error;
+      setStaff(prev => prev.map(s => s.id === user.id ? { ...s, status: newStatus } : s));
+    } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
+  };
+
+  // 📦 BULK IMPORTER
   const downloadStaffCsvTemplate = () => {
     const headers = "FullName,Email,EmpCode,Role,Department,Phone\n";
-    const sample = "Alexander Vance,a.vance@company.com,EMP-901,Senior Developer,Engineering,+1-555-0192\nSamantha Traylor,s.traylor@company.com,EMP-902,Logistics Officer,Warehouse,+1-555-0144";
+    const sample = "Alexander Vance,a.vance@company.com,EMP-901,Senior Developer,Engineering,+1-555-0192";
     const blob = new Blob([headers + sample], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
@@ -100,7 +135,7 @@ export default function AdminStaffDirectoryPage() {
     try {
       const text = await bulkFile.text();
       const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
-      if (lines.length < 2) throw new Error("CSV file contains headers but zero employee rows.");
+      if (lines.length < 2) throw new Error("CSV file contains headers but zero rows.");
 
       const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase());
       const batchPayload: any[] = [];
@@ -110,54 +145,38 @@ export default function AdminStaffDirectoryPage() {
         const col: Record<string, string> = {};
         rawHeaders.forEach((h, idx) => { col[h] = (row[idx] || '').replace(/(^"|"$)/g, '').trim(); });
 
-        // Highly forgiving multi-header keyword matcher
         const name = col['fullname'] || col['name'] || col['full_name'] || '';
         const email = col['email'] || col['emailaddress'] || col['e-mail'] || '';
-        const code = col['empcode'] || col['emp_code'] || col['employeeid'] || `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
-        const role = col['role'] || col['jobtitle'] || 'Staff Member';
-        const dept = col['department'] || col['dept'] || 'General';
-        const phone = col['phone'] || col['mobile'] || '';
-
-        if (!email || !name) continue; // Skip blank lines safely
+        if (!email || !name) continue;
 
         batchPayload.push({
           id: generateSafeUuid(),
           full_name: name,
           email: email.toLowerCase(),
-          emp_code: code.toUpperCase(),
-          role: role,
-          department: dept,
-          phone: phone || 'N/A',
+          emp_code: (col['empcode'] || col['emp_code'] || `EMP-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase(),
+          role: col['role'] || col['jobtitle'] || 'Staff Member',
+          department: col['department'] || col['dept'] || 'General',
+          phone: col['phone'] || col['mobile'] || 'N/A',
+          status: 'Active',
           created_at: new Date().toISOString()
         });
       }
 
-      if (batchPayload.length === 0) throw new Error("Could not detect any rows containing both a valid Name and Email.");
+      if (batchPayload.length === 0) throw new Error("Could not detect any valid Name/Email rows.");
 
-      // 🚨 THE CRITICAL STEP: We explicitly capture Supabase's rejection object!
       const { error } = await supabase.from('profiles').insert(batchPayload);
+      if (error) throw new Error(`SUPABASE REJECTION: ${error.message}`);
 
-      if (error) {
-        throw new Error(`SUPABASE SQL REJECTION:\n\n${error.message}\n(Error Code: ${error.code})\n\nTip: Check if one of these email addresses is already inside the database.`);
-      }
+      alert(`🎉 SUCCESS! ${batchPayload.length} employees imported.`);
+      setIsBulkModalOpen(false); setBulkFile(null); fetchStaff();
 
-      alert(`🎉 SUCCESS! ${batchPayload.length} employee accounts injected into active directory.`);
-      setIsBulkModalOpen(false);
-      setBulkFile(null);
-      fetchStaff(); // <-- instantly forces Next.js to repaint the grid!
-
-    } catch (err: any) { 
-      alert(`❌ BATCH ABORTED:\n\n${err.message}`); 
-    } finally { 
-      setIsImporting(false); 
-    }
+    } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
   };
 
   const filteredStaff = staff.filter(s => {
     const q = searchQuery.toLowerCase();
     return s.full_name?.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q) ||
-           s.emp_code?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q) ||
-           s.role?.toLowerCase().includes(q);
+           s.emp_code?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
   });
 
   return (
@@ -171,12 +190,12 @@ export default function AdminStaffDirectoryPage() {
           </button>
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">Staff & Access Directory</h1>
+              <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">Staff Directory</h1>
               <span className="px-3 py-0.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-full">
                 {staff.length} Active Profiles
               </span>
             </div>
-            <p className="text-xs text-gray-400 font-bold mt-0.5">Manage employee hardware holders, organizational codes, and network access</p>
+            <p className="text-xs text-gray-400 font-bold mt-0.5">Manage employee details, hardware holders, and network access limits</p>
           </div>
         </div>
 
@@ -184,8 +203,8 @@ export default function AdminStaffDirectoryPage() {
           <button onClick={() => setIsBulkModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer">
             <FileSpreadsheet size={15} /> <span>Bulk Import CSV</span>
           </button>
-          <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-[#002B49]/20 cursor-pointer">
-            <PlusCircle size={16} /> <span>Add Manual Hire</span>
+          <button onClick={handleOpenAdd} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-[#002B49]/20 cursor-pointer">
+            <PlusCircle size={16} /> <span>Add New Hire</span>
           </button>
         </div>
       </div>
@@ -196,103 +215,192 @@ export default function AdminStaffDirectoryPage() {
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
             type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by staff name, email, EMP code, department, or title..." 
+            placeholder="Search by staff name, email, EMP code, or department..." 
             className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
           />
         </div>
       </div>
 
-      {/* STAFF GRID */}
+      {/* 🚀 OVERHAULED STAFF GRID */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : filteredStaff.length === 0 ? (
         <div className="w-full py-20 bg-white rounded-3xl border border-gray-100 text-center space-y-2 shadow-2xs">
           <Users size={40} className="mx-auto text-gray-300" />
           <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide">No Staff Found</h3>
-          <p className="text-xs text-gray-400 font-medium">No matching employee records exist in the current filtered view.</p>
+          <p className="text-xs text-gray-400 font-medium">No matching employee records exist in the current view.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredStaff.map(user => (
-            <div key={user.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs hover:border-emerald-300 transition-all flex flex-col justify-between gap-4 group">
-              
-              <div className="space-y-3">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-black text-base shadow-md shadow-emerald-500/20 shrink-0">
-                    {user.full_name?.charAt(0) || user.name?.charAt(0) || <UserCheck size={20} />}
-                  </div>
-                  <div className="overflow-hidden">
-                    <h3 className="text-sm font-black text-gray-900 truncate group-hover:text-[#002B49] transition-colors">{user.full_name || user.name || 'Unnamed Employee'}</h3>
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 mt-0.5">
-                      <Building size={12} />
-                      <span className="truncate">{user.department || 'General'}</span>
+          {filteredStaff.map(user => {
+            const isActive = user.status === 'Active';
+
+            return (
+              <div key={user.id} className={`bg-white p-6 rounded-3xl border shadow-2xs transition-all flex flex-col justify-between gap-4 group ${isActive ? 'border-gray-100 hover:border-[#002B49]' : 'border-rose-100 bg-rose-50/20'}`}>
+                
+                <div className="space-y-4">
+                  {/* Top Bar: Clickable Name & Avatar */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3.5 overflow-hidden">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shrink-0 shadow-sm ${isActive ? 'bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-blue-500/20' : 'bg-gray-200 text-gray-400'}`}>
+                        {user.full_name?.charAt(0) || <UserCheck size={20} />}
+                      </div>
+                      <div className="overflow-hidden">
+                        {/* 🚀 CLICKABLE NAME TRIGGER */}
+                        <button 
+                          onClick={() => handleOpenEdit(user)}
+                          className={`text-sm font-black text-left leading-tight truncate w-full hover:underline cursor-pointer ${isActive ? 'text-gray-900 hover:text-blue-600' : 'text-gray-500'}`}
+                          title="Click to Edit Dossier"
+                        >
+                          {user.full_name || 'Unnamed Employee'}
+                        </button>
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 mt-1">
+                          <Building size={12} className={isActive ? "text-indigo-500" : ""} />
+                          <span className="truncate">{user.department || 'General'}</span>
+                        </div>
+                      </div>
                     </div>
+                    
+                    {/* Quick Edit Icon */}
+                    <button onClick={() => handleOpenEdit(user)} className="p-2 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors shrink-0 cursor-pointer">
+                      <Edit2 size={14} />
+                    </button>
+                  </div>
+
+                  {/* Info Box */}
+                  <div className={`space-y-2 p-3.5 rounded-2xl border text-xs ${isActive ? 'bg-gray-50 border-gray-100/80' : 'bg-white border-rose-100/50 opacity-70'}`}>
+                    <div className="flex items-center gap-2 text-gray-700 font-mono font-bold">
+                      <Hash size={13} className="text-blue-500 shrink-0" />
+                      <span>{user.emp_code || 'NO-EMP-CODE'}</span>
+                      <span className="ml-auto text-[9px] bg-gray-200/70 text-gray-600 px-2 py-0.5 rounded font-sans font-black uppercase tracking-wider">{user.role || 'Staff'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-gray-600 font-medium overflow-hidden">
+                      <Mail size={13} className="text-gray-400 shrink-0" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+
+                    {user.phone && user.phone !== 'N/A' && (
+                      <div className="flex items-center gap-2 text-gray-500 text-[11px]">
+                        <Phone size={12} className="text-gray-400 shrink-0" />
+                        <span>{user.phone}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-1.5 bg-gray-50 p-3.5 rounded-2xl border border-gray-100/80 text-xs">
-                  <div className="flex items-center gap-2 text-gray-700 font-mono font-bold">
-                    <Hash size={13} className="text-blue-500 shrink-0" />
-                    <span>{user.emp_code || 'NO-EMP-CODE'}</span>
-                    <span className="ml-auto text-[10px] bg-gray-200/70 text-gray-600 px-2 py-0.5 rounded font-sans font-black">{user.role || 'Staff'}</span>
+                {/* Footer Action Bar */}
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">
+                    <Package size={12}/>
+                    {user.assetCount > 0 ? (
+                      <span className="text-blue-600">{user.assetCount} Assets Held</span>
+                    ) : '0 Assets'}
                   </div>
 
-                  <div className="flex items-center gap-2 text-gray-600 font-medium overflow-hidden">
-                    <Mail size={13} className="text-gray-400 shrink-0" />
-                    <span className="truncate">{user.email}</span>
-                  </div>
+                  {/* ⚡ DIRECT STATUS TOGGLE */}
+                  <button 
+                    onClick={() => handleToggleStatus(user)}
+                    className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${isActive ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'}`}
+                    title="Click to toggle network access"
+                  >
+                    <Power size={11} /> {isActive ? 'Access Active' : 'Access Disabled'}
+                  </button>
+                </div>
 
-                  {user.phone && user.phone !== 'N/A' && (
-                    <div className="flex items-center gap-2 text-gray-500 text-[11px]">
-                      <Phone size={12} className="text-gray-400 shrink-0" />
-                      <span>{user.phone}</span>
-                    </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 🟢 THE HR DOSSIER MODAL (Create & Edit) */}
+      {isDossierModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+            
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+              <div>
+                <h3 className="text-sm font-black uppercase text-[#002B49] tracking-widest flex items-center gap-2">
+                  {isEditing ? <Edit2 size={16} className="text-blue-600"/> : <UserCheck size={16} className="text-blue-600"/>} 
+                  {isEditing ? 'Edit Employee Dossier' : 'Register New Employee'}
+                </h3>
+                {isEditing && <p className="text-[10px] font-mono text-gray-400 mt-1">ID: {formData.id}</p>}
+              </div>
+              <button onClick={() => setIsDossierModalOpen(false)} className="text-gray-400 hover:text-gray-900 bg-white p-2 rounded-full border border-gray-200 shadow-sm cursor-pointer"><X size={16}/></button>
+            </div>
+
+            <form onSubmit={handleSaveDossier} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+              
+              {/* Identity Matrix */}
+              <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 space-y-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-800 block">1. Employee Identity</span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Full Legal Name *</label>
+                    <input type="text" required placeholder="e.g. Marcus Vance" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Company Email *</label>
+                    <input type="email" required placeholder="m.vance@company.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Employee ID / Code</label>
+                    <input type="text" placeholder="e.g. EMP-1042 (Auto-generates if blank)" value={formData.emp_code} onChange={e => setFormData({...formData, emp_code: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Contact Phone</label>
+                    <input type="text" placeholder="+1 (555) 019-2834" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Organization Matrix */}
+              <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200/60 space-y-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 block">2. Organizational Role</span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Department</label>
+                    <input type="text" placeholder="e.g. Engineering, Sales" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Job Title</label>
+                    <input type="text" placeholder="e.g. Senior Developer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Matrix */}
+              <div className={`p-5 rounded-2xl border space-y-4 transition-colors ${formData.status === 'Active' ? 'bg-emerald-50/40 border-emerald-100' : 'bg-rose-50/50 border-rose-200'}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest block ${formData.status === 'Active' ? 'text-emerald-800' : 'text-rose-800'}`}>3. Network Security Status</span>
+                
+                <div>
+                  <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Employee Account State</label>
+                  <select 
+                    value={formData.status} 
+                    onChange={e => setFormData({...formData, status: e.target.value})} 
+                    className={`w-full p-3 border rounded-xl text-xs font-black uppercase tracking-wider outline-none cursor-pointer ${formData.status === 'Active' ? 'bg-white border-emerald-300 text-emerald-700' : 'bg-rose-50 border-rose-300 text-rose-700'}`}
+                  >
+                    <option value="Active">🟢 Account is Active (Normal Access)</option>
+                    <option value="Disabled">🔴 Account Disabled (Login Revoked)</option>
+                  </select>
+                  {formData.status === 'Disabled' && (
+                    <p className="text-[10px] font-bold text-rose-600 mt-2 flex items-center gap-1"><Shield size={12}/> Disabling this account revokes their ability to log into the staff portal.</p>
                   )}
                 </div>
               </div>
 
-              {/* Hardware Assignment Footer Badge */}
-              <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Assigned Equipment:</span>
-                <span className={`px-3 py-1 rounded-xl text-[11px] font-black tracking-wider ${user.assetCount > 0 ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-gray-100 text-gray-400'}`}>
-                  {user.assetCount} Units Held
-                </span>
-              </div>
-
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 🟢 1. MANUAL SINGLE HIRE MODAL */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-100">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="text-xs font-black uppercase text-[#002B49] tracking-widest flex items-center gap-1.5"><UserCheck size={16}/> Register New Employee Dossier</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-900 cursor-pointer"><X size={18}/></button>
-            </div>
-
-            <form onSubmit={handleRegisterSingleStaff} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Full Legal Name *</label><input type="text" required placeholder="e.g. Marcus Vance" value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-xs font-bold outline-none focus:bg-white" /></div>
-                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Company Email *</label><input type="email" required placeholder="m.vance@company.com" value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-xs font-bold outline-none focus:bg-white" /></div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Employee ID / Code</label><input type="text" placeholder="e.g. EMP-1042" value={newEmpCode} onChange={e => setNewEmpCode(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-xs font-mono font-bold outline-none focus:bg-white" /></div>
-                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Department</label><input type="text" placeholder="e.g. Engineering, Sales" value={newDept} onChange={e => setNewDept(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-xs font-bold outline-none focus:bg-white" /></div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Job Title / Role</label><input type="text" placeholder="e.g. System Administrator" value={newRole} onChange={e => setNewRole(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-xs font-bold outline-none focus:bg-white" /></div>
-                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Contact Phone</label><input type="text" placeholder="+1 (555) 019-2834" value={newPhone} onChange={e => setNewPhone(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-xs font-bold outline-none focus:bg-white" /></div>
-              </div>
-
-              <div className="pt-2">
-                <button type="submit" disabled={isSaving} className="w-full py-3.5 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer">
-                  {isSaving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
-                  <span>{isSaving ? 'Registering...' : 'Activate Account Dossier'}</span>
+              {/* Submit Line */}
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setIsDossierModalOpen(false)} className="px-6 py-4 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-lg cursor-pointer transition-all">
+                  {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                  <span>{isSaving ? 'Syncing to Database...' : (isEditing ? 'Save Dossier Updates' : 'Activate Employee Account')}</span>
                 </button>
               </div>
             </form>
@@ -300,7 +408,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       )}
 
-      {/* 🟢 2. LOUD BULK CSV IMPORTER MODAL */}
+      {/* 🟢 LOUD BULK CSV IMPORTER MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-6 text-center">
