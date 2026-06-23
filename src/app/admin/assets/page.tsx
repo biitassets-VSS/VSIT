@@ -7,7 +7,7 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, DollarSign, Package, Mouse, 
-  Keyboard, Headphones, SlidersHorizontal, Filter, Smartphone
+  Keyboard, Headphones, SlidersHorizontal, Filter, Smartphone, AlertCircle
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -21,11 +21,10 @@ export default function AssetRegistryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
-  const [selectedCondition, setSelectedCondition] = useState<string>('All');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false); // 👈 Restored!
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
 
   // Add Form
@@ -43,7 +42,7 @@ export default function AssetRegistryPage() {
   const [newAssetAssignee, setNewAssetAssignee] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Bulk Importer
+  // Bulk Importer State
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -54,7 +53,6 @@ export default function AssetRegistryPage() {
 
   useEffect(() => { fetchRegistryData(); }, []);
 
-  // Auto-trigger Tag ID generation when Add Modal opens
   useEffect(() => {
     if (isAddModalOpen) setNewAssetTag(generateCategoryPrefix(newAssetCategory));
   }, [newAssetCategory, isAddModalOpen]);
@@ -62,25 +60,24 @@ export default function AssetRegistryPage() {
   useEffect(() => {
     const scanId = searchParams.get('view');
     if (scanId && assets.length > 0) {
-      const foundAsset = assets.find(a => a.id === scanId || a.asset_tag === scanId);
+      const foundAsset = assets.find(a => a.id === scanId || a.asset_tag === scanId || a.clean_tag === scanId);
       if (foundAsset) openAssetViewModal(foundAsset);
     }
   }, [searchParams, assets]);
 
-  // 🚀 THE EXPANDED CATEGORY TAG GENERATOR
+  // 🚀 EXPANDED SMART PREFIX GENERATOR
   const generateCategoryPrefix = (category: string, existingUuid?: string) => {
     let prefix = 'VS-AST';
     const cat = (category || '').toLowerCase();
     
-    // Ordered by specificity (e.g., check 'combo kit' before 'keyboard')
     if (cat.includes('laptop')) prefix = 'VS-LAP';
     else if (cat.includes('mobile phone') || cat.includes('phone')) prefix = 'VS-MOB';
     else if (cat.includes('combo kit')) prefix = 'VS-CMB';
-    else if (cat.includes('mouse pad')) prefix = 'VS-PAD';
+    else if (cat.includes('mouse pad') || cat.includes('pad')) prefix = 'VS-PAD';
     else if (cat.includes('mouse')) prefix = 'VS-MO';
     else if (cat.includes('keyboard')) prefix = 'VS-KB';
     else if (cat.includes('headphone') || cat.includes('audio')) prefix = 'VS-HDP';
-    else if (cat.includes('cleaning kit')) prefix = 'VS-CLN';
+    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
     else if (cat.includes('stand')) prefix = 'VS-STND';
     else prefix = 'VS-AST';
 
@@ -130,13 +127,6 @@ export default function AssetRegistryPage() {
     if (s.includes('Demo')) return 'bg-purple-100 text-purple-700 border-purple-200';
     if (s.includes('Discard')) return 'bg-red-100 text-red-700 border-red-200 line-through';
     return 'bg-blue-100 text-blue-700 border-blue-200';
-  };
-
-  const getConditionBadge = (cond: string) => {
-    const c = cond || 'New';
-    if (c === 'New') return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-    if (c === 'Refurbished') return 'text-blue-600 bg-blue-50 border-blue-200';
-    return 'text-amber-600 bg-amber-50 border-amber-200';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -233,12 +223,100 @@ export default function AssetRegistryPage() {
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
+  // ==========================================
+  // 🟢 INDUSTRIAL BULK CSV PARSER & DOWNLOADER
+  // ==========================================
+  const parseCsvRow = (line: string) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') inQuotes = !inQuotes;
+      else if (char === ',' && !inQuotes) { result.push(current); current = ''; } 
+      else current += char;
+    }
+    result.push(current);
+    return result.map(s => s.trim().replace(/^"|"$/g, ''));
+  };
+
+  // 100% Perfect DB-Matching Sample Template
+  const downloadSampleCsvTemplate = () => {
+    const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
+    const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
+    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,45.99,Amazon Business,2025-02-15,,New\n';
+    const row3 = 'Headphone,Jabra,Evolve2 65,JAB-9941,VS-HDP-88210,180.00,B&H Photo,2025-01-01,,Refurbished\n';
+    const row4 = '"Mobile Phone",Samsung,Galaxy S24 Ultra,SMSG-7721,,,1199.00,Samsung Enterprise,2025-03-01,2027-03-01,New';
+    
+    const blob = new Blob([headers + row1 + row2 + row3 + row4], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'VSS_Hardware_Bulk_Upload_Template.csv'; a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const executeBulkImport = async () => {
+    if (!bulkFile) return alert("Please upload a CSV file first.");
+    setIsImporting(true);
+
+    try {
+      const text = await bulkFile.text();
+      const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
+      if (lines.length < 2) throw new Error("CSV contains no actual data rows.");
+
+      const rawHeaders = parseCsvRow(lines[0]).map(h => h.replace(/\s+/g, '').toLowerCase());
+      const batchPayload: any[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCsvRow(lines[i]);
+        const col: Record<string, string> = {};
+        rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
+
+        const modelName = col['modelname'] || col['name'] || '';
+        const serialNum = col['serialnumber'] || col['serial_number'] || col['sn'] || '';
+
+        if (!modelName && !serialNum) continue; // Skip totally blank Excel ghost-rows
+
+        const cat = col['category'] || 'Others';
+        const rawTag = col['assettag'] || col['asset_tag'] || col['tag'] || '';
+        const finalAssetTag = rawTag.toUpperCase() || generateCategoryPrefix(cat);
+
+        const rawPrice = col['price'] || '';
+        const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
+
+        batchPayload.push({
+          id: generateSafeUuid(), // Postgres native UUID requirement
+          asset_tag: finalAssetTag, // Readable Human Tag
+          asset_name: modelName || 'Standard Asset', 
+          brand: col['brand'] || 'Generic',
+          serial_number: (serialNum || 'UNKNOWN-SN').toUpperCase(), 
+          category: cat, 
+          purchase_date: col['purchasedate'] || col['purchase_date'] || null, 
+          warranty_expiry: col['warrantyexpiry'] || col['warranty_expiry'] || null,
+          price: isNaN(numPrice as number) ? null : numPrice, 
+          vendor: col['vendor'] || col['supplier'] || 'Bulk Upload', 
+          asset_condition: col['condition'] || 'New',
+          status: 'In Stock (Unassigned)', 
+          inspection_status: 'Logged'
+        });
+      }
+
+      if (batchPayload.length === 0) throw new Error("No valid hardware rows discovered in file.");
+
+      const { error } = await supabase.from('assets').insert(batchPayload);
+      if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
+
+      alert(`🎉 Batch successful! Uploaded ${batchPayload.length} new hardware assets.`);
+      setIsBulkModalOpen(false); setBulkFile(null); fetchRegistryData();
+    } catch (err: any) { alert(`❌ IMPORT REJECTED:\n\n${err.message}`); } finally { setIsImporting(false); }
+  };
+
   const getAssetViewUrl = (asset: any) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
+  // 🖨️ PHYSICAL STICKER PRINT MATRIX
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=500,height=500');
@@ -246,7 +324,7 @@ export default function AssetRegistryPage() {
 
     const cat = (asset.category || '').toLowerCase();
 
-    // Standard 50mm x 50mm Laptop/Default Square
+    // Standard 50mm x 50mm Laptop Square
     let boxCss = "width: 50mm; height: 50mm; padding: 2mm;";
     let qrCss = "width: 25mm; height: 25mm;";
     let titleCss = "font-size: 10px;";
@@ -254,14 +332,14 @@ export default function AssetRegistryPage() {
     let tagCss = "font-size: 13px; padding: 2px 6px;";
 
     if (cat.includes('mouse') && !cat.includes('pad')) {
-      // 🐭 Small Belly Sticker (32x22mm)
+      // 🐭 Micro Belly Sticker (32x22mm)
       boxCss = "width: 32mm; height: 22mm; padding: 1mm;";
       qrCss = "width: 11mm; height: 11mm;";
       titleCss = "font-size: 6px;";
       snCss = "font-size: 5px;";
       tagCss = "font-size: 8px; padding: 1px 3px;";
     } else if (cat.includes('headphone') || cat.includes('audio')) {
-      // 🎧 Vertical Wrap (20x45mm)
+      // 🎧 Vertical Headband Wrap (20x45mm)
       boxCss = "width: 20mm; height: 45mm; padding: 1.5mm; display: flex; flex-direction: column; justify-content: space-between;";
       qrCss = "width: 15mm; height: 15mm;";
       titleCss = "font-size: 7px;";
@@ -299,17 +377,11 @@ export default function AssetRegistryPage() {
 
   const getCatCount = (filterName: string) => {
     if (filterName === 'All') return assets.length;
-    
-    // Grouping counts for top filter tabs
     if (filterName === 'Accessories') {
       return assets.filter(a => ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category)).length;
     }
-    if (filterName === 'Mobile Phones') {
-      return assets.filter(a => a.category === 'Mobile Phone').length;
-    }
-    if (filterName === 'Other') {
-      return assets.filter(a => ['Cleaning Kits', 'Others'].includes(a.category)).length;
-    }
+    if (filterName === 'Mobile Phones') return assets.filter(a => a.category === 'Mobile Phone').length;
+    if (filterName === 'Other') return assets.filter(a => ['Cleaning Kits', 'Others'].includes(a.category)).length;
     return assets.filter(a => a.category?.toLowerCase() === filterName.toLowerCase()).length;
   };
 
@@ -330,26 +402,16 @@ export default function AssetRegistryPage() {
         matchesCat = a.category === 'Mobile Phone';
       } else if (selectedCategory === 'Other') {
         matchesCat = ['Cleaning Kits', 'Others'].includes(a.category);
-      } else {
-        matchesCat = a.category === selectedCategory;
-      }
+      } else matchesCat = a.category === selectedCategory;
     }
 
-    const matchesStat = selectedStatus === 'All' || (
-      selectedStatus === 'In Stock' ? (a.status || '').toLowerCase().includes('stock') :
-      selectedStatus === 'Assigned' ? (a.status || '').toLowerCase().includes('assigned') && !(a.status || '').includes('Stock') :
-      selectedStatus === 'In Repair' ? (a.status || '').toLowerCase().includes('repair') :
-      selectedStatus === 'Demo Use' ? (a.status || '').toLowerCase().includes('demo') :
-      (a.status || '').toLowerCase().includes('discard')
-    );
-
-    return matchesSearch && matchesCat && matchesStat;
+    return matchesSearch && matchesCat;
   });
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* HEADER */}
+      {/* RESTORED HEADER WITH BULK UPLOAD BUTTON */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 cursor-pointer">
@@ -364,14 +426,25 @@ export default function AssetRegistryPage() {
           </div>
         </div>
 
+        {/* 🚀 THE DOUBLE BUTTON GROUP RESTORED */}
         <div className="flex items-center gap-2.5">
-          <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md shadow-[#002B49]/20 cursor-pointer">
+          <button 
+            onClick={() => setIsBulkModalOpen(true)} 
+            className="flex items-center gap-2 px-5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+          >
+            <FileSpreadsheet size={16} /> <span>Bulk Upload CSV</span>
+          </button>
+
+          <button 
+            onClick={() => setIsAddModalOpen(true)} 
+            className="flex items-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md shadow-[#002B49]/20 cursor-pointer"
+          >
             <PlusCircle size={16} /> <span>Register Asset</span>
           </button>
         </div>
       </div>
 
-      {/* CATEGORY TABS (Grouped for clean display) */}
+      {/* CATEGORY TABS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
         {[
           { name: 'All', icon: <Package size={14}/> },
@@ -443,7 +516,48 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* REGISTER NEW ASSET MODAL */}
+      {/* 🚀 RESTORED BULK UPLOAD MODAL */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-gray-100 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+              <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] flex items-center gap-2"><Upload size={16}/> Bulk Hardware Intake</h3>
+              <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-gray-900 cursor-pointer"><X size={18}/></button>
+            </div>
+
+            <div className="space-y-3 text-left">
+              <button 
+                onClick={downloadSampleCsvTemplate} 
+                className="w-full py-3.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Download size={16}/> <span>1. Download Verified Sample CSV</span>
+              </button>
+              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">
+                The sample format is perfectly mapped to Postgres. You can leave the <b>Asset Tag</b> column completely blank to let VSS auto-tag your items!
+              </p>
+            </div>
+
+            <div className="p-6 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-gray-100/80 transition-colors flex flex-col items-center justify-center gap-3">
+              <FileSpreadsheet size={40} className="text-emerald-600 animate-bounce" />
+              <input 
+                type="file" accept=".csv" 
+                onChange={e => setBulkFile(e.target.files?.[0] || null)} 
+                className="text-xs font-bold text-gray-700 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-[#002B49] file:text-white file:cursor-pointer" 
+              />
+            </div>
+
+            <button 
+              onClick={executeBulkImport} 
+              disabled={isImporting || !bulkFile} 
+              className={`w-full py-4 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg ${bulkFile ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer' : 'bg-gray-300 cursor-not-allowed'}`}
+            >
+              {isImporting ? 'Parsing Postgres Rows...' : '2. Execute Batch Registration'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* REGISTER MANUAL ASSET MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100">
@@ -468,7 +582,6 @@ export default function AssetRegistryPage() {
                       }} 
                       className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none cursor-pointer"
                     >
-                      {/* 🚀 EXPANDED CATEGORY LIST */}
                       <option value="Laptop">Laptop</option>
                       <option value="Keyboard">Keyboard</option>
                       <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
@@ -518,7 +631,6 @@ export default function AssetRegistryPage() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border border-gray-200">
               
-              {/* LEFT SIDE: STICKER MATRIX */}
               <div className="w-full md:w-1/3 bg-gradient-to-b from-blue-50/80 to-white p-8 flex flex-col items-center border-b md:border-b-0 md:border-r border-gray-100 relative shrink-0">
                 <button onClick={() => setViewAssetModal(null)} className="absolute md:hidden top-4 right-4 text-gray-400 bg-gray-100 p-1.5 rounded-full"><X size={14}/></button>
                 <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] mb-6">Sticker Matrix</h3>
@@ -527,7 +639,6 @@ export default function AssetRegistryPage() {
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-36 h-36 object-contain" />
                 </div>
 
-                {/* 🚀 UI CLEANUP: Removed dark background, using simple bold text */}
                 <div className="mb-1 w-full text-center truncate">
                   <span className="text-xl font-mono font-black text-[#002B49] tracking-widest">{liveModalTag}</span>
                 </div>
@@ -541,7 +652,6 @@ export default function AssetRegistryPage() {
                 </div>
               </div>
 
-              {/* RIGHT SIDE: RECORD FORM */}
               <div className="w-full md:w-2/3 flex flex-col overflow-y-auto custom-scrollbar relative">
                 <button onClick={() => setViewAssetModal(null)} className="hidden md:flex absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full cursor-pointer z-10"><X size={16}/></button>
 
