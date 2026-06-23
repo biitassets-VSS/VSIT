@@ -98,7 +98,11 @@ export default function AdminStaffDirectoryPage() {
       } else {
         // CREATE NEW
         const { error } = await supabase.from('profiles').insert([{ ...payload, id: generateSafeUuid() }]);
+        
+        // Catch the specific Unique Email error for manual entry
+        if (error?.code === '23505') throw new Error(`The email address ${payload.email} is already registered to another employee.`);
         if (error) throw error;
+        
         alert(`New employee ${formData.full_name} activated!`);
       }
 
@@ -119,7 +123,7 @@ export default function AdminStaffDirectoryPage() {
     } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
   };
 
-  // 📦 BULK IMPORTER
+  // 📦 SMART BULK IMPORTER (NOW WITH COLLISION DETECTION)
   const downloadStaffCsvTemplate = () => {
     const headers = "FullName,Email,EmpCode,Role,Department,Phone\n";
     const sample = "Alexander Vance,a.vance@company.com,EMP-901,Senior Developer,Engineering,+1-555-0192";
@@ -164,10 +168,15 @@ export default function AdminStaffDirectoryPage() {
 
       if (batchPayload.length === 0) throw new Error("Could not detect any valid Name/Email rows.");
 
-      const { error } = await supabase.from('profiles').insert(batchPayload);
+      // 🚀 THE FIX: We use UPSERT and specifically tell Postgres to ignore duplicate emails!
+      const { error } = await supabase.from('profiles').upsert(batchPayload, { 
+        onConflict: 'email', 
+        ignoreDuplicates: true 
+      });
+      
       if (error) throw new Error(`SUPABASE REJECTION: ${error.message}`);
 
-      alert(`🎉 SUCCESS! ${batchPayload.length} employees imported.`);
+      alert(`🎉 SUCCESS! Batch processed. (Any rows with emails that already existed were safely skipped).`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchStaff();
 
     } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
@@ -221,7 +230,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       </div>
 
-      {/* 🚀 OVERHAULED STAFF GRID */}
+      {/* STAFF GRID */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : filteredStaff.length === 0 ? (
@@ -246,7 +255,6 @@ export default function AdminStaffDirectoryPage() {
                         {user.full_name?.charAt(0) || <UserCheck size={20} />}
                       </div>
                       <div className="overflow-hidden">
-                        {/* 🚀 CLICKABLE NAME TRIGGER */}
                         <button 
                           onClick={() => handleOpenEdit(user)}
                           className={`text-sm font-black text-left leading-tight truncate w-full hover:underline cursor-pointer ${isActive ? 'text-gray-900 hover:text-blue-600' : 'text-gray-500'}`}
@@ -261,13 +269,11 @@ export default function AdminStaffDirectoryPage() {
                       </div>
                     </div>
                     
-                    {/* Quick Edit Icon */}
                     <button onClick={() => handleOpenEdit(user)} className="p-2 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors shrink-0 cursor-pointer">
                       <Edit2 size={14} />
                     </button>
                   </div>
 
-                  {/* Info Box */}
                   <div className={`space-y-2 p-3.5 rounded-2xl border text-xs ${isActive ? 'bg-gray-50 border-gray-100/80' : 'bg-white border-rose-100/50 opacity-70'}`}>
                     <div className="flex items-center gap-2 text-gray-700 font-mono font-bold">
                       <Hash size={13} className="text-blue-500 shrink-0" />
@@ -289,7 +295,6 @@ export default function AdminStaffDirectoryPage() {
                   </div>
                 </div>
 
-                {/* Footer Action Bar */}
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">
                     <Package size={12}/>
@@ -298,7 +303,6 @@ export default function AdminStaffDirectoryPage() {
                     ) : '0 Assets'}
                   </div>
 
-                  {/* ⚡ DIRECT STATUS TOGGLE */}
                   <button 
                     onClick={() => handleToggleStatus(user)}
                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${isActive ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'}`}
@@ -332,7 +336,6 @@ export default function AdminStaffDirectoryPage() {
 
             <form onSubmit={handleSaveDossier} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
               
-              {/* Identity Matrix */}
               <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 space-y-4">
                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-800 block">1. Employee Identity</span>
                 
@@ -359,7 +362,6 @@ export default function AdminStaffDirectoryPage() {
                 </div>
               </div>
 
-              {/* Organization Matrix */}
               <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200/60 space-y-4">
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 block">2. Organizational Role</span>
                 
@@ -375,7 +377,6 @@ export default function AdminStaffDirectoryPage() {
                 </div>
               </div>
 
-              {/* Security Matrix */}
               <div className={`p-5 rounded-2xl border space-y-4 transition-colors ${formData.status === 'Active' ? 'bg-emerald-50/40 border-emerald-100' : 'bg-rose-50/50 border-rose-200'}`}>
                 <span className={`text-[10px] font-black uppercase tracking-widest block ${formData.status === 'Active' ? 'text-emerald-800' : 'text-rose-800'}`}>3. Network Security Status</span>
                 
@@ -395,7 +396,6 @@ export default function AdminStaffDirectoryPage() {
                 </div>
               </div>
 
-              {/* Submit Line */}
               <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setIsDossierModalOpen(false)} className="px-6 py-4 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-lg cursor-pointer transition-all">
@@ -408,7 +408,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       )}
 
-      {/* 🟢 LOUD BULK CSV IMPORTER MODAL */}
+      {/* 🟢 BULK CSV IMPORTER MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-6 text-center">
