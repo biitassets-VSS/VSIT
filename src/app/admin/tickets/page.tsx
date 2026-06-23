@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Search, Ticket, Clock, 
   CheckCircle2, AlertCircle, MessageSquare, Wrench,
-  Hourglass, Save, RefreshCw, X, User, Play, Pause, Calendar, FileText, Check, ShieldCheck
+  Hourglass, Save, RefreshCw, X, User, Play, Pause
 } from 'lucide-react';
 
 function TicketsWorkbenchContent() {
@@ -30,18 +30,16 @@ function TicketsWorkbenchContent() {
 
   useEffect(() => { fetchTickets(); }, []);
 
-  // URL & QUEUE LISTENER: Auto-opens a ticket if linked from Admin Dashboard
+  // URL LISTENER: Only opens if explicitly linked from the dashboard via ?view=xxx
   useEffect(() => {
     if (tickets.length === 0) return;
 
     const targetId = searchParams.get('view') || searchParams.get('id');
-    if (targetId) {
+    if (targetId && !selectedTicket) {
       const found = tickets.find(t => t.id === targetId);
       if (found) handleSelectTicket(found);
-    } else if (!selectedTicket) {
-      const defaultTicket = tickets.find(t => t.status === 'open' || t.status === 'pending') || tickets[0];
-      if (defaultTicket) handleSelectTicket(defaultTicket);
     }
+    // Note: We removed the auto-select logic so the page defaults to 100% width list view!
   }, [tickets, searchParams]);
 
   const fetchTickets = async () => {
@@ -57,6 +55,12 @@ function TicketsWorkbenchContent() {
     setFormStatus(ticket.status || 'open');
     setFormWaitTime(ticket.wait_time || '15 Mins');
     setFormResolutionNote(ticket.resolution_note || '');
+  };
+
+  // 🚀 Gracefully closes the workbench and expands the list back to 100% width
+  const closeWorkbench = () => {
+    setSelectedTicket(null);
+    router.replace('/admin/tickets'); // Clears the URL so it doesn't pop back open on refresh
   };
 
   const handleCommitUpdates = async (e: React.FormEvent) => {
@@ -121,7 +125,7 @@ function TicketsWorkbenchContent() {
   const countOpen = tickets.filter(t => (t.status || '').toLowerCase() === 'open').length;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans overflow-hidden">
       
       {/* TOP DASHBOARD LINK HEADER */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -136,7 +140,7 @@ function TicketsWorkbenchContent() {
                 {tickets.length} Total Records
               </span>
             </div>
-            <p className="text-xs text-gray-400 font-bold mt-0.5">Select a ticket from the left queue to view wide diagnostics and update resolution state</p>
+            <p className="text-xs text-gray-400 font-bold mt-0.5">Click any ticket in the queue to open the diagnostic workbench and resolve the issue</p>
           </div>
         </div>
       </div>
@@ -171,14 +175,14 @@ function TicketsWorkbenchContent() {
         </div>
       </div>
 
-      {/* THE SPLIT-VIEW MATRIX (Left Queue vs Right Form) */}
+      {/* THE DYNAMIC SPLIT-VIEW MATRIX */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="flex flex-col lg:flex-row gap-6 items-start relative min-h-[500px]">
           
-          {/* LEFT COLUMN: SCROLLABLE QUEUE LIST */}
-          <div className="w-full lg:w-5/12 space-y-3 max-h-[800px] overflow-y-auto pr-1 custom-scrollbar shrink-0">
+          {/* LEFT COLUMN: SCROLLABLE QUEUE LIST (Expands to 100% width if no ticket is selected) */}
+          <div className={`space-y-3 max-h-[800px] overflow-y-auto pr-1 custom-scrollbar shrink-0 transition-all duration-300 ease-in-out ${selectedTicket ? 'hidden lg:block lg:w-5/12' : 'w-full'}`}>
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-2 block mb-1">Queue Feed ({filteredTickets.length})</span>
             
             {filteredTickets.map(ticket => {
@@ -191,18 +195,23 @@ function TicketsWorkbenchContent() {
                   onClick={() => handleSelectTicket(ticket)}
                   className={`p-4 rounded-3xl border transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-3 ${
                     isSelected 
-                      ? 'bg-[#002B49] text-white border-[#002B49] shadow-lg shadow-[#002B49]/20 scale-101' 
+                      ? 'bg-[#002B49] text-white border-[#002B49] shadow-lg shadow-[#002B49]/20 scale-[1.01]' 
                       : 'bg-white text-gray-800 border-gray-200/70 hover:border-blue-400'
                   }`}
                 >
                   <div className="flex justify-between items-start gap-2">
-                    <h4 className="text-xs font-black truncate max-w-[200px]">{ticket.subject || 'Support Ticket'}</h4>
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-400'}`}>
+                        <MessageSquare size={14} />
+                      </div>
+                      <h4 className="text-sm font-black truncate">{ticket.subject || 'Support Ticket'}</h4>
+                    </div>
                     <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${isSelected ? 'bg-white/20 text-white border-transparent' : badge.css}`}>
                       {badge.label}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px]">
+                  <div className="flex items-center justify-between text-[11px] pl-10">
                     <span className={`font-bold truncate ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
                       {ticket.user_email?.split('@')[0]} ({ticket.emp_code || 'No EMP'})
                     </span>
@@ -213,26 +222,36 @@ function TicketsWorkbenchContent() {
                 </div>
               );
             })}
+            
+            {filteredTickets.length === 0 && (
+              <div className="py-12 text-center text-gray-400 font-bold text-xs">
+                No tickets match your search.
+              </div>
+            )}
           </div>
 
-          {/* RIGHT COLUMN: DETAIL WIDE & RESOLUTION FORM */}
-          <div className="w-full lg:w-7/12 bg-white rounded-3xl border border-gray-200/80 shadow-sm p-6 lg:sticky lg:top-6">
-            {!selectedTicket ? (
-              <div className="py-28 text-center space-y-2 opacity-50">
-                <Ticket size={48} className="mx-auto text-gray-300 animate-pulse" />
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500">No Ticket Selected</p>
-                <p className="text-[11px] font-bold text-gray-400">Click a ticket card from the left column to lock it onto the diagnostic workbench.</p>
-              </div>
-            ) : (() => {
-              const activeBadge = getStatusBadge(selectedTicket.status);
+          {/* RIGHT COLUMN: DETAIL WIDE & RESOLUTION FORM (Slides in when a ticket is clicked) */}
+          {selectedTicket && (() => {
+            const activeBadge = getStatusBadge(selectedTicket.status);
 
-              return (
-                <form onSubmit={handleCommitUpdates} className="space-y-6">
+            return (
+              <div className="w-full lg:w-7/12 bg-white rounded-3xl border border-gray-200/80 shadow-xl shadow-blue-900/5 p-6 lg:sticky lg:top-6 animate-in slide-in-from-right-8 duration-300 relative">
+                
+                {/* 🚀 The Close Button (Restores full-width view) */}
+                <button 
+                  onClick={closeWorkbench} 
+                  className="absolute top-4 right-4 text-gray-400 hover:text-rose-600 bg-gray-50 hover:bg-rose-50 p-2 rounded-full transition-colors z-10 cursor-pointer"
+                  title="Close Workbench"
+                >
+                  <X size={18}/>
+                </button>
+
+                <form onSubmit={handleCommitUpdates} className="space-y-6 pt-2">
                   
                   {/* Panel Header */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-gray-100">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-gray-100 pr-10">
                     <div>
-                      <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-widest">TICKET REF: #{selectedTicket.id}</span>
+                      <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-widest">TICKET REF: #{selectedTicket.id.split('-')[0]}</span>
                       <h2 className="text-lg font-black text-[#002B49] leading-tight mt-0.5">{selectedTicket.subject || 'IT Support Ticket'}</h2>
                     </div>
 
@@ -327,9 +346,9 @@ function TicketsWorkbenchContent() {
                   </div>
 
                 </form>
-              );
-            })()}
-          </div>
+              </div>
+            );
+          })()}
 
         </div>
       )}
