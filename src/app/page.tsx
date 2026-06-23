@@ -8,13 +8,11 @@ import { Mail, Lock, Shield, Users, User as UserIcon, Monitor, ArrowLeft } from 
 export default function LoginPage() {
   const router = useRouter();
   
-  // 🧭 Re-wired UI State
+  // 🧭 UI State (Defaults to Staff tab)
   const [activeTab, setActiveTab] = useState<'admin' | 'staff' | 'guest'>('staff');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Custom error state designed to trigger your exact screenshot's pink box
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -26,7 +24,7 @@ export default function LoginPage() {
       const cleanEmail = email.toLowerCase().trim();
       const cleanPass = password.trim();
 
-      // 1. Query your visible profiles ledger directly
+      // 1. Query the public profiles directory directly
       const { data: user, error } = await supabase
         .from('profiles')
         .select('*')
@@ -36,7 +34,6 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      // 2. Trigger your exact screenshot wording if typo'd!
       if (!user) {
         throw new Error("User profile not found. Please contact Administrator.");
       }
@@ -45,9 +42,8 @@ export default function LoginPage() {
         throw new Error("This account has been locked. Please contact Administrator.");
       }
 
-      // 3. Tab-based Routing & Session Stamping
+      // 2. Tab-Based Authorization & Routing
       if (activeTab === 'admin') {
-        // Verify this person actually holds an Admin or Officer rank
         const isUpperManagement = user.role?.toLowerCase().includes('admin') || 
                                   user.department?.toLowerCase().includes('admin') || 
                                   user.role?.toLowerCase().includes('developer');
@@ -61,15 +57,28 @@ export default function LoginPage() {
 
       } else if (activeTab === 'staff') {
         
-        // Save Meenakshi's profile locally so the dashboard can look up her equipment!
-        localStorage.setItem('vsit_staff_session', JSON.stringify({
+        // 🚀 THE MASTER KEY DOSSIER
+        const staffDossier = {
           id: user.id,
-          name: user.full_name || user.name,
+          name: user.full_name || user.name || 'Staff Member',
           email: user.email,
           emp_code: user.emp_code,
           department: user.department,
           role: user.role
-        }));
+        };
+
+        // Hand the browser our official modern key
+        localStorage.setItem('vsit_staff_session', JSON.stringify(staffDossier));
+
+        // Hand the browser the 4 most common legacy Next.js keys to defeat the Revolving Door
+        localStorage.setItem('staff_session', JSON.stringify(staffDossier));
+        localStorage.setItem('user_session', JSON.stringify(staffDossier));
+        localStorage.setItem('user', JSON.stringify(staffDossier));
+        localStorage.setItem('staff', JSON.stringify(staffDossier));
+
+        // Inject active session Cookies to satisfy Next.js middleware.ts route guards
+        document.cookie = `sb-access-token=${user.id}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `vsit_auth=true; path=/; max-age=86400; SameSite=Lax`;
 
         router.push('/staff/dashboard');
 
@@ -87,18 +96,16 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#F1F5F9] p-4 font-sans selection:bg-indigo-500 selection:text-white">
       
-      {/* 🚀 THE RESTORED SOFT-GLOW HALO CARD */}
+      {/* THE RESTORED SOFT-GLOW HALO CARD */}
       <div className="w-full max-w-[440px] bg-white rounded-[36px] p-8 sm:p-10 shadow-[0_0_60px_-15px_rgba(79,70,229,0.25)] border border-indigo-50/50 flex flex-col items-center">
         
-        {/* Logo Graphic Placement */}
+        {/* Logo Placement */}
         <div className="mb-2">
-          {/* Note: Update "/logo.png" to your exact logo file path inside your /public folder */}
           <img 
             src="/logo.png" 
             alt="Virtual Staffing Solutions Logo" 
             className="h-16 w-auto object-contain"
             onError={(e) => {
-              // Fallback text rendering just in case your logo image fails to load
               e.currentTarget.style.display = 'none';
               document.getElementById('logo-text-fallback')!.style.display = 'block';
             }} 
@@ -108,18 +115,16 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Main Header */}
         <h1 className="text-[22px] font-black text-gray-900 tracking-tight mt-1">
           Virtual Staffing Solutions
         </h1>
 
-        {/* Subtitle Pill Badge */}
         <div className="mt-2.5 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-50/80 border border-blue-100 text-blue-600 text-[11px] font-black tracking-wider uppercase">
           <Monitor size={13} className="text-blue-500" />
           <span>IT Assets Management System</span>
         </div>
 
-        {/* 🚀 THE 3-WAY ROLE SWITCHER */}
+        {/* THE 3-WAY ROLE SWITCHER */}
         <div className="w-full mt-7 p-1.5 bg-[#F4F4F5] rounded-2xl flex items-center justify-between gap-1">
           {[
             { id: 'admin', label: 'Admin', icon: <Shield size={14}/> },
@@ -144,7 +149,7 @@ export default function LoginPage() {
           })}
         </div>
 
-        {/* 🚀 THE RESTORED PINK ERROR BOX */}
+        {/* THE PINK ERROR BOX */}
         {errorMsg && (
           <div className="w-full mt-6 p-4 bg-rose-50/50 border border-rose-200 rounded-2xl text-center animate-in fade-in duration-200">
             <span className="bg-gray-200/80 text-gray-800 text-xs font-semibold px-2.5 py-1 rounded">
@@ -185,7 +190,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Submit Button */}
           <div className="pt-2">
             <button 
               type="submit" disabled={loading}
@@ -196,7 +200,6 @@ export default function LoginPage() {
           </div>
         </form>
 
-        {/* Footer Link */}
         <button 
           type="button" 
           onClick={() => router.push('/')} 
