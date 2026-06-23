@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
-  User, Calendar, X, Save, Eye, Hash, RefreshCw, Tag, 
-  Download, Printer, Edit2, ShieldCheck, AlertCircle, Camera, 
-  Upload, FileSpreadsheet, DollarSign, Package, Mouse, Keyboard, Headphones, SlidersHorizontal, Filter
+  User, X, Save, RefreshCw, Download, Printer, Edit2, 
+  Upload, FileSpreadsheet, DollarSign, Package, Mouse, 
+  Keyboard, Headphones, SlidersHorizontal, Filter, Smartphone
 } from 'lucide-react';
 
 export default function AssetRegistryPage() {
@@ -67,18 +67,23 @@ export default function AssetRegistryPage() {
     }
   }, [searchParams, assets]);
 
-  // 🚀 THE EXACT CATEGORY TAG GENERATOR (VS-LAP, VS-HDP, VS-MO, VS-KB)
+  // 🚀 THE EXPANDED CATEGORY TAG GENERATOR
   const generateCategoryPrefix = (category: string, existingUuid?: string) => {
     let prefix = 'VS-AST';
     const cat = (category || '').toLowerCase();
     
+    // Ordered by specificity (e.g., check 'combo kit' before 'keyboard')
     if (cat.includes('laptop')) prefix = 'VS-LAP';
-    else if (cat.includes('headphone') || cat.includes('audio')) prefix = 'VS-HDP';
+    else if (cat.includes('mobile phone') || cat.includes('phone')) prefix = 'VS-MOB';
+    else if (cat.includes('combo kit')) prefix = 'VS-CMB';
+    else if (cat.includes('mouse pad')) prefix = 'VS-PAD';
     else if (cat.includes('mouse')) prefix = 'VS-MO';
     else if (cat.includes('keyboard')) prefix = 'VS-KB';
-    else if (cat.includes('monitor')) prefix = 'VS-DISP';
+    else if (cat.includes('headphone') || cat.includes('audio')) prefix = 'VS-HDP';
+    else if (cat.includes('cleaning kit')) prefix = 'VS-CLN';
+    else if (cat.includes('stand')) prefix = 'VS-STND';
+    else prefix = 'VS-AST';
 
-    // If a UUID exists, derive a 100% permanent 5-digit number from it so the tag never shifts on re-renders!
     if (existingUuid && existingUuid.length > 20) {
       const numsOnly = existingUuid.replace(/[^0-9]/g, '');
       const stableDigits = numsOnly.length >= 5 ? numsOnly.slice(-5) : '10482';
@@ -110,7 +115,6 @@ export default function AssetRegistryPage() {
             ...asset,
             staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
             emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
-            // Clean legacy UUIDs instantly on load
             clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id)
           };
         });
@@ -141,7 +145,6 @@ export default function AssetRegistryPage() {
     setViewAssetModal({ ...asset, clean_tag: stableTag });
     setIsEditingAsset(false);
     
-    // 🚀 RESTORED EDIT DOSSIER (Includes Category, Serial, and Tag)
     setEditForm({
       category: asset.category || 'Laptop',
       asset_tag: stableTag,
@@ -202,8 +205,8 @@ export default function AssetRegistryPage() {
       if (!editForm.assignee && resolvedStatus === 'Assigned') resolvedStatus = 'In Stock (Unassigned)';
 
       const updatePayload = {
-        category: editForm.category,              // 👈 Restored to Database save!
-        serial_number: editForm.serial.toUpperCase(), // 👈 Restored to Database save!
+        category: editForm.category,
+        serial_number: editForm.serial.toUpperCase(),
         asset_tag: editForm.asset_tag.toUpperCase(),
         asset_name: editForm.name, 
         brand: editForm.brand, 
@@ -236,9 +239,6 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
-  // =========================================================
-  // 🖨️ CATEGORY-WISE SMART PHYSICAL STICKER PRINT MATRIX
-  // =========================================================
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=500,height=500');
@@ -246,22 +246,22 @@ export default function AssetRegistryPage() {
 
     const cat = (asset.category || '').toLowerCase();
 
-    // Default Geometry (Standard 50mm x 50mm Laptop Square)
+    // Standard 50mm x 50mm Laptop/Default Square
     let boxCss = "width: 50mm; height: 50mm; padding: 2mm;";
     let qrCss = "width: 25mm; height: 25mm;";
     let titleCss = "font-size: 10px;";
     let snCss = "font-size: 8px;";
     let tagCss = "font-size: 13px; padding: 2px 6px;";
 
-    if (cat.includes('mouse')) {
-      // 🐭 Small Belly Sticker
+    if (cat.includes('mouse') && !cat.includes('pad')) {
+      // 🐭 Small Belly Sticker (32x22mm)
       boxCss = "width: 32mm; height: 22mm; padding: 1mm;";
       qrCss = "width: 11mm; height: 11mm;";
       titleCss = "font-size: 6px;";
       snCss = "font-size: 5px;";
       tagCss = "font-size: 8px; padding: 1px 3px;";
     } else if (cat.includes('headphone') || cat.includes('audio')) {
-      // 🎧 Tall Vertical Headband Wrap
+      // 🎧 Vertical Wrap (20x45mm)
       boxCss = "width: 20mm; height: 45mm; padding: 1.5mm; display: flex; flex-direction: column; justify-content: space-between;";
       qrCss = "width: 15mm; height: 15mm;";
       titleCss = "font-size: 7px;";
@@ -297,10 +297,20 @@ export default function AssetRegistryPage() {
     printWindow.document.open(); printWindow.document.write(printableMarkup); printWindow.document.close();
   };
 
-  const getCatCount = (catName: string) => {
-    if (catName === 'All') return assets.length;
-    if (catName === 'Other') return assets.filter(a => !['Laptop', 'Mouse', 'Keyboard', 'Headphone'].includes(a.category)).length;
-    return assets.filter(a => a.category?.toLowerCase() === catName.toLowerCase()).length;
+  const getCatCount = (filterName: string) => {
+    if (filterName === 'All') return assets.length;
+    
+    // Grouping counts for top filter tabs
+    if (filterName === 'Accessories') {
+      return assets.filter(a => ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category)).length;
+    }
+    if (filterName === 'Mobile Phones') {
+      return assets.filter(a => a.category === 'Mobile Phone').length;
+    }
+    if (filterName === 'Other') {
+      return assets.filter(a => ['Cleaning Kits', 'Others'].includes(a.category)).length;
+    }
+    return assets.filter(a => a.category?.toLowerCase() === filterName.toLowerCase()).length;
   };
 
   const filteredAssets = assets.filter(a => {
@@ -312,11 +322,18 @@ export default function AssetRegistryPage() {
       a.staff_name?.toLowerCase().includes(q) || a.brand?.toLowerCase().includes(q)
     );
 
-    const matchesCat = selectedCategory === 'All' || (
-      selectedCategory === 'Other' 
-        ? !['Laptop', 'Mouse', 'Keyboard', 'Headphone'].includes(a.category)
-        : a.category?.toLowerCase() === selectedCategory.toLowerCase()
-    );
+    let matchesCat = true;
+    if (selectedCategory !== 'All') {
+      if (selectedCategory === 'Accessories') {
+        matchesCat = ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category);
+      } else if (selectedCategory === 'Mobile Phones') {
+        matchesCat = a.category === 'Mobile Phone';
+      } else if (selectedCategory === 'Other') {
+        matchesCat = ['Cleaning Kits', 'Others'].includes(a.category);
+      } else {
+        matchesCat = a.category === selectedCategory;
+      }
+    }
 
     const matchesStat = selectedStatus === 'All' || (
       selectedStatus === 'In Stock' ? (a.status || '').toLowerCase().includes('stock') :
@@ -354,14 +371,14 @@ export default function AssetRegistryPage() {
         </div>
       </div>
 
-      {/* CATEGORY TABS */}
+      {/* CATEGORY TABS (Grouped for clean display) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
         {[
           { name: 'All', icon: <Package size={14}/> },
           { name: 'Laptop', icon: <Laptop size={14}/> },
-          { name: 'Mouse', icon: <Mouse size={14}/> },
-          { name: 'Keyboard', icon: <Keyboard size={14}/> },
+          { name: 'Accessories', icon: <Mouse size={14}/> },
           { name: 'Headphone', icon: <Headphones size={14}/> },
+          { name: 'Mobile Phones', icon: <Smartphone size={14}/> },
           { name: 'Other', icon: <SlidersHorizontal size={14}/> },
         ].map(cat => (
           <button
@@ -451,7 +468,18 @@ export default function AssetRegistryPage() {
                       }} 
                       className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none cursor-pointer"
                     >
-                      <option value="Laptop">Laptop</option><option value="Headphone">Headphone</option><option value="Mouse">Mouse</option><option value="Keyboard">Keyboard</option><option value="Monitor">Monitor</option>
+                      {/* 🚀 EXPANDED CATEGORY LIST */}
+                      <option value="Laptop">Laptop</option>
+                      <option value="Keyboard">Keyboard</option>
+                      <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
+                      <option value="Mouse USB">Mouse USB</option>
+                      <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
+                      <option value="Headphone">Headphone</option>
+                      <option value="Cleaning Kits">Cleaning Kits</option>
+                      <option value="Mouse Pad">Mouse Pad</option>
+                      <option value="Stand">Stand</option>
+                      <option value="Mobile Phone">Mobile Phone</option>
+                      <option value="Others">Others</option>
                     </select>
                   </div>
                   <div>
@@ -482,7 +510,7 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🚀 VIEW & EDIT MODAL (RESTORED TO MATCH YOUR SCREENSHOT EXACTLY) */}
+      {/* VIEW & EDIT MODAL */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
@@ -499,9 +527,11 @@ export default function AssetRegistryPage() {
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-36 h-36 object-contain" />
                 </div>
 
-                <div className="bg-[#002B49] text-white py-2 px-6 rounded-xl shadow-md mb-2 w-full text-center truncate">
-                  <span className="text-sm font-mono font-black">{liveModalTag}</span>
+                {/* 🚀 UI CLEANUP: Removed dark background, using simple bold text */}
+                <div className="mb-1 w-full text-center truncate">
+                  <span className="text-xl font-mono font-black text-[#002B49] tracking-widest">{liveModalTag}</span>
                 </div>
+                
                 <p className="text-[10px] font-bold font-mono text-gray-500 mb-8">S/N: {editForm.serial || viewAssetModal.serial_number}</p>
 
                 <div className="flex w-full gap-2 mt-auto">
@@ -538,7 +568,6 @@ export default function AssetRegistryPage() {
                         <span className="text-xs font-mono font-bold text-blue-600">{liveModalTag}</span>
                       </div>
 
-                      {/* 🚀 RESTORED ROW 1: CATEGORY & LIVE ASSET TAG */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/40 p-3.5 rounded-2xl border border-blue-100">
                         <div>
                           <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Asset Category *</label>
@@ -551,7 +580,17 @@ export default function AssetRegistryPage() {
                             }}
                             className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none cursor-pointer shadow-2xs"
                           >
-                            <option value="Laptop">Laptop</option><option value="Headphone">Headphone</option><option value="Mouse">Mouse</option><option value="Keyboard">Keyboard</option><option value="Monitor">Monitor</option>
+                            <option value="Laptop">Laptop</option>
+                            <option value="Keyboard">Keyboard</option>
+                            <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
+                            <option value="Mouse USB">Mouse USB</option>
+                            <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
+                            <option value="Headphone">Headphone</option>
+                            <option value="Cleaning Kits">Cleaning Kits</option>
+                            <option value="Mouse Pad">Mouse Pad</option>
+                            <option value="Stand">Stand</option>
+                            <option value="Mobile Phone">Mobile Phone</option>
+                            <option value="Others">Others</option>
                           </select>
                         </div>
 
@@ -564,7 +603,6 @@ export default function AssetRegistryPage() {
                         </div>
                       </div>
 
-                      {/* 🚀 RESTORED ROW 2: FACTORY SERIAL NUMBER */}
                       <div>
                         <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Factory Serial Number (S/N) *</label>
                         <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 outline-none uppercase" />
