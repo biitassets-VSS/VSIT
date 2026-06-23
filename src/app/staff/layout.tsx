@@ -43,27 +43,30 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
+      // 🚀 THE FIX: Check for the custom local storage ticket created by the login page
+      const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+      
+      if (!sessionString) {
+        // No ticket found? Then they are an intruder. Kick them out.
+        router.replace('/login'); 
+        return; 
+      }
 
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      const profileName = userProfile?.full_name || userProfile?.name || 'Mohit Bahuguna';
-      const initials = profileName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+      // 🎟️ Parse the valid user ticket
+      const activeUser = JSON.parse(sessionString);
+      const profileName = activeUser.name || activeUser.full_name || 'Staff Member';
+      const initials = profileName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+      const userId = activeUser.id || String(Date.now());
 
       setStaffProfile({
-        id: user.id, 
+        id: userId, 
         name: profileName,
-        email: user.email || 'students_app05@outlook.com',
+        email: activeUser.email || 'staff@vsit.com',
         initials: initials
       });
       
       setIsCheckingAuth(false);
-      fetchNotifications(user.id);
+      fetchNotifications(userId);
 
       // 🌟 SECURE REAL-TIME SUBSCRIPTION
       const channel = supabase
@@ -72,7 +75,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           event: 'INSERT', 
           schema: 'public', 
           table: 'notifications',
-          filter: `target_user=eq.${user.id}` 
+          filter: `target_user=eq.${userId}` 
         }, (payload) => {
           setNotifications(current => [payload.new, ...current]);
         })
@@ -80,6 +83,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       return () => { supabase.removeChannel(channel); };
     };
+    
     verifyStaff();
   }, [router]);
 
