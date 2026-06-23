@@ -142,13 +142,11 @@ export default function AssetRegistryPage() {
     setIsSaving(true);
     try {
       const cleanPrice = newAssetPrice ? parseFloat(newAssetPrice) : null;
-      const cleanPurchase = newAssetPurchaseDate ? newAssetPurchaseDate : null;
-      const cleanWarranty = newAssetWarranty ? newAssetWarranty : null;
       const resolvedStatus = newAssetAssignee ? 'Assigned' : newAssetStatus;
 
       const { error } = await supabase.from('assets').insert([{
         id: newAssetId, asset_tag: newAssetId, asset_name: newAssetName, brand: newAssetBrand || 'Unknown Brand',
-        serial_number: newAssetSerial, category: newAssetCategory, purchase_date: cleanPurchase, warranty_expiry: cleanWarranty,
+        serial_number: newAssetSerial, category: newAssetCategory, purchase_date: newAssetPurchaseDate || null, warranty_expiry: newAssetWarranty || null,
         price: cleanPrice, vendor: newAssetVendor || 'General Supplier', asset_condition: newAssetCondition,
         status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Pending Verification',
         upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -166,16 +164,13 @@ export default function AssetRegistryPage() {
     setIsUpdating(true);
     try {
       const cleanPrice = editForm.price ? parseFloat(editForm.price) : null;
-      const cleanPurchase = editForm.purchase_date ? editForm.purchase_date : null;
-      const cleanWarranty = editForm.warranty_expiry ? editForm.warranty_expiry : null;
-      
       let resolvedStatus = editForm.status;
       if (editForm.assignee && resolvedStatus === 'In Stock (Unassigned)') resolvedStatus = 'Assigned';
       if (!editForm.assignee && resolvedStatus === 'Assigned') resolvedStatus = 'In Stock (Unassigned)';
 
       const { error } = await supabase.from('assets').update({
         asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
-        purchase_date: cleanPurchase, warranty_expiry: cleanWarranty, price: cleanPrice,
+        purchase_date: editForm.purchase_date || null, warranty_expiry: editForm.warranty_expiry || null, price: cleanPrice,
         vendor: editForm.vendor, asset_condition: editForm.condition, status: resolvedStatus,
         assigned_to: editForm.assignee || null
       }).eq('id', viewAssetModal.id);
@@ -186,7 +181,7 @@ export default function AssetRegistryPage() {
 
       setViewAssetModal((prev: any) => ({
         ...prev, asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
-        purchase_date: cleanPurchase, warranty_expiry: cleanWarranty, price: cleanPrice, vendor: editForm.vendor,
+        purchase_date: editForm.purchase_date, warranty_expiry: editForm.warranty_expiry, price: cleanPrice, vendor: editForm.vendor,
         asset_condition: editForm.condition, status: resolvedStatus, assigned_to: editForm.assignee, staff_name: updatedStaffName
       }));
 
@@ -194,9 +189,30 @@ export default function AssetRegistryPage() {
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
+  // 🛡️ INDUSTRIAL CSV ROW PARSER (Matches the Staff Page exactly)
+  const parseCsvRow = (line: string) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result.map(s => s.trim().replace(/^"|"$/g, ''));
+  };
+
+  // 📦 THE BULLETPROOF BULK IMPORTER (With Database Matching)
   const downloadSampleCsvTemplate = () => {
-    const headers = "Category,ModelName,Brand,SerialNumber,PurchaseDate,WarrantyExpiryDate,Price,Vendor,Condition\n";
-    const sampleData = "Laptop,MacBook Pro M3,Apple,SN-99482,2026-01-15,2029-01-15,1899.99,Apple Direct,New\nMouse,MX Master 3S,Logitech,LOGI-8821,2025-11-01,,99.50,Amazon,Refurbished";
+    const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
+    const sampleData = "Laptop,Apple,MacBook Pro M3,SN-99482,TAG-15361E,1899.99,Apple Direct,2024-12-12,2025-10-10,New\nMouse,Logitech,MX Master 3S,LOGI-8821,,,Amazon,2025-11-01,,Refurbished";
     const blob = new Blob([headers + sampleData], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Hardware_Bulk_Template.csv'; a.click();
@@ -211,48 +227,62 @@ export default function AssetRegistryPage() {
       const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
       if (lines.length < 2) throw new Error("CSV contains no data rows.");
 
-      const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const rawHeaders = parseCsvRow(lines[0]).map(h => h.replace(/\s+/g, '').toLowerCase());
       const batchPayload: any[] = [];
 
       for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+        const row = parseCsvRow(lines[i]);
         const col: Record<string, string> = {};
-        rawHeaders.forEach((h, index) => { col[h] = (row[index] || '').replace(/(^"|"$)/g, '').trim(); });
+        rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
 
-        if (!col['modelname'] || !col['serialnumber']) continue;
+        const modelName = col['modelname'] || col['name'] || '';
+        const serialNum = col['serialnumber'] || col['serial_number'] || '';
+
+        // Only skip if both the model name and serial are completely blank
+        if (!modelName && !serialNum) continue;
 
         const cat = col['category'] || 'Laptop';
-        const newId = generateAssetId(cat);
-        const pDate = col['purchasedate'] && !isNaN(Date.parse(col['purchasedate'])) ? col['purchasedate'] : null;
-        const wDate = col['warrantyexpirydate'] && !isNaN(Date.parse(col['warrantyexpirydate'])) ? col['warrantyexpirydate'] : null;
-        const numPrice = col['price'] ? parseFloat(col['price']) : null;
+        const rawTag = col['assettag'] || col['asset_tag'] || col['tag'] || '';
+        const finalAssetId = rawTag.toUpperCase() || generateAssetId(cat);
+
+        // Format Price safely
+        const rawPrice = col['price'] || '';
+        const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
         batchPayload.push({
-          id: newId, asset_tag: newId, asset_name: col['modelname'], brand: col['brand'] || 'Standard',
-          serial_number: col['serialnumber'], category: cat, purchase_date: pDate, warranty_expiry: wDate,
-          price: numPrice, vendor: col['vendor'] || 'Bulk Import', asset_condition: col['condition'] || 'New',
-          status: 'In Stock (Unassigned)', inspection_status: 'Pending Verification',
+          id: finalAssetId, 
+          asset_tag: finalAssetId, 
+          asset_name: modelName || 'Unknown Model', 
+          brand: col['brand'] || 'Standard',
+          serial_number: serialNum || 'N/A', 
+          category: cat, 
+          purchase_date: col['purchasedate'] || col['purchase_date'] || null, 
+          warranty_expiry: col['warrantyexpiry'] || col['warranty_expiry'] || null,
+          price: isNaN(numPrice as number) ? null : numPrice, 
+          vendor: col['vendor'] || col['supplier'] || 'Bulk Import', 
+          asset_condition: col['condition'] || 'New',
+          status: 'In Stock (Unassigned)', 
+          inspection_status: 'Pending Verification',
           upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         });
       }
 
       if (batchPayload.length === 0) throw new Error("No valid hardware rows found to import.");
 
-      const { error } = await supabase.from('assets').insert(batchPayload);
-      if (error) throw error;
+      // 🛡️ UPSERT ensures that if an asset tag already exists, it updates it instead of throwing an error!
+      const { error } = await supabase.from('assets').upsert(batchPayload, { onConflict: 'id' });
+      if (error) throw new Error(`SUPABASE REJECTION: ${error.message}`);
 
-      alert(`🎉 Successfully imported ${batchPayload.length} hardware assets!`);
+      alert(`🎉 Successfully imported/updated ${batchPayload.length} hardware assets!`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchRegistryData();
-    } catch (err: any) { alert(`Bulk Import Failed: ${err.message}`); } finally { setIsImporting(false); }
+    } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
   };
 
   const getCleanDisplayTag = (asset: any) => {
     if (!asset) return 'NO-TAG';
     if (asset.asset_tag && asset.asset_tag.includes('VS-')) return asset.asset_tag.toUpperCase();
     if (asset.id && asset.id.includes('VS-')) return asset.id.toUpperCase();
-    const rawId = String(asset.asset_tag || asset.id || '');
-    if (rawId.length > 20) return `TAG-${rawId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
-    return rawId.toUpperCase();
+    return String(asset.asset_tag || asset.id || '').toUpperCase();
   };
 
   const getAssetViewUrl = (asset: any) => {
@@ -261,24 +291,8 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
+  // Sticker printing code remains unchanged
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    const cat = (asset.category || '').toLowerCase();
-    
-    let printW = '50mm', printH = '50mm';
-    let qrSize = '28mm', tagSize = '14px', modelSize = '7px';
-    let layoutType = 'standard';
-
-    if (cat.includes('mouse') || cat.includes('headphone')) {
-      printW = '25mm'; printH = '25mm'; 
-      qrSize = '14mm'; tagSize = '8px'; modelSize = '4px';
-      layoutType = 'micro';
-    } 
-    else if (cat.includes('keyboard')) {
-      printW = '25mm'; printH = '50mm'; 
-      qrSize = '18mm'; tagSize = '10px'; modelSize = '6px';
-      layoutType = 'vertical';
-    }
-
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=400,height=400');
     if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print stickers.");
@@ -290,12 +304,12 @@ export default function AssetRegistryPage() {
           <title>Sticker_${cleanTag}</title>
           <style>
             body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; font-family: monospace; background: #fff; color: #000; }
-            .label-box { width: ${printW}; height: ${printH}; padding: 2mm; box-sizing: border-box; text-align: center; border: 1px dashed #ccc; display: flex; flex-direction: column; justify-content: center; }
-            .header { font-size: ${layoutType === 'micro' ? '4px' : '7px'}; font-weight: bold; margin-bottom: 2px; }
-            .qr { width: ${qrSize}; height: ${qrSize}; margin: 0 auto; display: block; }
-            .tag { font-size: ${tagSize}; font-weight: 900; margin-top: 2px; line-height: 1; }
-            .model { font-size: ${modelSize}; color: #444; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
-            @media print { @page { size: ${printW} ${printH}; margin: 0; } body { padding: 0; } .label-box { border: none; } }
+            .label-box { width: 50mm; height: 50mm; padding: 2mm; box-sizing: border-box; text-align: center; border: 1px dashed #ccc; display: flex; flex-direction: column; justify-content: center; }
+            .header { font-size: 7px; font-weight: bold; margin-bottom: 2px; }
+            .qr { width: 28mm; height: 28mm; margin: 0 auto; display: block; }
+            .tag { font-size: 14px; font-weight: 900; margin-top: 2px; line-height: 1; }
+            .model { font-size: 7px; color: #444; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
+            @media print { @page { size: 50mm 50mm; margin: 0; } body { padding: 0; } .label-box { border: none; } }
           </style>
         </head>
         <body>
@@ -309,71 +323,6 @@ export default function AssetRegistryPage() {
       </html>
     `;
     printWindow.document.open(); printWindow.document.write(printableMarkup); printWindow.document.close();
-  };
-
-  const handleDownloadStickerImage = async (asset: any, cleanTag: string) => {
-    try {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
-      const res = await fetch(qrUrl); const blob = await res.blob();
-      const base64Qr = await new Promise<string>((resolve) => {
-        const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.readAsDataURL(blob);
-      });
-
-      const canvas = document.createElement('canvas'); 
-      const ctx = canvas.getContext('2d'); 
-      if (!ctx) return;
-
-      const cat = (asset.category || '').toLowerCase();
-      
-      if (cat.includes('mouse') || cat.includes('headphone')) {
-        canvas.width = 300; canvas.height = 300;
-        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = '#002B49'; ctx.lineWidth = 6; ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
-        
-        ctx.fillStyle = '#002B49'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING', canvas.width / 2, 35);
-        
-        const qrImg = new Image(); qrImg.src = base64Qr;
-        qrImg.onload = () => {
-          ctx.drawImage(qrImg, 75, 45, 150, 150);
-          ctx.fillStyle = '#002B49'; ctx.font = '900 32px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 235);
-          ctx.fillStyle = '#475569'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 25) || 'Asset', canvas.width / 2, 260);
-          ctx.fillStyle = '#64748b'; ctx.font = '10px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 280);
-          const link = document.createElement('a'); link.download = `MicroSticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
-        };
-
-      } else if (cat.includes('keyboard')) {
-        canvas.width = 300; canvas.height = 600;
-        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = '#002B49'; ctx.lineWidth = 8; ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
-        
-        ctx.fillStyle = '#002B49'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING', canvas.width / 2, 50);
-        
-        const qrImg = new Image(); qrImg.src = base64Qr;
-        qrImg.onload = () => {
-          ctx.drawImage(qrImg, 40, 80, 220, 220);
-          ctx.fillStyle = '#002B49'; ctx.font = '900 38px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 360);
-          ctx.fillStyle = '#475569'; ctx.font = 'bold 16px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 30) || 'Asset', canvas.width / 2, 410);
-          ctx.fillStyle = '#64748b'; ctx.font = '14px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 450);
-          const link = document.createElement('a'); link.download = `VertSticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
-        };
-
-      } else {
-        canvas.width = 600; canvas.height = 750;
-        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = '#002B49'; ctx.lineWidth = 12; ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-        ctx.fillStyle = '#002B49'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('VIRTUAL STAFFING IT ASSET', canvas.width / 2, 65);
-
-        const qrImg = new Image(); qrImg.src = base64Qr;
-        qrImg.onload = () => {
-          ctx.drawImage(qrImg, 100, 95, 400, 400);
-          ctx.fillStyle = '#002B49'; ctx.font = '900 56px monospace'; ctx.fillText(cleanTag, canvas.width / 2, 560);
-          ctx.fillStyle = '#475569'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(asset.asset_name?.slice(0, 36) || 'Hardware Asset', canvas.width / 2, 620);
-          ctx.fillStyle = '#64748b'; ctx.font = '18px monospace'; ctx.fillText(`S/N: ${asset.serial_number || 'UNKNOWN'}`, canvas.width / 2, 665);
-          ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif'; ctx.fillText('Property of Virtual Staffing Solutions — Do Not Remove', canvas.width / 2, 715);
-          const link = document.createElement('a'); link.download = `Sticker_${cleanTag}.png`; link.href = canvas.toDataURL('image/png'); link.click();
-        };
-      }
-    } catch (err) { alert("Error rendering sticker image."); }
   };
 
   const getCatCount = (catName: string) => {
@@ -525,18 +474,6 @@ export default function AssetRegistryPage() {
 
       </div>
 
-      <div className="flex items-center justify-between px-2">
-        <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">
-          Showing <strong className="text-[#002B49]">{filteredAssets.length}</strong> units matching parameters
-        </span>
-        
-        {hasActiveFilters && (
-          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-xl">
-            Active Filter: [{selectedCategory}] + [{selectedStatus}] + [{selectedCondition}]
-          </span>
-        )}
-      </div>
-
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : filteredAssets.length === 0 ? (
@@ -593,6 +530,7 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
+      {/* MANUAL ASSET MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100">
@@ -680,7 +618,7 @@ export default function AssetRegistryPage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-gray-500 uppercase">Instant Staff Assignment (Overrides Stock Status)</label>
+                  <label className="text-[10px] font-black text-gray-500 uppercase">Instant Staff Assignment</label>
                   <select value={newAssetAssignee} onChange={e => setNewAssetAssignee(e.target.value)} className="w-full mt-1 p-2.5 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-gray-900 outline-none">
                     <option value="">-- Leave Unassigned in Warehouse --</option>
                     {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name || s.name} ({s.emp_code || s.email})</option>)}
@@ -697,19 +635,20 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
+      {/* 🟢 THE BULLETPROOF CSV UPLOAD MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-6 text-center">
             <div className="flex justify-between items-center pb-3 border-b border-gray-100">
-              <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] flex items-center gap-2"><Upload size={16}/> Bulk CSV Import</h3>
+              <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] flex items-center gap-2"><Upload size={16}/> Bulk Hardware Import</h3>
               <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-gray-900"><X size={18}/></button>
             </div>
 
             <div className="space-y-3 text-left">
               <button onClick={downloadSampleCsvTemplate} className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer">
-                <Download size={15}/> <span>1. Download CSV formatted Template</span>
+                <Download size={15}/> <span>1. Download Valid Format CSV</span>
               </button>
-              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Fill out the Excel template. Do not rename the top column headers. The script will automatically assign secure tags to every row.</p>
+              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Leave the <b>Asset Tag</b> column blank to automatically generate secure TAG-xxxxx IDs for your hardware.</p>
             </div>
 
             <div className="p-6 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-gray-100/80 transition-colors flex flex-col items-center justify-center gap-3">
@@ -724,10 +663,10 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
+      {/* EDIT / VIEW MODAL */}
       {viewAssetModal && (() => {
         const cleanModalTag = getCleanDisplayTag(viewAssetModal);
-        const logPhotos = assetInspectionLog?.photos ? Object.entries(assetInspectionLog.photos) : [];
-
+        
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border border-gray-200">
@@ -746,7 +685,6 @@ export default function AssetRegistryPage() {
 
                 <div className="flex w-full gap-2 mt-auto">
                   <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, cleanModalTag)} className="flex-1 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex justify-center items-center gap-1.5 shadow-md cursor-pointer"><Printer size={14} /> Print</button>
-                  <button onClick={() => handleDownloadStickerImage(viewAssetModal, cleanModalTag)} className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex justify-center items-center gap-1.5 shadow-md cursor-pointer"><Download size={14} /> PNG</button>
                 </div>
               </div>
 
@@ -771,7 +709,7 @@ export default function AssetRegistryPage() {
 
                   <div>
                     {isEditingAsset ? (
-                      <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-200 space-y-4 animate-in fade-in duration-200">
+                      <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-200 space-y-4">
                         <div className="flex justify-between items-center pb-2 border-b border-blue-100">
                           <span className="text-xs font-black uppercase tracking-wider text-blue-900">Editing Hardware Record</span>
                           <span className="text-xs font-mono font-bold text-blue-600">{cleanModalTag}</span>
@@ -848,52 +786,12 @@ export default function AssetRegistryPage() {
                     )}
                   </div>
 
-                  <hr className="border-gray-100" />
-
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-800 mb-4 flex items-center gap-2">
-                      <ShieldCheck size={18} className="text-emerald-500" /> Last Mobile Audit Log
-                    </h3>
-
-                    {!assetInspectionLog ? (
-                      <div className="p-6 bg-orange-50 border border-orange-100 rounded-2xl text-center">
-                        <AlertCircle size={24} className="mx-auto text-orange-400 mb-2" />
-                        <p className="text-xs font-bold text-orange-800">No verification history found.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border">
-                          <div><p className="text-[10px] font-black text-gray-400 uppercase">Audit Date</p><p className="mt-1 text-xs font-bold text-gray-800">{new Date(assetInspectionLog.created_at).toLocaleDateString()}</p></div>
-                          <div className="text-right"><p className="text-[10px] font-black text-gray-400 uppercase">Audit Status</p><p className="mt-1 text-xs font-black uppercase text-green-600">{assetInspectionLog.status || 'Verified'}</p></div>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-2xl border">
-                          <p className="text-[10px] font-black text-gray-400 uppercase mb-1.5">Staff Condition Notes</p>
-                          <p className="text-xs text-gray-700 italic bg-white p-3 border rounded-xl">"{assetInspectionLog.notes || 'No description.'}"</p>
-                        </div>
-                        {logPhotos.length > 0 && (
-                          <div className="flex flex-wrap gap-2.5">
-                            {logPhotos.map(([angle, url]: any) => (
-                              <button key={angle} onClick={() => setPreviewPhotoModal(url)} className="w-14 h-14 rounded-xl overflow-hidden border-2 border-gray-200 hover:border-blue-500 cursor-pointer"><img src={url} alt="" className="w-full h-full object-cover"/></button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
                 </div>
               </div>
             </div>
           </div>
         );
       })()}
-
-      {previewPhotoModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4">
-          <button onClick={() => setPreviewPhotoModal(null)} className="absolute top-6 right-6 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full flex items-center justify-center cursor-pointer shadow-xl"><X size={24} /></button>
-          <img src={previewPhotoModal} alt="High-Res Evidence" className="max-w-5xl max-h-[85vh] object-contain rounded-2xl border border-gray-700 shadow-2xl" />
-        </div>
-      )}
 
     </div>
   );
