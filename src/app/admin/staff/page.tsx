@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Search, Users, Mail, Hash, Shield, 
   UserCheck, PlusCircle, Upload, Download, FileSpreadsheet, 
-  X, RefreshCw, Save, Building, Phone, Power, Edit2, Package, CalendarDays
+  X, RefreshCw, Save, Building, Phone, Power, Edit2, Package, CalendarDays, Lock, KeyRound
 } from 'lucide-react';
 
 export default function AdminStaffDirectoryPage() {
@@ -19,10 +19,10 @@ export default function AdminStaffDirectoryPage() {
   const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
-  // Form State
+  // Form State (Now includes password!)
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({
-    id: '', full_name: '', email: '', emp_code: '', 
+    id: '', full_name: '', email: '', password: '', emp_code: '', 
     role: 'Staff Member', department: 'General', phone: '', 
     dob: '', joining_date: '', status: 'Active'
   });
@@ -59,7 +59,7 @@ export default function AdminStaffDirectoryPage() {
 
   const handleOpenAdd = () => {
     setIsEditing(false);
-    setFormData({ id: '', full_name: '', email: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', dob: '', joining_date: '', status: 'Active' });
+    setFormData({ id: '', full_name: '', email: '', password: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', dob: '', joining_date: '', status: 'Active' });
     setIsDossierModalOpen(true);
   };
 
@@ -67,8 +67,9 @@ export default function AdminStaffDirectoryPage() {
     setIsEditing(true);
     setFormData({
       id: user.id, full_name: user.full_name || user.name || '', email: user.email || '',
-      emp_code: user.emp_code || '', role: user.role || 'Staff Member', department: user.department || 'General',
-      phone: user.phone || '', dob: user.dob || '', joining_date: user.joining_date || '', status: user.status || 'Active'
+      password: user.password || '', emp_code: user.emp_code || '', role: user.role || 'Staff Member', 
+      department: user.department || 'General', phone: user.phone || '', dob: user.dob || '', 
+      joining_date: user.joining_date || '', status: user.status || 'Active'
     });
     setIsDossierModalOpen(true);
   };
@@ -79,7 +80,7 @@ export default function AdminStaffDirectoryPage() {
 
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         full_name: formData.full_name,
         email: formData.email.toLowerCase().trim(),
         emp_code: formData.emp_code.toUpperCase().trim() || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -91,6 +92,13 @@ export default function AdminStaffDirectoryPage() {
         status: formData.status
       };
 
+      // Ensure a password is saved! If left blank on a new hire, fallback to 'vsit1234'
+      if (formData.password) {
+        payload.password = formData.password.trim();
+      } else if (!isEditing) {
+        payload.password = 'vsit1234'; 
+      }
+
       if (isEditing) {
         const { error } = await supabase.from('profiles').update(payload).eq('id', formData.id);
         if (error) throw error;
@@ -99,7 +107,7 @@ export default function AdminStaffDirectoryPage() {
         const { error } = await supabase.from('profiles').insert([{ ...payload, id: generateSafeUuid() }]);
         if (error?.code === '23505') throw new Error(`The email address ${payload.email} is already registered to another employee.`);
         if (error) throw error;
-        alert(`New employee ${formData.full_name} activated!`);
+        alert(`New employee ${formData.full_name} activated with password: ${payload.password}`);
       }
 
       setIsDossierModalOpen(false); fetchStaff();
@@ -117,7 +125,6 @@ export default function AdminStaffDirectoryPage() {
     } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
   };
 
-  // 🛡️ INDUSTRIAL CSV ROW PARSER (Fixes shifting columns and missing names)
   const parseCsvRow = (line: string) => {
     const result = [];
     let current = '';
@@ -137,15 +144,16 @@ export default function AdminStaffDirectoryPage() {
     return result.map(s => s.trim().replace(/^"|"$/g, ''));
   };
 
-  // 📦 THE BULLETPROOF BULK IMPORTER
+  // 📦 THE UPDATED TEMPLATE (Now has Password column!)
   const downloadStaffCsvTemplate = () => {
-    const headers = "FullName,Email,EmpCode,Role,Department,Phone,DOB,JoiningDate\n";
-    const sample = "Alexander Vance,a.vance@company.com,,Senior Developer,Engineering,+1-555-0192,1990-05-15,2024-01-10\nSamantha Traylor,s.traylor@company.com,,Logistics Officer,Warehouse,,1995-10-22,2025-06-01";
+    const headers = "FullName,Email,Password,EmpCode,Role,Department,Phone,DOB,JoiningDate\n";
+    const sample = "Alexander Vance,a.vance@company.com,SecurePass123!,,Senior Developer,Engineering,+1-555-0192,1990-05-15,2024-01-10\nSamantha Traylor,s.traylor@company.com,Warehouse99!,,Logistics Officer,Warehouse,,1995-10-22,2025-06-01";
     const blob = new Blob([headers + sample], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
   };
 
+  // 🚀 THE INTELLIGENT DATA MERGE ENGINE (Patches missing CSV data)
   const executeStaffBulkImport = async () => {
     if (!bulkFile) return alert("Please select a CSV file.");
     setIsImporting(true);
@@ -155,14 +163,20 @@ export default function AdminStaffDirectoryPage() {
       const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
       if (lines.length < 2) throw new Error("CSV file contains headers but zero rows.");
 
-      const { data: registeredUsers, error: fetchErr } = await supabase.from('profiles').select('email');
-      if (fetchErr) throw new Error(`Could not query existing emails: ${fetchErr.message}`);
+      // 1. Fetch entire database user objects to use as our merge base
+      const { data: existingProfiles, error: fetchErr } = await supabase.from('profiles').select('*');
+      if (fetchErr) throw fetchErr;
 
-      const existingEmailSet = new Set((registeredUsers || []).map(u => (u.email || '').toLowerCase().trim()));
+      const profileDbMap = new Map();
+      (existingProfiles || []).forEach(p => {
+        if (p.email) profileDbMap.set(p.email.toLowerCase().trim(), p);
+      });
+
       const rawHeaders = parseCsvRow(lines[0]).map(h => h.toLowerCase());
       
-      const genuinelyNewStaff: any[] = [];
-      let skippedCount = 0;
+      const newHiresToInsert: any[] = [];
+      const existingToPatch: any[] = [];
+      let patchedCount = 0;
 
       for (let i = 1; i < lines.length; i++) {
         const row = parseCsvRow(lines[i]);
@@ -175,40 +189,61 @@ export default function AdminStaffDirectoryPage() {
 
         if (!cleanEmail || !name) continue;
 
-        if (existingEmailSet.has(cleanEmail)) {
-          skippedCount++;
-          continue;
-        }
-
+        const pass = col['password'] || col['pass'] || '';
         const rawCode = col['empcode'] || col['emp_code'] || '';
         const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        genuinelyNewStaff.push({
-          id: generateSafeUuid(),
-          full_name: name,
-          email: cleanEmail,
-          emp_code: empCode,
-          role: col['role'] || col['jobtitle'] || 'Staff Member',
-          department: col['department'] || col['dept'] || 'General',
-          phone: col['phone'] || col['mobile'] || 'N/A',
-          dob: col['dob'] || col['dateofbirth'] || null,
-          joining_date: col['joiningdate'] || col['joining_date'] || null,
-          status: 'Active',
-          created_at: new Date().toISOString()
-        });
+        const existingDbUser = profileDbMap.get(cleanEmail);
 
-        existingEmailSet.add(cleanEmail);
+        if (existingDbUser) {
+          // 🚀 IT'S A MERGE PATCH!
+          // Rule: If CSV column has text, update it. If CSV column is empty, KEEP the DB's existing data!
+          patchedCount++;
+          existingToPatch.push({
+            id: existingDbUser.id, // Strictly lock to their hard Primary Key!
+            email: existingDbUser.email,
+            full_name: name || existingDbUser.full_name,
+            password: pass || existingDbUser.password || 'vsit1234',
+            emp_code: rawCode ? rawCode.toUpperCase() : existingDbUser.emp_code,
+            role: col['role'] || col['jobtitle'] || existingDbUser.role,
+            department: col['department'] || col['dept'] || existingDbUser.department,
+            phone: col['phone'] || col['mobile'] || existingDbUser.phone,
+            dob: col['dob'] || col['dateofbirth'] || existingDbUser.dob,
+            joining_date: col['joiningdate'] || col['joining_date'] || existingDbUser.joining_date,
+            status: existingDbUser.status
+          });
+        } else {
+          // 🚀 IT'S A BRAND NEW HIRE!
+          newHiresToInsert.push({
+            id: generateSafeUuid(),
+            full_name: name,
+            email: cleanEmail,
+            password: pass || 'vsit1234', // Fallback safety password
+            emp_code: empCode,
+            role: col['role'] || col['jobtitle'] || 'Staff Member',
+            department: col['department'] || col['dept'] || 'General',
+            phone: col['phone'] || col['mobile'] || 'N/A',
+            dob: col['dob'] || col['dateofbirth'] || null,
+            joining_date: col['joiningdate'] || col['joining_date'] || null,
+            status: 'Active',
+            created_at: new Date().toISOString()
+          });
+          profileDbMap.set(cleanEmail, { id: 'temp', email: cleanEmail }); // prevent internal CSV duplicates
+        }
       }
 
-      if (genuinelyNewStaff.length === 0) {
-        setIsBulkModalOpen(false); setBulkFile(null);
-        return alert(`⚠️ Notice: All ${skippedCount} emails in this CSV were already registered in your directory. No new profiles were added.`);
+      // Execute SQL Batches separately
+      if (newHiresToInsert.length > 0) {
+        const { error: err1 } = await supabase.from('profiles').insert(newHiresToInsert);
+        if (err1) throw err1;
       }
 
-      const { error: insertErr } = await supabase.from('profiles').insert(genuinelyNewStaff);
-      if (insertErr) throw insertErr;
+      if (existingToPatch.length > 0) {
+        const { error: err2 } = await supabase.from('profiles').upsert(existingToPatch, { onConflict: 'id' });
+        if (err2) throw err2;
+      }
 
-      alert(`🎉 SUCCESS! Added ${genuinelyNewStaff.length} new employee profiles.\n(Safely skipped ${skippedCount} existing duplicate records).`);
+      alert(`🎉 BATCH FINISHED!\n\n• Created ${newHiresToInsert.length} brand new staff profiles.\n• Successfully updated/patched missing fields for ${patchedCount} existing employees.`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchStaff();
 
     } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
@@ -236,7 +271,7 @@ export default function AdminStaffDirectoryPage() {
                 {staff.length} Active Profiles
               </span>
             </div>
-            <p className="text-xs text-gray-400 font-bold mt-0.5">Manage employee details, hardware holders, and network access limits</p>
+            <p className="text-xs text-gray-400 font-bold mt-0.5">Manage employee details, login passwords, and hardware assignment</p>
           </div>
         </div>
 
@@ -305,7 +340,7 @@ export default function AdminStaffDirectoryPage() {
                     </button>
                   </div>
 
-                  <div className={`space-y-2 p-3.5 rounded-2xl border text-xs ${isActive ? 'bg-gray-50 border-gray-100/80' : 'bg-white border-rose-100/50 opacity-70'}`}>
+                  <div className={`space-y-2.5 p-3.5 rounded-2xl border text-xs ${isActive ? 'bg-gray-50 border-gray-100/80' : 'bg-white border-rose-100/50 opacity-70'}`}>
                     <div className="flex items-center gap-2 text-gray-700 font-mono font-bold">
                       <Hash size={13} className="text-blue-500 shrink-0" />
                       <span>{user.emp_code || 'NO-EMP-CODE'}</span>
@@ -317,12 +352,13 @@ export default function AdminStaffDirectoryPage() {
                       <span className="truncate">{user.email}</span>
                     </div>
 
-                    {user.phone && user.phone !== 'N/A' && (
-                      <div className="flex items-center gap-2 text-gray-500 text-[11px]">
-                        <Phone size={12} className="text-gray-400 shrink-0" />
-                        <span>{user.phone}</span>
-                      </div>
-                    )}
+                    {/* 🔑 ADMIN "SUPER-VISION" PASSWORD WARNING BADGE */}
+                    <div className="flex items-center justify-between pt-1 border-t border-gray-200/50 text-[11px] text-gray-500">
+                      <span className="flex items-center gap-1"><KeyRound size={11} className="text-amber-500"/> Login Auth:</span>
+                      <span className={`font-mono font-black text-[10px] px-2 py-0.5 rounded ${user.password ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700 animate-pulse'}`}>
+                        {user.password ? '•••••••• (Valid)' : '⚠️ MISSING PASSWORD'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -368,7 +404,7 @@ export default function AdminStaffDirectoryPage() {
             <form onSubmit={handleSaveDossier} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
               
               <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 space-y-4">
-                <span className="text-[10px] font-black uppercase tracking-widest text-blue-800 block">1. Employee Identity</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-800 block">1. Employee Identity & Auth</span>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -381,10 +417,11 @@ export default function AdminStaffDirectoryPage() {
                   </div>
                 </div>
 
+                {/* 🚀 PASSWORD FIELD RESTORED TO MODAL! */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Employee ID / Code</label>
-                    <input type="text" placeholder="e.g. EMP-1042 (Auto-generates if blank)" value={formData.emp_code} onChange={e => setFormData({...formData, emp_code: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-blue-500" />
+                    <label className="text-[10px] font-black text-amber-600 uppercase flex items-center gap-1 mb-1"><Lock size={12}/> Portal Login Password *</label>
+                    <input type="text" required={!isEditing} placeholder={isEditing ? "Type to overwrite password" : "e.g. SecurePass#2026"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-3 bg-amber-50/30 border border-amber-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-amber-500 text-amber-900" />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Contact Phone</label>
@@ -392,14 +429,17 @@ export default function AdminStaffDirectoryPage() {
                   </div>
                 </div>
 
-                {/* 🚀 NEW DATE FIELDS ADDED BACK! */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-blue-100/50">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-blue-100/50">
                   <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1.5 mb-1"><CalendarDays size={12}/> Date of Birth</label>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Employee Code</label>
+                    <input type="text" placeholder="EMP-xxxx" value={formData.emp_code} onChange={e => setFormData({...formData, emp_code: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1 mb-1"><CalendarDays size={12}/> Date of Birth</label>
                     <input type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1.5 mb-1"><CalendarDays size={12}/> Joining Date</label>
+                    <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1 mb-1"><CalendarDays size={12}/> Joining Date</label>
                     <input type="date" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
                   </div>
                 </div>
@@ -434,9 +474,6 @@ export default function AdminStaffDirectoryPage() {
                     <option value="Active">🟢 Account is Active (Normal Access)</option>
                     <option value="Disabled">🔴 Account Disabled (Login Revoked)</option>
                   </select>
-                  {formData.status === 'Disabled' && (
-                    <p className="text-[10px] font-bold text-rose-600 mt-2 flex items-center gap-1"><Shield size={12}/> Disabling this account revokes their ability to log into the staff portal.</p>
-                  )}
                 </div>
               </div>
 
@@ -465,7 +502,7 @@ export default function AdminStaffDirectoryPage() {
               <button onClick={downloadStaffCsvTemplate} className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer">
                 <Download size={15}/> <span>1. Download Staff CSV Template</span>
               </button>
-              <p className="text-[11px] text-gray-500 font-medium leading-relaxed pl-1">Fill out the template. If an Employee Code is left blank, the script will automatically assign a secure `EMP-xxxx` tag to the user.</p>
+              <p className="text-[11px] text-gray-500 font-medium leading-relaxed pl-1">Notice: Column 3 is now `Password`. If you upload an existing staff member to add a missing phone number, it will keep their old password safe.</p>
             </div>
 
             <div className="p-6 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-gray-100/80 transition-colors flex flex-col items-center justify-center gap-3">
