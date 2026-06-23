@@ -222,13 +222,10 @@ export default function AssetRegistryPage() {
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
-  // ==========================================
-  // 🟢 BRUTE-FORCE BULK CSV PARSER
-  // ==========================================
   const downloadSampleCsvTemplate = () => {
     const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
-    const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
-    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,Amazon Business,2025-02-15,,New\n';
+    const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
+    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,45.99,Amazon Business,2025-02-15,,New\n';
     const row3 = 'Headphone,Jabra,Evolve2 65,JAB-9941,,180.00,B&H Photo,2025-01-01,,Refurbished\n';
     const row4 = '"Mobile Phone",Samsung,Galaxy S24 Ultra,SMSG-7721,,,Samsung Enterprise,2025-03-01,2027-03-01,New';
     
@@ -243,16 +240,18 @@ export default function AssetRegistryPage() {
     setIsImporting(true);
 
     try {
-      const text = await bulkFile.text();
+      // 🚀 NEW: File Permission Error Catcher
+      let text = '';
+      try {
+        text = await bulkFile.text();
+      } catch (readError) {
+        throw new Error("Could not read file. Excel has locked it! Please close the CSV in Excel, re-select the file using the 'Choose File' button, and try again.");
+      }
       
-      // 1. BOM KILLER: Strips invisible Excel characters
       const cleanText = text.replace(/^\uFEFF/, '');
-      
-      // Split safely and completely remove any row that is fully empty or just commas (,,,,,)
       const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.replace(/,/g, '').trim().length > 0);
       if (lines.length < 2) throw new Error("File appears to be completely empty.");
 
-      // 2. AUTO-DETECT DELIMITER (Handles European Excel saves that use semicolons)
       const delimiter = lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
 
       const parseRow = (line: string) => {
@@ -274,11 +273,8 @@ export default function AssetRegistryPage() {
 
       for (let i = 1; i < lines.length; i++) {
         const row = parseRow(lines[i]);
-        
-        // Final safety check: if the parsed row is totally empty, skip it.
         if (row.join('').trim() === '') continue;
 
-        // 3. AGGRESSIVE VALUE EXTRACTOR: Tries to find the header. If Excel destroyed the header, it uses the hard-coded column number (0, 1, 2...).
         const getVal = (keywords: string[], colIndex: number) => {
           const key = rawHeaders.find(h => keywords.some(kw => h.includes(kw)));
           if (key) {
@@ -292,7 +288,6 @@ export default function AssetRegistryPage() {
         const brandName = getVal(['brand', 'make'], 1) || 'Unknown Brand';
         const modelName = getVal(['model', 'name'], 2) || 'Standard Asset';
         
-        // If Serial Number is missing, force a fake one so the database accepts it.
         let serialNum = getVal(['serial', 'sn'], 3);
         if (!serialNum) serialNum = `SN-MISSING-${Math.floor(Math.random() * 9999)}`;
 
@@ -321,7 +316,6 @@ export default function AssetRegistryPage() {
 
       if (batchPayload.length === 0) throw new Error("Could not parse rows. Please download the sample CSV and paste your data directly into it without changing headers.");
 
-      // 4. THE FORCED INJECTION
       const { error } = await supabase.from('assets').insert(batchPayload);
       if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
 
@@ -668,124 +662,4 @@ export default function AssetRegistryPage() {
                   <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Logistics State:</span>
-                      <span className={`px-3 py-1 rounded-lg font-black text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                    </div>
-
-                    {!isEditingAsset && (
-                      <button onClick={() => setIsEditingAsset(true)} className="px-4 py-2 bg-[#002B49] text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer ml-auto">
-                        <Edit2 size={13} /> Edit Hardware Record
-                      </button>
-                    )}
-                  </div>
-
-                  {isEditingAsset ? (
-                    <div className="space-y-5 animate-in fade-in duration-200">
-                      
-                      <div className="flex justify-between items-center pb-2 border-b border-blue-100">
-                        <span className="text-xs font-black uppercase tracking-wider text-blue-900">Editing Hardware Record</span>
-                        <span className="text-xs font-mono font-bold text-blue-600">{liveModalTag}</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/40 p-3.5 rounded-2xl border border-blue-100">
-                        <div>
-                          <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Asset Category *</label>
-                          <select 
-                            value={editForm.category} 
-                            onChange={e => {
-                              const newCat = e.target.value;
-                              const newPrefixTag = generateCategoryPrefix(newCat);
-                              setEditForm({ ...editForm, category: newCat, asset_tag: newPrefixTag });
-                            }}
-                            className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none cursor-pointer shadow-2xs"
-                          >
-                            <option value="Laptop">Laptop</option>
-                            <option value="Keyboard">Keyboard</option>
-                            <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
-                            <option value="Mouse USB">Mouse USB</option>
-                            <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
-                            <option value="Headphone">Headphone</option>
-                            <option value="Cleaning Kits">Cleaning Kits</option>
-                            <option value="Mouse Pad">Mouse Pad</option>
-                            <option value="Stand">Stand</option>
-                            <option value="Mobile Phone">Mobile Phone</option>
-                            <option value="Others">Others</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-black text-blue-700 uppercase flex justify-between mb-1">
-                            <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase text-blue-500 hover:underline cursor-pointer">(generate)</button>
-                          </label>
-                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none shadow-2xs uppercase" />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Factory Serial Number (S/N) *</label>
-                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 outline-none uppercase" />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
-                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Model Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Price ($ USD)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-mono font-bold outline-none" /></div>
-                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Vendor</label><input type="text" value={editForm.vendor} onChange={e => setEditForm({...editForm, vendor: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
-                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-2.5 border rounded-xl text-xs font-bold outline-none"><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-2.5 border rounded-xl text-xs font-black outline-none"><option value="In Stock (Unassigned)">📦 In Stock (Unassigned)</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo Use</option><option value="In Repair">⚠️ In Repair</option><option value="Discard">🗑️ Discarded</option></select></div>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Re-Assign to Staff</label>
-                        <select value={editForm.assignee} onChange={e => setEditForm({...editForm, assignee: e.target.value})} className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none">
-                          <option value="">-- Warehouse Inventory (Unassigned) --</option>
-                          {staffList.map(staff => <option key={staff.id} value={staff.id}>{staff.full_name || staff.name} ({staff.emp_code || staff.email})</option>)}
-                        </select>
-                      </div>
-
-                      <div className="flex gap-3 pt-4">
-                        <button type="button" onClick={() => setIsEditingAsset(false)} className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase cursor-pointer">Cancel</button>
-                        <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer">
-                          {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Updates
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-5">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <div className="bg-gray-50 p-3.5 rounded-2xl border"><p className="text-[9px] font-black text-gray-400 uppercase">Category</p><p className="text-xs font-black text-blue-600 mt-0.5">{viewAssetModal.category || 'Laptop'}</p></div>
-                        <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Serial Number (S/N)</p><p className="text-xs font-mono font-black text-gray-900 mt-0.5">{viewAssetModal.serial_number || 'N/A'}</p></div>
-                        <div className="bg-gray-50 p-3.5 rounded-2xl border"><p className="text-[9px] font-black text-gray-400 uppercase">Brand</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.brand || 'N/A'}</p></div>
-                        <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Model Name</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.asset_name}</p></div>
-                      </div>
-
-                      <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
-                        <div>
-                          <span className="text-[9px] font-black uppercase text-gray-400 block mb-0.5">Assigned Employee Holder:</span>
-                          <div className="flex items-center gap-2">
-                            <User size={15} className="text-blue-600"/>
-                            <span className="text-sm font-black text-gray-900">{viewAssetModal.staff_name}</span>
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono font-bold text-blue-900">{liveModalTag}</span>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
-
-    </div>
-  );
-}
+                      <span className={`px-3 py-1 rounded-lg font-black text-xs uppercase tracking
