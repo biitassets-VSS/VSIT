@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Search, Users, Mail, Hash, Shield, 
   UserCheck, PlusCircle, Upload, Download, FileSpreadsheet, 
-  X, RefreshCw, Save, Building, Phone, Power, Edit2, Package
+  X, RefreshCw, Save, Building, Phone, Power, Edit2, Package, CalendarDays
 } from 'lucide-react';
 
 export default function AdminStaffDirectoryPage() {
@@ -23,7 +23,8 @@ export default function AdminStaffDirectoryPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({
     id: '', full_name: '', email: '', emp_code: '', 
-    role: 'Staff Member', department: 'General', phone: '', status: 'Active'
+    role: 'Staff Member', department: 'General', phone: '', 
+    dob: '', joining_date: '', status: 'Active'
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -58,7 +59,7 @@ export default function AdminStaffDirectoryPage() {
 
   const handleOpenAdd = () => {
     setIsEditing(false);
-    setFormData({ id: '', full_name: '', email: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', status: 'Active' });
+    setFormData({ id: '', full_name: '', email: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', dob: '', joining_date: '', status: 'Active' });
     setIsDossierModalOpen(true);
   };
 
@@ -67,7 +68,7 @@ export default function AdminStaffDirectoryPage() {
     setFormData({
       id: user.id, full_name: user.full_name || user.name || '', email: user.email || '',
       emp_code: user.emp_code || '', role: user.role || 'Staff Member', department: user.department || 'General',
-      phone: user.phone || '', status: user.status || 'Active'
+      phone: user.phone || '', dob: user.dob || '', joining_date: user.joining_date || '', status: user.status || 'Active'
     });
     setIsDossierModalOpen(true);
   };
@@ -85,6 +86,8 @@ export default function AdminStaffDirectoryPage() {
         role: formData.role,
         department: formData.department,
         phone: formData.phone || 'Unrecorded',
+        dob: formData.dob || null,
+        joining_date: formData.joining_date || null,
         status: formData.status
       };
 
@@ -114,10 +117,30 @@ export default function AdminStaffDirectoryPage() {
     } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
   };
 
-  // 📦 THE BULLETPROOF JAVASCRIPT PRE-FILTER IMPORTER
+  // 🛡️ INDUSTRIAL CSV ROW PARSER (Fixes shifting columns and missing names)
+  const parseCsvRow = (line: string) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result.map(s => s.trim().replace(/^"|"$/g, ''));
+  };
+
+  // 📦 THE BULLETPROOF BULK IMPORTER
   const downloadStaffCsvTemplate = () => {
-    const headers = "FullName,Email,EmpCode,Role,Department,Phone\n";
-    const sample = "Alexander Vance,a.vance@company.com,EMP-901,Senior Developer,Engineering,+1-555-0192\nSamantha Traylor,s.traylor@company.com,EMP-902,Logistics Officer,Warehouse,+1-555-0144";
+    const headers = "FullName,Email,EmpCode,Role,Department,Phone,DOB,JoiningDate\n";
+    const sample = "Alexander Vance,a.vance@company.com,,Senior Developer,Engineering,+1-555-0192,1990-05-15,2024-01-10\nSamantha Traylor,s.traylor@company.com,,Logistics Officer,Warehouse,,1995-10-22,2025-06-01";
     const blob = new Blob([headers + sample], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
@@ -132,21 +155,19 @@ export default function AdminStaffDirectoryPage() {
       const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
       if (lines.length < 2) throw new Error("CSV file contains headers but zero rows.");
 
-      // 🛡️ STEP 1: FETCH EVERY SINGLE EXISTING EMAIL IN SUPABASE FIRST
       const { data: registeredUsers, error: fetchErr } = await supabase.from('profiles').select('email');
       if (fetchErr) throw new Error(`Could not query existing emails: ${fetchErr.message}`);
 
-      // Turn them into an instantly searchable hash-set
       const existingEmailSet = new Set((registeredUsers || []).map(u => (u.email || '').toLowerCase().trim()));
-
-      const rawHeaders = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const rawHeaders = parseCsvRow(lines[0]).map(h => h.toLowerCase());
+      
       const genuinelyNewStaff: any[] = [];
       let skippedCount = 0;
 
       for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+        const row = parseCsvRow(lines[i]);
         const col: Record<string, string> = {};
-        rawHeaders.forEach((h, idx) => { col[h] = (row[idx] || '').replace(/(^"|"$)/g, '').trim(); });
+        rawHeaders.forEach((h, idx) => { col[h] = row[idx] || ''; });
 
         const name = col['fullname'] || col['name'] || col['full_name'] || '';
         const rawEmail = col['email'] || col['emailaddress'] || col['e-mail'] || '';
@@ -154,35 +175,36 @@ export default function AdminStaffDirectoryPage() {
 
         if (!cleanEmail || !name) continue;
 
-        // 🛡️ STEP 2: THE FILTER SHIELD. If the database already owns this email, discard it instantly!
         if (existingEmailSet.has(cleanEmail)) {
           skippedCount++;
           continue;
         }
 
+        const rawCode = col['empcode'] || col['emp_code'] || '';
+        const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+
         genuinelyNewStaff.push({
           id: generateSafeUuid(),
           full_name: name,
           email: cleanEmail,
-          emp_code: (col['empcode'] || col['emp_code'] || `EMP-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase(),
+          emp_code: empCode,
           role: col['role'] || col['jobtitle'] || 'Staff Member',
           department: col['department'] || col['dept'] || 'General',
           phone: col['phone'] || col['mobile'] || 'N/A',
+          dob: col['dob'] || col['dateofbirth'] || null,
+          joining_date: col['joiningdate'] || col['joining_date'] || null,
           status: 'Active',
           created_at: new Date().toISOString()
         });
 
-        // Add it to our local tracking set instantly so the CSV cannot duplicate itself internally!
         existingEmailSet.add(cleanEmail);
       }
 
-      // If the CSV was just a sheet of people already in the database:
       if (genuinelyNewStaff.length === 0) {
         setIsBulkModalOpen(false); setBulkFile(null);
         return alert(`⚠️ Notice: All ${skippedCount} emails in this CSV were already registered in your directory. No new profiles were added.`);
       }
 
-      // 🛡️ STEP 3: Safe, standard insert of ONLY the vetted newcomers
       const { error: insertErr } = await supabase.from('profiles').insert(genuinelyNewStaff);
       if (insertErr) throw insertErr;
 
@@ -369,6 +391,19 @@ export default function AdminStaffDirectoryPage() {
                     <input type="text" placeholder="+1 (555) 019-2834" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
                   </div>
                 </div>
+
+                {/* 🚀 NEW DATE FIELDS ADDED BACK! */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-blue-100/50">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1.5 mb-1"><CalendarDays size={12}/> Date of Birth</label>
+                    <input type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1.5 mb-1"><CalendarDays size={12}/> Joining Date</label>
+                    <input type="date" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+
               </div>
 
               <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200/60 space-y-4">
