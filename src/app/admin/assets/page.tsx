@@ -27,11 +27,10 @@ export default function AssetRegistryPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
-  const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
   // Add Form
   const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
-  const [newAssetId, setNewAssetId] = useState('');
+  const [newAssetTag, setNewAssetTag] = useState(''); // 👈 Now purely tracks the readable Tag
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetBrand, setNewAssetBrand] = useState('');
   const [newAssetSerial, setNewAssetSerial] = useState('');
@@ -56,8 +55,9 @@ export default function AssetRegistryPage() {
 
   useEffect(() => { fetchRegistryData(); }, []);
 
+  // 🚀 Auto-generate proper tags based on category selection
   useEffect(() => {
-    if (isAddModalOpen) generateAssetId(newAssetCategory);
+    if (isAddModalOpen) setNewAssetTag(generateAssetId(newAssetCategory));
   }, [newAssetCategory, isAddModalOpen]);
 
   useEffect(() => {
@@ -68,17 +68,25 @@ export default function AssetRegistryPage() {
     }
   }, [searchParams, assets]);
 
+  // 🚀 THE PREFIX GENERATOR
   const generateAssetId = (category: string) => {
     let prefix = 'VS-AST';
     const cat = category.toLowerCase();
     if (cat.includes('laptop')) prefix = 'VS-LAP';
     else if (cat.includes('mouse')) prefix = 'VS-MO';
     else if (cat.includes('keyboard')) prefix = 'VS-KB';
-    else if (cat.includes('headphone')) prefix = 'VS-HP';
+    else if (cat.includes('headphone') || cat.includes('audio')) prefix = 'VS-HDP';
     else if (cat.includes('cleaning')) prefix = 'VS-CLN';
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-    setNewAssetId(`${prefix}-${randomSuffix}`);
     return `${prefix}-${randomSuffix}`;
+  };
+
+  // Safe UUID generator for Bulk Uploads
+  const generateSafeUuid = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   };
 
   const fetchRegistryData = async () => {
@@ -125,7 +133,8 @@ export default function AssetRegistryPage() {
       name: asset.asset_name || '', brand: asset.brand || '', serial: asset.serial_number || '',
       purchase_date: asset.purchase_date || '', warranty_expiry: asset.warranty_expiry || '',
       price: asset.price || '', vendor: asset.vendor || '', condition: asset.asset_condition || 'New',
-      status: asset.status || 'In Stock (Unassigned)', assignee: asset.assigned_to || ''
+      status: asset.status || 'In Stock (Unassigned)', assignee: asset.assigned_to || '',
+      asset_tag: asset.asset_tag || ''
     });
 
     setAssetInspectionLog(null);
@@ -145,15 +154,25 @@ export default function AssetRegistryPage() {
       const resolvedStatus = newAssetAssignee ? 'Assigned' : newAssetStatus;
 
       const { error } = await supabase.from('assets').insert([{
-        id: newAssetId, asset_tag: newAssetId, asset_name: newAssetName, brand: newAssetBrand || 'Unknown Brand',
-        serial_number: newAssetSerial, category: newAssetCategory, purchase_date: newAssetPurchaseDate || null, warranty_expiry: newAssetWarranty || null,
-        price: cleanPrice, vendor: newAssetVendor || 'General Supplier', asset_condition: newAssetCondition,
-        status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Pending Verification',
+        // Let Supabase Auto-Generate the UUID for 'id' natively
+        asset_tag: newAssetTag, 
+        asset_name: newAssetName, 
+        brand: newAssetBrand || 'Unknown Brand',
+        serial_number: newAssetSerial, 
+        category: newAssetCategory, 
+        purchase_date: newAssetPurchaseDate || null, 
+        warranty_expiry: newAssetWarranty || null,
+        price: cleanPrice, 
+        vendor: newAssetVendor || 'General Supplier', 
+        asset_condition: newAssetCondition,
+        status: resolvedStatus, 
+        assigned_to: newAssetAssignee || null, 
+        inspection_status: 'Pending Verification',
         upcoming_inspection_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       }]);
 
       if (error) throw error;
-      alert(`Hardware ${newAssetId} fully logged into Enterprise Ledger!`);
+      alert(`Hardware ${newAssetTag} fully logged into Enterprise Ledger!`);
       setIsAddModalOpen(false);
       setNewAssetName(''); setNewAssetBrand(''); setNewAssetSerial(''); setNewAssetPrice(''); setNewAssetVendor(''); setNewAssetAssignee('');
       fetchRegistryData();
@@ -169,9 +188,16 @@ export default function AssetRegistryPage() {
       if (!editForm.assignee && resolvedStatus === 'Assigned') resolvedStatus = 'In Stock (Unassigned)';
 
       const { error } = await supabase.from('assets').update({
-        asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
-        purchase_date: editForm.purchase_date || null, warranty_expiry: editForm.warranty_expiry || null, price: cleanPrice,
-        vendor: editForm.vendor, asset_condition: editForm.condition, status: resolvedStatus,
+        asset_tag: editForm.asset_tag, // Allows you to fix bad UUID tags manually!
+        asset_name: editForm.name, 
+        brand: editForm.brand, 
+        serial_number: editForm.serial,
+        purchase_date: editForm.purchase_date || null, 
+        warranty_expiry: editForm.warranty_expiry || null, 
+        price: cleanPrice,
+        vendor: editForm.vendor, 
+        asset_condition: editForm.condition, 
+        status: resolvedStatus,
         assigned_to: editForm.assignee || null
       }).eq('id', viewAssetModal.id);
 
@@ -180,7 +206,7 @@ export default function AssetRegistryPage() {
       const updatedStaffName = selectedStaff.full_name || selectedStaff.name || editForm.assignee || 'Unassigned';
 
       setViewAssetModal((prev: any) => ({
-        ...prev, asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
+        ...prev, asset_tag: editForm.asset_tag, asset_name: editForm.name, brand: editForm.brand, serial_number: editForm.serial,
         purchase_date: editForm.purchase_date, warranty_expiry: editForm.warranty_expiry, price: cleanPrice, vendor: editForm.vendor,
         asset_condition: editForm.condition, status: resolvedStatus, assigned_to: editForm.assignee, staff_name: updatedStaffName
       }));
@@ -189,7 +215,6 @@ export default function AssetRegistryPage() {
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
-  // 🛡️ INDUSTRIAL CSV ROW PARSER (Matches the Staff Page exactly)
   const parseCsvRow = (line: string) => {
     const result = [];
     let current = '';
@@ -209,10 +234,9 @@ export default function AssetRegistryPage() {
     return result.map(s => s.trim().replace(/^"|"$/g, ''));
   };
 
-  // 📦 THE BULLETPROOF BULK IMPORTER (With Database Matching)
   const downloadSampleCsvTemplate = () => {
     const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
-    const sampleData = "Laptop,Apple,MacBook Pro M3,SN-99482,TAG-15361E,1899.99,Apple Direct,2024-12-12,2025-10-10,New\nMouse,Logitech,MX Master 3S,LOGI-8821,,,Amazon,2025-11-01,,Refurbished";
+    const sampleData = "Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2024-12-12,2025-10-10,New\nMouse,Logitech,MX Master 3S,LOGI-8821,,,Amazon,2025-11-01,,Refurbished";
     const blob = new Blob([headers + sampleData], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Hardware_Bulk_Template.csv'; a.click();
@@ -238,20 +262,20 @@ export default function AssetRegistryPage() {
         const modelName = col['modelname'] || col['name'] || '';
         const serialNum = col['serialnumber'] || col['serial_number'] || '';
 
-        // Only skip if both the model name and serial are completely blank
         if (!modelName && !serialNum) continue;
 
         const cat = col['category'] || 'Laptop';
         const rawTag = col['assettag'] || col['asset_tag'] || col['tag'] || '';
-        const finalAssetId = rawTag.toUpperCase() || generateAssetId(cat);
+        
+        // Use provided tag or generate exactly matching prefix
+        const finalAssetTag = rawTag.toUpperCase() || generateAssetId(cat);
 
-        // Format Price safely
         const rawPrice = col['price'] || '';
         const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
         batchPayload.push({
-          id: finalAssetId, 
-          asset_tag: finalAssetId, 
+          id: generateSafeUuid(), // Required unique ID for the Postgres row
+          asset_tag: finalAssetTag, // The beautiful visual Tag ID
           asset_name: modelName || 'Unknown Model', 
           brand: col['brand'] || 'Standard',
           serial_number: serialNum || 'N/A', 
@@ -269,20 +293,30 @@ export default function AssetRegistryPage() {
 
       if (batchPayload.length === 0) throw new Error("No valid hardware rows found to import.");
 
-      // 🛡️ UPSERT ensures that if an asset tag already exists, it updates it instead of throwing an error!
-      const { error } = await supabase.from('assets').upsert(batchPayload, { onConflict: 'id' });
+      const { error } = await supabase.from('assets').insert(batchPayload);
       if (error) throw new Error(`SUPABASE REJECTION: ${error.message}`);
 
-      alert(`🎉 Successfully imported/updated ${batchPayload.length} hardware assets!`);
+      alert(`🎉 Successfully imported ${batchPayload.length} hardware assets!`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchRegistryData();
     } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
   };
 
+  // 🚀 THE UUID CLEANER (Fixes old messy UUIDs automatically on display)
   const getCleanDisplayTag = (asset: any) => {
     if (!asset) return 'NO-TAG';
+    
+    // Always prefer standard VS tag
     if (asset.asset_tag && asset.asset_tag.includes('VS-')) return asset.asset_tag.toUpperCase();
-    if (asset.id && asset.id.includes('VS-')) return asset.id.toUpperCase();
-    return String(asset.asset_tag || asset.id || '').toUpperCase();
+    
+    // If it has a tag, but it's a massive UUID, slice it to look like a tag
+    if (asset.asset_tag && asset.asset_tag.length > 20) return 'ID-' + asset.asset_tag.substring(0, 8).toUpperCase();
+    
+    // Normal asset tag
+    if (asset.asset_tag) return asset.asset_tag.toUpperCase();
+    
+    // Absolute fallback if asset_tag is missing entirely
+    if (asset.id) return 'ID-' + asset.id.substring(0, 8).toUpperCase(); 
+    return 'NO-TAG';
   };
 
   const getAssetViewUrl = (asset: any) => {
@@ -291,7 +325,6 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
-  // Sticker printing code remains unchanged
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=400,height=400');
@@ -551,7 +584,7 @@ export default function AssetRegistryPage() {
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-blue-600 uppercase">System Tag ID</label>
-                    <input type="text" readOnly value={newAssetId} className="w-full mt-1 p-2.5 bg-blue-100/60 border border-blue-200 rounded-xl text-xs font-mono font-black text-blue-900 outline-none" />
+                    <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className="w-full mt-1 p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none" />
                   </div>
                 </div>
 
@@ -648,7 +681,7 @@ export default function AssetRegistryPage() {
               <button onClick={downloadSampleCsvTemplate} className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer">
                 <Download size={15}/> <span>1. Download Valid Format CSV</span>
               </button>
-              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Leave the <b>Asset Tag</b> column blank to automatically generate secure TAG-xxxxx IDs for your hardware.</p>
+              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">Leave the <b>Asset Tag</b> column blank to automatically generate secure VS-xxxxx IDs for your hardware.</p>
             </div>
 
             <div className="p-6 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-gray-100/80 transition-colors flex flex-col items-center justify-center gap-3">
@@ -713,6 +746,12 @@ export default function AssetRegistryPage() {
                         <div className="flex justify-between items-center pb-2 border-b border-blue-100">
                           <span className="text-xs font-black uppercase tracking-wider text-blue-900">Editing Hardware Record</span>
                           <span className="text-xs font-mono font-bold text-blue-600">{cleanModalTag}</span>
+                        </div>
+
+                        {/* ALLOW MANUAL CORRECTION OF BAD TAGS HERE */}
+                        <div className="bg-white p-3 rounded-xl border border-blue-100 mb-2">
+                          <label className="text-[10px] font-black text-blue-600 uppercase block mb-1">Asset Tag (Editable)</label>
+                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-xs font-mono font-bold text-blue-900 outline-none" />
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
