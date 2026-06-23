@@ -223,14 +223,14 @@ export default function AssetRegistryPage() {
   };
 
   // ==========================================
-  // 🟢 INDUSTRIAL BULK CSV PARSER & DOWNLOADER
+  // 🟢 BRUTE-FORCE BULK CSV PARSER
   // ==========================================
   const downloadSampleCsvTemplate = () => {
     const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
-    const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
-    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,45.99,Amazon Business,2025-02-15,,New\n';
-    const row3 = 'Headphone,Jabra,Evolve2 65,JAB-9941,VS-HDP-88210,180.00,B&H Photo,2025-01-01,,Refurbished\n';
-    const row4 = '"Mobile Phone",Samsung,Galaxy S24 Ultra,SMSG-7721,,,1199.00,Samsung Enterprise,2025-03-01,2027-03-01,New';
+    const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
+    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,Amazon Business,2025-02-15,,New\n';
+    const row3 = 'Headphone,Jabra,Evolve2 65,JAB-9941,,180.00,B&H Photo,2025-01-01,,Refurbished\n';
+    const row4 = '"Mobile Phone",Samsung,Galaxy S24 Ultra,SMSG-7721,,,Samsung Enterprise,2025-03-01,2027-03-01,New';
     
     const blob = new Blob([headers + row1 + row2 + row3 + row4], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
@@ -245,12 +245,14 @@ export default function AssetRegistryPage() {
     try {
       const text = await bulkFile.text();
       
-      // 1. BOM KILLER: Strips invisible Excel characters that break header reading
+      // 1. BOM KILLER: Strips invisible Excel characters
       const cleanText = text.replace(/^\uFEFF/, '');
       
-      const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.trim().length > 0);
-      if (lines.length < 2) throw new Error("CSV contains no actual data rows.");
+      // Split safely and completely remove any row that is fully empty or just commas (,,,,,)
+      const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.replace(/,/g, '').trim().length > 0);
+      if (lines.length < 2) throw new Error("File appears to be completely empty.");
 
+      // 2. AUTO-DETECT DELIMITER (Handles European Excel saves that use semicolons)
       const delimiter = lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
 
       const parseRow = (line: string) => {
@@ -272,56 +274,60 @@ export default function AssetRegistryPage() {
 
       for (let i = 1; i < lines.length; i++) {
         const row = parseRow(lines[i]);
-        if (row.length === 0 || (row.length === 1 && !row[0])) continue;
+        
+        // Final safety check: if the parsed row is totally empty, skip it.
+        if (row.join('').trim() === '') continue;
 
-        const col: Record<string, string> = {};
-        rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
-
-        const findCol = (keywords: string[]) => {
-          const key = Object.keys(col).find(k => keywords.some(kw => k.includes(kw)));
-          return key ? col[key] : '';
+        // 3. AGGRESSIVE VALUE EXTRACTOR: Tries to find the header. If Excel destroyed the header, it uses the hard-coded column number (0, 1, 2...).
+        const getVal = (keywords: string[], colIndex: number) => {
+          const key = rawHeaders.find(h => keywords.some(kw => h.includes(kw)));
+          if (key) {
+            const idx = rawHeaders.indexOf(key);
+            if (row[idx]) return row[idx];
+          }
+          return row[colIndex] || '';
         };
 
-        // 2. HARD INDEX FALLBACK: If Excel broke the headers, it falls back to the absolute template positions
-        const modelName = findCol(['model', 'name']) || row[2] || '';
-        const serialNum = findCol(['serial', 'sn']) || row[3] || '';
-        const brandName = findCol(['brand', 'make']) || row[1] || '';
+        const cat = getVal(['category', 'type'], 0) || 'Others';
+        const brandName = getVal(['brand', 'make'], 1) || 'Unknown Brand';
+        const modelName = getVal(['model', 'name'], 2) || 'Standard Asset';
+        
+        // If Serial Number is missing, force a fake one so the database accepts it.
+        let serialNum = getVal(['serial', 'sn'], 3);
+        if (!serialNum) serialNum = `SN-MISSING-${Math.floor(Math.random() * 9999)}`;
 
-        // Skip completely empty ghost-rows
-        if (!modelName && !serialNum && !brandName) continue; 
-
-        const cat = findCol(['category', 'type']) || row[0] || 'Others';
-        const rawTag = findCol(['tag', 'id']) || row[4] || '';
+        const rawTag = getVal(['tag', 'id'], 4) || '';
         const finalAssetTag = rawTag.toUpperCase() || generateCategoryPrefix(cat);
 
-        const rawPrice = findCol(['price', 'cost', 'amount']) || row[5] || '';
+        const rawPrice = getVal(['price', 'cost'], 5) || '';
         const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
         batchPayload.push({
           id: generateSafeUuid(), 
           asset_tag: finalAssetTag, 
-          asset_name: modelName || 'Standard Asset', 
-          brand: brandName || 'Generic',
-          serial_number: (serialNum || 'UNKNOWN-SN').toUpperCase(), 
+          asset_name: modelName, 
+          brand: brandName,
+          serial_number: serialNum.toUpperCase(), 
           category: cat, 
-          purchase_date: findCol(['purchase', 'bought', 'date']) || row[7] || null, 
-          warranty_expiry: findCol(['warranty', 'expiry']) || row[8] || null,
+          purchase_date: getVal(['purchase', 'date'], 7) || null, 
+          warranty_expiry: getVal(['warranty', 'expiry'], 8) || null,
           price: isNaN(numPrice as number) ? null : numPrice, 
-          vendor: findCol(['vendor', 'supplier']) || row[6] || 'Bulk Upload', 
-          asset_condition: findCol(['condition', 'state']) || row[9] || 'New',
+          vendor: getVal(['vendor', 'supplier'], 6) || 'Bulk Upload', 
+          asset_condition: getVal(['condition', 'state'], 9) || 'New',
           status: 'In Stock (Unassigned)', 
           inspection_status: 'Logged'
         });
       }
 
-      if (batchPayload.length === 0) throw new Error("Could not extract rows. Please ensure you are using the exact Template format provided.");
+      if (batchPayload.length === 0) throw new Error("Could not parse rows. Please download the sample CSV and paste your data directly into it without changing headers.");
 
+      // 4. THE FORCED INJECTION
       const { error } = await supabase.from('assets').insert(batchPayload);
       if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
 
-      alert(`🎉 Batch successful! Uploaded ${batchPayload.length} new hardware assets.`);
+      alert(`🎉 SUCCESS! Force-imported ${batchPayload.length} hardware rows.`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchRegistryData();
-    } catch (err: any) { alert(`❌ IMPORT REJECTED:\n\n${err.message}`); } finally { setIsImporting(false); }
+    } catch (err: any) { alert(`❌ IMPORT ERROR:\n\n${err.message}`); } finally { setIsImporting(false); }
   };
 
   const getAssetViewUrl = (asset: any) => {
@@ -337,7 +343,6 @@ export default function AssetRegistryPage() {
 
     const cat = (asset.category || '').toLowerCase();
 
-    // Standard 50mm x 50mm Laptop Square
     let boxCss = "width: 50mm; height: 50mm; padding: 2mm;";
     let qrCss = "width: 25mm; height: 25mm;";
     let titleCss = "font-size: 10px;";
@@ -345,14 +350,12 @@ export default function AssetRegistryPage() {
     let tagCss = "font-size: 13px; padding: 2px 6px;";
 
     if (cat.includes('mouse') && !cat.includes('pad')) {
-      // 🐭 Micro Belly Sticker (32x22mm)
       boxCss = "width: 32mm; height: 22mm; padding: 1mm;";
       qrCss = "width: 11mm; height: 11mm;";
       titleCss = "font-size: 6px;";
       snCss = "font-size: 5px;";
       tagCss = "font-size: 8px; padding: 1px 3px;";
     } else if (cat.includes('headphone') || cat.includes('audio')) {
-      // 🎧 Vertical Headband Wrap (20x45mm)
       boxCss = "width: 20mm; height: 45mm; padding: 1.5mm; display: flex; flex-direction: column; justify-content: space-between;";
       qrCss = "width: 15mm; height: 15mm;";
       titleCss = "font-size: 7px;";
@@ -540,7 +543,7 @@ export default function AssetRegistryPage() {
                 <Download size={16}/> <span>1. Download Verified Sample CSV</span>
               </button>
               <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">
-                The sample format is perfectly mapped to Postgres. You can leave the <b>Asset Tag</b> column completely blank to let VSS auto-tag your items!
+                The sample format is perfectly mapped. You can leave the <b>Asset Tag</b> column completely blank to let VSS auto-tag your items!
               </p>
             </div>
 
@@ -558,7 +561,7 @@ export default function AssetRegistryPage() {
               disabled={isImporting || !bulkFile} 
               className={`w-full py-4 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg ${bulkFile ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer' : 'bg-gray-300 cursor-not-allowed'}`}
             >
-              {isImporting ? 'Parsing Postgres Rows...' : '2. Execute Batch Registration'}
+              {isImporting ? 'Parsing Excel Rows...' : '2. Execute Batch Registration'}
             </button>
           </div>
         </div>
