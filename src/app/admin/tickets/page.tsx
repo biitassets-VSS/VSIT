@@ -16,10 +16,10 @@ function TicketsWorkbenchContent() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // 🧭 Top Tier Status Filters
+  // Top Tier Status Filters
   const [filterTab, setFilterTab] = useState<'all' | 'open' | 'in_process' | 'hold' | 'resolved'>('open');
   
-  // 🖥️ THE MASTER-DETAIL STATE (The currently opened ticket on the right side)
+  // MASTER-DETAIL STATE (The currently opened ticket on the right side)
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
   
   // Right-Side Form State
@@ -30,7 +30,7 @@ function TicketsWorkbenchContent() {
 
   useEffect(() => { fetchTickets(); }, []);
 
-  // 🎯 URL & QUEUE LISTENER: Auto-opens a ticket if linked from Admin Dashboard, or grabs the first open one
+  // URL & QUEUE LISTENER: Auto-opens a ticket if linked from Admin Dashboard
   useEffect(() => {
     if (tickets.length === 0) return;
 
@@ -39,7 +39,6 @@ function TicketsWorkbenchContent() {
       const found = tickets.find(t => t.id === targetId);
       if (found) handleSelectTicket(found);
     } else if (!selectedTicket) {
-      // Auto-select the first visible ticket in the queue so the right panel is never blank!
       const defaultTicket = tickets.find(t => t.status === 'open' || t.status === 'pending') || tickets[0];
       if (defaultTicket) handleSelectTicket(defaultTicket);
     }
@@ -81,7 +80,6 @@ function TicketsWorkbenchContent() {
 
       if (error) throw error;
 
-      // Instantly patch local state to flash success
       const patched = {
         ...selectedTicket,
         status: formStatus, wait_time: formWaitTime, 
@@ -125,7 +123,7 @@ function TicketsWorkbenchContent() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* 🚀 TOP DASHBOARD LINK HEADER */}
+      {/* TOP DASHBOARD LINK HEADER */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors cursor-pointer">
@@ -173,7 +171,7 @@ function TicketsWorkbenchContent() {
         </div>
       </div>
 
-      {/* 🚀 THE SPLIT-VIEW MATRIX (Left Queue vs Right Form) */}
+      {/* THE SPLIT-VIEW MATRIX (Left Queue vs Right Form) */}
       {loading ? (
         <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
       ) : (
@@ -225,7 +223,7 @@ function TicketsWorkbenchContent() {
                 <p className="text-xs font-black uppercase tracking-widest text-gray-500">No Ticket Selected</p>
                 <p className="text-[11px] font-bold text-gray-400">Click a ticket card from the left column to lock it onto the diagnostic workbench.</p>
               </div>
-            ) : {
+            ) : (() => {
               const activeBadge = getStatusBadge(selectedTicket.status);
 
               return (
@@ -248,7 +246,7 @@ function TicketsWorkbenchContent() {
                     </div>
                   </div>
 
-                  {/* LIFECYCLE TIMESTAMPS (When Opened vs When Closed) */}
+                  {/* LIFECYCLE TIMESTAMPS */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200/60 text-xs">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-0.5 flex items-center gap-1"><Clock size={11}/> Time Logged (Opened)</span>
@@ -280,7 +278,7 @@ function TicketsWorkbenchContent() {
 
                   <hr className="border-gray-100" />
 
-                  {/* 🚀 THE ADMIN WORKBENCH CONTROLS */}
+                  {/* WORKBENCH CONTROLS */}
                   <div className="space-y-4 bg-blue-50/40 p-5 rounded-2xl border border-blue-200/80">
                     <span className="text-xs font-black uppercase tracking-widest text-[#002B49] block flex items-center gap-1.5"><Wrench size={14}/> Live Status & Wait Time Editor</span>
 
@@ -330,7 +328,7 @@ function TicketsWorkbenchContent() {
 
                 </form>
               );
-            }}
+            })()}
           </div>
 
         </div>
