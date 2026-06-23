@@ -1,621 +1,791 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Ticket, ClipboardCheck, PlusCircle, RefreshCw, 
-  Laptop, AlertCircle, CheckCircle2, Clock, Calendar, ShieldAlert, X, Camera, QrCode
+  ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
+  User, X, Save, RefreshCw, Download, Printer, Edit2, 
+  Upload, FileSpreadsheet, Package, Mouse, 
+  Keyboard, Headphones, SlidersHorizontal, Filter, Smartphone
 } from 'lucide-react';
 
-interface StaffData {
-  name: string;
-  email: string;
-  emp_code: string;
-}
-
-export default function StaffDashboardPage() {
-  return (
-    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
-      <DashboardContent />
-    </Suspense>
-  );
-}
-
-function DashboardContent() {
+export default function AssetRegistryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [staffProfile, setStaffProfile] = useState<StaffData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [activeTickets, setActiveTickets] = useState<any[]>([]);
-  const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
-
-  // Modals State
-  const [isInspectionOpen, setIsInspectionOpen] = useState(false);
-  const [isRequestOpen, setIsRequestOpen] = useState(false);
-
-  // Asset Request Form State
-  const [requestCategory, setRequestCategory] = useState('Laptop');
-  const [requestNotes, setRequestNotes] = useState('');
-
-  // Inspection Form State
-  const [selectedAsset, setSelectedAsset] = useState<any>(null);
-  const [typedVerification, setTypedVerification] = useState('');
-  const [isAssetUnlocked, setIsAssetUnlocked] = useState(false);
-  const [validationError, setValidationError] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Laptop');
-  const [assetCondition, setAssetCondition] = useState('');
-  const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   
-  const [stats, setStats] = useState({ myAssets: 0, needsInspection: 0, inRepair: 0 });
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
 
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [activeAngleTarget, setActiveAngleTarget] = useState('');
-  const [copiedNotification, setCopiedNotification] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  // Modals
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false); 
+  const [viewAssetModal, setViewAssetModal] = useState<any>(null);
 
-  const [shareableSessionLink, setShareableSessionLink] = useState('');
+  // Add Form
+  const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
+  const [newAssetTag, setNewAssetTag] = useState(''); 
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetBrand, setNewAssetBrand] = useState('');
+  const [newAssetSerial, setNewAssetSerial] = useState('');
+  const [newAssetPrice, setNewAssetPrice] = useState('');
+  const [newAssetVendor, setNewAssetVendor] = useState('');
+  const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState('');
+  const [newAssetWarranty, setNewAssetWarranty] = useState('');
+  const [newAssetCondition, setNewAssetCondition] = useState('New');
+  const [newAssetStatus, setNewAssetStatus] = useState('In Stock (Unassigned)');
+  const [newAssetAssignee, setNewAssetAssignee] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const laptopGuides: Record<string, string> = {
-    '1. Laptop Top Photo': 'Capture outer top shell lid layer.',
-    '2. Laptop Screen & Keyboard': 'Open device; view display and keys context.',
-    '3. Bottom Case with Tag ID': 'Flip base over; tracking label text must be highly visible.',
-    '4. Right Side Peripheral Ports': 'Clear edge profile showing right side ports.',
-    '5. Left Side Power Ports': 'Clear edge profile showing left side layout.',
-    '6. Damage or Scratches (Optional)': 'Focal macro snap for physical dents if present.'
-  };
+  // Bulk Importer State
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
-  const accessoryGuides: Record<string, string> = {
-    '1. Front View with Tag ID': 'Direct front camera capture with property label readable.',
-    '2. Back Structural View': 'Rear alignment frame detailing base components.'
-  };
+  // Edit State
+  const [isEditingAsset, setIsEditingAsset] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => { fetchRegistryData(); }, []);
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (isAddModalOpen) setNewAssetTag(generateCategoryPrefix(newAssetCategory));
+  }, [newAssetCategory, isAddModalOpen]);
 
   useEffect(() => {
-    if (selectedAsset) {
-      let baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-      if (baseDomain.includes('localhost')) baseDomain = 'http://192.168.1.25:3000'; 
-      const safeCat = encodeURIComponent(selectedCategory);
-      setShareableSessionLink(`${baseDomain}/staff?open_inspection=true&asset_id=${selectedAsset.id}&category=${safeCat}`);
+    const scanId = searchParams.get('view');
+    if (scanId && assets.length > 0) {
+      const foundAsset = assets.find(a => a.id === scanId || a.asset_tag === scanId || a.clean_tag === scanId);
+      if (foundAsset) openAssetViewModal(foundAsset);
     }
-  }, [selectedAsset, selectedCategory]);
+  }, [searchParams, assets]);
 
-  useEffect(() => {
-    if (searchParams.get('open_inspection') === 'true' && assignedAssets.length > 0) {
-      const targetId = searchParams.get('asset_id');
-      const foundAsset = assignedAssets.find(a => String(a.id) === String(targetId)) || assignedAssets[0];
-      setSelectedAsset(foundAsset);
-      setIsAssetUnlocked(true); 
-      setSelectedCategory(searchParams.get('category') || foundAsset.category || 'Laptop');
-      setIsInspectionOpen(true);
-    }
-  }, [searchParams, assignedAssets]);
-
-  const resetModalState = () => {
-    setPhotos({});
-    setIsAssetUnlocked(false);
-    setTypedVerification('');
-    setValidationError('');
-    setAssetCondition('');
-    stopLiveVideoStream();
-  };
-
-  const loadDashboardData = async () => {
-    setIsLoading(true);
-
-    const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-    if (!sessionString) {
-      router.push('/login');
-      return;
-    }
-
-    const activeUser = JSON.parse(sessionString);
-    const userEmail = activeUser.email || 'students_app05@outlook.com';
-    const userId = activeUser.id || String(Date.now());
-
-    let fullName = activeUser.name || 'Staff Member';
-    let empCode = activeUser.emp_code || 'EMP-000';
+  const generateCategoryPrefix = (category: string, existingUuid?: string) => {
+    let prefix = 'VS-AST';
+    const cat = (category || '').toLowerCase();
     
-    try {
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-      if (profile) {
-        fullName = profile.full_name || profile.name || fullName;
-        empCode = profile.emp_code || profile.emp_id || empCode;
-      }
-    } catch (e) { console.warn('Profile fetch ignored RLS block'); }
+    if (cat.includes('laptop')) prefix = 'VS-LAP';
+    else if (cat.includes('mobile phone') || cat.includes('phone')) prefix = 'VS-MOB';
+    else if (cat.includes('combo kit')) prefix = 'VS-CMB';
+    else if (cat.includes('mouse pad') || cat.includes('pad')) prefix = 'VS-PAD';
+    else if (cat.includes('mouse')) prefix = 'VS-MO';
+    else if (cat.includes('keyboard')) prefix = 'VS-KB';
+    else if (cat.includes('headphone') || cat.includes('audio')) prefix = 'VS-HDP';
+    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
+    else if (cat.includes('stand')) prefix = 'VS-STND';
+    else prefix = 'VS-AST';
 
-    setStaffProfile({ name: fullName, email: userEmail, emp_code: empCode });
+    if (existingUuid && existingUuid.length > 20) {
+      const numsOnly = existingUuid.replace(/[^0-9]/g, '');
+      const stableDigits = numsOnly.length >= 5 ? numsOnly.slice(-5) : '10482';
+      return `${prefix}-${stableDigits}`;
+    }
 
-    // 🚀 FIX 3: REMOVED ALL DUMMY DATA. Fetching strict, real assets only.
-    let rawAssets: any[] = [];
-    try {
-      const { data } = await supabase.from('assets').select('*');
-      if (data) rawAssets = data;
-    } catch (e) { console.warn('Assets fetch fallback'); }
+    const randomDigits = Math.floor(10000 + Math.random() * 90000);
+    return `${prefix}-${randomDigits}`;
+  };
 
-    let rawInspections: any[] = [];
-    try {
-      const { data } = await supabase.from('inspections').select('*').order('created_at', { ascending: false });
-      if (data) rawInspections = data;
-    } catch (e) { console.warn('Inspections fetch fallback'); }
-
-    let rawTickets: any[] = [];
-    try {
-      const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-      if (data) rawTickets = data.filter((t: any) => JSON.stringify(t).toLowerCase().includes(userEmail.toLowerCase()));
-    } catch (e) { console.warn('Tickets fetch fallback'); }
-
-    setActiveTickets(rawTickets);
-
-    // Finding assets strictly assigned to this user in the database
-    let myAssets = rawAssets.filter((a: any) => {
-      const s = JSON.stringify(a).toLowerCase();
-      return s.includes(userEmail.toLowerCase()) || s.includes(fullName.toLowerCase()) || s.includes(empCode.toLowerCase());
+  const generateSafeUuid = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
     });
+  };
 
-    let overdueCounter = 0;
-    const compiledAssets = myAssets.map(asset => {
-      const insLog = rawInspections.find((i: any) => String(i.asset_id) === String(asset.id));
-      const lastCheck = asset.last_inspection_date || insLog?.created_at || new Date().toISOString();
-      const nextCheck = asset.upcoming_inspection_date || new Date(Date.now() - 86400000).toISOString();
-      const isOverdue = new Date(nextCheck).getTime() < Date.now();
+  const fetchRegistryData = async () => {
+    setLoading(true);
+    try {
+      const { data: assetData } = await supabase.from('assets').select('*').order('created_at', { ascending: false });
+      const { data: staffData } = await supabase.from('profiles').select('*');
+      if (staffData) setStaffList(staffData);
+      
+      if (assetData) {
+        const compiledAssets = assetData.map(asset => {
+          const assignee = (staffData || []).find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
+          return {
+            ...asset,
+            staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
+            emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
+            clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id)
+          };
+        });
+        setAssets(compiledAssets);
+      }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
+  };
 
-      let dispStatus = asset.inspection_status || insLog?.status || 'Pending Verification';
-      if (asset.status?.toUpperCase() === 'WAITING') dispStatus = 'Sent for Approval';
-      if (isOverdue && dispStatus !== 'Sent for Approval' && dispStatus !== 'Passed') overdueCounter++;
+  const getStockStatusBadge = (status: string) => {
+    const s = status || 'In Stock (Unassigned)';
+    if (s.includes('Assigned')) return 'bg-green-100 text-green-700 border-green-200';
+    if (s.includes('Repair')) return 'bg-orange-100 text-orange-700 border-orange-200 animate-pulse';
+    if (s.includes('Demo')) return 'bg-purple-100 text-purple-700 border-purple-200';
+    if (s.includes('Discard')) return 'bg-red-100 text-red-700 border-red-200 line-through';
+    return 'bg-blue-100 text-blue-700 border-blue-200';
+  };
 
-      return {
-        ...asset,
-        displayStatus: 'Assigned',
-        inspectionStatus: dispStatus,
-        lastInspection: lastCheck,
-        upcomingInspection: nextCheck,
-        isOverdue,
-        publicPhotosLog: insLog?.photos || null
+  const openAssetViewModal = (asset: any) => {
+    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.id);
+
+    setViewAssetModal({ ...asset, clean_tag: stableTag });
+    setIsEditingAsset(false);
+    
+    setEditForm({
+      category: asset.category || 'Laptop',
+      asset_tag: stableTag,
+      serial: asset.serial_number || '',
+      name: asset.asset_name || '', 
+      brand: asset.brand || '', 
+      price: asset.price || '', 
+      vendor: asset.vendor || '', 
+      purchase_date: asset.purchase_date || '', 
+      warranty_expiry: asset.warranty_expiry || '',
+      condition: asset.asset_condition || 'New',
+      status: asset.status || 'In Stock (Unassigned)', 
+      assignee: asset.assigned_to || ''
+    });
+  };
+
+  const handleSaveNewAsset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAssetName || !newAssetSerial) return alert("Model Name and Serial Number required.");
+    
+    setIsSaving(true);
+    try {
+      const cleanPrice = newAssetPrice ? parseFloat(newAssetPrice) : null;
+      const resolvedStatus = newAssetAssignee ? 'Assigned' : newAssetStatus;
+      const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
+
+      const { error } = await supabase.from('assets').insert([{
+        id: generateSafeUuid(),
+        asset_tag: finalTag.toUpperCase(), 
+        asset_name: newAssetName, 
+        brand: newAssetBrand || 'Standard',
+        serial_number: newAssetSerial.toUpperCase(), 
+        category: newAssetCategory, 
+        price: cleanPrice, 
+        vendor: newAssetVendor || 'Direct', 
+        purchase_date: newAssetPurchaseDate || null, 
+        warranty_expiry: newAssetWarranty || null,
+        asset_condition: newAssetCondition,
+        status: resolvedStatus, 
+        assigned_to: newAssetAssignee || null, 
+        inspection_status: 'Logged'
+      }]);
+
+      if (error) throw error;
+      alert(`Hardware ${finalTag} registered successfully!`);
+      setIsAddModalOpen(false);
+      setNewAssetName(''); setNewAssetBrand(''); setNewAssetSerial(''); setNewAssetPrice(''); setNewAssetAssignee('');
+      fetchRegistryData();
+    } catch (err: any) { alert(`Database Error: ${err.message}`); } finally { setIsSaving(false); }
+  };
+
+  const handleUpdateExistingAsset = async () => {
+    setIsUpdating(true);
+    try {
+      const cleanPrice = editForm.price ? parseFloat(editForm.price) : null;
+      let resolvedStatus = editForm.status;
+      if (editForm.assignee && resolvedStatus === 'In Stock (Unassigned)') resolvedStatus = 'Assigned';
+      if (!editForm.assignee && resolvedStatus === 'Assigned') resolvedStatus = 'In Stock (Unassigned)';
+
+      const updatePayload = {
+        category: editForm.category,
+        serial_number: editForm.serial.toUpperCase(),
+        asset_tag: editForm.asset_tag.toUpperCase(),
+        asset_name: editForm.name, 
+        brand: editForm.brand, 
+        price: cleanPrice,
+        vendor: editForm.vendor, 
+        purchase_date: editForm.purchase_date || null, 
+        warranty_expiry: editForm.warranty_expiry || null, 
+        asset_condition: editForm.condition, 
+        status: resolvedStatus,
+        assigned_to: editForm.assignee || null
       };
-    });
 
-    setAssignedAssets(compiledAssets);
-    setStats({
-      myAssets: compiledAssets.length,
-      needsInspection: overdueCounter > 0 ? overdueCounter : 0,
-      inRepair: rawTickets.filter(t => t.status === 'in_repair' || t.status === 'pending').length
-    });
+      const { error } = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
+      if (error) throw error;
 
-    setIsLoading(false);
+      const selectedStaff = staffList.find(s => s.id === editForm.assignee) || {};
+      const updatedStaffName = selectedStaff.full_name || selectedStaff.name || editForm.assignee || 'Unassigned';
+
+      setViewAssetModal((prev: any) => ({
+        ...prev, ...updatePayload, clean_tag: editForm.asset_tag.toUpperCase(), staff_name: updatedStaffName
+      }));
+
+      setIsEditingAsset(false); fetchRegistryData(); alert("Hardware record patched successfully!");
+    } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
-  // 🚀 FIX 1: Handle Asset Request Submission
-  const handleRequestAssetSubmit = async () => {
-    if (!requestNotes.trim()) {
-      alert("Please enter why you need this hardware allocation.");
-      return;
-    }
+  // ==========================================
+  // 🟢 INDUSTRIAL FUZZY-MATCH BULK CSV PARSER
+  // ==========================================
+  const downloadSampleCsvTemplate = () => {
+    const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
+    const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
+    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,45.99,Amazon Business,2025-02-15,,New\n';
+    const row3 = 'Headphone,Jabra,Evolve2 65,JAB-9941,VS-HDP-88210,180.00,B&H Photo,2025-01-01,,Refurbished\n';
+    const row4 = '"Mobile Phone",Samsung,Galaxy S24 Ultra,SMSG-7721,,,1199.00,Samsung Enterprise,2025-03-01,2027-03-01,New';
     
-    setIsSubmitting(true);
+    const blob = new Blob([headers + row1 + row2 + row3 + row4], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'VSS_Hardware_Bulk_Upload_Template.csv'; a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const executeBulkImport = async () => {
+    if (!bulkFile) return alert("Please upload a CSV file first.");
+    setIsImporting(true);
+
     try {
-      await supabase.from('tickets').insert([{
-        title: `Asset Request: ${requestCategory}`,
-        description: requestNotes,
-        category: 'Hardware Request',
-        status: 'Open',
-        priority: 'Medium',
-        user_email: staffProfile?.email,
-        created_by: staffProfile?.name
-      }]);
-      
-      alert('Asset request submitted successfully!');
-      setIsRequestOpen(false);
-      setRequestNotes('');
-      loadDashboardData();
-    } catch (err: any) {
-      alert('Error submitting request: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      const text = await bulkFile.text();
+      // Safely split lines across Mac (\r), Linux (\n), and Windows (\r\n) formats
+      const lines = text.split(/\r\n|\n|\r/).filter(line => line.trim().length > 0);
+      if (lines.length < 2) throw new Error("CSV contains no actual data rows.");
 
-  const handleVerifyAssetLock = (e: React.FormEvent) => {
-    e.preventDefault();
-    setValidationError('');
-    if (!selectedAsset) return;
-    const targetTag = String(selectedAsset.asset_tag || selectedAsset.tag || '').trim().toLowerCase();
-    const targetSerial = String(selectedAsset.serial_number || selectedAsset.serial || '').trim().toLowerCase();
-    const input = typedVerification.trim().toLowerCase();
+      // Auto-Detect if Excel used semicolons (EU/IN localization) instead of commas
+      const delimiter = lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
 
-    if (input === targetTag || input === targetSerial) {
-      setIsAssetUnlocked(true);
-      setSelectedCategory(selectedAsset.category || 'Laptop');
-    } else {
-      setValidationError('❌ PROTECTION ALERT: Entry mismatch. Verification locked.');
-    }
-  };
+      const parseRow = (line: string) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') inQuotes = !inQuotes;
+          else if (char === delimiter && !inQuotes) { result.push(current); current = ''; } 
+          else current += char;
+        }
+        result.push(current);
+        return result.map(s => s.trim().replace(/^"|"$/g, ''));
+      };
 
-  const startLiveVideoStream = async (angle: string) => {
-    setActiveAngleTarget(angle);
-    setIsCameraActive(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, 
-        audio: false
-      });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (err) {
-      alert('Camera access blocked. Please allow camera permissions.');
-      setIsCameraActive(false);
-    }
-  };
+      // Strip all spaces and symbols from headers so 'Serial Number (S/N)' becomes 'serialnumbersn'
+      const rawHeaders = parseRow(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const batchPayload: any[] = [];
 
-  const captureSnapshotFrame = () => {
-    if (videoRef.current && streamRef.current && staffProfile) {
-      const video = videoRef.current;
-      const canvas = document.createElement('canvas');
-      const maxDim = 1200; 
-      let w = video.videoWidth || 1200;
-      let h = video.videoHeight || 720;
-      if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
-      canvas.width = w; canvas.height = h;
-      
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, w, h);
-        const watermarkString = `${new Date().toLocaleString()} | STAFF: ${staffProfile.name} | CODE: ${staffProfile.emp_code}`;
-        const barHeight = Math.max(45, h * 0.06);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, h - barHeight, w, barHeight);
-        ctx.fillStyle = '#f97316'; 
-        ctx.font = `bold ${Math.max(12, h * 0.03)}px monospace`;
-        ctx.textBaseline = 'middle';
-        ctx.fillText(watermarkString, 20, h - (barHeight / 2));
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseRow(lines[i]);
+        const col: Record<string, string> = {};
+        rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
 
-        setPhotos(prev => ({ ...prev, [activeAngleTarget]: canvas.toDataURL('image/jpeg', 0.75) }));
-        stopLiveVideoStream();
-      }
-    }
-  };
+        // FUZZY MATCHER: Finds the column even if Excel renamed the header
+        const findCol = (keywords: string[]) => {
+          const key = Object.keys(col).find(k => keywords.some(kw => k.includes(kw)));
+          return key ? col[key] : '';
+        };
 
-  const stopLiveVideoStream = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setIsCameraActive(false);
-  };
+        const modelName = findCol(['model', 'name', 'assetname']);
+        const serialNum = findCol(['serial', 'sn']);
+        const brandName = findCol(['brand', 'make']);
 
-  const getInspectionBadgeStyle = (status: string, isOverdue: boolean) => {
-    const s = status.toLowerCase();
-    if (s.includes('approve') || s.includes('sent')) return 'bg-blue-50 text-blue-700 border-blue-200';
-    if (s.includes('pass') || s.includes('approved')) return 'bg-green-50 text-green-700 border-green-200';
-    if (s.includes('fail') || s.includes('re-request')) return 'bg-red-50 text-red-700 border-red-200 font-extrabold';
-    if (isOverdue) return 'bg-rose-600 text-white border-rose-700 font-black animate-pulse';
-    return 'bg-amber-50 text-amber-700 border-amber-200';
-  };
+        // Skip completely empty Excel ghost-rows
+        if (!modelName && !serialNum && !brandName) continue; 
 
-  const handleInspectionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assetCondition.trim()) { alert('Please enter current asset condition text parameters.'); return; }
-    const targetCount = selectedCategory.toLowerCase() === 'laptop' ? 5 : 2;
-    if (Object.keys(photos).length < targetCount) { alert(`Fulfill all ${targetCount} mandatory checkpoints first.`); return; }
+        const cat = findCol(['category', 'type']) || 'Others';
+        const rawTag = findCol(['tag', 'id']);
+        const finalAssetTag = rawTag.toUpperCase() || generateCategoryPrefix(cat);
 
-    setIsSubmitting(true);
-    try {
-      const uploadedPhotoUrls: Record<string, string> = {};
+        const rawPrice = findCol(['price', 'cost', 'amount']);
+        const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
-      for (const [angle, base64Image] of Object.entries(photos)) {
-        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
-        const binaryString = window.atob(base64Data);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-
-        const fileName = `${selectedAsset.id}-${angle}-${Date.now()}.jpg`;
-        const filePath = `inspections/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage.from('inspections').upload(filePath, bytes.buffer, { contentType: 'image/jpeg', upsert: true });
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage.from('inspections').getPublicUrl(filePath);
-        uploadedPhotoUrls[angle] = publicUrl;
+        batchPayload.push({
+          id: generateSafeUuid(), // Postgres native UUID requirement
+          asset_tag: finalAssetTag, // Readable Human Tag
+          asset_name: modelName || 'Standard Asset', 
+          brand: brandName || 'Generic',
+          serial_number: (serialNum || 'UNKNOWN-SN').toUpperCase(), 
+          category: cat, 
+          purchase_date: findCol(['purchase', 'bought', 'date']) || null, 
+          warranty_expiry: findCol(['warranty', 'expiry', 'expire']) || null,
+          price: isNaN(numPrice as number) ? null : numPrice, 
+          vendor: findCol(['vendor', 'supplier', 'merchant']) || 'Bulk Upload', 
+          asset_condition: findCol(['condition', 'state']) || 'New',
+          status: 'In Stock (Unassigned)', 
+          inspection_status: 'Logged'
+        });
       }
 
-      await supabase.from('assets').update({
-        status: 'WAITING',
-        inspection_status: 'Sent for Approval',
-        category: selectedCategory,
-        last_inspection_date: new Date().toISOString()
-      }).eq('id', selectedAsset.id);
+      if (batchPayload.length === 0) throw new Error("No valid hardware rows discovered. Please ensure your CSV has 'Model Name' or 'Serial Number' columns.");
 
-      await supabase.from('inspections').insert([{
-        asset_id: selectedAsset.id,
-        status: 'Pending Verification',
-        notes: assetCondition,
-        category: selectedCategory,
-        photos: uploadedPhotoUrls,
-        user_email: staffProfile?.email
-      }]);
+      const { error } = await supabase.from('assets').insert(batchPayload);
+      if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
 
-      setIsInspectionOpen(false);
-      resetModalState();
-      loadDashboardData();
-      alert('Inspection submitted successfully!');
-    } catch (err: any) {
-      alert(err.message || 'Error executing upload commands');
-    } finally {
-      setIsSubmitting(false);
-    }
+      alert(`🎉 Batch successful! Uploaded ${batchPayload.length} new hardware assets.`);
+      setIsBulkModalOpen(false); setBulkFile(null); fetchRegistryData();
+    } catch (err: any) { alert(`❌ IMPORT REJECTED:\n\n${err.message}`); } finally { setIsImporting(false); }
   };
 
-  const activeGuides = selectedCategory.toLowerCase() === 'laptop' ? laptopGuides : accessoryGuides;
+  const getAssetViewUrl = (asset: any) => {
+    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
+    const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
+    return `${baseDomain}/admin/assets?view=${targetRef}`;
+  };
+
+  const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
+    const printWindow = window.open('', '_blank', 'width=500,height=500');
+    if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print hardware stickers.");
+
+    const cat = (asset.category || '').toLowerCase();
+
+    // Standard 50mm x 50mm Laptop Square
+    let boxCss = "width: 50mm; height: 50mm; padding: 2mm;";
+    let qrCss = "width: 25mm; height: 25mm;";
+    let titleCss = "font-size: 10px;";
+    let snCss = "font-size: 8px;";
+    let tagCss = "font-size: 13px; padding: 2px 6px;";
+
+    if (cat.includes('mouse') && !cat.includes('pad')) {
+      // 🐭 Micro Belly Sticker (32x22mm)
+      boxCss = "width: 32mm; height: 22mm; padding: 1mm;";
+      qrCss = "width: 11mm; height: 11mm;";
+      titleCss = "font-size: 6px;";
+      snCss = "font-size: 5px;";
+      tagCss = "font-size: 8px; padding: 1px 3px;";
+    } else if (cat.includes('headphone') || cat.includes('audio')) {
+      // 🎧 Vertical Headband Wrap (20x45mm)
+      boxCss = "width: 20mm; height: 45mm; padding: 1.5mm; display: flex; flex-direction: column; justify-content: space-between;";
+      qrCss = "width: 15mm; height: 15mm;";
+      titleCss = "font-size: 7px;";
+      snCss = "font-size: 6px;";
+      tagCss = "font-size: 8px; padding: 2px 0; width: 100%; text-align: center;";
+    }
+
+    const printableMarkup = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Sticker_${cleanTag}</title>
+          <style>
+            body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; font-family: monospace; background: #fff; color: #000; }
+            .label-box { ${boxCss} box-sizing: border-box; text-align: center; border: 1px dashed #bbb; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+            .header { font-weight: 900; ${titleCss} margin-bottom: 2px; text-transform: uppercase; font-family: sans-serif; }
+            .qr { ${qrCss} margin: 2px auto; display: block; object-fit: contain; }
+            .sn { ${snCss} color: #111; font-family: sans-serif; font-weight: 800; margin-top: 2px; }
+            .tag { ${tagCss} font-weight: 900; font-family: monospace; margin-top: 3px; background: #000; color: #fff; border-radius: 3px; letter-spacing: 0.5px; }
+            @media print { @page { margin: 0; } body { padding: 0; } .label-box { border: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="label-box">
+            <div class="header">VSS-Assets</div>
+            <img class="qr" src="${qrUrl}" onload="window.print(); window.close();" />
+            <div class="sn">S/N: ${asset.serial_number || 'FACTORY-SN'}</div>
+            <div class="tag">${cleanTag}</div>
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.open(); printWindow.document.write(printableMarkup); printWindow.document.close();
+  };
+
+  const getCatCount = (filterName: string) => {
+    if (filterName === 'All') return assets.length;
+    if (filterName === 'Accessories') {
+      return assets.filter(a => ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category)).length;
+    }
+    if (filterName === 'Mobile Phones') return assets.filter(a => a.category === 'Mobile Phone').length;
+    if (filterName === 'Other') return assets.filter(a => ['Cleaning Kits', 'Others'].includes(a.category)).length;
+    return assets.filter(a => a.category?.toLowerCase() === filterName.toLowerCase()).length;
+  };
+
+  const filteredAssets = assets.filter(a => {
+    const q = searchQuery.toLowerCase();
+    const cleanTag = (a.clean_tag || '').toLowerCase();
+    const matchesSearch = !q || (
+      a.id.toLowerCase().includes(q) || cleanTag.includes(q) ||
+      a.asset_name?.toLowerCase().includes(q) || a.serial_number?.toLowerCase().includes(q) ||
+      a.staff_name?.toLowerCase().includes(q) || a.brand?.toLowerCase().includes(q)
+    );
+
+    let matchesCat = true;
+    if (selectedCategory !== 'All') {
+      if (selectedCategory === 'Accessories') {
+        matchesCat = ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category);
+      } else if (selectedCategory === 'Mobile Phones') {
+        matchesCat = a.category === 'Mobile Phone';
+      } else if (selectedCategory === 'Other') {
+        matchesCat = ['Cleaning Kits', 'Others'].includes(a.category);
+      } else matchesCat = a.category === selectedCategory;
+    }
+
+    return matchesSearch && matchesCat;
+  });
 
   return (
-    <div className="space-y-8 font-sans max-w-7xl mx-auto p-2">
-      <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
-        <h1 className="text-2xl font-black text-[#002B49]">Welcome back, {staffProfile?.name}! 👋</h1>
-        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 font-bold">
-          <span>ID: {staffProfile?.emp_code}</span> | <span>Email: {staffProfile?.email}</span>
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
+      
+      {/* RESTORED HEADER WITH BULK UPLOAD BUTTON */}
+      <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 cursor-pointer">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">Hardware Registry</h1>
+              <span className="px-3 py-0.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-full">{assets.length} Units</span>
+            </div>
+            <p className="text-xs text-gray-400 font-bold mt-0.5">Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button 
+            onClick={() => setIsBulkModalOpen(true)} 
+            className="flex items-center gap-2 px-5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+          >
+            <FileSpreadsheet size={16} /> <span>Bulk Upload CSV</span>
+          </button>
+
+          <button 
+            onClick={() => setIsAddModalOpen(true)} 
+            className="flex items-center gap-2 px-6 py-3 bg-[#002B49] hover:bg-[#001d33] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md shadow-[#002B49]/20 cursor-pointer"
+          >
+            <PlusCircle size={16} /> <span>Register Asset</span>
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <button onClick={() => router.push('/staff/tickets?action=new')} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800"><div className="p-3 rounded-2xl bg-blue-50 text-blue-500"><Ticket size={20} /></div> RAISE TICKET</button>
-        
-        <button onClick={() => { 
-            if (assignedAssets.length === 0) { alert("You have no assigned assets to inspect."); return; }
-            setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); 
-          }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800 cursor-pointer">
-          <div className="p-3 rounded-2xl bg-orange-50 text-orange-500"><ClipboardCheck size={20} /></div> SUBMIT INSPECTION
-        </button>
-
-        {/* 🚀 FIX 1: Open Request Asset pop-up */}
-        <button onClick={() => setIsRequestOpen(true)} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
-          <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-500"><PlusCircle size={20} /></div> REQUEST ASSET
-        </button>
-
-        {/* 🚀 FIX 2: My Inspections now opens the Inspection Modal Form instead of routing away */}
-        <button onClick={() => { 
-            if (assignedAssets.length === 0) { alert("You have no assigned assets to inspect."); return; }
-            setSelectedAsset(assignedAssets[0]); resetModalState(); setIsInspectionOpen(true); 
-          }} className="bg-white border border-gray-100 p-6 rounded-[24px] shadow-sm hover:shadow-md text-center flex flex-col items-center justify-center gap-2 font-black text-xs text-gray-800">
-          <div className="p-3 rounded-2xl bg-rose-50 text-rose-500"><RefreshCw size={20} /></div> MY INSPECTIONS
-        </button>
+      {/* CATEGORY TABS */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+        {[
+          { name: 'All', icon: <Package size={14}/> },
+          { name: 'Laptop', icon: <Laptop size={14}/> },
+          { name: 'Accessories', icon: <Mouse size={14}/> },
+          { name: 'Headphone', icon: <Headphones size={14}/> },
+          { name: 'Mobile Phones', icon: <Smartphone size={14}/> },
+          { name: 'Other', icon: <SlidersHorizontal size={14}/> },
+        ].map(cat => (
+          <button
+            key={cat.name} onClick={() => setSelectedCategory(cat.name)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 cursor-pointer ${
+              selectedCategory === cat.name ? 'bg-[#002B49] text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80'
+            }`}
+          >
+            {cat.icon} <span>{cat.name}</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-500 font-mono">{getCatCount(cat.name)}</span>
+          </button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">MY ASSETS</p><p className="text-3xl font-black text-gray-900">{stats.myAssets}</p></div><div className="p-4 rounded-2xl text-white bg-blue-500"><Laptop size={22} /></div></div>
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">NEEDS INSPECTION</p><p className="text-3xl font-black text-gray-900">{stats.needsInspection}</p></div><div className="p-4 rounded-2xl text-white bg-orange-500"><AlertCircle size={22} /></div></div>
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-gray-100 flex items-center justify-between"><div><p className="text-xs font-black text-gray-400">IN REPAIR</p><p className="text-3xl font-black text-gray-900">{stats.inRepair}</p></div><div className="p-4 rounded-2xl text-white bg-rose-500"><Clock size={22} /></div></div>
+      {/* SEARCH BAR */}
+      <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-2xs flex items-center">
+        <div className="relative w-full">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input 
+            type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search Tag ID, Model, Brand, Serial S/N, or Holder Name..." 
+            className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
+          />
+        </div>
       </div>
 
-      <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2"><Laptop size={18} className="text-emerald-500" /><h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2></div>
-        
-        {/* 🚀 FIX 3: Display clean Empty State if database yields no assets */}
-        {assignedAssets.length === 0 ? (
-          <div className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="p-6 bg-gray-50 rounded-full mb-4">
-              <Laptop size={40} className="text-gray-300" />
-            </div>
-            <h3 className="text-lg font-black text-gray-900">No Assets Assigned</h3>
-            <p className="text-sm text-gray-500 mt-2 max-w-sm">There are currently no hardware assets assigned to this email address in the database.</p>
-          </div>
-        ) : (
-          <div className="p-6 space-y-4">
-            {assignedAssets.map((asset) => (
-              <div key={asset.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-100 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-200/60">
-                  <div>
-                    <p className="text-base font-extrabold text-gray-900">{asset.asset_name || asset.name}</p>
-                    <p className="text-[11px] text-gray-400 font-mono font-bold mt-0.5">S/N: {asset.serial_number || asset.serial}</p>
+      {/* ASSET GRID */}
+      {loading ? (
+        <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredAssets.map(asset => (
+            <div key={asset.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-blue-200 transition-colors">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-black">
+                    <Laptop size={18}/>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-green-100 text-green-700 border border-green-200 rounded-full text-[10px] font-black uppercase tracking-wider">{asset.displayStatus}</span>
-                    <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-wider ${getInspectionBadgeStyle(asset.inspectionStatus, asset.isOverdue)}`}>{asset.isOverdue && asset.inspectionStatus !== 'Sent for Approval' ? 'OVER DUE' : asset.inspectionStatus}</span>
+                  <div className="overflow-hidden">
+                    <h3 className="text-sm font-black text-gray-900 leading-tight truncate max-w-[170px]">{asset.asset_name}</h3>
+                    <p className="text-[11px] font-bold text-gray-400 truncate">{asset.brand || 'Standard Brand'}</p>
                   </div>
                 </div>
-
-                {asset.publicPhotosLog && (
-                  <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-100">
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Permanent Verification Snapshots</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                      {Object.entries(asset.publicPhotosLog).map(([angle, url]: any) => (
-                        <a key={angle} href={url} target="_blank" rel="noreferrer" className="block relative aspect-video border rounded-lg overflow-hidden group bg-gray-50 hover:border-blue-600 transition-colors">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Calendar size={16} className="text-gray-400" /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Last Inspection</p><p className="text-xs font-bold text-gray-800">{new Date(asset.lastInspection).toLocaleDateString()}</p></div></div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-2xs"><Clock size={16} className={asset.isOverdue ? 'text-red-500' : 'text-gray-400'} /><div><p className="text-[10px] font-bold text-gray-400 uppercase">Upcoming Due Date</p><p className={`text-xs font-bold ${asset.isOverdue ? 'text-red-600 font-extrabold' : 'text-gray-800'}`}>{new Date(asset.upcomingInspection).toLocaleDateString()}</p></div></div>
-                  <div className="flex items-center justify-end"><button onClick={() => { setSelectedAsset(asset); resetModalState(); setIsInspectionOpen(true); }} disabled={asset.inspectionStatus === 'Sent for Approval'} className="w-full px-4 py-2.5 rounded-xl text-xs font-black uppercase border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 cursor-pointer disabled:opacity-50">{asset.inspectionStatus === 'Sent for Approval' ? 'Awaiting Approval' : 'Launch Popup Form'}</button></div>
-                </div>
+                <button onClick={() => openAssetViewModal(asset)} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer">
+                  <QrCode size={16} />
+                </button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* 🚀 FIX 1 MODAL: REQUEST ASSET ALLOCATION */}
-      {isRequestOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h3 className="text-sm font-black uppercase text-gray-900 flex items-center gap-2">
-                <PlusCircle size={18} className="text-emerald-500"/> REQUEST ASSET ALLOCATION
-              </h3>
-              <button onClick={() => setIsRequestOpen(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer"><X size={18}/></button>
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className={`px-2.5 py-0.5 rounded-md font-extrabold text-[9px] uppercase tracking-wider border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
+                <span className="px-2 py-0.5 rounded-md font-black text-[9px] uppercase tracking-wider border text-emerald-600 bg-emerald-50 border-emerald-200">{asset.asset_condition || 'New'}</span>
+                {asset.price && <span className="ml-auto text-xs font-black text-gray-900 font-mono">${Number(asset.price).toLocaleString()}</span>}
+              </div>
+
+              <div className="space-y-1.5 p-3.5 bg-gray-50 rounded-2xl border border-gray-100/60 text-xs">
+                <div className="flex justify-between"><span className="font-bold text-gray-400 uppercase text-[9px]">Tag ID:</span> <span className="font-mono font-black text-blue-600">{asset.clean_tag}</span></div>
+                <div className="flex justify-between"><span className="font-bold text-gray-400 uppercase text-[9px]">Serial S/N:</span> <span className="font-mono font-black text-gray-700 truncate max-w-[140px]">{asset.serial_number || 'N/A'}</span></div>
+                <div className="flex justify-between pt-1 border-t border-gray-200/60"><span className="font-bold text-gray-400 uppercase text-[9px]">Holder:</span> <span className="font-black text-gray-900 truncate max-w-[140px]">{asset.staff_name}</span></div>
+              </div>
             </div>
-            
-            <div className="p-6 space-y-5 bg-white">
-              <div>
-                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-2">Select Asset Category</label>
-                <select value={requestCategory} onChange={e => setRequestCategory(e.target.value)} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 outline-none focus:border-emerald-500 focus:bg-white transition-colors cursor-pointer">
-                  <option value="Laptop">Laptop</option>
-                  <option value="Monitor">Monitor</option>
-                  <option value="Keyboard">Keyboard</option>
-                  <option value="Mouse">Mouse</option>
-                  <option value="Headphones">Headphones</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-2">Notes (What hardware are you using before?)</label>
-                <textarea 
-                  rows={4} 
-                  required
-                  value={requestNotes} 
-                  onChange={e => setRequestNotes(e.target.value)} 
-                  placeholder="Explain why you need this hardware item allocation..." 
-                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors"
-                />
-              </div>
+          ))}
+        </div>
+      )}
 
+      {/* BULK UPLOAD MODAL */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-gray-100 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+              <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] flex items-center gap-2"><Upload size={16}/> Bulk Hardware Intake</h3>
+              <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-gray-900 cursor-pointer"><X size={18}/></button>
+            </div>
+
+            <div className="space-y-3 text-left">
               <button 
-                onClick={handleRequestAssetSubmit} 
-                disabled={isSubmitting || !requestNotes.trim()} 
-                className={`w-full py-4 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${isSubmitting || !requestNotes.trim() ? 'bg-gray-300' : 'bg-[#009A66] hover:bg-[#008055] shadow-lg shadow-emerald-500/20'}`}
+                onClick={downloadSampleCsvTemplate} 
+                className="w-full py-3.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
-                {isSubmitting ? 'Transmitting Request...' : 'File Request Record'}
+                <Download size={16}/> <span>1. Download Verified Sample CSV</span>
               </button>
+              <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">
+                The sample format is perfectly mapped to Postgres. You can leave the <b>Asset Tag</b> column completely blank to let VSS auto-tag your items!
+              </p>
             </div>
+
+            <div className="p-6 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 hover:bg-gray-100/80 transition-colors flex flex-col items-center justify-center gap-3">
+              <FileSpreadsheet size={40} className="text-emerald-600 animate-bounce" />
+              <input 
+                type="file" accept=".csv" 
+                onChange={e => setBulkFile(e.target.files?.[0] || null)} 
+                className="text-xs font-bold text-gray-700 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-[#002B49] file:text-white file:cursor-pointer" 
+              />
+            </div>
+
+            <button 
+              onClick={executeBulkImport} 
+              disabled={isImporting || !bulkFile} 
+              className={`w-full py-4 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg ${bulkFile ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer' : 'bg-gray-300 cursor-not-allowed'}`}
+            >
+              {isImporting ? 'Parsing Postgres Rows...' : '2. Execute Batch Registration'}
+            </button>
           </div>
         </div>
       )}
 
-      {/* COMPLIANCE INSPECTION POP-UP */}
-      {isInspectionOpen && selectedAsset && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-3xl w-full flex flex-col max-h-[85vh] shadow-2xl border border-gray-100">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-3xl">
-              <div><h3 className="text-sm font-black uppercase text-gray-900">Compliance Pop-Up Framework</h3><p className="text-xs text-gray-400 font-bold mt-0.5">{selectedAsset.asset_name || selectedAsset.name}</p></div>
-              <button onClick={() => setIsInspectionOpen(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer"><X size={18}/></button>
+      {/* REGISTER MANUAL ASSET MODAL */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-xs font-black uppercase text-[#002B49] tracking-widest flex items-center gap-2"><Laptop size={16}/> Hardware Asset Intake</h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-900"><X size={18}/></button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-6">
-              {!isAssetUnlocked ? (
-                <div className="space-y-4 py-2">
-                  <div className="p-4 bg-blue-50 border border-blue-100 text-blue-900 text-xs rounded-xl font-medium flex items-start gap-2">
-                    <ShieldAlert size={16} className="text-blue-600 shrink-0 mt-0.5" />
-                    <span><strong>SECURITY ANTI-WRONG GUARD:</strong> Please enter this machine's exact <strong>Tag ID</strong> or <strong>Serial Number</strong> parameter to unlock the configuration fields.</span>
-                  </div>
-                  <form onSubmit={handleVerifyAssetLock} className="flex flex-col sm:flex-row gap-3">
-                    <input type="text" required value={typedVerification} onChange={e => setTypedVerification(e.target.value)} placeholder="Type Tag ID or Serial Number..." className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-600" />
-                    <button type="submit" className="px-6 py-3 bg-[#0B152A] hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer">Verify Asset</button>
-                  </form>
-                  {validationError && <p className="text-xs text-red-600 font-bold">{validationError}</p>}
-                </div>
-              ) : (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="p-3 bg-green-50 text-green-700 text-xs font-black uppercase tracking-wide rounded-xl">✓ MACHINE CONFIRMED. LIVE CAPTURE FEED ACTIVE.</div>
-                  
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 2: Select Current Asset Category</label>
-                    <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPhotos({}); }} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-blue-600 cursor-pointer">
-                      <option value="Laptop">Laptop (Requires 6 Photo Checkpoints)</option>
-                      <option value="Headphone">Headphone (Requires 2 Photo Checkpoints)</option>
-                      <option value="Keyboard">Keyboard (Requires 2 Photo Checkpoints)</option>
-                      <option value="Mouse">Mouse (Requires 2 Photo Checkpoints)</option>
-                      <option value="Cleaning Kits">Cleaning Kits (Requires 2 Photo Checkpoints)</option>
-                      <option value="Mouse Pad">Mouse Pad (Requires 2 Photo Checkpoints)</option>
-                      <option value="Laptop Stand">Laptop Stand (Requires 2 Photo Checkpoints)</option>
-                      <option value="Other">Other Accessories (Requires 2 Photo Checkpoints)</option>
+            <form onSubmit={handleSaveNewAsset} className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
+              <div className="bg-blue-50/40 p-4 rounded-2xl border border-blue-100 space-y-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-800 block">1. Identity & Classification</span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Asset Category</label>
+                    <select 
+                      value={newAssetCategory} 
+                      onChange={e => {
+                        const cat = e.target.value;
+                        setNewAssetCategory(cat);
+                        setNewAssetTag(generateCategoryPrefix(cat));
+                      }} 
+                      className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none cursor-pointer"
+                    >
+                      <option value="Laptop">Laptop</option>
+                      <option value="Keyboard">Keyboard</option>
+                      <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
+                      <option value="Mouse USB">Mouse USB</option>
+                      <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
+                      <option value="Headphone">Headphone</option>
+                      <option value="Cleaning Kits">Cleaning Kits</option>
+                      <option value="Mouse Pad">Mouse Pad</option>
+                      <option value="Stand">Stand</option>
+                      <option value="Mobile Phone">Mobile Phone</option>
+                      <option value="Others">Others</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="text-[10px] font-black text-blue-600 uppercase block mb-1">Auto Tag Prefix</label>
+                    <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none" />
+                  </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 3: Enter Current Condition of Asset</label>
-                    <textarea rows={3} required value={assetCondition} onChange={e => setAssetCondition(e.target.value)} placeholder="Explain the performance, wear, or physical condition of this hardware right now..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-600 focus:bg-white text-gray-800 leading-relaxed" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Brand</label><input type="text" placeholder="Dell, Sony" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
+                  <div className="sm:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Model Name *</label><input type="text" required placeholder="MacBook Pro M3" value={newAssetName} onChange={e => setNewAssetName(e.target.value)} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
+                </div>
+
+                <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Factory Serial Number (S/N) *</label><input type="text" required placeholder="Scan S/N barcode..." value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} className="w-full p-2.5 bg-white border rounded-xl text-xs font-mono font-bold outline-none uppercase" /></div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-2xl border space-y-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 block">2. Financials</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Price ($ USD)</label><input type="number" step="0.01" placeholder="280.00" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} className="w-full p-2 bg-white border rounded-xl text-xs font-mono font-bold outline-none" /></div>
+                  <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Vendor</label><input type="text" placeholder="Amazon" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} className="w-full p-2 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
+                </div>
+              </div>
+
+              <button type="submit" disabled={isSaving} className="w-full py-4 bg-[#002B49] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg cursor-pointer">Confirm Registration</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW & EDIT MODAL */}
+      {viewAssetModal && (() => {
+        const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
+        
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border border-gray-200">
+              
+              <div className="w-full md:w-1/3 bg-gradient-to-b from-blue-50/80 to-white p-8 flex flex-col items-center border-b md:border-b-0 md:border-r border-gray-100 relative shrink-0">
+                <button onClick={() => setViewAssetModal(null)} className="absolute md:hidden top-4 right-4 text-gray-400 bg-gray-100 p-1.5 rounded-full"><X size={14}/></button>
+                <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] mb-6">Sticker Matrix</h3>
+                
+                <div className="bg-white p-3 rounded-2xl shadow-sm border border-blue-100 mb-4">
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-36 h-36 object-contain" />
+                </div>
+
+                <div className="mb-1 w-full text-center truncate">
+                  <span className="text-xl font-mono font-black text-[#002B49] tracking-widest">{liveModalTag}</span>
+                </div>
+                
+                <p className="text-[10px] font-bold font-mono text-gray-500 mb-8">S/N: {editForm.serial || viewAssetModal.serial_number}</p>
+
+                <div className="flex w-full gap-2 mt-auto">
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className="flex-1 py-3.5 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-md cursor-pointer">
+                    <Printer size={15} /> Print Physical Sticker
+                  </button>
+                </div>
+              </div>
+
+              <div className="w-full md:w-2/3 flex flex-col overflow-y-auto custom-scrollbar relative">
+                <button onClick={() => setViewAssetModal(null)} className="hidden md:flex absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full cursor-pointer z-10"><X size={16}/></button>
+
+                <div className="p-8 space-y-6">
+                  
+                  <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Logistics State:</span>
+                      <span className={`px-3 py-1 rounded-lg font-black text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
+                    </div>
+
+                    {!isEditingAsset && (
+                      <button onClick={() => setIsEditingAsset(true)} className="px-4 py-2 bg-[#002B49] text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer ml-auto">
+                        <Edit2 size={13} /> Edit Hardware Record
+                      </button>
+                    )}
                   </div>
 
-                  <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-6">
-                    <div className="shrink-0 bg-white p-2 rounded-xl border border-blue-200 shadow-xs flex items-center justify-center min-w-[140px] min-h-[140px]">
-                      {shareableSessionLink ? (
-                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareableSessionLink)}`} alt="Real QR Code" className="w-32 h-32 object-contain" />
-                      ) : (
-                        <span className="text-[10px] text-gray-400 font-bold">Loading QR...</span>
-                      )}
-                    </div>
-                    <div className="space-y-3 text-center sm:text-left flex-1">
-                      <div>
-                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide flex items-center justify-center sm:justify-start gap-1.5"><QrCode size={14} className="text-blue-600"/> STEP 4: SMART PHONE SCAN OR LINK SHARE</h4>
-                        <p className="text-[11px] text-gray-500 font-medium leading-relaxed max-w-md mt-0.5">Scan this official ISO QR Code with your phone camera, or copy the link below to share over **WhatsApp** for instant mobile activation.</p>
+                  {isEditingAsset ? (
+                    <div className="space-y-5 animate-in fade-in duration-200">
+                      
+                      <div className="flex justify-between items-center pb-2 border-b border-blue-100">
+                        <span className="text-xs font-black uppercase tracking-wider text-blue-900">Editing Hardware Record</span>
+                        <span className="text-xs font-mono font-bold text-blue-600">{liveModalTag}</span>
                       </div>
-                      <div className="flex items-center gap-2 max-w-md">
-                        <input type="text" readOnly value={shareableSessionLink} className="flex-1 p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-mono text-gray-500 outline-none" />
-                        <button type="button" onClick={() => { navigator.clipboard.writeText(shareableSessionLink); setCopiedNotification(true); setTimeout(() => setCopiedNotification(false), 2000); }} className="p-2 bg-[#0B152A] hover:bg-black text-white rounded-lg text-xs font-bold shrink-0 transition-colors cursor-pointer">
-                          <span>{copiedNotification ? 'Copied!' : 'Copy Link'}</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/40 p-3.5 rounded-2xl border border-blue-100">
+                        <div>
+                          <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Asset Category *</label>
+                          <select 
+                            value={editForm.category} 
+                            onChange={e => {
+                              const newCat = e.target.value;
+                              const newPrefixTag = generateCategoryPrefix(newCat);
+                              setEditForm({ ...editForm, category: newCat, asset_tag: newPrefixTag });
+                            }}
+                            className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none cursor-pointer shadow-2xs"
+                          >
+                            <option value="Laptop">Laptop</option>
+                            <option value="Keyboard">Keyboard</option>
+                            <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
+                            <option value="Mouse USB">Mouse USB</option>
+                            <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
+                            <option value="Headphone">Headphone</option>
+                            <option value="Cleaning Kits">Cleaning Kits</option>
+                            <option value="Mouse Pad">Mouse Pad</option>
+                            <option value="Stand">Stand</option>
+                            <option value="Mobile Phone">Mobile Phone</option>
+                            <option value="Others">Others</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-black text-blue-700 uppercase flex justify-between mb-1">
+                            <span>Asset Tag ID</span>
+                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase text-blue-500 hover:underline cursor-pointer">(generate)</button>
+                          </label>
+                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none shadow-2xs uppercase" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Factory Serial Number (S/N) *</label>
+                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 outline-none uppercase" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
+                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Model Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Price ($ USD)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-mono font-bold outline-none" /></div>
+                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Vendor</label><input type="text" value={editForm.vendor} onChange={e => setEditForm({...editForm, vendor: e.target.value})} className="w-full p-2.5 bg-white border rounded-xl text-xs font-bold outline-none" /></div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-2.5 border rounded-xl text-xs font-bold outline-none"><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
+                        <div><label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-2.5 border rounded-xl text-xs font-black outline-none"><option value="In Stock (Unassigned)">📦 In Stock (Unassigned)</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo Use</option><option value="In Repair">⚠️ In Repair</option><option value="Discard">🗑️ Discarded</option></select></div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Re-Assign to Staff</label>
+                        <select value={editForm.assignee} onChange={e => setEditForm({...editForm, assignee: e.target.value})} className="w-full p-3 bg-white border rounded-xl text-xs font-bold outline-none">
+                          <option value="">-- Warehouse Inventory (Unassigned) --</option>
+                          {staffList.map(staff => <option key={staff.id} value={staff.id}>{staff.full_name || staff.name} ({staff.emp_code || staff.email})</option>)}
+                        </select>
+                      </div>
+
+                      <div className="flex gap-3 pt-4">
+                        <button type="button" onClick={() => setIsEditingAsset(false)} className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase cursor-pointer">Cancel</button>
+                        <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer">
+                          {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Updates
                         </button>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="bg-gray-50 p-3.5 rounded-2xl border"><p className="text-[9px] font-black text-gray-400 uppercase">Category</p><p className="text-xs font-black text-blue-600 mt-0.5">{viewAssetModal.category || 'Laptop'}</p></div>
+                        <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Serial Number (S/N)</p><p className="text-xs font-mono font-black text-gray-900 mt-0.5">{viewAssetModal.serial_number || 'N/A'}</p></div>
+                        <div className="bg-gray-50 p-3.5 rounded-2xl border"><p className="text-[9px] font-black text-gray-400 uppercase">Brand</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.brand || 'N/A'}</p></div>
+                        <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Model Name</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.asset_name}</p></div>
+                      </div>
 
-                  <div className="space-y-3">
-                    <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide">Step 5: Live Capture Checklist Frames</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {Object.keys(activeGuides).map((angle) => (
-                        <div key={angle} className="border border-gray-100 rounded-2xl p-4 bg-gray-50/60 flex flex-col justify-between space-y-3">
-                          <div>
-                            <h4 className="text-xs font-black text-gray-800">{angle}</h4>
-                            <p className="text-[11px] text-gray-400 font-medium mt-0.5 leading-relaxed">{activeGuides[angle]}</p>
-                          </div>
-                          <div className="relative aspect-video w-full rounded-xl bg-white border border-gray-200 flex flex-col items-center justify-center overflow-hidden shadow-3xs group">
-                            {photos[angle] ? (
-                              <>
-                                <img src={photos[angle]} className="w-full h-full object-cover" alt="" />
-                                <button type="button" onClick={() => setPhotos(prev => { const copy = {...prev}; delete copy[angle]; return copy; })} className="absolute top-1.5 right-1.5 bg-black/70 text-white p-1 rounded-full cursor-pointer"><X size={12} /></button>
-                              </>
-                            ) : (
-                              <button type="button" onClick={() => startLiveVideoStream(angle)} className="w-full h-full flex flex-col items-center justify-center text-center p-4 hover:bg-gray-100/40 transition-colors cursor-pointer">
-                                <Camera className="mx-auto text-gray-300 group-hover:text-blue-600 transition-colors mb-1" size={22} />
-                                <span className="text-[10px] text-gray-400 font-black uppercase tracking-wide block">Phone Live Lens</span>
-                              </button>
-                            )}
+                      <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-gray-400 block mb-0.5">Assigned Employee Holder:</span>
+                          <div className="flex items-center gap-2">
+                            <User size={15} className="text-blue-600"/>
+                            <span className="text-sm font-black text-gray-900">{viewAssetModal.staff_name}</span>
                           </div>
                         </div>
-                      ))}
+                        <span className="text-xs font-mono font-bold text-blue-900">{liveModalTag}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-3xl">
-              <button type="button" onClick={() => { stopLiveVideoStream(); setIsInspectionOpen(false); }} className="px-4 py-2 text-xs font-bold hover:bg-gray-200 rounded-xl cursor-pointer">Cancel</button>
-              <button type="submit" onClick={handleInspectionSubmit} disabled={isSubmitting || !isAssetUnlocked || !assetCondition.trim()} className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs cursor-pointer ${isAssetUnlocked && assetCondition.trim() ? 'bg-[#D1D5DB] text-gray-700 hover:bg-gray-300' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                {isSubmitting ? 'Transmitting...' : 'Submit Verification'}
-              </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* FULL SCREEN CAMERA UI */}
-      {isCameraActive && (
-        <div className="fixed inset-0 bg-black z-[1000] flex flex-col">
-          <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
-          <div className="relative z-10 w-full h-full flex flex-col justify-end p-8 bg-gradient-to-t from-black/90 via-transparent to-transparent">
-            <div className="flex justify-between items-center w-full max-w-md mx-auto mb-6">
-              <button type="button" onClick={stopLiveVideoStream} className="w-14 h-14 bg-gray-800/80 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer">
-                <X size={24} />
-              </button>
-              <button type="button" onClick={captureSnapshotFrame} className="w-20 h-20 bg-blue-600 border-4 border-blue-400 text-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(37,99,235,0.6)] transition-transform active:scale-95 cursor-pointer">
-                <Camera size={32}/>
-              </button>
-              <div className="w-14 h-14" />
-            </div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
