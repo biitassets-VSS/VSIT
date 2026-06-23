@@ -141,18 +141,23 @@ function DashboardContent() {
   const loadDashboardData = async () => {
     setIsLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    // 🚀 FIXED AUTH CHECK: Read the session ticket created by your Login page
+    const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+    
+    if (!sessionString) {
       router.push('/login');
       return;
     }
 
-    const userEmail = user.email || 'students_app05@outlook.com';
+    const activeUser = JSON.parse(sessionString);
+    const userEmail = activeUser.email || 'students_app05@outlook.com';
+    const userId = activeUser.id || String(Date.now());
 
     let fullName = 'Lakhwinder Canberra';
     let empCode = 'EMP-002';
+    
     try {
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (profile) {
         fullName = profile.full_name || profile.name || fullName;
         empCode = profile.emp_code || profile.emp_id || empCode;
@@ -188,7 +193,7 @@ function DashboardContent() {
 
     if (myAssets.length === 0) {
       myAssets = [{
-        id: `auto-device-${user.id.slice(0,6)}`,
+        id: `auto-device-${String(userId).slice(0,6)}`,
         asset_name: 'HP EliteBook 840 G8 Hardware',
         serial_number: `S/N-CANBERRA-${Math.floor(1000 + Math.random() * 9000)}`,
         category: 'Laptop',
@@ -330,8 +335,9 @@ function DashboardContent() {
 
     setIsSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const submissionEmail = user?.email || staffProfile?.email || 'students_app05@outlook.com';
+      const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+      const activeUser = sessionString ? JSON.parse(sessionString) : null;
+      const submissionEmail = activeUser?.email || staffProfile?.email || 'students_app05@outlook.com';
 
       const uploadedPhotoUrls: Record<string, string> = {};
 
