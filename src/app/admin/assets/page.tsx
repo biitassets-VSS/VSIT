@@ -24,7 +24,7 @@ export default function AssetRegistryPage() {
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false); // 👈 Restored!
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
 
   // Add Form
@@ -224,7 +224,7 @@ export default function AssetRegistryPage() {
   };
 
   // ==========================================
-  // 🟢 INDUSTRIAL BULK CSV PARSER & DOWNLOADER
+  // 🟢 ARMORED BULK CSV PARSER & DOWNLOADER
   // ==========================================
   const parseCsvRow = (line: string) => {
     const result = [];
@@ -240,7 +240,6 @@ export default function AssetRegistryPage() {
     return result.map(s => s.trim().replace(/^"|"$/g, ''));
   };
 
-  // 100% Perfect DB-Matching Sample Template
   const downloadSampleCsvTemplate = () => {
     const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
     const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
@@ -260,10 +259,17 @@ export default function AssetRegistryPage() {
 
     try {
       const text = await bulkFile.text();
-      const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
+      
+      // 🛡️ ARMOR 1: Destroy invisible BOM characters and normalize all line breaks
+      const cleanText = text.replace(/^\uFEFF/, '');
+      
+      // 🛡️ ARMOR 2: Split lines and instantly destroy completely empty Excel ghost rows
+      const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.replace(/,/g, '').trim().length > 0);
+      
       if (lines.length < 2) throw new Error("CSV contains no actual data rows.");
 
-      const rawHeaders = parseCsvRow(lines[0]).map(h => h.replace(/\s+/g, '').toLowerCase());
+      // 🛡️ ARMOR 3: Ultra-aggressive Header Normalizer (removes spaces, dashes, everything but letters/numbers)
+      const rawHeaders = parseCsvRow(lines[0]).map(h => h.replace(/[^a-z0-9]/gi, '').toLowerCase());
       const batchPayload: any[] = [];
 
       for (let i = 1; i < lines.length; i++) {
@@ -271,36 +277,38 @@ export default function AssetRegistryPage() {
         const col: Record<string, string> = {};
         rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
 
-        const modelName = col['modelname'] || col['name'] || '';
-        const serialNum = col['serialnumber'] || col['serial_number'] || col['sn'] || '';
+        // 🛡️ ARMOR 4: Deep-Search Alias Targeting
+        const modelName = col['modelname'] || col['model'] || col['name'] || col['assetname'] || '';
+        const serialNum = col['serialnumber'] || col['serial'] || col['sn'] || '';
 
-        if (!modelName && !serialNum) continue; // Skip totally blank Excel ghost-rows
+        // If a row somehow slipped past the ghost check, block it here
+        if (!modelName && !serialNum) continue; 
 
-        const cat = col['category'] || 'Others';
-        const rawTag = col['assettag'] || col['asset_tag'] || col['tag'] || '';
+        const cat = col['category'] || col['type'] || 'Others';
+        const rawTag = col['assettag'] || col['tag'] || col['id'] || '';
         const finalAssetTag = rawTag.toUpperCase() || generateCategoryPrefix(cat);
 
-        const rawPrice = col['price'] || '';
+        const rawPrice = col['price'] || col['cost'] || '';
         const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
         batchPayload.push({
-          id: generateSafeUuid(), // Postgres native UUID requirement
-          asset_tag: finalAssetTag, // Readable Human Tag
+          id: generateSafeUuid(), 
+          asset_tag: finalAssetTag, 
           asset_name: modelName || 'Standard Asset', 
-          brand: col['brand'] || 'Generic',
+          brand: col['brand'] || col['manufacturer'] || 'Generic',
           serial_number: (serialNum || 'UNKNOWN-SN').toUpperCase(), 
           category: cat, 
-          purchase_date: col['purchasedate'] || col['purchase_date'] || null, 
-          warranty_expiry: col['warrantyexpiry'] || col['warranty_expiry'] || null,
+          purchase_date: col['purchasedate'] || col['date'] || null, 
+          warranty_expiry: col['warrantyexpiry'] || col['warranty'] || null,
           price: isNaN(numPrice as number) ? null : numPrice, 
           vendor: col['vendor'] || col['supplier'] || 'Bulk Upload', 
-          asset_condition: col['condition'] || 'New',
+          asset_condition: col['condition'] || col['state'] || 'New',
           status: 'In Stock (Unassigned)', 
           inspection_status: 'Logged'
         });
       }
 
-      if (batchPayload.length === 0) throw new Error("No valid hardware rows discovered in file.");
+      if (batchPayload.length === 0) throw new Error("No valid hardware rows discovered. Check your column headers.");
 
       const { error } = await supabase.from('assets').insert(batchPayload);
       if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
@@ -411,7 +419,7 @@ export default function AssetRegistryPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
       
-      {/* RESTORED HEADER WITH BULK UPLOAD BUTTON */}
+      {/* HEADER WITH BULK UPLOAD BUTTON */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 cursor-pointer">
@@ -426,7 +434,6 @@ export default function AssetRegistryPage() {
           </div>
         </div>
 
-        {/* 🚀 THE DOUBLE BUTTON GROUP RESTORED */}
         <div className="flex items-center gap-2.5">
           <button 
             onClick={() => setIsBulkModalOpen(true)} 
@@ -516,7 +523,7 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🚀 RESTORED BULK UPLOAD MODAL */}
+      {/* 🚀 ARMORED BULK UPLOAD MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-gray-100 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
