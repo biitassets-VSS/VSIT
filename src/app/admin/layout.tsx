@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // Notifications & Alerts State
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [activeAlert, setActiveAlert] = useState<any>(null); // State for the live popup alert
+  const [activeAlert, setActiveAlert] = useState<any>(null);
   
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
     name: 'Loading...',
@@ -35,28 +35,46 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   });
 
   useEffect(() => {
+    // 🚀 THE MASTER-KEY SECURITY CHECK
     const verifyAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
+      try {
+        // 1. Look for the custom session we saved during our Custom Login
+        const adminSessionStr = localStorage.getItem('vsit_admin_session');
+        
+        // If it doesn't exist, kick them back to the Home/Login page
+        if (!adminSessionStr) { 
+          router.replace('/'); 
+          return; 
+        }
 
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('name, email, role')
-        .eq('email', user.email)
-        .single();
+        // 2. Parse the session data
+        const userProfile = JSON.parse(adminSessionStr);
 
-      if (!userProfile || userProfile.role !== 'admin') {
-        router.replace('/staff');
-        return;
+        // 3. Double-verify they actually have Admin clearance
+        const isAdmin = userProfile.role?.toLowerCase().includes('admin') || 
+                        userProfile.department?.toLowerCase().includes('admin') ||
+                        userProfile.role?.toLowerCase() === 'developer';
+
+        if (!isAdmin) {
+          router.replace('/staff');
+          return;
+        }
+
+        // 4. Authorized! Set up their profile UI
+        const displayName = userProfile.full_name || userProfile.name || 'Administrator';
+        setAdminProfile({
+          name: displayName,
+          email: userProfile.email || '',
+          initials: displayName.substring(0, 2).toUpperCase()
+        });
+        
+        setIsCheckingAuth(false);
+        fetchNotifications();
+
+      } catch (error) {
+        console.error("Auth check failed", error);
+        router.replace('/');
       }
-
-      setAdminProfile({
-        name: userProfile.name || 'Administrator',
-        email: user.email || '',
-        initials: 'AD'
-      });
-      setIsCheckingAuth(false);
-      fetchNotifications();
     };
 
     verifyAdmin();
@@ -73,10 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const newNotif = payload.new;
         setNotifications(current => [newNotif, ...current]);
         
-        // Trigger the Live Toast Alert Popup
         setActiveAlert(newNotif);
-        
-        // Auto-hide alert after 5 seconds
         setTimeout(() => setActiveAlert(null), 5000);
       })
       .subscribe();
@@ -104,7 +119,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.clear();
-    router.replace('/login');
+    // Clear our custom cookies too
+    document.cookie = "vsit_auth=; path=/; max-age=0";
+    document.cookie = "vsit_role=; path=/; max-age=0";
+    router.replace('/');
   };
 
   if (isCheckingAuth) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-10 h-10 text-orange-500 animate-spin" /></div>;
@@ -184,7 +202,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           
           {isProfileOpen && (
             <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 z-50">
-              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50"><LogOut size={18} /> Logout</button>
+              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 cursor-pointer"><LogOut size={18} /> Logout</button>
             </div>
           )}
         </div>
@@ -195,15 +213,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         
         {/* TOP RIGHT BAR CONTAINER */}
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg lg:hidden">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg lg:hidden cursor-pointer">
             <Menu size={24} />
           </button>
 
-          {/* Desktop Top Right Actions */}
           <div className="flex items-center gap-4 ml-auto relative">
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)} 
-              className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 border border-gray-100 text-gray-600 hover:text-orange-500 transition-colors"
+              className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 border border-gray-100 text-gray-600 hover:text-orange-500 transition-colors cursor-pointer"
             >
               <Bell size={22} />
               {unreadTotal > 0 && (
@@ -211,7 +228,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               )}
             </button>
 
-            {/* Top Right Header Dropdown Panel */}
             {isNotifOpen && (
               <div className="absolute top-[115%] right-0 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 max-h-96 overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
                 <div className="p-2 border-b border-gray-50 mb-2 flex justify-between items-center">
