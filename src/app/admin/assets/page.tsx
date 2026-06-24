@@ -6,9 +6,23 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
-  Upload, FileSpreadsheet, DollarSign, Package, Mouse, 
-  Keyboard, Headphones, SlidersHorizontal, Filter, Smartphone, AlertCircle
+  Upload, FileSpreadsheet, Package, Mouse, 
+  Keyboard, Headphones, SlidersHorizontal, Smartphone
 } from 'lucide-react';
+
+// 1. EXACT CATEGORY MATCHES AS REQUESTED
+const ASSET_CATEGORIES = [
+  'Laptop', 
+  'Stand', 
+  'Keyboard USB', 
+  'Combo Keyboard with Mouse kit USB', 
+  'Wireless Keyboard kit', 
+  'Mouse', 
+  'Headphone', 
+  'Cleaning kit', 
+  'Mouse PAD', 
+  'Others'
+];
 
 export default function AssetRegistryPage() {
   const router = useRouter();
@@ -20,7 +34,6 @@ export default function AssetRegistryPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedStatus, setSelectedStatus] = useState<string>('All');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -65,21 +78,18 @@ export default function AssetRegistryPage() {
     }
   }, [searchParams, assets]);
 
-  // 🚀 EXPANDED SMART PREFIX GENERATOR
+  // 🚀 SMART PREFIX GENERATOR (Exactly mapped to your rules)
   const generateCategoryPrefix = (category: string, existingUuid?: string) => {
     let prefix = 'VS-AST';
     const cat = (category || '').toLowerCase();
     
     if (cat.includes('laptop')) prefix = 'VS-LAP';
-    else if (cat.includes('mobile phone') || cat.includes('phone')) prefix = 'VS-MOB';
-    else if (cat.includes('combo kit')) prefix = 'VS-CMB';
-    else if (cat.includes('mouse pad') || cat.includes('pad')) prefix = 'VS-PAD';
+    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KB';
+    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
     else if (cat.includes('mouse')) prefix = 'VS-MO';
-    else if (cat.includes('keyboard')) prefix = 'VS-KB';
-    else if (cat.includes('headphone') || cat.includes('audio')) prefix = 'VS-HDP';
+    else if (cat.includes('headphone')) prefix = 'VS-HDP';
     else if (cat.includes('cleaning')) prefix = 'VS-CLN';
-    else if (cat.includes('stand')) prefix = 'VS-STND';
-    else prefix = 'VS-AST';
+    else if (cat.includes('stand')) prefix = 'VS-STN';
 
     if (existingUuid && existingUuid.length > 20) {
       const numsOnly = existingUuid.replace(/[^0-9]/g, '');
@@ -110,6 +120,8 @@ export default function AssetRegistryPage() {
           const assignee = (staffData || []).find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
           return {
             ...asset,
+            // 🛡️ FRONTEND FIX: Read from "name" first, fallback to "asset_name" safely
+            safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
             staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
             emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
             clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id)
@@ -139,7 +151,7 @@ export default function AssetRegistryPage() {
       category: asset.category || 'Laptop',
       asset_tag: stableTag,
       serial: asset.serial_number || '',
-      name: asset.asset_name || '', 
+      name: asset.name || asset.asset_name || '', // 🛡️ Load from either DB column
       brand: asset.brand || '', 
       price: asset.price || '', 
       vendor: asset.vendor || '', 
@@ -153,7 +165,7 @@ export default function AssetRegistryPage() {
 
   const handleSaveNewAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAssetName || !newAssetSerial) return alert("Model Name and Serial Number required.");
+    if (!newAssetName || !newAssetSerial) return alert("Model Name and Serial Number are required.");
     
     setIsSaving(true);
     try {
@@ -161,10 +173,11 @@ export default function AssetRegistryPage() {
       const resolvedStatus = newAssetAssignee ? 'Assigned' : newAssetStatus;
       const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
 
+      // 🚨 DB FIX: STRICTLY INSERT INTO "name"
       const { error } = await supabase.from('assets').insert([{
         id: generateSafeUuid(),
         asset_tag: finalTag.toUpperCase(), 
-        asset_name: newAssetName, 
+        name: newAssetName, // <-- FIXED
         brand: newAssetBrand || 'Standard',
         serial_number: newAssetSerial.toUpperCase(), 
         category: newAssetCategory, 
@@ -194,11 +207,12 @@ export default function AssetRegistryPage() {
       if (editForm.assignee && resolvedStatus === 'In Stock (Unassigned)') resolvedStatus = 'Assigned';
       if (!editForm.assignee && resolvedStatus === 'Assigned') resolvedStatus = 'In Stock (Unassigned)';
 
+      // 🚨 DB FIX: STRICTLY UPDATE "name"
       const updatePayload = {
         category: editForm.category,
         serial_number: editForm.serial.toUpperCase(),
         asset_tag: editForm.asset_tag.toUpperCase(),
-        asset_name: editForm.name, 
+        name: editForm.name, // <-- FIXED
         brand: editForm.brand, 
         price: cleanPrice,
         vendor: editForm.vendor, 
@@ -216,7 +230,7 @@ export default function AssetRegistryPage() {
       const updatedStaffName = selectedStaff.full_name || selectedStaff.name || editForm.assignee || 'Unassigned';
 
       setViewAssetModal((prev: any) => ({
-        ...prev, ...updatePayload, clean_tag: editForm.asset_tag.toUpperCase(), staff_name: updatedStaffName
+        ...prev, ...updatePayload, clean_tag: editForm.asset_tag.toUpperCase(), staff_name: updatedStaffName, safe_display_name: editForm.name
       }));
 
       setIsEditingAsset(false); fetchRegistryData(); alert("Hardware record patched successfully!");
@@ -224,7 +238,7 @@ export default function AssetRegistryPage() {
   };
 
   // ==========================================
-  // 🟢 ARMORED BULK CSV PARSER & DOWNLOADER
+  // 🟢 BULK CSV PARSER
   // ==========================================
   const parseCsvRow = (line: string) => {
     const result = [];
@@ -243,9 +257,9 @@ export default function AssetRegistryPage() {
   const downloadSampleCsvTemplate = () => {
     const headers = "Category,Brand,Model Name,Serial Number,Asset Tag,Price,Vendor,Purchase Date,Warranty Expiry,Condition\n";
     const row1 = 'Laptop,Apple,MacBook Pro M3,SN-99482,VS-LAP-15361,1899.99,Apple Direct,2025-01-10,2028-01-10,New\n';
-    const row2 = '"Combo Kit USB Keyboard and Mouse",Logitech,MK270 Wireless Combo,LOGI-SN882,,,45.99,Amazon Business,2025-02-15,,New\n';
+    const row2 = '"Combo Keyboard with Mouse kit USB",Logitech,MK270 Combo,LOGI-SN882,,,45.99,Amazon Business,2025-02-15,,New\n';
     const row3 = 'Headphone,Jabra,Evolve2 65,JAB-9941,VS-HDP-88210,180.00,B&H Photo,2025-01-01,,Refurbished\n';
-    const row4 = '"Mobile Phone",Samsung,Galaxy S24 Ultra,SMSG-7721,,,1199.00,Samsung Enterprise,2025-03-01,2027-03-01,New';
+    const row4 = 'Mouse PAD,Logitech,Studio Series,PAD-112,,,,,,New\n';
     
     const blob = new Blob([headers + row1 + row2 + row3 + row4], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
@@ -257,18 +271,27 @@ export default function AssetRegistryPage() {
     if (!bulkFile) return alert("Please upload a CSV file first.");
     setIsImporting(true);
 
+    const parseDateForPostgres = (dateStr: string) => {
+      if (!dateStr) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      
+      const parts = dateStr.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parseInt(parts[0]) > 12) {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+      }
+      return null;
+    };
+
     try {
       const text = await bulkFile.text();
       
-      // 🛡️ ARMOR 1: Destroy invisible BOM characters and normalize all line breaks
       const cleanText = text.replace(/^\uFEFF/, '');
-      
-      // 🛡️ ARMOR 2: Split lines and instantly destroy completely empty Excel ghost rows
-      const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.replace(/,/g, '').trim().length > 0);
-      
+      const lines = cleanText.split(/\r?\n/).filter(line => line.replace(/,/g, '').trim().length > 0);
       if (lines.length < 2) throw new Error("CSV contains no actual data rows.");
 
-      // 🛡️ ARMOR 3: Ultra-aggressive Header Normalizer (removes spaces, dashes, everything but letters/numbers)
       const rawHeaders = parseCsvRow(lines[0]).map(h => h.replace(/[^a-z0-9]/gi, '').toLowerCase());
       const batchPayload: any[] = [];
 
@@ -277,11 +300,9 @@ export default function AssetRegistryPage() {
         const col: Record<string, string> = {};
         rawHeaders.forEach((h, index) => { col[h] = row[index] || ''; });
 
-        // 🛡️ ARMOR 4: Deep-Search Alias Targeting
         const modelName = col['modelname'] || col['model'] || col['name'] || col['assetname'] || '';
         const serialNum = col['serialnumber'] || col['serial'] || col['sn'] || '';
 
-        // If a row somehow slipped past the ghost check, block it here
         if (!modelName && !serialNum) continue; 
 
         const cat = col['category'] || col['type'] || 'Others';
@@ -291,15 +312,19 @@ export default function AssetRegistryPage() {
         const rawPrice = col['price'] || col['cost'] || '';
         const numPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : null;
 
+        const safePurchaseDate = parseDateForPostgres(col['purchasedate'] || col['date']);
+        const safeWarrantyDate = parseDateForPostgres(col['warrantyexpiry'] || col['warranty']);
+
+        // 🚨 DB FIX: STRICTLY INSERT INTO "name"
         batchPayload.push({
           id: generateSafeUuid(), 
           asset_tag: finalAssetTag, 
-          asset_name: modelName || 'Standard Asset', 
+          name: modelName || 'Standard Asset', // <-- FIXED
           brand: col['brand'] || col['manufacturer'] || 'Generic',
           serial_number: (serialNum || 'UNKNOWN-SN').toUpperCase(), 
           category: cat, 
-          purchase_date: col['purchasedate'] || col['date'] || null, 
-          warranty_expiry: col['warrantyexpiry'] || col['warranty'] || null,
+          purchase_date: safePurchaseDate, 
+          warranty_expiry: safeWarrantyDate,
           price: isNaN(numPrice as number) ? null : numPrice, 
           vendor: col['vendor'] || col['supplier'] || 'Bulk Upload', 
           asset_condition: col['condition'] || col['state'] || 'New',
@@ -308,7 +333,9 @@ export default function AssetRegistryPage() {
         });
       }
 
-      if (batchPayload.length === 0) throw new Error("No valid hardware rows discovered. Check your column headers.");
+      if (batchPayload.length === 0) {
+        throw new Error(`Not valid Hardware rows discovered.`);
+      }
 
       const { error } = await supabase.from('assets').insert(batchPayload);
       if (error) throw new Error(`DATABASE ERROR: ${error.message}`);
@@ -324,7 +351,9 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
+  // ==========================================
   // 🖨️ PHYSICAL STICKER PRINT MATRIX
+  // ==========================================
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=500,height=500');
@@ -332,27 +361,34 @@ export default function AssetRegistryPage() {
 
     const cat = (asset.category || '').toLowerCase();
 
-    // Standard 50mm x 50mm Laptop Square
+    // Default: Standard 50mm x 50mm Square (Laptops, Cleaning Kits, Others)
     let boxCss = "width: 50mm; height: 50mm; padding: 2mm;";
     let qrCss = "width: 25mm; height: 25mm;";
     let titleCss = "font-size: 10px;";
     let snCss = "font-size: 8px;";
     let tagCss = "font-size: 13px; padding: 2px 6px;";
 
-    if (cat.includes('mouse') && !cat.includes('pad')) {
-      // 🐭 Micro Belly Sticker (32x22mm)
+    if (cat.includes('mouse') && !cat.includes('pad') && !cat.includes('combo')) {
+      // 🐭 Micro Belly Sticker (Small: 32x22mm)
       boxCss = "width: 32mm; height: 22mm; padding: 1mm;";
       qrCss = "width: 11mm; height: 11mm;";
       titleCss = "font-size: 6px;";
       snCss = "font-size: 5px;";
       tagCss = "font-size: 8px; padding: 1px 3px;";
-    } else if (cat.includes('headphone') || cat.includes('audio')) {
-      // 🎧 Vertical Headband Wrap (20x45mm)
+    } else if (cat.includes('headphone')) {
+      // 🎧 Vertical Headband Wrap (Vertical: 20x45mm)
       boxCss = "width: 20mm; height: 45mm; padding: 1.5mm; display: flex; flex-direction: column; justify-content: space-between;";
       qrCss = "width: 15mm; height: 15mm;";
       titleCss = "font-size: 7px;";
       snCss = "font-size: 6px;";
       tagCss = "font-size: 8px; padding: 2px 0; width: 100%; text-align: center;";
+    } else if (cat.includes('keyboard') || cat.includes('stand') || cat.includes('combo')) {
+      // ⌨️ Horizontal Strip (Horizontal: 60x20mm)
+      boxCss = "width: 60mm; height: 20mm; padding: 1.5mm; display: flex; flex-direction: row; justify-content: space-between; align-items: center;";
+      qrCss = "width: 16mm; height: 16mm; margin: 0 4px 0 0;";
+      titleCss = "font-size: 8px; text-align: left;";
+      snCss = "font-size: 6px; text-align: left;";
+      tagCss = "font-size: 10px; padding: 1px 4px; margin-top: 2px;";
     }
 
     const printableMarkup = `
@@ -367,15 +403,18 @@ export default function AssetRegistryPage() {
             .qr { ${qrCss} margin: 2px auto; display: block; object-fit: contain; }
             .sn { ${snCss} color: #111; font-family: sans-serif; font-weight: 800; margin-top: 2px; }
             .tag { ${tagCss} font-weight: 900; font-family: monospace; margin-top: 3px; background: #000; color: #fff; border-radius: 3px; letter-spacing: 0.5px; }
+            ${cat.includes('keyboard') || cat.includes('stand') || cat.includes('combo') ? '.label-box { flex-direction: row; text-align: left; } .info-col { display: flex; flex-direction: column; justify-content: center; flex: 1; }' : ''}
             @media print { @page { margin: 0; } body { padding: 0; } .label-box { border: none; } }
           </style>
         </head>
         <body>
           <div class="label-box">
+            ${cat.includes('keyboard') || cat.includes('stand') || cat.includes('combo') ? `<img class="qr" src="${qrUrl}" onload="window.print(); window.close();" /><div class="info-col"><div class="header">VSS-Assets</div><div class="sn">S/N: ${asset.serial_number || 'FACTORY-SN'}</div><div class="tag">${cleanTag}</div></div>` : `
             <div class="header">VSS-Assets</div>
             <img class="qr" src="${qrUrl}" onload="window.print(); window.close();" />
             <div class="sn">S/N: ${asset.serial_number || 'FACTORY-SN'}</div>
             <div class="tag">${cleanTag}</div>
+            `}
           </div>
         </body>
       </html>
@@ -386,10 +425,9 @@ export default function AssetRegistryPage() {
   const getCatCount = (filterName: string) => {
     if (filterName === 'All') return assets.length;
     if (filterName === 'Accessories') {
-      return assets.filter(a => ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category)).length;
+      return assets.filter(a => ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category)).length;
     }
-    if (filterName === 'Mobile Phones') return assets.filter(a => a.category === 'Mobile Phone').length;
-    if (filterName === 'Other') return assets.filter(a => ['Cleaning Kits', 'Others'].includes(a.category)).length;
+    if (filterName === 'Other') return assets.filter(a => ['Cleaning kit', 'Others'].includes(a.category)).length;
     return assets.filter(a => a.category?.toLowerCase() === filterName.toLowerCase()).length;
   };
 
@@ -398,18 +436,18 @@ export default function AssetRegistryPage() {
     const cleanTag = (a.clean_tag || '').toLowerCase();
     const matchesSearch = !q || (
       a.id.toLowerCase().includes(q) || cleanTag.includes(q) ||
-      a.asset_name?.toLowerCase().includes(q) || a.serial_number?.toLowerCase().includes(q) ||
-      a.staff_name?.toLowerCase().includes(q) || a.brand?.toLowerCase().includes(q)
+      (a.safe_display_name || '').toLowerCase().includes(q) || 
+      (a.serial_number || '').toLowerCase().includes(q) ||
+      (a.staff_name || '').toLowerCase().includes(q) || 
+      (a.brand || '').toLowerCase().includes(q)
     );
 
     let matchesCat = true;
     if (selectedCategory !== 'All') {
       if (selectedCategory === 'Accessories') {
-        matchesCat = ['Mouse USB', 'Keyboard', 'Combo Kit USB Keyboard and Mouse', 'Wireless Keyboard and Mouse Combo Kit', 'Mouse Pad', 'Stand'].includes(a.category);
-      } else if (selectedCategory === 'Mobile Phones') {
-        matchesCat = a.category === 'Mobile Phone';
+        matchesCat = ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category);
       } else if (selectedCategory === 'Other') {
-        matchesCat = ['Cleaning Kits', 'Others'].includes(a.category);
+        matchesCat = ['Cleaning kit', 'Others'].includes(a.category);
       } else matchesCat = a.category === selectedCategory;
     }
 
@@ -417,7 +455,7 @@ export default function AssetRegistryPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800">
       
       {/* HEADER WITH BULK UPLOAD BUTTON */}
       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -458,7 +496,6 @@ export default function AssetRegistryPage() {
           { name: 'Laptop', icon: <Laptop size={14}/> },
           { name: 'Accessories', icon: <Mouse size={14}/> },
           { name: 'Headphone', icon: <Headphones size={14}/> },
-          { name: 'Mobile Phones', icon: <Smartphone size={14}/> },
           { name: 'Other', icon: <SlidersHorizontal size={14}/> },
         ].map(cat => (
           <button
@@ -498,7 +535,7 @@ export default function AssetRegistryPage() {
                     <Laptop size={18}/>
                   </div>
                   <div className="overflow-hidden">
-                    <h3 className="text-sm font-black text-gray-900 leading-tight truncate max-w-[170px]">{asset.asset_name}</h3>
+                    <h3 className="text-sm font-black text-gray-900 leading-tight truncate max-w-[170px]">{asset.safe_display_name}</h3>
                     <p className="text-[11px] font-bold text-gray-400 truncate">{asset.brand || 'Standard Brand'}</p>
                   </div>
                 </div>
@@ -523,7 +560,7 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* 🚀 ARMORED BULK UPLOAD MODAL */}
+      {/* BULK UPLOAD MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-gray-100 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
@@ -540,7 +577,7 @@ export default function AssetRegistryPage() {
                 <Download size={16}/> <span>1. Download Verified Sample CSV</span>
               </button>
               <p className="text-[11px] text-gray-400 font-medium leading-relaxed pl-1">
-                The sample format is perfectly mapped to Postgres. You can leave the <b>Asset Tag</b> column completely blank to let VSS auto-tag your items!
+                The sample format is perfectly mapped to Postgres. You can leave the <b>Asset Tag</b> column completely blank to let VSS auto-tag your items based on their Category!
               </p>
             </div>
 
@@ -549,7 +586,7 @@ export default function AssetRegistryPage() {
               <input 
                 type="file" accept=".csv" 
                 onChange={e => setBulkFile(e.target.files?.[0] || null)} 
-                className="text-xs font-bold text-gray-700 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-[#002B49] file:text-white file:cursor-pointer" 
+                className="text-xs font-bold text-gray-700 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-[#002B49] file:text-white file:cursor-pointer w-full" 
               />
             </div>
 
@@ -589,17 +626,7 @@ export default function AssetRegistryPage() {
                       }} 
                       className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold outline-none cursor-pointer"
                     >
-                      <option value="Laptop">Laptop</option>
-                      <option value="Keyboard">Keyboard</option>
-                      <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
-                      <option value="Mouse USB">Mouse USB</option>
-                      <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
-                      <option value="Headphone">Headphone</option>
-                      <option value="Cleaning Kits">Cleaning Kits</option>
-                      <option value="Mouse Pad">Mouse Pad</option>
-                      <option value="Stand">Stand</option>
-                      <option value="Mobile Phone">Mobile Phone</option>
-                      <option value="Others">Others</option>
+                      {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                   </div>
                   <div>
@@ -630,7 +657,7 @@ export default function AssetRegistryPage() {
         </div>
       )}
 
-      {/* VIEW & EDIT MODAL */}
+      {/* VIEW & EDIT MODAL (Screenshot EXACT Match) */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
@@ -638,6 +665,7 @@ export default function AssetRegistryPage() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border border-gray-200">
               
+              {/* Left Column: QR Matrix */}
               <div className="w-full md:w-1/3 bg-gradient-to-b from-blue-50/80 to-white p-8 flex flex-col items-center border-b md:border-b-0 md:border-r border-gray-100 relative shrink-0">
                 <button onClick={() => setViewAssetModal(null)} className="absolute md:hidden top-4 right-4 text-gray-400 bg-gray-100 p-1.5 rounded-full"><X size={14}/></button>
                 <h3 className="text-xs font-black uppercase tracking-widest text-[#002B49] mb-6">Sticker Matrix</h3>
@@ -646,11 +674,11 @@ export default function AssetRegistryPage() {
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-36 h-36 object-contain" />
                 </div>
 
-                <div className="mb-1 w-full text-center truncate">
-                  <span className="text-xl font-mono font-black text-[#002B49] tracking-widest">{liveModalTag}</span>
+                <div className="mb-1 w-full bg-[#002B49] text-white rounded-xl py-3 text-center truncate">
+                  <span className="text-lg font-mono font-black tracking-widest">{liveModalTag}</span>
                 </div>
                 
-                <p className="text-[10px] font-bold font-mono text-gray-500 mb-8">S/N: {editForm.serial || viewAssetModal.serial_number}</p>
+                <p className="text-[10px] font-bold font-mono text-gray-500 mb-8 mt-2">S/N: {editForm.serial || viewAssetModal.serial_number}</p>
 
                 <div className="flex w-full gap-2 mt-auto">
                   <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className="flex-1 py-3.5 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex justify-center items-center gap-2 shadow-md cursor-pointer">
@@ -659,20 +687,19 @@ export default function AssetRegistryPage() {
                 </div>
               </div>
 
+              {/* Right Column: Editor Workspace */}
               <div className="w-full md:w-2/3 flex flex-col overflow-y-auto custom-scrollbar relative">
                 <button onClick={() => setViewAssetModal(null)} className="hidden md:flex absolute top-5 right-5 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full cursor-pointer z-10"><X size={16}/></button>
 
                 <div className="p-8 space-y-6">
                   
-                  <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Logistics State:</span>
-                      <span className={`px-3 py-1 rounded-lg font-black text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                    </div>
+                  <div className="flex items-center pb-4 border-b border-gray-100 gap-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Logistics State:</span>
+                    <span className={`px-4 py-1.5 rounded-lg font-black text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
 
                     {!isEditingAsset && (
                       <button onClick={() => setIsEditingAsset(true)} className="px-4 py-2 bg-[#002B49] text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer ml-auto">
-                        <Edit2 size={13} /> Edit Hardware Record
+                        <Edit2 size={13} /> Edit Record
                       </button>
                     )}
                   </div>
@@ -681,11 +708,11 @@ export default function AssetRegistryPage() {
                     <div className="space-y-5 animate-in fade-in duration-200">
                       
                       <div className="flex justify-between items-center pb-2 border-b border-blue-100">
-                        <span className="text-xs font-black uppercase tracking-wider text-blue-900">Editing Hardware Record</span>
+                        <span className="text-sm font-black uppercase tracking-wider text-blue-900">Editing Hardware Record</span>
                         <span className="text-xs font-mono font-bold text-blue-600">{liveModalTag}</span>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/40 p-3.5 rounded-2xl border border-blue-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Asset Category *</label>
                           <select 
@@ -695,19 +722,9 @@ export default function AssetRegistryPage() {
                               const newPrefixTag = generateCategoryPrefix(newCat);
                               setEditForm({ ...editForm, category: newCat, asset_tag: newPrefixTag });
                             }}
-                            className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none cursor-pointer shadow-2xs"
+                            className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none cursor-pointer"
                           >
-                            <option value="Laptop">Laptop</option>
-                            <option value="Keyboard">Keyboard</option>
-                            <option value="Combo Kit USB Keyboard and Mouse">Combo Kit USB Keyboard and Mouse</option>
-                            <option value="Mouse USB">Mouse USB</option>
-                            <option value="Wireless Keyboard and Mouse Combo Kit">Wireless Keyboard and Mouse Combo Kit</option>
-                            <option value="Headphone">Headphone</option>
-                            <option value="Cleaning Kits">Cleaning Kits</option>
-                            <option value="Mouse Pad">Mouse Pad</option>
-                            <option value="Stand">Stand</option>
-                            <option value="Mobile Phone">Mobile Phone</option>
-                            <option value="Others">Others</option>
+                            {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                           </select>
                         </div>
 
@@ -716,13 +733,13 @@ export default function AssetRegistryPage() {
                             <span>Asset Tag ID</span>
                             <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase text-blue-500 hover:underline cursor-pointer">(generate)</button>
                           </label>
-                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none shadow-2xs uppercase" />
+                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none uppercase" />
                         </div>
                       </div>
 
                       <div>
                         <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Factory Serial Number (S/N) *</label>
-                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 outline-none uppercase" />
+                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 outline-none uppercase" />
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -761,7 +778,7 @@ export default function AssetRegistryPage() {
                         <div className="bg-gray-50 p-3.5 rounded-2xl border"><p className="text-[9px] font-black text-gray-400 uppercase">Category</p><p className="text-xs font-black text-blue-600 mt-0.5">{viewAssetModal.category || 'Laptop'}</p></div>
                         <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Serial Number (S/N)</p><p className="text-xs font-mono font-black text-gray-900 mt-0.5">{viewAssetModal.serial_number || 'N/A'}</p></div>
                         <div className="bg-gray-50 p-3.5 rounded-2xl border"><p className="text-[9px] font-black text-gray-400 uppercase">Brand</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.brand || 'N/A'}</p></div>
-                        <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Model Name</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.asset_name}</p></div>
+                        <div className="bg-gray-50 p-3.5 rounded-2xl border sm:col-span-2"><p className="text-[9px] font-black text-gray-400 uppercase">Model Name</p><p className="text-xs font-black text-gray-900 mt-0.5">{viewAssetModal.safe_display_name}</p></div>
                       </div>
 
                       <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
