@@ -36,52 +36,72 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const verifyStaff = async () => {
-      const isGuest = localStorage.getItem('isGuestSession') === 'true';
-      if (isGuest) {
-        setStaffProfile({ id: 'guest-mock-uuid', name: 'Demo Guest User', email: 'guest@vsit.com', initials: 'GS' });
+      try {
+        // 0. Check for Demo / Guest session
+        const isGuest = localStorage.getItem('isGuestSession') === 'true';
+        if (isGuest) {
+          setStaffProfile({ id: 'guest-mock-uuid', name: 'Demo Guest User', email: 'guest@vsit.com', initials: 'GS' });
+          setIsCheckingAuth(false);
+          return;
+        }
+
+        // 1. Grab ANY valid session ticket dropped by the login page
+        const rawSession = localStorage.getItem('vsit_staff_session') || 
+                           localStorage.getItem('vsit_admin_session') || 
+                           localStorage.getItem('user');
+        
+        if (!rawSession) {
+          router.replace('/'); 
+          return; 
+        }
+
+        // 2. 🛡️ ARMORED PARSER: Catches string crashes safely
+        let activeUser: any = {};
+        try {
+          activeUser = JSON.parse(rawSession);
+        } catch (parseCrash) {
+          // If the session was saved as a raw email string e.g. "staff@vss.com"
+          if (typeof rawSession === 'string' && rawSession.includes('@')) {
+            activeUser = { email: rawSession, name: rawSession.split('@')[0] };
+          } else {
+            throw new Error("Unreadable session format");
+          }
+        }
+
+        // 3. Resolve the safest possible display details
+        const profileName = activeUser.name || activeUser.full_name || activeUser.email?.split('@')[0] || 'Staff Member';
+        const cleanInitials = profileName.substring(0, 2).toUpperCase();
+        const safeUserId = activeUser.id || activeUser.emp_code || activeUser.email || 'staff-default-id';
+
+        setStaffProfile({
+          id: safeUserId, 
+          name: profileName,
+          email: activeUser.email || 'staff@vsit.com',
+          initials: cleanInitials
+        });
+        
         setIsCheckingAuth(false);
-        return;
+        fetchNotifications(safeUserId);
+
+        // 4. Secure Real-Time Subscription
+        const channel = supabase
+          .channel('staff_notifications')
+          .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'notifications',
+            filter: `target_user=eq.${safeUserId}` 
+          }, (payload) => {
+            setNotifications(current => [payload.new, ...current]);
+          })
+          .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+
+      } catch (fatalError) {
+        console.error("Staff Layout rejected session:", fatalError);
+        router.replace('/');
       }
-
-      // 🚀 THE FIX: Check for the custom local storage ticket created by the login page
-      const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      
-      if (!sessionString) {
-        // No ticket found? Then they are an intruder. Kick them out.
-        router.replace('/login'); 
-        return; 
-      }
-
-      // 🎟️ Parse the valid user ticket
-      const activeUser = JSON.parse(sessionString);
-      const profileName = activeUser.name || activeUser.full_name || 'Staff Member';
-      const initials = profileName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-      const userId = activeUser.id || String(Date.now());
-
-      setStaffProfile({
-        id: userId, 
-        name: profileName,
-        email: activeUser.email || 'staff@vsit.com',
-        initials: initials
-      });
-      
-      setIsCheckingAuth(false);
-      fetchNotifications(userId);
-
-      // 🌟 SECURE REAL-TIME SUBSCRIPTION
-      const channel = supabase
-        .channel('staff_notifications')
-        .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'notifications',
-          filter: `target_user=eq.${userId}` 
-        }, (payload) => {
-          setNotifications(current => [payload.new, ...current]);
-        })
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
     };
     
     verifyStaff();
@@ -105,7 +125,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
-    router.replace('/login');
+    // Wipe browser security cookies
+    document.cookie = "vsit_auth=; path=/; max-age=0";
+    document.cookie = "vsit_role=; path=/; max-age=0";
+    router.replace('/');
   };
 
   if (isCheckingAuth) return (
@@ -157,7 +180,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           
           {isProfileOpen && (
             <div className="absolute bottom-20 left-4 right-4 bg-white rounded-xl shadow-lg border border-slate-100 p-2 z-50">
-              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50"><LogOut size={16} /> Logout</button>
+              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 cursor-pointer"><LogOut size={16} /> Logout</button>
             </div>
           )}
         </div>
@@ -166,9 +189,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* BODY */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-40">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-orange-50 rounded-lg"><Menu size={22} /></button>
+          <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-orange-50 rounded-lg cursor-pointer"><Menu size={22} /></button>
           <div className="flex items-center gap-4 ml-auto">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors">
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer">
               <Bell size={20} />
               {notifications.filter(n => !n.is_read).length > 0 && (
                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
