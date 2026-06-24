@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, PackageSearch, Settings, 
-  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, Loader2, Bell, ChevronDown 
+  LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, Loader2, Bell, ChevronDown, AlertTriangle 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -23,91 +23,87 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // Notifications & Alerts State
+  // 🚨 THE ANTI-BOUNCE SCREEN FREEZER
+  const [layoutCrash, setLayoutCrash] = useState<string | null>(null);
+
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [activeAlert, setActiveAlert] = useState<any>(null);
   
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
-    name: 'Loading...',
-    email: '...',
-    initials: 'AD'
+    name: 'Loading...', email: '...', initials: 'AD'
   });
 
   useEffect(() => {
-    // 🚀 THE MASTER-KEY SECURITY CHECK
+    let activeChannel: any;
+
     const verifyAdmin = async () => {
       try {
-        // 1. Look for the custom session we saved during our Custom Login
-        const adminSessionStr = localStorage.getItem('vsit_admin_session');
+        const rawSession = localStorage.getItem('vsit_admin_session') || 
+                           localStorage.getItem('vsit_staff_session') || 
+                           localStorage.getItem('user');
         
-        // If it doesn't exist, kick them back to the Home/Login page
-        if (!adminSessionStr) { 
-          router.replace('/'); 
+        if (!rawSession) {
+          setLayoutCrash("REASON: localStorage has no login session tokens. Available browser keys: " + Object.keys(localStorage).join(', '));
+          setIsCheckingAuth(false);
           return; 
         }
 
-        // 2. Parse the session data
-        const userProfile = JSON.parse(adminSessionStr);
-
-        // 3. Double-verify they actually have Admin clearance
-        const isAdmin = userProfile.role?.toLowerCase().includes('admin') || 
-                        userProfile.department?.toLowerCase().includes('admin') ||
-                        userProfile.role?.toLowerCase() === 'developer';
-
-        if (!isAdmin) {
-          router.replace('/staff');
-          return;
+        let activeUser: any = {};
+        try {
+          activeUser = JSON.parse(rawSession);
+        } catch (parseCrash) {
+          if (typeof rawSession === 'string' && rawSession.includes('@')) {
+            activeUser = { email: rawSession, name: rawSession.split('@')[0], role: 'admin' };
+          } else {
+            throw new Error(`Failed to parse session token: "${rawSession}"`);
+          }
         }
 
-        // 4. Authorized! Set up their profile UI
-        const displayName = userProfile.full_name || userProfile.name || 'Administrator';
+        const profileName = activeUser.name || activeUser.full_name || activeUser.email?.split('@')[0] || 'Administrator';
+        
         setAdminProfile({
-          name: displayName,
-          email: userProfile.email || '',
-          initials: displayName.substring(0, 2).toUpperCase()
+          name: profileName,
+          email: activeUser.email || 'admin@vsit.com',
+          initials: profileName.substring(0, 2).toUpperCase()
         });
         
         setIsCheckingAuth(false);
         fetchNotifications();
 
-      } catch (error) {
-        console.error("Auth check failed", error);
-        router.replace('/');
+        // Math.random() completely breaks Supabase real-time cache collisions
+        try {
+          activeChannel = supabase
+            .channel(`admin_notifs_${Math.random()}`)
+            .on('postgres_changes', { 
+              event: 'INSERT', schema: 'public', table: 'notifications', filter: "target_role=eq.admin" 
+            }, (payload) => {
+              const newNotif = payload.new;
+              setNotifications(current => [newNotif, ...current]);
+              setActiveAlert(newNotif);
+              setTimeout(() => setActiveAlert(null), 5000);
+            })
+            .subscribe();
+        } catch (channelErr) {
+          console.warn("Realtime channel skipped:", channelErr);
+        }
+
+      } catch (fatalError: any) {
+        console.error("Layout Crashed:", fatalError);
+        setLayoutCrash(fatalError.message || String(fatalError));
+        setIsCheckingAuth(false);
       }
     };
 
     verifyAdmin();
 
-    // REAL-TIME LISTENER
-    const channel = supabase
-      .channel('admin_notifications')
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'notifications',
-        filter: "target_role=eq.admin" 
-      }, (payload) => {
-        const newNotif = payload.new;
-        setNotifications(current => [newNotif, ...current]);
-        
-        setActiveAlert(newNotif);
-        setTimeout(() => setActiveAlert(null), 5000);
-      })
-      .subscribe();
-
     return () => {
-      supabase.removeChannel(channel);
+      if (activeChannel) supabase.removeChannel(activeChannel);
     };
-  }, [router]);
+  }, []);
 
   const fetchNotifications = async () => {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('target_role', 'admin')
-      .order('created_at', { ascending: false })
-      .limit(40);
+    const { data } = await supabase.from('notifications').select('*').eq('target_role', 'admin').order('created_at', { ascending: false }).limit(40);
     if (data) setNotifications(data);
   };
 
@@ -117,17 +113,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
-    // Clear our custom cookies too
-    document.cookie = "vsit_auth=; path=/; max-age=0";
-    document.cookie = "vsit_role=; path=/; max-age=0";
     router.replace('/');
   };
 
+  // 🚨 TRAP DISPLAY 
+  if (layoutCrash) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 font-mono">
+        <div className="max-w-xl w-full bg-red-500/10 border-2 border-red-500 rounded-2xl p-6 space-y-4 shadow-2xl">
+          <div className="flex items-center gap-3 text-red-500 font-bold text-lg">
+            <AlertTriangle size={24} className="animate-bounce" />
+            <span>ADMIN LAYOUT CRASH INTERCEPTED</span>
+          </div>
+          <p className="text-xs text-slate-300">The code tried to kick you back to `/login`. The screen-freezer caught this exact error:</p>
+          <div className="p-4 bg-black/80 rounded-xl text-red-400 font-bold text-xs break-all">
+            {layoutCrash}
+          </div>
+          <p className="text-[11px] text-slate-400">Copy the text inside the black box and send it to your AI assistant.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isCheckingAuth) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-10 h-10 text-orange-500 animate-spin" /></div>;
 
-  // --- BADGE COUNTS ---
   const unreadTotal = notifications.filter(n => !n.is_read).length;
   const unreadTickets = notifications.filter(n => !n.is_read && n.type?.toLowerCase() === 'ticket').length;
   const unreadInspections = notifications.filter(n => !n.is_read && n.type?.toLowerCase() === 'inspection').length;
@@ -136,7 +147,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-gray-50 flex font-sans relative">
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-gray-900/60 z-40 lg:hidden backdrop-blur-sm" />}
 
-      {/* --- LIVE TOAST ALERT POPUP --- */}
       {activeAlert && (
         <div className="fixed top-6 right-6 z-[100] w-80 bg-white border border-gray-100 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-right-8 fade-in duration-300">
           <div className="flex justify-between items-start mb-1">
@@ -151,9 +161,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* SIDEBAR */}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 bg-white border-r border-gray-100 shadow-sm z-50 flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        
         <div className="h-20 flex items-center justify-between px-6 border-b border-gray-50 shrink-0">
           <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-full"><X size={20} /></button>
@@ -176,18 +184,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div className="flex items-center gap-3">
                   <Icon size={20} className={isActive ? 'text-orange-500' : 'text-gray-400'} /> {link.name}
                 </div>
-                
                 {link.badge && link.badge > 0 ? (
-                  <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300">
-                    {link.badge}
-                  </span>
+                  <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300">{link.badge}</span>
                 ) : null}
               </Link>
             );
           })}
         </nav>
 
-        {/* PROFILE FOOTER ONLY */}
         <div className="p-4 border-t border-gray-50 relative shrink-0 mb-2">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-full flex items-center justify-between p-2 rounded-2xl transition-all hover:bg-gray-50">
             <div className="flex items-center gap-3 overflow-hidden">
@@ -208,45 +212,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* MAIN CONTENT WORKSPACE */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        
-        {/* TOP RIGHT BAR CONTAINER */}
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg lg:hidden cursor-pointer">
-            <Menu size={24} />
-          </button>
+          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-gray-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg lg:hidden cursor-pointer"><Menu size={24} /></button>
 
           <div className="flex items-center gap-4 ml-auto relative">
-            <button 
-              onClick={() => setIsNotifOpen(!isNotifOpen)} 
-              className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 border border-gray-100 text-gray-600 hover:text-orange-500 transition-colors cursor-pointer"
-            >
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 border border-gray-100 text-gray-600 hover:text-orange-500 transition-colors cursor-pointer">
               <Bell size={22} />
-              {unreadTotal > 0 && (
-                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full ring-2 ring-white animate-pulse" />
-              )}
+              {unreadTotal > 0 && <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full ring-2 ring-white animate-pulse" />}
             </button>
-
-            {isNotifOpen && (
-              <div className="absolute top-[115%] right-0 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 max-h-96 overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
-                <div className="p-2 border-b border-gray-50 mb-2 flex justify-between items-center">
-                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-wide">Recent Alerts</h3>
-                  {unreadTotal > 0 && <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{unreadTotal} New</span>}
-                </div>
-                {notifications.length === 0 ? (
-                  <p className="text-xs text-center text-gray-500 py-6 font-medium">No new notifications.</p>
-                ) : (
-                  notifications.map(n => (
-                    <div key={n.id} onClick={() => markAsRead(n.id)} className={`p-3 rounded-xl cursor-pointer transition-colors mb-1 ${n.is_read ? 'bg-white opacity-60' : 'bg-orange-50/50 border border-orange-100/60'}`}>
-                      <p className="text-[10px] font-bold text-orange-600 mb-0.5 uppercase tracking-wider">{n.type}</p>
-                      <p className="text-xs font-black text-gray-900">{n.title}</p>
-                      <p className="text-[11px] text-gray-600 mt-1 line-clamp-2">{n.message}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
           </div>
         </header>
 

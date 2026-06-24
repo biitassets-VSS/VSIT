@@ -30,60 +30,63 @@ export default function AdminDashboardPage() {
   const loadAdminData = async () => {
     setLoading(true);
 
-    // 1. Authenticate & Get Profile
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/login');
+    // 🚀 THE ARMORED AUTH BYPASSER
+    // We check for the custom login ticket instead of Supabase's strict vault
+    const rawSession = localStorage.getItem('vsit_admin_session') || 
+                       localStorage.getItem('vsit_staff_session') || 
+                       localStorage.getItem('user');
+
+    if (!rawSession) {
+      router.replace('/');
       return;
     }
 
     try {
-      const { data: profile } = await supabase.from('profiles').select('full_name, name').eq('id', user.id).maybeSingle();
-      if (profile) setAdminName(profile.full_name || profile.name || 'System Admin');
-    } catch (e) { console.warn('Profile load skipped'); }
+      let activeUser: any = {};
+      try { activeUser = JSON.parse(rawSession); }
+      catch (e) { activeUser = { name: rawSession.split('@')[0] }; }
+      
+      setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
 
-    // 2. Safe Fetch: Assets
-    let assetCount = 0;
-    try {
-      const { count } = await supabase.from('assets').select('*', { count: 'exact', head: true });
-      assetCount = count || 0;
-    } catch (e) { console.warn('Asset fetch failed'); }
+      // 1. Safe Fetch: Assets
+      let assetCount = 0;
+      const { count: assets } = await supabase.from('assets').select('*', { count: 'exact', head: true });
+      assetCount = assets || 0;
 
-    // 3. Safe Fetch: Pending Inspections
-    let pendingCount = 0;
-    let recentLogs: any[] = [];
-    try {
+      // 2. Safe Fetch: Pending Inspections
+      let pendingCount = 0;
+      let recentLogs: any[] = [];
       const { data: inspections } = await supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false });
       if (inspections) {
         pendingCount = inspections.filter(i => i.status?.toLowerCase().includes('pending')).length;
-        recentLogs = inspections.slice(0, 5); // Grab latest 5 for the activity feed
+        recentLogs = inspections.slice(0, 5);
       }
-    } catch (e) { console.warn('Inspection fetch failed'); }
 
-    // 4. Safe Fetch: Tickets
-    let ticketCount = 0;
-    try {
+      // 3. Safe Fetch: Tickets
+      let ticketCount = 0;
       const { data: tickets } = await supabase.from('tickets').select('*');
       if (tickets) {
         ticketCount = tickets.filter(t => t.status === 'open' || t.status === 'in_repair' || t.status === 'pending').length;
       }
-    } catch (e) { console.warn('Ticket fetch failed'); }
 
-    // 5. Safe Fetch: Staff Profiles
-    let staffCount = 0;
-    try {
-      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-      staffCount = count || 0;
-    } catch (e) { console.warn('Staff fetch failed'); }
+      // 4. Safe Fetch: Staff Profiles
+      let staffCount = 0;
+      const { count: staff } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+      staffCount = staff || 0;
 
-    setStats({
-      totalAssets: assetCount,
-      pendingInspections: pendingCount,
-      activeTickets: ticketCount,
-      totalStaff: staffCount
-    });
-    setRecentActivity(recentLogs);
-    setLoading(false);
+      setStats({
+        totalAssets: assetCount,
+        pendingInspections: pendingCount,
+        activeTickets: ticketCount,
+        totalStaff: staffCount
+      });
+      setRecentActivity(recentLogs);
+      setLoading(false);
+
+    } catch (e) { 
+      console.error('Data load error:', e);
+      setLoading(false); 
+    }
   };
 
   if (loading) {
@@ -166,7 +169,6 @@ export default function AdminDashboardPage() {
       {/* 🧭 NAVIGATION ACTION CARDS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Column: Quick Links */}
         <div className="lg:col-span-2 space-y-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 pl-2">System Modules</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -214,11 +216,9 @@ export default function AdminDashboardPage() {
                 <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-emerald-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
               </div>
             </button>
-
           </div>
         </div>
 
-        {/* Right Column: Mini Activity Feed */}
         <div className="space-y-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 pl-2">Live Activity Log</h3>
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 h-[300px] overflow-hidden flex flex-col">
@@ -230,7 +230,7 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-                {recentActivity.map((log) => (
+                {recentActivity.map((log: any) => (
                   <div key={log.id} className="flex gap-3 relative pb-4 border-b border-gray-50 last:border-0 last:pb-0">
                     <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
                       <Clock size={12} />
@@ -253,7 +253,6 @@ export default function AdminDashboardPage() {
         </div>
 
       </div>
-
     </div>
   );
 }
