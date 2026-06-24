@@ -1,21 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
-  Eye, Laptop, User, Calendar, ShieldAlert, AlertCircle, Search, RefreshCw, X
+  Eye, Laptop, User, Calendar, ShieldAlert, AlertTriangle, Search, RefreshCw, X, Image as ImageIcon
 } from 'lucide-react';
 
 export default function AdminInspectionReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightedId = searchParams.get('id'); 
+
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<any[]>([]);
-  const [filterTab, setFilterTab] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [filterTab, setFilterTab] = useState<'pending' | 'approved' | 're-inspection' | 'rejected' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Action state
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
@@ -26,72 +28,94 @@ export default function AdminInspectionReviewPage() {
   const fetchVerificationLedger = async () => {
     setLoading(true);
     try {
-      // Fetch 1: All Inspections
-      const { data: rawInspections, error: inspErr } = await supabase
-        .from('inspections')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // 1. Fetch from all 3 tables in real-time
+      const [inspRes, assetsRes, profilesRes] = await Promise.all([
+        supabase.from('inspections').select('*').order('created_at', { ascending: false }),
+        supabase.from('assets').select('*'),
+        supabase.from('profiles').select('*')
+      ]);
 
-      if (inspErr) throw inspErr;
+      const rawInspections = inspRes.data || [];
+      const assetsData = assetsRes.data || [];
+      const profilesData = profilesRes.data || [];
 
-      // Fetch 2: All Assets (to get device names & Serial numbers)
-      const { data: assetsData } = await supabase.from('assets').select('*');
+      const masterLedger: any[] = [];
+      const processedAssetIds = new Set();
 
-      // Fetch 3: All Profiles (to get clean Employee Names & Emp Codes)
-      const { data: profilesData } = await supabase.from('profiles').select('*');
+      // 2. Process all actual Staff Submissions
+      rawInspections.forEach(insp => {
+        const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
+        const matchedStaff = profilesData.find(p => p.email?.toLowerCase() === insp.user_email?.toLowerCase() || p.id === matchedAsset.assigned_to || p.id === insp.inspected_by) || {};
 
-      // Map the 3 tables together into one rich master object
-      const masterLedger = (rawInspections || []).map(insp => {
-        const matchedAsset = (assetsData || []).find(a => String(a.id) === String(insp.asset_id)) || {};
-        
-        // Find user by email or fallback to raw user_email string
-        const matchedStaff = (profilesData || []).find(p => 
-          p.email?.toLowerCase() === insp.user_email?.toLowerCase() || 
-          p.id === matchedAsset.assigned_to
-        ) || {};
+        processedAssetIds.add(String(matchedAsset.id));
 
-        return {
+        masterLedger.push({
           ...insp,
-          asset_name: matchedAsset.asset_name || matchedAsset.name || 'Unmapped Device',
+          is_submission: true,
+          asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
+          asset_tag: matchedAsset.asset_tag || 'NO-TAG',
           staff_name: matchedStaff.full_name || matchedStaff.name || insp.user_email || 'Remote Employee',
           emp_code: matchedStaff.emp_code || matchedStaff.emp_id || 'EMP-??',
-        };
+          status: insp.status || 'Pending Review'
+        });
       });
+
+      // 3. 🚨 NEW: Find Assets that are "Pending" in the database but staff hasn't submitted yet
+      assetsData.forEach(asset => {
+        const s = (asset.inspection_status || '').toLowerCase();
+        
+        if (s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) {
+          // If we haven't already processed a recent submission for this asset
+          if (!processedAssetIds.has(String(asset.id))) {
+            const matchedStaff = profilesData.find(p => p.id === asset.assigned_to) || {};
+            
+            masterLedger.push({
+              id: `missing-${asset.id}`,
+              asset_id: asset.id,
+              is_submission: false, // Flag to show it's missing photos
+              created_at: asset.created_at || new Date().toISOString(),
+              asset_name: asset.name || asset.asset_name,
+              serial_number: asset.serial_number || asset.serial,
+              asset_tag: asset.asset_tag || 'NO-TAG',
+              staff_name: matchedStaff.full_name || matchedStaff.name || 'Unassigned',
+              emp_code: matchedStaff.emp_code || matchedStaff.emp_id || 'N/A',
+              status: 'Awaiting Staff Action',
+              notes: 'Staff member has not submitted the smartphone visual inspection yet.',
+              photos: {}
+            });
+          }
+        }
+      });
+
+      // Sort everything by date so the newest issues are at the top
+      masterLedger.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setInspections(masterLedger);
     } catch (err: any) {
       console.error("Admin fetch failed:", err);
-      alert("Failed to fetch inspection records. Please check Supabase table permissions.");
+      alert("Failed to fetch inspection records. Please check Supabase connectivity.");
     } finally {
       setLoading(false);
     }
   };
 
-  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Passed' | 'Failed (Re-Request)') => {
+  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected') => {
     if (!confirm(`Are you sure you want to mark this submission as "${verdict}"?`)) return;
 
     setUpdatingId(inspectionId);
     try {
-      await supabase
-        .from('inspections')
-        .update({ status: verdict })
-        .eq('id', inspectionId);
+      await supabase.from('inspections').update({ status: verdict }).eq('id', inspectionId);
 
-      await supabase
-        .from('assets')
-        .update({ 
-          inspection_status: verdict,
-          status: 'Assigned',
-          last_inspection_date: new Date().toISOString()
-        })
-        .eq('id', assetId);
+      const assetUpdatePayload: any = { inspection_status: verdict };
+      if (verdict === 'Approved') {
+        assetUpdatePayload.last_inspection_date = new Date().toISOString();
+        assetUpdatePayload.status = 'Assigned'; 
+      }
 
-      setInspections(prev => prev.map(item => 
-        item.id === inspectionId ? { ...item, status: verdict } : item
-      ));
+      await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
 
-      alert(`Verdict transmitted successfully! Staff screen updated to: ${verdict}`);
+      setInspections(prev => prev.map(item => item.id === inspectionId ? { ...item, status: verdict } : item));
     } catch (err: any) {
       alert(`Error transmitting verdict: ${err.message}`);
     } finally {
@@ -99,201 +123,289 @@ export default function AdminInspectionReviewPage() {
     }
   };
 
+  // 🚨 FIXED: Smart logic to catch 'Completed' or 'Logged' submissions as Pending Review
   const filteredList = inspections.filter(item => {
+    const s = (item.status || '').toLowerCase();
+    const isApproved = s.includes('approved') || s.includes('pass');
+    const isRejected = s.includes('rejected') || s.includes('not approved') || s.includes('fail');
+    const isReInspect = s.includes('re-inspection');
+    
+    // If it's not explicitly approved, rejected, or re-inspection... it requires your attention!
+    const isPending = !isApproved && !isRejected && !isReInspect;
+
     const matchesTab = 
       filterTab === 'all' ? true :
-      filterTab === 'pending' ? item.status?.toLowerCase().includes('pending') :
-      filterTab === 'approved' ? item.status?.toLowerCase().includes('pass') :
-      filterTab === 'rejected' ? item.status?.toLowerCase().includes('fail') : true;
+      filterTab === 'pending' ? isPending :
+      filterTab === 'approved' ? isApproved :
+      filterTab === 're-inspection' ? isReInspect :
+      filterTab === 'rejected' ? isRejected : true;
 
     const query = searchQuery.toLowerCase();
     const matchesSearch = 
       item.staff_name.toLowerCase().includes(query) ||
       item.asset_name.toLowerCase().includes(query) ||
       item.serial_number.toLowerCase().includes(query) ||
-      item.emp_code.toLowerCase().includes(query);
+      item.emp_code.toLowerCase().includes(query) ||
+      item.asset_tag.toLowerCase().includes(query);
 
     return matchesTab && matchesSearch;
   });
 
-  const pendingCount = inspections.filter(i => i.status?.toLowerCase().includes('pending')).length;
+  const pendingCount = inspections.filter(item => {
+    const s = (item.status || '').toLowerCase();
+    return !(s.includes('approved') || s.includes('pass') || s.includes('rejected') || s.includes('not approved') || s.includes('fail') || s.includes('re-inspection'));
+  }).length;
+
+  const getSemanticColor = (status: string, isSubmission: boolean) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('approved')) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    if (s.includes('re-inspection')) return 'text-amber-700 bg-amber-50 border-amber-200';
+    if (s.includes('rejected') || s.includes('not approved')) return 'text-rose-700 bg-rose-50 border-rose-200';
+    if (!isSubmission) return 'text-orange-700 bg-orange-50 border-orange-200'; // Missing Action
+    return 'text-blue-700 bg-blue-50 border-blue-200'; // Ready for Admin Review
+  };
+
+  const calculateUpcomingDate = (createdDateStr: string) => {
+    const d = new Date(createdDateStr);
+    d.setMonth(d.getMonth() + 6);
+    return d.toLocaleDateString('en-IN');
+  };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6 font-sans">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
       
-      <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors">
+      {/* 🌟 PREMIUM HEADER */}
+      <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
             <ArrowLeft size={20} />
           </button>
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">Inspection Command Center</h1>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Inspection Command Center</h1>
               {pendingCount > 0 && (
-                <span className="px-3 py-0.5 bg-orange-500 text-white font-black text-xs rounded-full animate-bounce">
-                  {pendingCount} Pending
+                <span className="px-3 py-1 bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-sm">
+                  {pendingCount} Pending Reviews
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400 font-bold mt-0.5">Verify smartphone visual captures, audit hardware health, and issue compliance certificates</p>
+            <p className="text-xs text-slate-500 font-semibold">Adjudicate smartphone hardware captures and enforce compliance</p>
           </div>
         </div>
 
         <button 
           onClick={fetchVerificationLedger} 
           disabled={loading}
-          className="flex items-center justify-center gap-2 px-5 py-3 bg-gray-50 hover:bg-gray-100 text-[#002B49] rounded-2xl text-xs font-black uppercase tracking-wider border border-gray-200 transition-all active:scale-95 self-start md:self-auto"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh Data</span>
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          <span>Sync Database</span>
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-2xs">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
-          <button onClick={() => setFilterTab('pending')} className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide shrink-0 transition-all ${filterTab === 'pending' ? 'bg-orange-500 text-white shadow-xs' : 'text-gray-500 hover:bg-gray-50'}`}>
-            Pending Review ({pendingCount})
-          </button>
-          <button onClick={() => setFilterTab('approved')} className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide shrink-0 transition-all ${filterTab === 'approved' ? 'bg-green-600 text-white shadow-xs' : 'text-gray-500 hover:bg-gray-50'}`}>
-            Approved
-          </button>
-          <button onClick={() => setFilterTab('rejected')} className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide shrink-0 transition-all ${filterTab === 'rejected' ? 'bg-red-600 text-white shadow-xs' : 'text-gray-500 hover:bg-gray-50'}`}>
-            Rejected
-          </button>
-          <button onClick={() => setFilterTab('all')} className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide shrink-0 transition-all ${filterTab === 'all' ? 'bg-[#002B49] text-white shadow-xs' : 'text-gray-500 hover:bg-gray-50'}`}>
-            All Logs ({inspections.length})
-          </button>
+      {/* 🌟 TABS & SEARCH */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+          {[
+            { id: 'pending', label: `Pending (${pendingCount})` },
+            { id: 'approved', label: 'Approved' },
+            { id: 're-inspection', label: 'Re-Inspection' },
+            { id: 'rejected', label: 'Rejected' },
+            { id: 'all', label: `All Logs (${inspections.length})` },
+          ].map(tab => (
+            <button
+              key={tab.id} onClick={() => setFilterTab(tab.id as any)}
+              className={`px-5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest shrink-0 cursor-pointer transition-all ${
+                filterTab === tab.id ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div className="relative min-w-[260px]">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            type="text" 
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search employee, S/N, asset..." 
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
-          />
+        <div className="bg-white p-2.5 rounded-3xl border border-slate-200 shadow-sm flex items-center">
+          <div className="relative w-full">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by Employee, S/N, Asset Name, or Tag ID..." 
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-2xl text-sm font-bold text-slate-900 outline-none transition-all"
+            />
+          </div>
         </div>
       </div>
 
+      {/* 🌟 ADJUDICATION GRID */}
       {loading ? (
-        <div className="w-full py-24 flex flex-col items-center justify-center gap-3 bg-white rounded-3xl border border-gray-100">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Intercepting secure database payloads...</p>
+        <div className="w-full py-32 flex flex-col items-center justify-center gap-4 text-slate-400">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
+          <span className="text-[11px] font-black tracking-widest uppercase">Fetching Submissions...</span>
         </div>
       ) : filteredList.length === 0 ? (
-        <div className="w-full py-20 bg-white rounded-3xl border border-gray-100 text-center space-y-2">
-          <ClipboardCheck size={40} className="mx-auto text-gray-300" />
-          <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide">No Inspection Logs Found</h3>
-          <p className="text-xs text-gray-400 font-medium">There are no hardware submissions matching your current filter parameters.</p>
+        <div className="w-full py-24 bg-white rounded-3xl border border-slate-200 text-center space-y-3 shadow-sm">
+          <ClipboardCheck size={48} className="mx-auto text-slate-300" />
+          <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">No Logs Found</h3>
+          <p className="text-xs text-slate-400 font-bold">Your queue is completely clear for this category.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {filteredList.map((item) => {
-            const isPending = item.status?.toLowerCase().includes('pending');
-            const isApproved = item.status?.toLowerCase().includes('pass');
+            const isPending = !(item.status?.toLowerCase().includes('approved') || item.status?.toLowerCase().includes('rejected') || item.status?.toLowerCase().includes('re-inspection'));
             const photoEntries = Object.entries(item.photos || {});
+            const isHighlighted = highlightedId === String(item.id);
 
             return (
               <div 
                 key={item.id} 
-                className={`p-6 bg-white rounded-3xl border shadow-2xs transition-all ${
-                  isPending ? 'border-orange-200/80 bg-gradient-to-r from-orange-50/20 via-white to-white' : 'border-gray-100'
+                id={`inspection-${item.id}`}
+                className={`p-6 md:p-8 bg-white rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 ${
+                  isHighlighted ? 'border-blue-500 ring-4 ring-blue-500/10' : (isPending && item.is_submission) ? 'border-blue-200 shadow-blue-500/5' : 'border-slate-200 opacity-95'
                 }`}
               >
-                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                
+                {/* LEFT COLUMN: Data & Identity */}
+                <div className="w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r border-slate-100 pb-6 xl:pb-0 xl:pr-8">
                   
-                  <div className="space-y-3 min-w-[280px]">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm border border-blue-100 shrink-0">
-                        <User size={18} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-gray-900 leading-tight">{item.staff_name}</h3>
-                        <p className="text-[11px] text-gray-400 font-bold font-mono mt-0.5">ID: {item.emp_code} | {item.user_email}</p>
-                      </div>
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shrink-0 border ${item.is_submission ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
+                      <User size={20} />
                     </div>
-
-                    <div className="p-3 bg-gray-50/80 rounded-2xl border border-gray-100/80 space-y-1">
-                      <div className="flex items-center gap-1.5 text-xs font-black text-[#002B49]">
-                        <Laptop size={14} className="text-blue-600" />
-                        <span>{item.asset_name}</span>
+                    <div className="overflow-hidden">
+                      <h3 className="text-lg font-black text-slate-900 leading-tight truncate" title={item.staff_name}>{item.staff_name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-mono font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{item.emp_code}</span>
                       </div>
-                      <p className="text-[11px] font-mono font-bold text-gray-500">S/N: {item.serial_number}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400">
-                      <Clock size={13} />
-                      <span>Submitted: {new Date(item.created_at).toLocaleString()}</span>
                     </div>
                   </div>
 
-                  <div className="flex-1 w-full lg:w-auto bg-gray-50/50 p-4 rounded-2xl border border-gray-100 space-y-3">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1">Employee Condition Declaration:</span>
-                      <p className="text-xs text-gray-800 font-medium italic bg-white p-3 rounded-xl border border-gray-200/60 shadow-3xs leading-relaxed">
-                        "{item.notes || 'No description provided by staff.'}"
-                      </p>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
+                      <Laptop size={14} className="text-blue-600 shrink-0" />
+                      <span className="truncate">{item.asset_name}</span>
                     </div>
-
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1.5">
-                        Captured Hardware Angles ({photoEntries.length}):
-                      </span>
-                      {photoEntries.length === 0 ? (
-                        <p className="text-xs text-red-500 font-bold">⚠️ No images attached to payload.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2.5">
-                          {photoEntries.map(([angle, url]: any) => (
-                            <button
-                              key={angle}
-                              type="button"
-                              onClick={() => setPreviewPhotoModal(url)}
-                              className="relative group w-20 h-20 rounded-xl overflow-hidden border-2 border-gray-200 bg-white hover:border-blue-600 transition-all active:scale-95 cursor-pointer shadow-3xs"
-                            >
-                              <img src={url} alt={angle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-1">
-                                {/* 🚀 FIX: Removed the invalid `mb={0.5}` and applied it as a className */}
-                                <Eye size={16} className="mb-1" />
-                                <span className="text-[8px] font-black uppercase text-center leading-none">{angle.split(' ')[0]}</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                    <div className="flex justify-between items-center text-[11px] border-t border-slate-200 pt-2 mt-2">
+                      <span className="font-bold text-slate-400 uppercase tracking-widest">S/N:</span>
+                      <span className="font-mono font-black text-slate-700">{item.serial_number}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="font-bold text-slate-400 uppercase tracking-widest">TAG:</span>
+                      <span className="font-mono font-black text-blue-600">{item.asset_tag}</span>
                     </div>
                   </div>
 
-                  <div className="flex lg:flex-col items-center justify-end gap-3 w-full lg:w-auto shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-100">
-                    {isPending ? (
-                      <div className="flex flex-row lg:flex-col gap-2.5 w-full sm:w-auto">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">{item.is_submission ? 'Submitted Date' : 'Assigned Date'}</span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-900">{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Calendar size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Upcoming Due</span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-900">{calculateUpcomingDate(item.created_at)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Evidence & Action */}
+                <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
+                  
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Evaluation Workspace</h4>
+                    <span className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getSemanticColor(item.status, item.is_submission)}`}>
+                      {item.status === 'Pending' && item.is_submission ? 'Ready For Review' : item.status}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5"><ImageIcon size={12}/> Photographic Evidence ({photoEntries.length})</span>
+                    {!item.is_submission ? (
+                      <div className="p-4 rounded-xl border border-dashed border-orange-200 bg-orange-50 text-orange-700 text-xs font-bold flex items-center gap-2">
+                        <Clock size={14} /> Awaiting staff to upload verification photos.
+                      </div>
+                    ) : photoEntries.length === 0 ? (
+                      <div className="p-4 rounded-xl border border-dashed border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold flex items-center gap-2">
+                        <ShieldAlert size={14} /> No visual evidence was attached to this payload.
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-3">
+                        {photoEntries.map(([angle, url]: any) => (
+                          <button
+                            key={angle}
+                            type="button"
+                            onClick={() => setPreviewPhotoModal(url)}
+                            className="relative group w-24 h-24 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 hover:border-blue-500 transition-all cursor-pointer shadow-sm"
+                          >
+                            <img src={url} alt={angle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                            <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
+                              <Eye size={20} className="mb-1" />
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1 text-center leading-tight">{angle}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 font-medium italic leading-relaxed">
+                      "{item.notes || 'No written declaration provided.'}"
+                    </div>
+                  </div>
+
+                  {/* THE 3-WAY ADJUDICATION ROW */}
+                  <div className="pt-4 border-t border-slate-100 mt-auto">
+                    {!item.is_submission ? (
+                       <div className="flex items-center justify-between px-5 py-4 bg-orange-50 rounded-xl border border-orange-200">
+                         <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Pending Staff Action</span>
+                         <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-orange-700">
+                           <Clock size={14} /> Waiting on Employee
+                         </div>
+                       </div>
+                    ) : isPending ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <button
                           type="button"
                           disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Passed')}
-                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-md shadow-green-600/20 transition-all cursor-pointer"
+                          onClick={() => executeVerdict(item.id, item.asset_id, 'Approved')}
+                          className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
                         >
-                          <CheckCircle2 size={16} />
-                          <span>{updatingId === item.id ? 'Syncing...' : 'Approve Asset'}</span>
+                          <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
                         </button>
                         
                         <button
                           type="button"
                           disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Failed (Re-Request)')}
-                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm transition-all cursor-pointer"
+                          onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection')}
+                          className="flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
                         >
-                          <XCircle size={16} />
-                          <span>Reject & Re-Try</span>
+                          <RefreshCw size={16} /> Re-Inspect
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={updatingId === item.id}
+                          onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected')}
+                          className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-600/20 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          <XCircle size={16} /> Reject
                         </button>
                       </div>
                     ) : (
-                      <div className={`flex items-center gap-2 px-5 py-3 rounded-2xl border font-black text-xs uppercase tracking-wider ${
-                        isApproved ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
-                      }`}>
-                        {isApproved ? <CheckCircle2 size={16} className="text-green-600"/> : <XCircle size={16} className="text-red-600"/>}
-                        <span>{item.status}</span>
+                      <div className="flex items-center justify-between px-5 py-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Adjudication Complete</span>
+                        <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
+                          {item.status.includes('Approved') && <CheckCircle2 size={14} className="text-emerald-600"/>}
+                          {item.status.includes('Re-Inspection') && <RefreshCw size={14} className="text-amber-600"/>}
+                          {(item.status.includes('Reject') || item.status.includes('Not')) && <XCircle size={14} className="text-rose-600"/>}
+                          <span className={item.status.includes('Approved') ? 'text-emerald-700' : item.status.includes('Re') ? 'text-amber-700' : 'text-rose-700'}>
+                            {item.status}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -305,26 +417,26 @@ export default function AdminInspectionReviewPage() {
         </div>
       )}
 
+      {/* 🚀 HIGH-RES PHOTO LIGHTBOX */}
       {previewPhotoModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in">
           <button 
             onClick={() => setPreviewPhotoModal(null)}
-            className="absolute top-6 right-6 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full flex items-center justify-center transition-all cursor-pointer shadow-xl"
+            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer border border-white/20"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
           
-          <div className="max-w-5xl max-h-[85vh] w-full h-full flex flex-col items-center justify-center p-2">
+          <div className="max-w-6xl w-full h-full flex flex-col items-center justify-center">
             <img 
               src={previewPhotoModal} 
               alt="Hardware High-Res Verification" 
-              className="max-w-full max-h-full object-contain rounded-2xl border border-gray-700 shadow-2xl" 
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
             />
+            <span className="text-[10px] font-mono font-bold text-slate-400 mt-6 bg-black/50 px-4 py-2 rounded-lg border border-white/10 tracking-widest">
+              SECURE BUCKET REF: {previewPhotoModal.split('/').pop()}
+            </span>
           </div>
-          
-          <span className="text-xs font-mono font-bold text-gray-400 mt-4 bg-gray-900 px-4 py-2 rounded-xl border border-gray-800">
-            SECURE PUBLIC STORAGE BUCKET REF: {previewPhotoModal.split('/').pop()}
-          </span>
         </div>
       )}
 
