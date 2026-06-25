@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, 
-  RefreshCw, AlertCircle, Clock, X, Upload, CheckCircle, ShieldCheck, Loader2 
+  RefreshCw, AlertCircle, Clock, X, Upload, CheckCircle, 
+  ShieldCheck, Loader2, Calendar, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 
 export default function StaffDashboardPage() {
@@ -15,7 +16,6 @@ export default function StaffDashboardPage() {
   
   // LIVE DATABASE FEEDS
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
-  const [myPastInspections, setMyPastInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, inRepair: 0 });
 
   // Modal Controller
@@ -33,48 +33,43 @@ export default function StaffDashboardPage() {
       try { user = JSON.parse(sessionStr); } 
       catch (e) { user = { name: sessionStr.split('@')[0], email: sessionStr }; }
 
-      // 1. FETCH REAL USER PROFILE FOR EMP ID
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', user.email)
-        .maybeSingle();
-
+      // 1. FETCH PROFILE
+      const { data: profile } = await supabase.from('profiles').select('*').eq('email', user.email).maybeSingle();
       if (profile) {
         user.emp_id = profile.emp_code || profile.emp_id || profile.employee_id || profile.id.split('-')[0].toUpperCase();
         user.name = profile.full_name || profile.name || user.name;
-      } else {
-        user.emp_id = user.id ? user.id.split('-')[0].toUpperCase() : 'STAFF';
+        user.id = profile.id;
       }
-
       setCurrentUser(user);
 
-      // 2. FETCH REAL ASSETS FROM POSTGRES
-      const { data: realAssets } = await supabase
-        .from('assets')
-        .select('*')
-        .eq('assigned_to', user.id || profile?.id);
+      // 2. FETCH ASSETS & LATEST INSPECTIONS
+      const [assetsRes, inspRes] = await Promise.all([
+        supabase.from('assets').select('*').eq('assigned_to', user.id),
+        supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false })
+      ]);
 
-      // 3. FETCH REAL PAST INSPECTIONS FROM POSTGRES
-      const { data: realInspections } = await supabase
-        .from('inspections')
-        .select('*, assets(asset_name)')
-        .eq('inspected_by', user.id || profile?.id)
-        .order('created_at', { ascending: false });
-
-      if (realAssets) {
-        setAssignedAssets(realAssets);
-        const needsInsp = realAssets.filter(a => a.inspection_status?.toLowerCase() === 'pending' || a.status?.toLowerCase() === 'overdue').length;
-        const inRep = realAssets.filter(a => a.status?.toLowerCase() === 'in repair').length;
-
-        setStats({
-          totalAssets: realAssets.length,
-          needsInspection: needsInsp,
-          inRepair: inRep
+      if (assetsRes.data) {
+        const compiledAssets = assetsRes.data.map(asset => {
+          // Find the newest inspection log for this specific asset to get real-time status
+          const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
+          return {
+            ...asset,
+            live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
+            live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
+          };
         });
-      }
 
-      if (realInspections) setMyPastInspections(realInspections);
+        setAssignedAssets(compiledAssets);
+        
+        const needsInsp = compiledAssets.filter(a => 
+          a.live_inspection_status?.toLowerCase() === 'pending' || 
+          a.live_inspection_status?.toLowerCase() === 're-inspection' || 
+          a.status?.toLowerCase() === 'overdue'
+        ).length;
+        const inRep = compiledAssets.filter(a => a.status?.toLowerCase() === 'in repair').length;
+        
+        setStats({ totalAssets: compiledAssets.length, needsInspection: needsInsp, inRepair: inRep });
+      }
 
     } catch (err) {
       console.error("Postgres feed error:", err);
@@ -83,15 +78,28 @@ export default function StaffDashboardPage() {
     }
   };
 
-  useEffect(() => {
-    loadRealDatabase();
-  }, []);
+  useEffect(() => { loadRealDatabase(); }, []);
+
+  const calculateUpcomingDate = (dateStr: string) => {
+    if (!dateStr) return 'Pending Setup';
+    const d = new Date(dateStr);
+    d.setMonth(d.getMonth() + 6); // 6 month compliance interval
+    return d.toLocaleDateString('en-IN');
+  };
+
+  const getInspectionStatusColor = (status: string) => {
+    const s = (status || '').toLowerCase().trim();
+    if (s === 'approved') return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    if (s === 're-inspection') return 'text-amber-700 bg-amber-50 border-amber-200';
+    if (s === 'rejected' || s === 'not approved') return 'text-rose-700 bg-rose-50 border-rose-200';
+    return 'text-blue-700 bg-blue-50 border-blue-200'; // Default Pending
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3 font-sans">
-        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
-        <p className="text-xs font-black text-slate-400 tracking-widest uppercase">Connecting to Live DB...</p>
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <p className="text-xs font-black text-slate-400 tracking-widest uppercase">Syncing Dashboard...</p>
       </div>
     );
   }
@@ -100,37 +108,41 @@ export default function StaffDashboardPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans text-slate-800">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* TOP WELCOME PILL */}
-        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-            Welcome back, {currentUser.name}! 👋
-          </h1>
-          <div className="flex items-center gap-2 mt-2 text-xs font-bold text-slate-400">
-            <span className="text-slate-700 font-black uppercase">ID: {currentUser.emp_id}</span>
-            <span>|</span>
-            <span>Email: {currentUser.email}</span>
+        {/* 🌟 TOP WELCOME PILL */}
+        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+              Welcome back, {currentUser.name}! 👋
+            </h1>
+            <div className="flex items-center gap-3 mt-2 text-xs font-bold text-slate-500">
+              <span className="text-blue-700 font-black uppercase tracking-widest px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-100">ID: {currentUser.emp_id}</span>
+              <span>{currentUser.email}</span>
+            </div>
           </div>
+          <button onClick={() => loadRealDatabase()} className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors self-start md:self-auto border border-slate-200">
+            <RefreshCw size={14}/> Sync Data
+          </button>
         </div>
 
-        {/* THE 4 QUICK ACTION BUTTONS */}
+        {/* 🌟 THE 4 QUICK ACTION BUTTONS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { name: 'RAISE TICKET', icon: Ticket, color: 'text-blue-600', bg: 'bg-blue-50', type: 'TICKET' },
-            { name: 'SUBMIT INSPECTION', icon: ClipboardCheck, color: 'text-amber-600', bg: 'bg-amber-50', type: 'INSPECTION' },
-            { name: 'REQUEST ASSET', icon: PlusCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', type: 'REQUEST' },
-            { name: 'ASSETS REPLACEMENT', icon: RefreshCw, color: 'text-pink-600', bg: 'bg-pink-50', type: 'REPLACEMENT' },
+            { name: 'RAISE TICKET', icon: Ticket, color: 'text-blue-600', bg: 'bg-blue-50', hover: 'hover:border-blue-300', type: 'TICKET' },
+            { name: 'SUBMIT INSPECTION', icon: ClipboardCheck, color: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:border-amber-300', type: 'INSPECTION' },
+            { name: 'REQUEST ASSET', icon: PlusCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:border-emerald-300', type: 'REQUEST' },
+            { name: 'ASSETS REPLACEMENT', icon: RefreshCw, color: 'text-pink-600', bg: 'bg-pink-50', hover: 'hover:border-pink-300', type: 'REPLACEMENT' },
           ].map((action) => (
             <button key={action.name} onClick={() => {
               const target = assignedAssets.length > 0 ? assignedAssets[0] : null;
               setModal({ isOpen: true, type: action.type, targetAsset: target });
-            }} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col items-center justify-center gap-3 group cursor-pointer">
+            }} className={`bg-white p-6 rounded-3xl border border-slate-200 shadow-sm transition-all flex flex-col items-center justify-center gap-3 group cursor-pointer ${action.hover}`}>
               <div className={`w-14 h-14 rounded-2xl ${action.bg} ${action.color} flex items-center justify-center group-hover:scale-110 transition-transform`}><action.icon size={26} /></div>
               <span className="text-xs font-black text-slate-900 tracking-wider uppercase text-center">{action.name}</span>
             </button>
           ))}
         </div>
 
-        {/* THE 3 STATS PILLS */}
+        {/* 🌟 THE 3 STATS PILLS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
             <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">MY ASSETS</p><h2 className="text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
@@ -146,45 +158,53 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* LIVE ASSIGNED ASSET DETAILS */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-8 space-y-6">
+        {/* 🌟 ORIGINAL CLEAN ASSET DETAILS VIEW */}
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-            <Laptop className="text-emerald-600" size={22} />
+            <Laptop className="text-blue-600" size={22} />
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2>
           </div>
 
           {assignedAssets.length === 0 ? (
-            <div className="py-12 text-center bg-[#F8FAFC] rounded-2xl border border-slate-100 text-slate-400 font-bold text-xs">
-              No hardware units currently assigned to your profile in Postgres.
+            <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 font-bold text-xs">
+              No hardware units currently assigned to your profile in the database.
             </div>
           ) : (
             assignedAssets.map((asset) => {
-              const isOverdue = asset.status?.toLowerCase() === 'overdue' || asset.inspection_status?.toLowerCase() === 'pending';
+              const isOverdue = asset.live_inspection_status?.toLowerCase() === 'pending' || asset.live_inspection_status?.toLowerCase() === 're-inspection';
               
               return (
-                <div key={asset.id} className="bg-[#F8FAFC] rounded-2xl p-6 border border-slate-100 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div key={asset.id} className="bg-slate-50 rounded-2xl p-6 border border-slate-200 space-y-4 hover:border-blue-300 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-black text-slate-900">{asset.asset_name || asset.model}</h3>
-                      <p className="text-xs font-bold text-slate-400 mt-0.5">S/N: {asset.serial_number || asset.asset_tag}</p>
+                      <h3 className="text-lg font-black text-slate-900">{asset.asset_name || asset.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-bold text-slate-500">S/N: {asset.serial_number || 'N/A'}</span>
+                        <span className="text-[10px] font-mono font-black text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md">{asset.asset_tag}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider">ASSIGNED</span>
-                      {isOverdue && <span className="px-3 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs">OVER DUE</span>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider">{asset.status || 'Assigned'}</span>
+                      <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border flex items-center gap-1 ${getInspectionStatusColor(asset.live_inspection_status)}`}>
+                        {asset.live_inspection_status?.toLowerCase() === 'approved' && <CheckCircle2 size={12}/>}
+                        {asset.live_inspection_status?.toLowerCase() === 're-inspection' && <RefreshCw size={12}/>}
+                        {(asset.live_inspection_status?.toLowerCase() === 'rejected' || asset.live_inspection_status?.toLowerCase() === 'not approved') && <AlertTriangle size={12}/>}
+                        {asset.live_inspection_status || 'Pending'}
+                      </span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3 shadow-xs">
                       <Clock className="text-slate-400 shrink-0" size={18} />
-                      <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">LAST INSPECTION</p><p className="text-xs font-black text-slate-800 mt-0.5">{asset.last_inspection_date ? new Date(asset.last_inspection_date).toLocaleDateString() : 'Pending'}</p></div>
+                      <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Last Audited</p><p className="text-xs font-black text-slate-800 mt-0.5">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'Pending Initial Setup'}</p></div>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3">
-                      <AlertCircle className={`shrink-0 ${isOverdue ? 'text-red-500' : 'text-emerald-500'}`} size={18} />
-                      <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">AUDIT STATUS</p><p className={`text-xs font-black mt-0.5 uppercase ${isOverdue ? 'text-red-600' : 'text-emerald-600'}`}>{asset.inspection_status || asset.status}</p></div>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3 shadow-xs">
+                      <Calendar className="text-slate-400 shrink-0" size={18} />
+                      <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Due Date</p><p className="text-xs font-black text-blue-700 mt-0.5">{calculateUpcomingDate(asset.live_inspection_date || asset.created_at)}</p></div>
                     </div>
-                    <button onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl py-3 transition-colors flex items-center justify-center cursor-pointer shadow-md">
-                      ASSETS REPLACEMENT
+                    <button onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className={`w-full text-white font-black text-[10px] uppercase tracking-widest rounded-xl py-3 transition-colors flex items-center justify-center cursor-pointer shadow-md ${isOverdue ? 'bg-orange-600 hover:bg-orange-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                      {isOverdue ? 'START INSPECTION NOW' : 'SUBMIT EARLY AUDIT'}
                     </button>
                   </div>
                 </div>
@@ -194,7 +214,7 @@ export default function StaffDashboardPage() {
         </div>
       </div>
 
-      {/* ARMORED MODAL CONTROLLER */}
+      {/* 🌟 ARMORED MODAL CONTROLLER */}
       {modal.isOpen && (
         <LiveDatabaseModal 
           type={modal.type} 
@@ -224,7 +244,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
 
-  // Auto-reset category selection when switching windows
   useEffect(() => {
     if (type === 'REQUEST') setFormCategory('Laptop');
     else if (type === 'TICKET') setFormCategory('Hardware');
@@ -250,16 +269,16 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           title: formTitle || 'IT Service Ticket',
           category: formCategory,
           description: formText,
-          status: 'open',
+          status: 'Open',
           created_by: user.id || user.emp_id
         });
       } 
       else if (type === 'REQUEST') {
         await supabase.from('tickets').insert({
           title: `New Asset Allocation: ${formCategory}`,
-          category: formCategory,
+          category: `Asset Request: ${formCategory}`,
           description: formText || `Requested allocation for category: ${formCategory}`,
-          status: 'pending',
+          status: 'Pending',
           created_by: user.id || user.emp_id
         });
       }
@@ -267,14 +286,14 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         await supabase.from('inspections').insert({
           asset_id: asset.id,
           inspected_by: user.id || user.emp_id,
+          user_email: user.email,
           condition: formCondition,
           notes: formText || `Submitted via ${type}`,
-          status: 'Completed'
+          status: 'Pending'
         });
 
         await supabase.from('assets').update({
-          last_inspection_date: new Date().toISOString(),
-          inspection_status: 'Verified',
+          inspection_status: 'Pending',
           status: type === 'REPLACEMENT' ? 'Replacement Requested' : 'Assigned'
         }).eq('id', asset.id);
       }
@@ -291,95 +310,96 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in text-left">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in text-left">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col font-sans">
         
-        {/* Top Header Row matching your screenshots */}
-        <div className="p-6 bg-white border-b border-slate-50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            {type === 'TICKET' && <Ticket className="text-blue-600 shrink-0" size={22} />}
-            {type === 'REQUEST' && <PlusCircle className="text-emerald-600 shrink-0" size={22} />}
-            {type === 'INSPECTION' && <ClipboardCheck className="text-amber-500 shrink-0" size={22} />}
-            {type === 'REPLACEMENT' && <RefreshCw className="text-pink-600 shrink-0" size={22} />}
-            
+        {/* Top Header Row */}
+        <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${type === 'TICKET' ? 'bg-blue-100 text-blue-600 border-blue-200' : type === 'REQUEST' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : type === 'INSPECTION' ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-pink-100 text-pink-600 border-pink-200'}`}>
+                {type === 'TICKET' && <Ticket size={18} />}
+                {type === 'REQUEST' && <PlusCircle size={18} />}
+                {type === 'INSPECTION' && <ClipboardCheck size={18} />}
+                {type === 'REPLACEMENT' && <RefreshCw size={18} />}
+            </div>
             <div>
-              <h3 className="font-black text-slate-900 text-sm tracking-wider uppercase">
+              <h3 className="font-black text-slate-900 text-xs tracking-widest uppercase">
                 {type === 'TICKET' && 'RAISE IT SERVICE TICKET'}
                 {type === 'REQUEST' && 'REQUEST ASSET ALLOCATION'}
                 {type === 'INSPECTION' && 'COMPLIANCE POP-UP FRAMEWORK'}
                 {type === 'REPLACEMENT' && 'ASSET REPLACEMENT FRAMEWORK'}
               </h3>
-              {asset?.asset_name && type !== 'REQUEST' && type !== 'TICKET' && <p className="text-[11px] font-bold text-slate-400 mt-0.5">{asset.asset_name}</p>}
+              {asset?.asset_name && type !== 'REQUEST' && type !== 'TICKET' && <p className="text-[10px] font-bold text-slate-500 mt-0.5">{asset.asset_name}</p>}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"><X size={18} /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white hover:bg-slate-200 text-slate-500 flex items-center justify-center border border-slate-200 cursor-pointer transition-colors"><X size={16} /></button>
         </div>
 
         {/* Modal Dynamic Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-6 md:p-8 overflow-y-auto space-y-6">
           {successDone ? (
-            <div className="py-12 text-center space-y-2">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto animate-bounce"><CheckCircle size={32} /></div>
-              <h4 className="text-lg font-black text-slate-900">Postgres Updated!</h4>
-              <p className="text-xs font-bold text-slate-400">Transaction written securely to database.</p>
+            <div className="py-12 text-center space-y-3">
+              <div className="w-20 h-20 bg-emerald-100 border border-emerald-200 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto animate-bounce shadow-sm"><CheckCircle size={40} /></div>
+              <h4 className="text-xl font-black text-slate-900 tracking-tight">Transmission Secured!</h4>
+              <p className="text-xs font-bold text-slate-500">Your record has been written to the live Postgres database.</p>
             </div>
           ) : (
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* COMPLIANCE GUARD FOR REPLACEMENT/INSPECTION */}
               {needsLock && (
-                <div className="space-y-3">
-                  <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 text-[11px] font-bold text-blue-900 flex gap-2.5">
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-200 text-[11px] font-bold text-blue-900 flex gap-3 leading-relaxed">
                     <ShieldCheck className="text-blue-600 shrink-0 mt-0.5" size={18} />
                     <div><span className="font-black">SECURITY ANTI-WRONG GUARD:</span> Please enter this machine's exact Tag ID or Serial Number parameter to unlock configuration fields.</div>
                   </div>
 
                   <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e => { setSerialInput(e.target.value); setLockError(false); }} placeholder="Type Tag ID or Serial Number..." className={`flex-1 p-3.5 rounded-xl border text-xs font-black outline-none ${lockError ? 'border-red-500 bg-red-50/20' : isUnlocked ? 'bg-green-50 border-green-300 text-green-800' : 'border-slate-200'}`} />
+                    <input disabled={isUnlocked} value={serialInput} onChange={e => { setSerialInput(e.target.value); setLockError(false); }} placeholder="Type Tag ID or Serial Number..." className={`flex-1 p-3.5 rounded-xl border text-xs font-black outline-none transition-colors ${lockError ? 'border-red-500 bg-red-50/20 text-red-900' : isUnlocked ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`} />
                     {!isUnlocked && (
-                      <button onClick={handleAttemptUnlock} className="bg-slate-900 hover:bg-slate-800 text-white px-6 rounded-xl font-black text-xs cursor-pointer shadow-md">
-                        VERIFY ASSET
+                      <button onClick={handleAttemptUnlock} className="bg-slate-900 hover:bg-slate-800 text-white px-6 rounded-xl font-black text-[10px] uppercase tracking-widest cursor-pointer shadow-md transition-colors">
+                        VERIFY
                       </button>
                     )}
                   </div>
-                  {lockError && <p className="text-[10px] font-black text-red-500">❌ Mismatch. Look at the sticker on the bottom of your device.</p>}
+                  {lockError && <p className="text-[10px] font-black text-red-500 pl-1">❌ Mismatch. Look at the sticker on the bottom of your device.</p>}
                 </div>
               )}
 
-              {/* WINDOW 1: REQUEST ASSET ALLOCATION (Exact match to Screenshot 1) */}
+              {/* WINDOW 1: REQUEST ASSET ALLOCATION */}
               {type === 'REQUEST' && (
-                <div className="space-y-4 animate-in fade-in">
+                <div className="space-y-5 animate-in fade-in">
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">SELECT ASSET CATEGORY</label>
-                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full mt-1 p-3.5 rounded-xl border border-orange-500 text-xs font-black bg-white text-slate-900 outline-none shadow-xs cursor-pointer">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Select Asset Category</label>
+                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full p-4 rounded-xl border border-emerald-500 text-xs font-black bg-emerald-50/10 text-emerald-900 outline-none shadow-sm cursor-pointer transition-colors focus:ring-4 focus:ring-emerald-500/20">
                       <option>Laptop</option>
                       <option>Headphone</option>
                       <option>Keyboard</option>
                       <option>Mouse</option>
                       <option>Cleaning Kits</option>
                       <option>Mouse Pad</option>
-                      <option>Laptop Stand</option>
+                      <option>Stand</option>
                       <option>Other</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">ALLOCATION JUSTIFICATION</label>
-                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain why this equipment allocation is required..." className="w-full mt-1 p-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-600" />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Allocation Justification</label>
+                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain why this equipment allocation is required..." className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none focus:border-emerald-600 focus:bg-white transition-colors" />
                   </div>
                 </div>
               )}
 
-              {/* WINDOW 2: RAISE IT SERVICE TICKET (Exact match to Screenshot 2) */}
+              {/* WINDOW 2: RAISE IT SERVICE TICKET */}
               {type === 'TICKET' && (
-                <div className="space-y-4 animate-in fade-in">
+                <div className="space-y-5 animate-in fade-in">
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">WHAT IS THE ISSUE TITLE?</label>
-                    <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Describe the issue briefly" className="w-full mt-1 p-3.5 rounded-xl border border-slate-200 focus:border-orange-500 text-xs font-black outline-none transition-colors" />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">What is the issue title?</label>
+                    <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Describe the issue briefly" className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-black outline-none transition-colors" />
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">SELECT CATEGORY TYPE</label>
-                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full mt-1 p-3.5 rounded-xl border border-orange-500 text-xs font-black bg-white text-slate-900 outline-none shadow-xs cursor-pointer">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Select Category Type</label>
+                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full p-3.5 rounded-xl border border-blue-500 text-xs font-black bg-blue-50/10 text-blue-900 outline-none shadow-sm cursor-pointer transition-colors focus:ring-4 focus:ring-blue-500/20">
                       <option>Hardware</option>
                       <option>Software</option>
                       <option>Internet</option>
@@ -387,15 +407,15 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">BRIEF NOTES EXPLANATIONS</label>
-                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain the problem details..." className="w-full mt-1 p-3.5 rounded-xl border border-slate-200 focus:border-orange-500 text-xs font-bold outline-none transition-colors" />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Brief Notes & Explanations</label>
+                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain the problem details..." className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-bold outline-none transition-colors" />
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">SHARE ERROR SCREENSHOT (OPTIONAL)</label>
-                    <div className="mt-1 border-2 border-dashed border-slate-200 bg-slate-50/50 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-blue-600 cursor-pointer group transition-colors">
-                      <Upload className="group-hover:text-blue-600 mb-1 transition-colors" size={20} />
-                      <span className="text-xs font-black text-slate-700 group-hover:text-blue-600">Upload Snapshot Image</span>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Share Error Screenshot (Optional)</label>
+                    <div className="border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-blue-500 cursor-pointer group transition-colors">
+                      <Upload className="group-hover:text-blue-600 mb-2 transition-colors" size={24} />
+                      <span className="text-[11px] font-black text-slate-500 group-hover:text-blue-700 tracking-wider">UPLOAD SNAPSHOT</span>
                     </div>
                   </div>
                 </div>
@@ -403,16 +423,16 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
               {/* WINDOW 3: INSPECTION / REPLACEMENT */}
               {(type === 'INSPECTION' || type === 'REPLACEMENT') && (
-                <div className={`space-y-4 transition-all ${!isUnlocked ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
+                <div className={`space-y-5 transition-all duration-300 ${!isUnlocked ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">DEVICE PHYSICAL CONDITION</label>
-                    <select value={formCondition} onChange={e => setFormCondition(e.target.value)} className="w-full mt-1 p-3.5 rounded-xl border border-slate-200 text-xs font-black bg-white outline-none">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Device Physical Condition</label>
+                    <select value={formCondition} onChange={e => setFormCondition(e.target.value)} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-black outline-none cursor-pointer transition-colors">
                       <option>Pristine / Flawless</option><option>Normal Wear & Scratches</option><option>Damaged / Cracked</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400">NOTES & REASON</label>
-                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Provide explanation details..." className="w-full mt-1 p-3.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-900" />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Declaration Notes & Reason</label>
+                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Provide explanation details..." className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-bold outline-none transition-colors" />
                   </div>
                 </div>
               )}
@@ -423,16 +443,16 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
         {/* Dynamic Modal Footer */}
         {!successDone && (
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
-            <button onClick={onClose} className="px-5 py-2.5 text-xs font-black text-slate-400 hover:text-slate-600 cursor-pointer">Cancel</button>
+          <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 shrink-0 rounded-b-3xl">
+            <button onClick={onClose} className="px-6 py-3.5 text-[11px] font-black tracking-widest uppercase text-slate-500 hover:bg-white hover:text-slate-800 rounded-xl cursor-pointer border border-transparent hover:border-slate-200 transition-colors">Cancel Process</button>
             <button 
               disabled={isTransmitting || (needsLock && !isUnlocked)}
               onClick={handleLivePostgresSubmit} 
-              className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${needsLock && !isUnlocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : type === 'REQUEST' ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-lg shadow-emerald-600/20' : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-lg shadow-blue-600/20'}`}
+              className={`px-8 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${needsLock && !isUnlocked ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' : type === 'REQUEST' ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-600/20' : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-blue-600/20'}`}
             >
               {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : null}
-              {type === 'TICKET' && 'SUBMIT SERVICE TICKET'}
-              {type === 'REQUEST' && 'REQUEST ASSET ALLOCATION'}
+              {type === 'TICKET' && 'SUBMIT IT TICKET'}
+              {type === 'REQUEST' && 'DISPATCH REQUEST'}
               {(type === 'INSPECTION' || type === 'REPLACEMENT') && 'SUBMIT VERIFICATION'}
             </button>
           </div>
