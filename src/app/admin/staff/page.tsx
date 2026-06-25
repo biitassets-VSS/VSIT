@@ -7,7 +7,7 @@ import {
   ArrowLeft, Search, Users, Mail, Hash, UserCheck, 
   PlusCircle, Upload, Download, FileSpreadsheet, 
   X, RefreshCw, Save, Building, Power, Edit2, 
-  Package, CalendarDays, Lock, KeyRound
+  Package, CalendarDays, Lock, KeyRound, ShieldCheck
 } from 'lucide-react';
 
 export default function AdminStaffDirectoryPage() {
@@ -24,7 +24,7 @@ export default function AdminStaffDirectoryPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({
     id: '', full_name: '', email: '', password: '', emp_code: '', 
-    role: 'Staff Member', department: 'General', phone: '', 
+    role: 'Staff', department: 'Migration', phone: '', 
     dob: '', joining_date: '', status: 'Active'
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -60,7 +60,7 @@ export default function AdminStaffDirectoryPage() {
 
   const handleOpenAdd = () => {
     setIsEditing(false);
-    setFormData({ id: '', full_name: '', email: '', password: '', emp_code: '', role: 'Staff Member', department: 'Operations', phone: '', dob: '', joining_date: '', status: 'Active' });
+    setFormData({ id: '', full_name: '', email: '', password: '', emp_code: '', role: 'Staff', department: 'Migration', phone: '', dob: '', joining_date: '', status: 'Active' });
     setIsDossierModalOpen(true);
   };
 
@@ -68,8 +68,8 @@ export default function AdminStaffDirectoryPage() {
     setIsEditing(true);
     setFormData({
       id: user.id, full_name: user.full_name || user.name || '', email: user.email || '',
-      password: user.password || '', emp_code: user.emp_code || '', role: user.role || 'Staff Member', 
-      department: user.department || 'General', phone: user.phone || '', dob: user.dob || '', 
+      password: user.password || '', emp_code: user.emp_code || '', role: user.role || 'Staff', 
+      department: user.department || 'Migration', phone: user.phone || '', dob: user.dob || '', 
       joining_date: user.joining_date || '', status: user.status || 'Active'
     });
     setIsDossierModalOpen(true);
@@ -85,8 +85,8 @@ export default function AdminStaffDirectoryPage() {
         full_name: formData.full_name,
         email: formData.email.toLowerCase().trim(),
         emp_code: formData.emp_code.toUpperCase().trim() || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
-        role: formData.role || 'Staff Member',
-        department: formData.department || 'General',
+        role: formData.role || 'Staff',
+        department: formData.department || 'Migration',
         phone: formData.phone || null,
         dob: formData.dob || null,
         joining_date: formData.joining_date || null,
@@ -143,8 +143,8 @@ export default function AdminStaffDirectoryPage() {
   };
 
   const downloadStaffCsvTemplate = () => {
-    const headers = "FullName,Email,Password,EmpCode,Role,Department,Phone,DOB,JoiningDate\n";
-    const sample = "Alexander Vance,a.vance@company.com,SecurePass123!,,Senior Developer,Engineering,+1-555-0192,1990-05-15,2024-01-10\nSamantha Traylor,s.traylor@company.com,Warehouse99!,,Logistics Officer,Warehouse,,1995-10-22,2025-06-01";
+    const headers = "FullName,Email,Password,EmpCode,AccessRole,Department,Phone,DOB,JoiningDate\n";
+    const sample = "Alexander Vance,a.vance@company.com,SecurePass123!,,Admin,Accounts,+1-555-0192,1990-05-15,2024-01-10\nSamantha Traylor,s.traylor@company.com,Warehouse99!,,Staff,Migration,,1995-10-22,2025-06-01";
     const blob = new Blob([headers + sample], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
@@ -156,7 +156,6 @@ export default function AdminStaffDirectoryPage() {
 
     try {
       const text = await bulkFile.text();
-      // Remove invisible BOM char and filter completely empty lines
       const cleanText = text.replace(/^\uFEFF/, '');
       const lines = cleanText.split(/\r\n|\n|\r/).filter(line => line.replace(/,/g, '').trim().length > 0);
       
@@ -170,7 +169,6 @@ export default function AdminStaffDirectoryPage() {
         if (p.email) profileDbMap.set(p.email.toLowerCase().trim(), p);
       });
 
-      // Flexible Header Matcher
       const rawHeaders = parseCsvRow(lines[0]).map(h => h.replace(/[^a-z0-9]/gi, '').toLowerCase());
       
       const newHiresToInsert: any[] = [];
@@ -186,7 +184,7 @@ export default function AdminStaffDirectoryPage() {
         const rawEmail = col['email'] || col['emailaddress'] || col['e-mail'] || '';
         const cleanEmail = rawEmail.toLowerCase().trim();
 
-        if (!cleanEmail || !name) continue; // Skip bad rows
+        if (!cleanEmail || !name) continue; 
 
         const pass = col['password'] || col['pass'] || '';
         const rawCode = col['empcode'] || col['emp_code'] || col['id'] || '';
@@ -195,14 +193,13 @@ export default function AdminStaffDirectoryPage() {
         const existingDbUser = profileDbMap.get(cleanEmail);
 
         if (existingDbUser) {
-          // 🚀 INTELLIGENT PATCHING: Only update fields that exist in the CSV row
           const patchPayload: any = { id: existingDbUser.id, email: existingDbUser.email };
           
           if (name) patchPayload.full_name = name;
           if (pass) patchPayload.password = pass;
           if (rawCode) patchPayload.emp_code = rawCode.toUpperCase();
           
-          const role = col['role'] || col['jobtitle'];
+          const role = col['accessrole'] || col['role'] || col['access'];
           if (role) patchPayload.role = role;
           
           const dept = col['department'] || col['dept'];
@@ -220,18 +217,17 @@ export default function AdminStaffDirectoryPage() {
           existingToPatch.push(patchPayload);
           patchedCount++;
         } else {
-          // 🚀 BRAND NEW HIRE (NULL safe implementation)
           newHiresToInsert.push({
             id: generateSafeUuid(),
             full_name: name,
             email: cleanEmail,
             password: pass || 'vsit1234', 
             emp_code: empCode,
-            role: col['role'] || col['jobtitle'] || 'Staff Member',
-            department: col['department'] || col['dept'] || 'General',
-            phone: col['phone'] || col['mobile'] || null, // Postgres safe
-            dob: col['dob'] || col['dateofbirth'] || null, // Postgres safe
-            joining_date: col['joiningdate'] || col['joining_date'] || null, // Postgres safe
+            role: col['accessrole'] || col['role'] || col['access'] || 'Staff',
+            department: col['department'] || col['dept'] || 'Migration',
+            phone: col['phone'] || col['mobile'] || null,
+            dob: col['dob'] || col['dateofbirth'] || null,
+            joining_date: col['joiningdate'] || col['joining_date'] || null,
             status: 'Active',
             created_at: new Date().toISOString()
           });
@@ -245,7 +241,6 @@ export default function AdminStaffDirectoryPage() {
       }
 
       if (existingToPatch.length > 0) {
-        // Upsert allows us to send partial payloads matching the ID safely
         const { error: err2 } = await supabase.from('profiles').upsert(existingToPatch, { onConflict: 'id' });
         if (err2) throw err2;
       }
@@ -278,7 +273,7 @@ export default function AdminStaffDirectoryPage() {
                 {staff.length} Active Profiles
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-semibold">Manage employee records, passwords, and assigned hardware</p>
+            <p className="text-xs text-slate-500 font-semibold">Manage employee records, passwords, and system access levels</p>
           </div>
         </div>
 
@@ -320,6 +315,7 @@ export default function AdminStaffDirectoryPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredStaff.map(user => {
             const isActive = user.status === 'Active';
+            const isAdmin = user.role?.toLowerCase() === 'admin';
 
             return (
               <div key={user.id} className={`bg-white rounded-3xl border shadow-sm transition-all flex flex-col justify-between group hover:shadow-md ${isActive ? 'border-slate-200 hover:border-blue-300' : 'border-rose-200 bg-rose-50/30'}`}>
@@ -327,9 +323,20 @@ export default function AdminStaffDirectoryPage() {
                 <div className="p-6 border-b border-slate-50">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4 overflow-hidden">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 shadow-sm ${isActive ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-blue-500/20' : 'bg-slate-200 text-slate-400'}`}>
-                        {user.full_name?.charAt(0) || <UserCheck size={20} />}
+                      
+                      {/* 🌟 FROSTED GLASS AVATAR */}
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 relative overflow-hidden shadow-sm ${
+                        isActive 
+                          ? (isAdmin 
+                              ? 'bg-purple-500/10 text-purple-600 border border-purple-200/50 shadow-[0_4px_12px_rgba(168,85,247,0.05)]' 
+                              : 'bg-blue-500/10 text-blue-600 border border-blue-200/50 shadow-[0_4px_12px_rgba(59,130,246,0.05)]') 
+                          : 'bg-slate-100 text-slate-400 border border-slate-200'
+                      }`}>
+                        {/* Internal Shine Gradient for Glass Effect */}
+                        {isActive && <div className="absolute inset-0 bg-gradient-to-br from-white/60 to-transparent opacity-80 z-0"></div>}
+                        <span className="relative z-10">{user.full_name?.charAt(0) || <UserCheck size={20} />}</span>
                       </div>
+
                       <div className="overflow-hidden">
                         <button 
                           onClick={() => handleOpenEdit(user)}
@@ -339,7 +346,7 @@ export default function AdminStaffDirectoryPage() {
                         </button>
                         <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 mt-1.5">
                           <Building size={13} className={isActive ? "text-blue-500" : ""} />
-                          <span className="truncate">{user.department || 'General'}</span>
+                          <span className="truncate">{user.department || 'Migration'}</span>
                         </div>
                       </div>
                     </div>
@@ -358,7 +365,9 @@ export default function AdminStaffDirectoryPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-black text-slate-900 text-xs">{user.emp_code || 'NO-EMP-CODE'}</span>
-                      <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-black uppercase tracking-widest">{user.role || 'Staff'}</span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-widest ${isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {user.role || 'Staff'}
+                      </span>
                     </div>
                   </div>
 
@@ -472,32 +481,53 @@ export default function AdminStaffDirectoryPage() {
               <div className="space-y-5">
                 <div className="flex items-center gap-3 border-b border-slate-100 pb-2">
                   <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black">2</span>
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-900">Organizational Role</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-900">Organizational Assignment</span>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1.5">Department</label>
-                    <input type="text" placeholder="e.g. Engineering, Sales" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold text-slate-900 outline-none transition-all" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1.5">Job Title</label>
-                    <input type="text" placeholder="e.g. Senior Developer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold text-slate-900 outline-none transition-all" />
-                  </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase block mb-1.5">Department</label>
+                  <select 
+                    value={formData.department} 
+                    onChange={e => setFormData({...formData, department: e.target.value})} 
+                    className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold text-slate-900 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="Migration">Migration</option>
+                    <option value="Calling Team">Calling Team</option>
+                    <option value="DOE">DOE</option>
+                    <option value="Accounts">Accounts</option>
+                    <option value="Education">Education</option>
+                  </select>
                 </div>
               </div>
 
-              <div className={`p-5 rounded-2xl border transition-colors ${formData.status === 'Active' ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/50 border-rose-200'}`}>
-                <span className={`text-[10px] font-black uppercase tracking-widest block mb-4 ${formData.status === 'Active' ? 'text-emerald-800' : 'text-rose-800'}`}>3. Network Security Status</span>
-                <div>
-                  <select 
-                    value={formData.status} 
-                    onChange={e => setFormData({...formData, status: e.target.value})} 
-                    className={`w-full p-3.5 border rounded-xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer ${formData.status === 'Active' ? 'bg-white border-emerald-300 text-emerald-700' : 'bg-rose-50 border-rose-300 text-rose-700'}`}
-                  >
-                    <option value="Active">🟢 Account is Active (Normal Access)</option>
-                    <option value="Disabled">🔴 Account Disabled (Login Revoked)</option>
-                  </select>
+              <div className={`p-6 rounded-3xl border transition-colors ${formData.status === 'Active' ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/50 border-rose-200'}`}>
+                <span className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-4 ${formData.status === 'Active' ? 'text-emerald-800' : 'text-rose-800'}`}>
+                  <ShieldCheck size={14} /> 3. System Access & Security
+                </span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1.5">System Access Level</label>
+                    <select 
+                      value={formData.role} 
+                      onChange={e => setFormData({...formData, role: e.target.value})} 
+                      className="w-full p-3.5 bg-white border border-slate-300 rounded-xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer text-slate-700 shadow-sm"
+                    >
+                      <option value="Staff">🟢 Staff Access</option>
+                      <option value="Admin">🟣 Admin Access</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase block mb-1.5">Employee Account State</label>
+                    <select 
+                      value={formData.status} 
+                      onChange={e => setFormData({...formData, status: e.target.value})} 
+                      className={`w-full p-3.5 border rounded-xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer shadow-sm ${formData.status === 'Active' ? 'bg-white border-emerald-300 text-emerald-700' : 'bg-rose-50 border-rose-300 text-rose-700'}`}
+                    >
+                      <option value="Active">🟢 Account Active</option>
+                      <option value="Disabled">🔴 Account Disabled</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -526,7 +556,7 @@ export default function AdminStaffDirectoryPage() {
               <button onClick={downloadStaffCsvTemplate} className="w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer">
                 <Download size={16}/> <span>1. Download Staff CSV Template</span>
               </button>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1">Notice: Column 3 is now <b>Password</b>. If you upload an existing staff member to add a missing phone number, leave the password blank and it will keep their old password safe.</p>
+              <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1">Notice: Column 3 is <b>Password</b>. If you upload an existing staff member to add a missing phone number, leave the password blank and it will keep their old password safe.</p>
             </div>
 
             <div className="p-8 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors flex flex-col items-center justify-center gap-4">
