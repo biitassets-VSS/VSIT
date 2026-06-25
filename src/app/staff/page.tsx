@@ -139,7 +139,6 @@ export default function StaffDashboardPage() {
 // MODAL HANDLER
 function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
-  const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
   const [formTitle, setFormTitle] = useState('');
   const [formText, setFormText] = useState('');

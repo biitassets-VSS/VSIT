@@ -43,20 +43,29 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         return;
       }
 
-      // 🚀 THE FIX: Check for the custom local storage ticket created by the login page
+      // 🚀 Check for the custom local storage ticket created by the login page
       const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
       if (!sessionString) {
         // No ticket found? Then they are an intruder. Kick them out.
-        router.replace('/login'); 
+        router.replace('/'); 
         return; 
       }
 
-      // 🎟️ Parse the valid user ticket
-      const activeUser = JSON.parse(sessionString);
+      // 🎟️ SAFE PARSE: Handle both JSON objects and plain text emails
+      let activeUser: any = {};
+      try {
+        activeUser = JSON.parse(sessionString);
+      } catch (e) {
+        activeUser = { 
+          email: sessionString, 
+          name: sessionString.split('@')[0] 
+        };
+      }
+
       const profileName = activeUser.name || activeUser.full_name || 'Staff Member';
       const initials = profileName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-      const userId = activeUser.id || String(Date.now());
+      const userId = activeUser.id || activeUser.email || String(Date.now());
 
       setStaffProfile({
         id: userId, 
@@ -105,7 +114,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
-    router.replace('/login');
+    router.replace('/');
   };
 
   if (isCheckingAuth) return (
