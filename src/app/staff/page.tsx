@@ -99,7 +99,7 @@ export default function StaffDashboardPage() {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3 font-sans">
         <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-xs font-black text-slate-400 tracking-widest uppercase">Syncing Dashboard...</p>
+        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Dashboard...</p>
       </div>
     );
   }
@@ -114,13 +114,13 @@ export default function StaffDashboardPage() {
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">
               Welcome back, {currentUser.name}! 👋
             </h1>
-            <div className="flex items-center gap-3 mt-2 text-xs font-bold text-slate-500">
-              <span className="text-blue-700 font-black uppercase tracking-widest px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-100">ID: {currentUser.emp_id}</span>
+            <div className="flex items-center gap-3 mt-2 text-sm font-semibold text-slate-500">
+              <span className="text-blue-700 font-bold uppercase tracking-widest px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-100">ID: {currentUser.emp_id}</span>
               <span>{currentUser.email}</span>
             </div>
           </div>
-          <button onClick={() => loadRealDatabase()} className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors self-start md:self-auto border border-slate-200">
-            <RefreshCw size={14}/> Sync Data
+          <button onClick={() => loadRealDatabase()} className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors self-start md:self-auto border border-slate-200">
+            <RefreshCw size={16}/> Sync Data
           </button>
         </div>
 
@@ -137,7 +137,7 @@ export default function StaffDashboardPage() {
               setModal({ isOpen: true, type: action.type, targetAsset: target });
             }} className={`bg-white p-6 rounded-3xl border border-slate-200 shadow-sm transition-all flex flex-col items-center justify-center gap-3 group cursor-pointer ${action.hover}`}>
               <div className={`w-14 h-14 rounded-2xl ${action.bg} ${action.color} flex items-center justify-center group-hover:scale-110 transition-transform`}><action.icon size={26} /></div>
-              <span className="text-xs font-black text-slate-900 tracking-wider uppercase text-center">{action.name}</span>
+              <span className="text-sm font-bold text-slate-900 tracking-wider uppercase text-center">{action.name}</span>
             </button>
           ))}
         </div>
@@ -145,15 +145,15 @@ export default function StaffDashboardPage() {
         {/* 🌟 THE 3 STATS PILLS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">MY ASSETS</p><h2 className="text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
+            <div><p className="text-xs font-bold uppercase tracking-widest text-slate-400">MY ASSETS</p><h2 className="text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
             <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center"><Laptop size={26} /></div>
           </div>
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">NEEDS INSPECTION</p><h2 className="text-4xl font-black text-orange-600 mt-1">{stats.needsInspection}</h2></div>
+            <div><p className="text-xs font-bold uppercase tracking-widest text-slate-400">NEEDS INSPECTION</p><h2 className="text-4xl font-black text-orange-600 mt-1">{stats.needsInspection}</h2></div>
             <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center"><AlertCircle size={26} /></div>
           </div>
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">IN REPAIR</p><h2 className="text-4xl font-black text-pink-600 mt-1">{stats.inRepair}</h2></div>
+            <div><p className="text-xs font-bold uppercase tracking-widest text-slate-400">IN REPAIR</p><h2 className="text-4xl font-black text-pink-600 mt-1">{stats.inRepair}</h2></div>
             <div className="w-14 h-14 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center"><Clock size={26} /></div>
           </div>
         </div>
@@ -162,11 +162,11 @@ export default function StaffDashboardPage() {
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
             <Laptop className="text-blue-600" size={22} />
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2>
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">ASSIGNED ASSET DETAILS</h2>
           </div>
 
           {assignedAssets.length === 0 ? (
-            <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 font-bold text-xs">
+            <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 font-medium text-sm">
               No hardware units currently assigned to your profile in the database.
             </div>
           ) : (
@@ -177,33 +177,33 @@ export default function StaffDashboardPage() {
                 <div key={asset.id} className="bg-slate-50 rounded-2xl p-6 border border-slate-200 space-y-4 hover:border-blue-300 transition-colors">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-black text-slate-900">{asset.asset_name || asset.name}</h3>
+                      <h3 className="text-lg font-bold text-slate-900">{asset.asset_name || asset.name}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[11px] font-bold text-slate-500">S/N: {asset.serial_number || 'N/A'}</span>
-                        <span className="text-[10px] font-mono font-black text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md">{asset.asset_tag}</span>
+                        <span className="text-xs font-medium text-slate-500">S/N: {asset.serial_number || 'N/A'}</span>
+                        <span className="text-xs font-mono font-bold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md">{asset.asset_tag}</span>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider">{asset.status || 'Assigned'}</span>
-                      <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border flex items-center gap-1 ${getInspectionStatusColor(asset.live_inspection_status)}`}>
-                        {asset.live_inspection_status?.toLowerCase() === 'approved' && <CheckCircle2 size={12}/>}
-                        {asset.live_inspection_status?.toLowerCase() === 're-inspection' && <RefreshCw size={12}/>}
-                        {(asset.live_inspection_status?.toLowerCase() === 'rejected' || asset.live_inspection_status?.toLowerCase() === 'not approved') && <AlertTriangle size={12}/>}
+                      <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold uppercase tracking-wider">{asset.status || 'Assigned'}</span>
+                      <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border flex items-center gap-1 ${getInspectionStatusColor(asset.live_inspection_status)}`}>
+                        {asset.live_inspection_status?.toLowerCase() === 'approved' && <CheckCircle2 size={14}/>}
+                        {asset.live_inspection_status?.toLowerCase() === 're-inspection' && <RefreshCw size={14}/>}
+                        {(asset.live_inspection_status?.toLowerCase() === 'rejected' || asset.live_inspection_status?.toLowerCase() === 'not approved') && <AlertTriangle size={14}/>}
                         {asset.live_inspection_status || 'Pending'}
                       </span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3 shadow-xs">
-                      <Clock className="text-slate-400 shrink-0" size={18} />
-                      <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Last Audited</p><p className="text-xs font-black text-slate-800 mt-0.5">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'Pending Initial Setup'}</p></div>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3 shadow-sm">
+                      <Clock className="text-slate-400 shrink-0" size={20} />
+                      <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last Audited</p><p className="text-sm font-semibold text-slate-800 mt-0.5">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'Pending Initial Setup'}</p></div>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3 shadow-xs">
-                      <Calendar className="text-slate-400 shrink-0" size={18} />
-                      <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Due Date</p><p className="text-xs font-black text-blue-700 mt-0.5">{calculateUpcomingDate(asset.live_inspection_date || asset.created_at)}</p></div>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3 shadow-sm">
+                      <Calendar className="text-slate-400 shrink-0" size={20} />
+                      <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Next Due Date</p><p className="text-sm font-semibold text-blue-700 mt-0.5">{calculateUpcomingDate(asset.live_inspection_date || asset.created_at)}</p></div>
                     </div>
-                    <button onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className={`w-full text-white font-black text-[10px] uppercase tracking-widest rounded-xl py-3 transition-colors flex items-center justify-center cursor-pointer shadow-md ${isOverdue ? 'bg-orange-600 hover:bg-orange-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                    <button onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className={`w-full text-white font-bold text-xs uppercase tracking-widest rounded-xl py-3 transition-colors flex items-center justify-center cursor-pointer shadow-md ${isOverdue ? 'bg-orange-600 hover:bg-orange-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
                       {isOverdue ? 'START INSPECTION NOW' : 'SUBMIT EARLY AUDIT'}
                     </button>
                   </div>
@@ -228,7 +228,7 @@ export default function StaffDashboardPage() {
 }
 
 // =========================================================
-// COMPONENT: SCREENSHOT-EXACT TRANSACTION MODAL
+// COMPONENT: MODAL FORM HANDLER
 // =========================================================
 function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
@@ -264,22 +264,30 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const handleLivePostgresSubmit = async () => {
     setIsTransmitting(true);
     try {
+      const finalEmpCode = user.emp_id || user.emp_code || user.id || 'STAFF';
+
       if (type === 'TICKET') {
         await supabase.from('tickets').insert({
           title: formTitle || 'IT Service Ticket',
+          subject: formTitle || 'IT Service Ticket', 
           category: formCategory,
-          description: formText,
+          description: formText || 'No description provided',
+          note: formText || 'No description provided',
           status: 'Open',
-          created_by: user.id || user.emp_id
+          created_by: user.email, 
+          emp_code: finalEmpCode // <-- THE CRITICAL FIX
         });
       } 
       else if (type === 'REQUEST') {
         await supabase.from('tickets').insert({
           title: `New Asset Allocation: ${formCategory}`,
+          subject: `Asset Request: ${formCategory}`, 
           category: `Asset Request: ${formCategory}`,
           description: formText || `Requested allocation for category: ${formCategory}`,
+          note: formText || `Requested allocation for category: ${formCategory}`,
           status: 'Pending',
-          created_by: user.id || user.emp_id
+          created_by: user.email,
+          emp_code: finalEmpCode // <-- THE CRITICAL FIX
         });
       }
       else if (type === 'INSPECTION' || type === 'REPLACEMENT') {
@@ -311,58 +319,58 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in text-left">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col font-sans">
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col font-sans max-h-[90vh]">
         
         {/* Top Header Row */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${type === 'TICKET' ? 'bg-blue-100 text-blue-600 border-blue-200' : type === 'REQUEST' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : type === 'INSPECTION' ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-pink-100 text-pink-600 border-pink-200'}`}>
-                {type === 'TICKET' && <Ticket size={18} />}
-                {type === 'REQUEST' && <PlusCircle size={18} />}
-                {type === 'INSPECTION' && <ClipboardCheck size={18} />}
-                {type === 'REPLACEMENT' && <RefreshCw size={18} />}
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${type === 'TICKET' ? 'bg-blue-100 text-blue-600 border-blue-200' : type === 'REQUEST' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : type === 'INSPECTION' ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-pink-100 text-pink-600 border-pink-200'}`}>
+                {type === 'TICKET' && <Ticket size={24} />}
+                {type === 'REQUEST' && <PlusCircle size={24} />}
+                {type === 'INSPECTION' && <ClipboardCheck size={24} />}
+                {type === 'REPLACEMENT' && <RefreshCw size={24} />}
             </div>
             <div>
-              <h3 className="font-black text-slate-900 text-xs tracking-widest uppercase">
+              <h3 className="font-bold text-slate-900 text-sm tracking-widest uppercase">
                 {type === 'TICKET' && 'RAISE IT SERVICE TICKET'}
                 {type === 'REQUEST' && 'REQUEST ASSET ALLOCATION'}
-                {type === 'INSPECTION' && 'COMPLIANCE POP-UP FRAMEWORK'}
-                {type === 'REPLACEMENT' && 'ASSET REPLACEMENT FRAMEWORK'}
+                {type === 'INSPECTION' && 'COMPLIANCE AUDIT'}
+                {type === 'REPLACEMENT' && 'ASSET REPLACEMENT'}
               </h3>
-              {asset?.asset_name && type !== 'REQUEST' && type !== 'TICKET' && <p className="text-[10px] font-bold text-slate-500 mt-0.5">{asset.asset_name}</p>}
+              {asset?.asset_name && type !== 'REQUEST' && type !== 'TICKET' && <p className="text-xs font-medium text-slate-500 mt-0.5">{asset.asset_name}</p>}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white hover:bg-slate-200 text-slate-500 flex items-center justify-center border border-slate-200 cursor-pointer transition-colors"><X size={16} /></button>
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-white hover:bg-slate-200 text-slate-500 flex items-center justify-center border border-slate-200 cursor-pointer transition-colors"><X size={20} /></button>
         </div>
 
         {/* Modal Dynamic Body */}
         <div className="p-6 md:p-8 overflow-y-auto space-y-6">
           {successDone ? (
-            <div className="py-12 text-center space-y-3">
-              <div className="w-20 h-20 bg-emerald-100 border border-emerald-200 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto animate-bounce shadow-sm"><CheckCircle size={40} /></div>
-              <h4 className="text-xl font-black text-slate-900 tracking-tight">Transmission Secured!</h4>
-              <p className="text-xs font-bold text-slate-500">Your record has been written to the live Postgres database.</p>
+            <div className="py-12 text-center space-y-4">
+              <div className="w-24 h-24 bg-emerald-100 border border-emerald-200 text-emerald-600 rounded-full flex items-center justify-center mx-auto animate-bounce shadow-sm"><CheckCircle size={48} /></div>
+              <h4 className="text-2xl font-bold text-slate-900 tracking-tight">Transmission Secured!</h4>
+              <p className="text-sm font-medium text-slate-500">Your record has been written to the live database.</p>
             </div>
           ) : (
 
-            <div className="space-y-5">
+            <div className="space-y-6">
               {/* COMPLIANCE GUARD FOR REPLACEMENT/INSPECTION */}
               {needsLock && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-200 text-[11px] font-bold text-blue-900 flex gap-3 leading-relaxed">
-                    <ShieldCheck className="text-blue-600 shrink-0 mt-0.5" size={18} />
-                    <div><span className="font-black">SECURITY ANTI-WRONG GUARD:</span> Please enter this machine's exact Tag ID or Serial Number parameter to unlock configuration fields.</div>
+                  <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-200 text-xs font-semibold text-blue-900 flex gap-3 leading-relaxed">
+                    <ShieldCheck className="text-blue-600 shrink-0 mt-0.5" size={20} />
+                    <div><span className="font-bold">SECURITY GUARD:</span> Please enter this machine's exact Tag ID or Serial Number parameter to unlock fields.</div>
                   </div>
 
                   <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e => { setSerialInput(e.target.value); setLockError(false); }} placeholder="Type Tag ID or Serial Number..." className={`flex-1 p-3.5 rounded-xl border text-xs font-black outline-none transition-colors ${lockError ? 'border-red-500 bg-red-50/20 text-red-900' : isUnlocked ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`} />
+                    <input disabled={isUnlocked} value={serialInput} onChange={e => { setSerialInput(e.target.value); setLockError(false); }} placeholder="Type Tag ID or Serial Number..." className={`flex-1 p-3.5 rounded-xl border text-sm font-semibold outline-none transition-colors ${lockError ? 'border-red-500 bg-red-50/20 text-red-900' : isUnlocked ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-slate-300 focus:border-blue-500 text-slate-900'}`} />
                     {!isUnlocked && (
-                      <button onClick={handleAttemptUnlock} className="bg-slate-900 hover:bg-slate-800 text-white px-6 rounded-xl font-black text-[10px] uppercase tracking-widest cursor-pointer shadow-md transition-colors">
+                      <button onClick={handleAttemptUnlock} className="bg-slate-900 hover:bg-slate-800 text-white px-6 rounded-xl font-bold text-xs uppercase tracking-widest cursor-pointer shadow-md transition-colors">
                         VERIFY
                       </button>
                     )}
                   </div>
-                  {lockError && <p className="text-[10px] font-black text-red-500 pl-1">❌ Mismatch. Look at the sticker on the bottom of your device.</p>}
+                  {lockError && <p className="text-xs font-semibold text-red-500 pl-1">❌ Mismatch. Look at the sticker on the bottom of your device.</p>}
                 </div>
               )}
 
@@ -370,8 +378,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
               {type === 'REQUEST' && (
                 <div className="space-y-5 animate-in fade-in">
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Select Asset Category</label>
-                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full p-4 rounded-xl border border-emerald-500 text-xs font-black bg-emerald-50/10 text-emerald-900 outline-none shadow-sm cursor-pointer transition-colors focus:ring-4 focus:ring-emerald-500/20">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Select Asset Category</label>
+                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full p-4 rounded-xl border border-slate-300 text-sm font-medium bg-white text-slate-900 outline-none shadow-sm cursor-pointer transition-colors focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
                       <option>Laptop</option>
                       <option>Headphone</option>
                       <option>Keyboard</option>
@@ -383,8 +391,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Allocation Justification</label>
-                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain why this equipment allocation is required..." className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none focus:border-emerald-600 focus:bg-white transition-colors" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Allocation Justification</label>
+                    <textarea rows={4} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain why this equipment allocation is required..." className="w-full p-4 rounded-xl border border-slate-300 bg-white text-sm font-medium outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-colors resize-none" />
                   </div>
                 </div>
               )}
@@ -393,13 +401,13 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
               {type === 'TICKET' && (
                 <div className="space-y-5 animate-in fade-in">
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">What is the issue title?</label>
-                    <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Describe the issue briefly" className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-black outline-none transition-colors" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Issue Title</label>
+                    <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="e.g., VPN not connecting" className="w-full p-3.5 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium outline-none transition-colors" />
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Select Category Type</label>
-                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full p-3.5 rounded-xl border border-blue-500 text-xs font-black bg-blue-50/10 text-blue-900 outline-none shadow-sm cursor-pointer transition-colors focus:ring-4 focus:ring-blue-500/20">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Category Type</label>
+                    <select value={formCategory} onChange={e => setFormCategory(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-300 text-sm font-medium bg-white text-slate-900 outline-none shadow-sm cursor-pointer transition-colors focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
                       <option>Hardware</option>
                       <option>Software</option>
                       <option>Internet</option>
@@ -407,15 +415,15 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Brief Notes & Explanations</label>
-                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain the problem details..." className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-bold outline-none transition-colors" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Brief Notes & Explanations</label>
+                    <textarea rows={4} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Explain the problem details..." className="w-full p-3.5 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium outline-none transition-colors resize-none" />
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Share Error Screenshot (Optional)</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Share Error Screenshot (Optional)</label>
                     <div className="border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-blue-500 cursor-pointer group transition-colors">
                       <Upload className="group-hover:text-blue-600 mb-2 transition-colors" size={24} />
-                      <span className="text-[11px] font-black text-slate-500 group-hover:text-blue-700 tracking-wider">UPLOAD SNAPSHOT</span>
+                      <span className="text-xs font-bold text-slate-500 group-hover:text-blue-700 tracking-wider">UPLOAD SNAPSHOT</span>
                     </div>
                   </div>
                 </div>
@@ -423,16 +431,16 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
               {/* WINDOW 3: INSPECTION / REPLACEMENT */}
               {(type === 'INSPECTION' || type === 'REPLACEMENT') && (
-                <div className={`space-y-5 transition-all duration-300 ${!isUnlocked ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
+                <div className={`space-y-5 transition-all duration-300 ${!isUnlocked ? 'opacity-40 pointer-events-none grayscale' : 'opacity-100'}`}>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Device Physical Condition</label>
-                    <select value={formCondition} onChange={e => setFormCondition(e.target.value)} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-black outline-none cursor-pointer transition-colors">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Device Physical Condition</label>
+                    <select value={formCondition} onChange={e => setFormCondition(e.target.value)} className="w-full p-4 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium outline-none cursor-pointer transition-colors">
                       <option>Pristine / Flawless</option><option>Normal Wear & Scratches</option><option>Damaged / Cracked</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">Declaration Notes & Reason</label>
-                    <textarea rows={3} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Provide explanation details..." className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 text-xs font-bold outline-none transition-colors" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Declaration Notes & Reason</label>
+                    <textarea rows={4} value={formText} onChange={e => setFormText(e.target.value)} placeholder="Provide explanation details..." className="w-full p-4 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium outline-none transition-colors resize-none" />
                   </div>
                 </div>
               )}
@@ -444,11 +452,11 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         {/* Dynamic Modal Footer */}
         {!successDone && (
           <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 shrink-0 rounded-b-3xl">
-            <button onClick={onClose} className="px-6 py-3.5 text-[11px] font-black tracking-widest uppercase text-slate-500 hover:bg-white hover:text-slate-800 rounded-xl cursor-pointer border border-transparent hover:border-slate-200 transition-colors">Cancel Process</button>
+            <button onClick={onClose} className="px-6 py-3.5 text-xs font-bold tracking-widest uppercase text-slate-500 hover:bg-white hover:text-slate-800 rounded-xl cursor-pointer border border-transparent hover:border-slate-300 transition-colors">Cancel</button>
             <button 
               disabled={isTransmitting || (needsLock && !isUnlocked)}
               onClick={handleLivePostgresSubmit} 
-              className={`px-8 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${needsLock && !isUnlocked ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' : type === 'REQUEST' ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-600/20' : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-blue-600/20'}`}
+              className={`px-8 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm ${needsLock && !isUnlocked ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : type === 'REQUEST' ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'}`}
             >
               {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : null}
               {type === 'TICKET' && 'SUBMIT IT TICKET'}

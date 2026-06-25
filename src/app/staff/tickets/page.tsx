@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Ticket, ClipboardList, CheckCircle2, ArrowLeft, Loader2, X, Upload } from 'lucide-react';
+import { Ticket, ClipboardList, CheckCircle2, ArrowLeft, Loader2, X, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface StaffData {
   name: string;
@@ -24,6 +24,7 @@ function ITTicketsContent() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Hardware');
   const [note, setNote] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
@@ -96,6 +97,12 @@ function ITTicketsContent() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -108,6 +115,7 @@ function ITTicketsContent() {
         setTicketHistory(prev => [newMock, ...prev]);
         setTitle('');
         setNote('');
+        setSelectedFile(null);
         setSuccessMessage('Demo service ticket submitted successfully!');
         setTimeout(() => { setIsModalOpen(false); setSuccessMessage(''); router.replace('/staff/tickets'); }, 1200);
         return;
@@ -118,11 +126,11 @@ function ITTicketsContent() {
 
       const finalEmpCode = staffProfile?.emp_code || 'EMP-7783';
 
-      // Build insertion payload with explicit column mappings to handle strict constraints
+      // Build insertion payload
       const payload: Record<string, any> = { 
         title: title || 'IT Service Request',
         subject: title || 'IT Service Request', 
-        description: note || 'No description provided', // ✅ Satisfies your database description not-null constraint!
+        description: note || 'No description provided',
         note: note || 'No description provided',
         status: 'pending',
         emp_code: finalEmpCode 
@@ -144,11 +152,15 @@ function ITTicketsContent() {
       else if ('ticket_type' in sampleRow) payload.ticket_type = category;
       else if ('type' in sampleRow) payload.type = category;
 
+      // Note: File upload logic to Supabase Storage would go here in the future
+      // if (selectedFile) { ... upload logic ... }
+
       const { error } = await supabase.from('tickets').insert([payload]);
       if (error) throw error;
 
       setTitle('');
       setNote('');
+      setSelectedFile(null);
       setSuccessMessage('IT service ticket submitted successfully!');
       fetchTicketHistory();
       setTimeout(() => { setIsModalOpen(false); setSuccessMessage(''); router.replace('/staff/tickets'); }, 1200);
@@ -161,46 +173,67 @@ function ITTicketsContent() {
 
   const getStatusBadge = (status: string) => {
     const cleanStatus = status?.toLowerCase();
-    if (cleanStatus === 'resolved' || cleanStatus === 'completed') return <span className="px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-black uppercase tracking-wider border border-green-200">Resolved</span>;
-    if (cleanStatus === 'in_repair') return <span className="px-2.5 py-0.5 bg-rose-100 text-rose-700 rounded-full text-[10px] font-black uppercase tracking-wider border border-rose-200">In Repair</span>;
-    return <span className="px-2.5 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-wider animate-pulse border border-amber-200">Pending Review</span>;
+    if (cleanStatus === 'resolved' || cleanStatus === 'completed') {
+      return <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold border border-green-200">Resolved</span>;
+    }
+    if (cleanStatus === 'in_repair') {
+      return <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-semibold border border-rose-200">In Repair</span>;
+    }
+    return <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold animate-pulse border border-amber-200">Pending Review</span>;
   };
 
-  if (isLoading) return <div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin text-orange-500" /></div>;
+  if (isLoading) return <div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 font-sans">
+    <div className="space-y-6 animate-in fade-in duration-500 font-sans max-w-6xl mx-auto">
       
       {/* HEADER BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-2xl p-6 shadow-sm border border-gray-100 gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/staff')} className="p-2.5 hover:bg-gray-50 rounded-xl border border-gray-100 text-gray-600"><ArrowLeft size={18} /></button>
+          <button onClick={() => router.push('/staff')} className="p-2.5 hover:bg-gray-50 rounded-xl border border-gray-100 text-gray-600 transition-colors">
+            <ArrowLeft size={20} />
+          </button>
           <div>
-            <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">MY IT TICKETS DETAILS</h1>
-            <p className="text-xs text-gray-400 font-bold mt-0.5">Track your active IT service desk queries and resolutions</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">My IT Tickets</h1>
+            <p className="text-sm text-gray-500 mt-1">Track your active IT service desk queries and resolutions</p>
           </div>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all"><Ticket size={16} /> Raise New Ticket</button>
+        <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-sm transition-all w-full sm:w-auto">
+          <Ticket size={18} /> 
+          Raise New Ticket
+        </button>
       </div>
 
       {/* TICKET LOGS LISTING */}
-      <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2 bg-gray-50/20"><ClipboardList size={18} className="text-[#ff9800]" /><h2 className="text-xs font-black text-gray-900 uppercase tracking-wider">Historical Ticket Records Log</h2></div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2 bg-gray-50/50">
+          <ClipboardList size={20} className="text-blue-500" />
+          <h2 className="text-sm font-semibold text-gray-800">Historical Ticket Records</h2>
+        </div>
         <div className="p-6">
           {ticketHistory.length === 0 ? (
-            <div className="text-center py-16"><CheckCircle2 size={36} className="text-gray-300 mx-auto mb-2" /><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">No historical service tickets logged.</p></div>
+            <div className="text-center py-16">
+              <CheckCircle2 size={48} className="text-gray-200 mx-auto mb-4" />
+              <p className="text-base font-medium text-gray-500">No historical service tickets logged.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {ticketHistory.map((t) => (
-                <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100/60 gap-3 hover:bg-gray-100/40 transition-colors">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-extrabold text-gray-900">{t.subject || t.title}</span>
-                      <span className="text-[10px] text-gray-400 font-bold">[{t.category || t.ticket_type || 'General'}] ({t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Recent'})</span>
+                <div key={t.id} className="flex flex-col md:flex-row md:items-start justify-between p-5 bg-gray-50/50 rounded-2xl border border-gray-100 hover:bg-gray-50 transition-colors gap-4">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                      <span className="text-base font-semibold text-gray-900">{t.subject || t.title}</span>
+                      <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-200">
+                        {t.category || t.ticket_type || 'General'} • {t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Recent'}
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-500 font-medium leading-relaxed max-w-3xl">{t.description || t.note || t.details}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
+                      {t.description || t.note || t.details}
+                    </p>
                   </div>
-                  <div className="sm:text-right shrink-0">{getStatusBadge(t.status)}</div>
+                  <div className="md:text-right shrink-0 pt-1">
+                    {getStatusBadge(t.status)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -210,53 +243,110 @@ function ITTicketsContent() {
 
       {/* FORM OVERLAY DIALOG MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-gray-100 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-              <h3 className="text-sm font-black uppercase text-gray-900 flex items-center gap-2"><Ticket size={16} className="text-blue-500" /> Raise IT Service Ticket</h3>
-              <button type="button" onClick={() => { setIsModalOpen(false); router.replace('/staff/tickets'); }} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={18}/></button>
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center pb-4 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Ticket size={20} className="text-blue-600" /> 
+                Raise IT Service Ticket
+              </h3>
+              <button type="button" onClick={() => { setIsModalOpen(false); router.replace('/staff/tickets'); }} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+                <X size={20}/>
+              </button>
             </div>
 
-            {successMessage && <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs rounded-xl text-center font-bold">{successMessage}</div>}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">What is the issue title?</label>
-                <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="Describe the issue briefly" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-orange-500 focus:bg-white text-gray-800" />
+            {successMessage && (
+              <div className="p-4 bg-green-50 border border-green-100 text-green-700 text-sm rounded-xl text-center font-medium">
+                {successMessage}
               </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">Select Category Type</label>
-                <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-orange-500">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Title</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={title} 
+                  onChange={e => setTitle(e.target.value)} 
+                  placeholder="e.g., Cannot connect to office Wi-Fi" 
+                  className="w-full p-3 bg-white border border-gray-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 transition-all" 
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                <select 
+                  value={category} 
+                  onChange={e => setCategory(e.target.value)} 
+                  className="w-full p-3 bg-white border border-gray-300 rounded-xl text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
                   <option value="Hardware">Hardware</option>
                   <option value="Software">Software</option>
-                  <option value="Internet">Internet</option>
+                  <option value="Internet">Internet & Network</option>
+                  <option value="Access">Account & Access</option>
                 </select>
               </div>
+              
               <div>
-                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">Brief Notes Explanations</label>
-                <textarea rows={3} required value={note} onChange={e => setNote(e.target.value)} placeholder="Explain the problem details..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-orange-500 focus:bg-white text-gray-800" />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Issue Details</label>
+                <textarea 
+                  rows={4} 
+                  required 
+                  value={note} 
+                  onChange={e => setNote(e.target.value)} 
+                  placeholder="Please provide as much detail as possible about the problem..." 
+                  className="w-full p-3 bg-white border border-gray-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 transition-all resize-none" 
+                />
               </div>
+              
               <div>
-                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wide mb-1.5">Share Error Screenshot (Optional)</label>
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors relative">
-                  <Upload size={18} className="mx-auto text-gray-400 mb-1" />
-                  <span className="text-xs text-gray-500 font-bold">Upload Snapshot Image</span>
-                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Screenshot (Optional)</label>
+                <div className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors relative ${selectedFile ? 'border-blue-300 bg-blue-50/50' : 'border-gray-300 hover:bg-gray-50'}`}>
+                  {selectedFile ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageIcon size={24} className="text-blue-500" />
+                      <span className="text-sm font-medium text-blue-700 break-all px-4">{selectedFile.name}</span>
+                      <span className="text-xs text-blue-400">Click to change file</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload size={24} className="text-gray-400" />
+                      <span className="text-sm font-medium text-gray-600">Click to upload image</span>
+                      <span className="text-xs text-gray-400">PNG, JPG, GIF up to 5MB</span>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
                 </div>
               </div>
-              <button type="submit" disabled={isSubmitting} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2">{isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Submit Service Ticket'}</button>
+              
+              <div className="pt-2">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold text-base rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" /> 
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit Ticket'
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }
 
 export default function ITTicketsPage() {
   return (
-    <Suspense fallback={<div className="w-full h-96 flex items-center justify-center"><Loader2 className="animate-spin text-orange-500" /></div>}>
+    <Suspense fallback={<div className="w-full h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-500 w-8 h-8" /></div>}>
       <ITTicketsContent />
     </Suspense>
   );
