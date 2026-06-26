@@ -55,7 +55,7 @@ function TicketsWorkbenchContent() {
     router.replace('/admin/tickets'); 
   };
 
-  cconst handleCommitUpdates = async (e: React.FormEvent) => {
+  const handleCommitUpdates = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) return;
 
