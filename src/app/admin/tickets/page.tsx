@@ -55,7 +55,7 @@ function TicketsWorkbenchContent() {
     router.replace('/admin/tickets'); 
   };
 
-  const handleCommitUpdates = async (e: React.FormEvent) => {
+  cconst handleCommitUpdates = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) return;
 
@@ -64,25 +64,24 @@ function TicketsWorkbenchContent() {
       const isMarkingDone = formStatus === 'resolved' || formStatus === 'closed';
       const timeResolvedStamp = isMarkingDone ? new Date().toISOString() : selectedTicket.resolved_at;
 
-      // 🌟 THIS IS THE LINE. Postgres will now accept it flawlessly.
+      // THE TRACKER: This proves exactly what your browser is trying to send!
+      const payloadToSend = {
+        status: formStatus,
+        waiting_time: formWaitTime, 
+        resolution_note: formResolutionNote,
+        resolved_at: timeResolvedStamp
+      };
+      
+      console.log("🚀 SENDING PAYLOAD TO SUPABASE:", payloadToSend);
+
       const { error } = await supabase
         .from('tickets')
-        .update({
-          status: formStatus,
-          waiting_time: formWaitTime, 
-          resolution_note: formResolutionNote,
-          resolved_at: timeResolvedStamp
-        })
+        .update(payloadToSend)
         .eq('id', selectedTicket.id);
 
       if (error) throw error;
 
-      const patched = {
-        ...selectedTicket,
-        status: formStatus, waiting_time: formWaitTime, 
-        resolution_note: formResolutionNote, resolved_at: timeResolvedStamp
-      };
-
+      const patched = { ...selectedTicket, ...payloadToSend };
       setSelectedTicket(patched);
       setTickets(prev => prev.map(t => t.id === selectedTicket.id ? patched : t));
       alert("Ticket updated successfully.");
