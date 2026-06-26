@@ -8,8 +8,13 @@ import {
   LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-// 1. IMPORT MOVED TO THE TOP
-import CobrowseProvider from '@/components/CobrowseProvider';
+
+// 1. DYNAMIC IMPORT ADDED HERE TO FIX VERCEL BUILD CRASH
+import dynamic from 'next/dynamic';
+const CobrowseProvider = dynamic(
+  () => import('@/components/CobrowseProvider'),
+  { ssr: false } 
+);
 
 interface StaffProfile {
   id: string;
