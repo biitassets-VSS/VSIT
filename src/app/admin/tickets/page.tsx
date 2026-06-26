@@ -284,7 +284,9 @@ function TicketsWorkbenchContent() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                       <User size={14} className="text-blue-600"/>
-                      <span>Submitted By: <strong className="text-gray-900">{selectedTicket.user_email}</strong></span>
+                      <span>
+  Submitted By: <strong className="text-slate-900">{ticket.staff_name || ticket.created_by?.split('@')[0]}</strong> • EMP: {ticket.emp_code}
+</span>
                       <span>•</span>
                       <span className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">EMP: {selectedTicket.emp_code || 'N/A'}</span>
                     </div>
