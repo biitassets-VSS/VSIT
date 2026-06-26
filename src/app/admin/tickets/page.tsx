@@ -52,14 +52,14 @@ function TicketsWorkbenchContent() {
   const handleSelectTicket = (ticket: any) => {
     setSelectedTicket(ticket);
     setFormStatus(ticket.status || 'open');
-    setFormWaitTime(ticket.wait_time || '15 Mins');
+    setFormWaitTime(ticket.waiting_time || '15 Mins'); // Fixed column name
     setFormResolutionNote(ticket.resolution_note || '');
   };
 
   // 🚀 Gracefully closes the workbench and expands the list back to 100% width
   const closeWorkbench = () => {
     setSelectedTicket(null);
-    router.replace('/admin/tickets'); // Clears the URL so it doesn't pop back open on refresh
+    router.replace('/admin/tickets'); 
   };
 
   const handleCommitUpdates = async (e: React.FormEvent) => {
@@ -71,11 +71,12 @@ function TicketsWorkbenchContent() {
       const isMarkingDone = formStatus === 'resolved' || formStatus === 'closed';
       const timeResolvedStamp = isMarkingDone ? new Date().toISOString() : selectedTicket.resolved_at;
 
+      // 🌟 Fixed 'waiting_time' column mapping here!
       const { error } = await supabase
         .from('tickets')
         .update({
           status: formStatus,
-          wait_time: formWaitTime,
+          waiting_time: formWaitTime, 
           resolution_note: formResolutionNote,
           resolved_at: timeResolvedStamp
         })
@@ -85,14 +86,19 @@ function TicketsWorkbenchContent() {
 
       const patched = {
         ...selectedTicket,
-        status: formStatus, wait_time: formWaitTime, 
+        status: formStatus, waiting_time: formWaitTime, 
         resolution_note: formResolutionNote, resolved_at: timeResolvedStamp
       };
 
       setSelectedTicket(patched);
       setTickets(prev => prev.map(t => t.id === selectedTicket.id ? patched : t));
       alert("Ticket status & resolution log successfully recorded.");
-    } catch (err: any) { alert(`Update Failed: ${err.message}`); } finally { setIsSaving(false); }
+    } catch (err: any) { 
+      console.error("FULL POSTGRES ERROR:", err);
+      alert(`Update Failed: ${err.message || JSON.stringify(err)}`); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -215,7 +221,7 @@ function TicketsWorkbenchContent() {
                       {ticket.staff_name || ticket.created_by?.split('@')[0]}
                     </span>
                     <span className={`font-mono font-bold text-[10px] ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
-                      ⏳ {ticket.wait_time || '15 Mins'}
+                      ⏳ {ticket.waiting_time || '15 Mins'}
                     </span>
                   </div>
                 </div>
@@ -256,7 +262,7 @@ function TicketsWorkbenchContent() {
 
                     <div className="flex gap-2 shrink-0">
                       <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-xl text-xs font-mono font-black flex items-center gap-1">
-                        <Hourglass size={12} className="text-blue-500"/> {selectedTicket.wait_time || '15 Mins'}
+                        <Hourglass size={12} className="text-blue-500"/> {selectedTicket.waiting_time || '15 Mins'}
                       </span>
                       <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border flex items-center gap-1 ${activeBadge.css}`}>
                         {activeBadge.label}
