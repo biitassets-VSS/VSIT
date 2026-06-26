@@ -286,13 +286,7 @@ function TicketsWorkbenchContent() {
                         <span className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">EMP: {selectedTicket.emp_code || 'N/A'}</span>
                       </div>
                       
-                      <button 
-                        type="button" 
-                        onClick={() => handleLiveAssist(selectedTicket.user_email || selectedTicket.created_by || selectedTicket.staff_email)} 
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-sm shadow-blue-500/30"
-                      >
-                        🖥️ View User's Screen
-                      </button>
+                      
                     </div>
 
                     <div className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100 text-xs text-gray-800 leading-relaxed font-medium">
