@@ -55,17 +55,6 @@ function TicketsWorkbenchContent() {
     router.replace('/admin/tickets'); 
   };
 
-  // 1. ADDED COBROWSE FUNCTION HERE (OUTSIDE THE DATABASE UPDATE FUNCTION)
-  const handleLiveAssist = (staffEmail: string) => {
-    if (!staffEmail) {
-      alert("No email address found for this user.");
-      return;
-    }
-    const targetEmail = encodeURIComponent(staffEmail);
-    const agentPortalUrl = `https://cobrowse.io/connect?filter_user_email=${targetEmail}`;
-    window.open(agentPortalUrl, 'CobrowseAgent', 'width=1200,height=800');
-  };
-
   const handleCommitUpdates = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) return;

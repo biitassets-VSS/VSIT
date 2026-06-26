@@ -9,13 +9,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
-// 1. DYNAMIC IMPORT ADDED HERE TO FIX VERCEL BUILD CRASH
-import dynamic from 'next/dynamic';
-const CobrowseProvider = dynamic(
-  () => import('@/components/CobrowseProvider'),
-  { ssr: false } 
-);
-
 interface StaffProfile {
   id: string;
   name: string;
@@ -132,16 +125,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative">
-      
-      {/* 2. INJECT COBROWSE HERE, USING YOUR EXISTING STAFF PROFILE STATE */}
-      {staffProfile.id && staffProfile.id !== 'guest-mock-uuid' && (
-        <CobrowseProvider user={{
-          id: staffProfile.id,
-          name: staffProfile.name,
-          email: staffProfile.email
-        }} />
-      )}
-
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-slate-900/40 z-40 lg:hidden backdrop-blur-sm" />}
 
       {/* SIDEBAR */}
@@ -188,7 +171,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           )}
         </div>
       </aside>
+import CobrowseProvider from '@/components/CobrowseProvider';
+import { getSession } from '@/lib/auth'; // <--- swap with your actual auth fetcher
 
+export default async function StaffLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession(); 
+
+  return (
+    <div className="staff-layout">
+      {/* Boots up silently in the background for every staff member */}
+      {session?.user && <CobrowseProvider user={session.user} />}
+      
+      <main>{children}</main>
+    </div>
+  );
+}
       {/* BODY */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-40">
