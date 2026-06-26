@@ -43,16 +43,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         return;
       }
 
-      // 🚀 Check for the custom local storage ticket created by the login page
       const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
       if (!sessionString) {
-        // No ticket found? Then they are an intruder. Kick them out.
         router.replace('/'); 
         return; 
       }
 
-      // 🎟️ SAFE PARSE: Handle both JSON objects and plain text emails
       let activeUser: any = {};
       try {
         activeUser = JSON.parse(sessionString);
@@ -75,41 +72,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       });
       
       setIsCheckingAuth(false);
-      fetchNotifications(userId);
-
-      // 🌟 SECURE REAL-TIME SUBSCRIPTION
-      const channel = supabase
-        .channel('staff_notifications')
-        .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'notifications',
-          filter: `target_user=eq.${userId}` 
-        }, (payload) => {
-          setNotifications(current => [payload.new, ...current]);
-        })
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
     };
     
     verifyStaff();
   }, [router]);
-
-  const fetchNotifications = async (userId: string) => {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('target_user', userId)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (data) setNotifications(data);
-  };
-
-  const markAsRead = async (id: string) => {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-    setNotifications(current => current.map(n => n.id === id ? { ...n, is_read: true } : n));
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
@@ -151,7 +117,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* USER PROFILE */}
         <div className="p-4 border-t border-slate-50 shrink-0 mb-2">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-full flex items-center justify-between p-2 rounded-xl transition-all hover:bg-slate-50">
             <div className="flex items-center gap-3 overflow-hidden">
@@ -171,35 +136,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           )}
         </div>
       </aside>
-import CobrowseProvider from '@/components/CobrowseProvider';
-import { getSession } from '@/lib/auth'; // <--- swap with your actual auth fetcher
 
-export default async function StaffLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession(); 
-
-  return (
-    <div className="staff-layout">
-      {/* Boots up silently in the background for every staff member */}
-      {session?.user && <CobrowseProvider user={session.user} />}
-      
-      <main>{children}</main>
-    </div>
-  );
-}
-      {/* BODY */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-40">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-orange-50 rounded-lg"><Menu size={22} /></button>
-          <div className="flex items-center gap-4 ml-auto">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="relative p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors">
-              <Bell size={20} />
-              {notifications.filter(n => !n.is_read).length > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              )}
-            </button>
-          </div>
-        </header>
-
         <main className="flex-1 p-6 overflow-y-auto">
           {children}
         </main>
