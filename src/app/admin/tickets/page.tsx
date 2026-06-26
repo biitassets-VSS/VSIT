@@ -39,7 +39,6 @@ function TicketsWorkbenchContent() {
       const found = tickets.find(t => t.id === targetId);
       if (found) handleSelectTicket(found);
     }
-    // Note: We removed the auto-select logic so the page defaults to 100% width list view!
   }, [tickets, searchParams]);
 
   const fetchTickets = async () => {
@@ -181,7 +180,7 @@ function TicketsWorkbenchContent() {
       ) : (
         <div className="flex flex-col lg:flex-row gap-6 items-start relative min-h-[500px]">
           
-          {/* LEFT COLUMN: SCROLLABLE QUEUE LIST (Expands to 100% width if no ticket is selected) */}
+          {/* LEFT COLUMN: SCROLLABLE QUEUE LIST */}
           <div className={`space-y-3 max-h-[800px] overflow-y-auto pr-1 custom-scrollbar shrink-0 transition-all duration-300 ease-in-out ${selectedTicket ? 'hidden lg:block lg:w-5/12' : 'w-full'}`}>
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-2 block mb-1">Queue Feed ({filteredTickets.length})</span>
             
@@ -204,7 +203,7 @@ function TicketsWorkbenchContent() {
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-400'}`}>
                         <MessageSquare size={14} />
                       </div>
-                      <h4 className="text-sm font-black truncate">{ticket.subject || 'Support Ticket'}</h4>
+                      <h4 className="text-sm font-black truncate">{ticket.subject || ticket.title || 'Support Ticket'}</h4>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${isSelected ? 'bg-white/20 text-white border-transparent' : badge.css}`}>
                       {badge.label}
@@ -213,7 +212,7 @@ function TicketsWorkbenchContent() {
 
                   <div className="flex items-center justify-between text-[11px] pl-10">
                     <span className={`font-bold truncate ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                      {ticket.user_email?.split('@')[0]} ({ticket.emp_code || 'No EMP'})
+                      {ticket.staff_name || ticket.created_by?.split('@')[0]}
                     </span>
                     <span className={`font-mono font-bold text-[10px] ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
                       ⏳ {ticket.wait_time || '15 Mins'}
@@ -230,14 +229,14 @@ function TicketsWorkbenchContent() {
             )}
           </div>
 
-          {/* RIGHT COLUMN: DETAIL WIDE & RESOLUTION FORM (Slides in when a ticket is clicked) */}
+          {/* RIGHT COLUMN: DETAIL WIDE & RESOLUTION FORM */}
           {selectedTicket && (() => {
             const activeBadge = getStatusBadge(selectedTicket.status);
 
             return (
               <div className="w-full lg:w-7/12 bg-white rounded-3xl border border-gray-200/80 shadow-xl shadow-blue-900/5 p-6 lg:sticky lg:top-6 animate-in slide-in-from-right-8 duration-300 relative">
                 
-                {/* 🚀 The Close Button (Restores full-width view) */}
+                {/* 🚀 The Close Button */}
                 <button 
                   onClick={closeWorkbench} 
                   className="absolute top-4 right-4 text-gray-400 hover:text-rose-600 bg-gray-50 hover:bg-rose-50 p-2 rounded-full transition-colors z-10 cursor-pointer"
@@ -252,7 +251,7 @@ function TicketsWorkbenchContent() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-gray-100 pr-10">
                     <div>
                       <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-widest">TICKET REF: #{selectedTicket.id.split('-')[0]}</span>
-                      <h2 className="text-lg font-black text-[#002B49] leading-tight mt-0.5">{selectedTicket.subject || 'IT Support Ticket'}</h2>
+                      <h2 className="text-lg font-black text-[#002B49] leading-tight mt-0.5">{selectedTicket.subject || selectedTicket.title || 'IT Support Ticket'}</h2>
                     </div>
 
                     <div className="flex gap-2 shrink-0">
@@ -285,15 +284,15 @@ function TicketsWorkbenchContent() {
                     <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                       <User size={14} className="text-blue-600"/>
                       <span>
-  Submitted By: <strong className="text-slate-900">{ticket.staff_name || ticket.created_by?.split('@')[0]}</strong> • EMP: {ticket.emp_code}
-</span>
+                        Submitted By: <strong className="text-slate-900">{selectedTicket.staff_name || selectedTicket.created_by?.split('@')[0]}</strong>
+                      </span>
                       <span>•</span>
                       <span className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">EMP: {selectedTicket.emp_code || 'N/A'}</span>
                     </div>
 
                     <div className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100 text-xs text-gray-800 leading-relaxed font-medium">
                       <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Issue Description</span>
-                      "{selectedTicket.description || 'No descriptive text supplied by user.'}"
+                      "{selectedTicket.description || selectedTicket.note || 'No descriptive text supplied by user.'}"
                     </div>
                   </div>
 
@@ -334,7 +333,7 @@ function TicketsWorkbenchContent() {
                     <div>
                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">How Was This Resolved? (Fix Notes)</label>
                       <textarea 
-                        rows={2} required={formStatus === 'resolved'}
+                        rows={2} required={formStatus === 'resolved' || formStatus === 'closed'}
                         placeholder="Type solution (e.g. 'Replaced keyboard USB cable', 'Reset AnyDesk Password')..."
                         value={formResolutionNote} onChange={e => setFormResolutionNote(e.target.value)}
                         className="w-full p-3 bg-white border border-gray-300 rounded-xl text-xs font-medium text-gray-900 outline-none focus:border-[#002B49]"
