@@ -217,7 +217,7 @@ export default function StaffDashboardPage() {
                       <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
                     </div>
                   </div>
-                ))
+                ))}
               </div>
             )}
           </div>
