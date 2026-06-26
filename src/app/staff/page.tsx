@@ -257,17 +257,18 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
   const handleLivePostgresSubmit = async () => {
     setIsTransmitting(true);
+    let submitError = null; // Track error here
+
     try {
       const cleanEmail = user.email.toLowerCase().trim();
       const finalEmp = user.emp_id || 'STAFF';
 
-      // 🌟 Clean up the human name safely before sending to Postgres
       let humanName = user.name || cleanEmail.split('@')[0];
       humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
       humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
 
       if (type === 'TICKET') {
-        await supabase.from('tickets').insert({
+        const { error } = await supabase.from('tickets').insert({
           title: formTitle || 'IT Support Ticket',
           subject: formTitle || 'IT Support Ticket',
           category: formCategory,
@@ -276,10 +277,11 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           status: 'Open',
           created_by: cleanEmail,
           emp_code: finalEmp,
-          staff_name: humanName // <--- PLUGGED INTO YOUR NEW COLUMN!
+          staff_name: humanName 
         });
+        submitError = error;
       } else if (type === 'REQUEST') {
-        await supabase.from('tickets').insert({
+        const { error } = await supabase.from('tickets').insert({
           title: `Asset Request: ${formCategory}`,
           subject: `Asset Request: ${formCategory}`,
           category: `Request: ${formCategory}`,
@@ -288,22 +290,31 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           status: 'Pending',
           created_by: cleanEmail,
           emp_code: finalEmp,
-          staff_name: humanName // <--- PLUGGED INTO YOUR NEW COLUMN!
+          staff_name: humanName
         });
+        submitError = error;
       } else if (type === 'INSPECTION' || type === 'REPLACEMENT') {
-        await supabase.from('inspections').insert({
+        const { error: inspError } = await supabase.from('inspections').insert({
           asset_id: asset.id, inspected_by: user.id || user.emp_id, user_email: cleanEmail,
           condition: formCondition, notes: formText || `Submitted ${type}`, status: 'Pending'
         });
-        await supabase.from('assets').update({
-          inspection_status: 'Pending', status: type === 'REPLACEMENT' ? 'Replacement Requested' : 'Assigned'
-        }).eq('id', asset.id);
+        submitError = inspError;
+        
+        if (!inspError) {
+          await supabase.from('assets').update({
+            inspection_status: 'Pending', status: type === 'REPLACEMENT' ? 'Replacement Requested' : 'Assigned'
+          }).eq('id', asset.id);
+        }
       }
+
+      // 🚨 Force the error to trigger the catch block if Supabase blocked it!
+      if (submitError) throw submitError;
 
       setSuccessDone(true);
       setTimeout(() => onClose(), 1200);
-    } catch (e) {
-      alert("Postgres rejected the transmission.");
+    } catch (e: any) {
+      console.error("FULL POSTGRES ERROR:", e);
+      alert(`Database Error: ${e.message || JSON.stringify(e)}`);
     } finally {
       setIsTransmitting(false);
     }
