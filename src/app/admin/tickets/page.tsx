@@ -55,6 +55,17 @@ function TicketsWorkbenchContent() {
     router.replace('/admin/tickets'); 
   };
 
+  // 1. ADDED COBROWSE FUNCTION HERE (OUTSIDE THE DATABASE UPDATE FUNCTION)
+  const handleLiveAssist = (staffEmail: string) => {
+    if (!staffEmail) {
+      alert("No email address found for this user.");
+      return;
+    }
+    const targetEmail = encodeURIComponent(staffEmail);
+    const agentPortalUrl = `https://cobrowse.io/connect?filter_user_email=${targetEmail}`;
+    window.open(agentPortalUrl, 'CobrowseAgent', 'width=1200,height=800');
+  };
+
   const handleCommitUpdates = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) return;
@@ -63,28 +74,7 @@ function TicketsWorkbenchContent() {
     try {
       const isMarkingDone = formStatus === 'resolved' || formStatus === 'closed';
       const timeResolvedStamp = isMarkingDone ? new Date().toISOString() : selectedTicket.resolved_at;
-// Inside your Admin Ticket Detail Component
 
-const handleLiveAssist = () => {
-  // Cobrowse provides a deep-link URL structure that auto-searches your connected users
-  const targetEmail = encodeURIComponent(ticket.staff_email);
-  
-  const agentPortalUrl = `https://cobrowse.io/connect?filter_user_email=${targetEmail}`;
-  
-  // Opens the live screen-share in a pop-up window next to your portal
-  window.open(agentPortalUrl, 'CobrowseAgent', 'width=1200,height=800');
-};
-
-return (
-  <div>
-    <h4>Ticket filed by: {ticket.staff_name}</h4>
-    
-    <button onClick={handleLiveAssist} className="bg-blue-600 text-white px-4 py-2 rounded">
-      🖥️ View Staff Member's Screen
-    </button>
-  </div>
-)
-      // THE TRACKER: This proves exactly what your browser is trying to send!
       const payloadToSend = {
         status: formStatus,
         waiting_time: formWaitTime, 
@@ -295,13 +285,25 @@ return (
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
-                      <User size={14} className="text-blue-600"/>
-                      <span>
-                        Submitted By: <strong className="text-slate-900">{selectedTicket.staff_name || selectedTicket.created_by?.split('@')[0]}</strong>
-                      </span>
-                      <span>•</span>
-                      <span className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">EMP: {selectedTicket.emp_code || 'N/A'}</span>
+                    
+                    {/* 2. PLACED THE VIEW SCREEN BUTTON HERE, NEXT TO USER DETAILS */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                        <User size={14} className="text-blue-600"/>
+                        <span>
+                          Submitted By: <strong className="text-slate-900">{selectedTicket.staff_name || selectedTicket.created_by?.split('@')[0]}</strong>
+                        </span>
+                        <span className="hidden sm:inline">•</span>
+                        <span className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">EMP: {selectedTicket.emp_code || 'N/A'}</span>
+                      </div>
+                      
+                      <button 
+                        type="button" 
+                        onClick={() => handleLiveAssist(selectedTicket.user_email || selectedTicket.created_by || selectedTicket.staff_email)} 
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-sm shadow-blue-500/30"
+                      >
+                        🖥️ View User's Screen
+                      </button>
                     </div>
 
                     <div className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100 text-xs text-gray-800 leading-relaxed font-medium">
