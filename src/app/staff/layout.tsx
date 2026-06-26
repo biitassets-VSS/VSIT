@@ -171,7 +171,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           )}
         </div>
       </aside>
+import CobrowseProvider from '@/components/CobrowseProvider';
+import { getSession } from '@/lib/auth'; // <--- swap with your actual auth fetcher
 
+export default async function StaffLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession(); 
+
+  return (
+    <div className="staff-layout">
+      {/* Boots up silently in the background for every staff member */}
+      {session?.user && <CobrowseProvider user={session.user} />}
+      
+      <main>{children}</main>
+    </div>
+  );
+}
       {/* BODY */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-40">

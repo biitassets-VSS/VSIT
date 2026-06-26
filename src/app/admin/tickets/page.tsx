@@ -63,7 +63,27 @@ function TicketsWorkbenchContent() {
     try {
       const isMarkingDone = formStatus === 'resolved' || formStatus === 'closed';
       const timeResolvedStamp = isMarkingDone ? new Date().toISOString() : selectedTicket.resolved_at;
+// Inside your Admin Ticket Detail Component
 
+const handleLiveAssist = () => {
+  // Cobrowse provides a deep-link URL structure that auto-searches your connected users
+  const targetEmail = encodeURIComponent(ticket.staff_email);
+  
+  const agentPortalUrl = `https://cobrowse.io/connect?filter_user_email=${targetEmail}`;
+  
+  // Opens the live screen-share in a pop-up window next to your portal
+  window.open(agentPortalUrl, 'CobrowseAgent', 'width=1200,height=800');
+};
+
+return (
+  <div>
+    <h4>Ticket filed by: {ticket.staff_name}</h4>
+    
+    <button onClick={handleLiveAssist} className="bg-blue-600 text-white px-4 py-2 rounded">
+      🖥️ View Staff Member's Screen
+    </button>
+  </div>
+)
       // THE TRACKER: This proves exactly what your browser is trying to send!
       const payloadToSend = {
         status: formStatus,
