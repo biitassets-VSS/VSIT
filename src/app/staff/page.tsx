@@ -14,7 +14,6 @@ export default function StaffDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   
-  // LIVE DATABASE FEEDS
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   const [myTickets, setMyTickets] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
@@ -23,6 +22,15 @@ export default function StaffDashboardPage() {
     isOpen: false,
     type: '',
   });
+
+  // 🌟 SMART NAME FORMATTER: Turns "meenakshi.bi" into "Meenakshi"
+  const formatDisplayName = (raw: string) => {
+    if (!raw) return 'Staff Member';
+    let s = raw.split('@')[0];       // Strip email domain
+    s = s.split('.')[0];             // Chop off ".bi" or ".vss"
+    s = s.replace(/[_-]/g, ' ');     // Clean up underscores/dashes
+    return s.charAt(0).toUpperCase() + s.slice(1); // Capitalize first letter
+  };
 
   const loadRealDatabase = async () => {
     try {
@@ -35,7 +43,6 @@ export default function StaffDashboardPage() {
 
       const cleanEmail = user.email?.toLowerCase().trim();
 
-      // 1. FETCH PROFILE
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
       if (profile) {
         user.emp_id = profile.emp_code || profile.emp_id || 'STAFF';
@@ -46,14 +53,12 @@ export default function StaffDashboardPage() {
       }
       setCurrentUser(user);
 
-      // 2. PARALLEL PULL: ASSETS, INSPECTIONS, & TICKETS
       const [assetsRes, inspRes, ticketsRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
         supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false })
       ]);
 
-      // Process Hardware
       if (assetsRes.data) {
         const compiledAssets = assetsRes.data.map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
@@ -69,7 +74,6 @@ export default function StaffDashboardPage() {
           ['pending', 're-inspection', 'overdue'].includes((a.live_inspection_status || '').toLowerCase())
         ).length;
 
-        // Process Tickets
         const tix = ticketsRes.data || [];
         setMyTickets(tix);
         const openTixCount = tix.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
@@ -85,8 +89,6 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     loadRealDatabase();
-
-    // 🌟 LIVE WEBSOCKET LISTENER: Auto-updates screen if Admin replies!
     const ticketSubscription = supabase
       .channel('public:tickets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
@@ -118,11 +120,11 @@ export default function StaffDashboardPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* TOP WELCOME BANNER */}
+        {/* TOP WELCOME BANNER WITH FORMATTED NAME */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-              Welcome back, {currentUser.name} 👋
+              Welcome back, {formatDisplayName(currentUser.name)} 👋
             </h1>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-500">
               <span className="text-blue-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-200/60">ID: {currentUser.emp_id}</span>
@@ -165,10 +167,9 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* DUAL FEED SECTION: HARDWARE (LEFT) | TICKETS (RIGHT) */}
+        {/* DUAL FEED SECTION */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          {/* LEFT: ASSIGNED HARDWARE LIST */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units</div>
@@ -192,7 +193,6 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* RIGHT: LIVE TICKET HISTORY FEED */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
@@ -233,7 +233,7 @@ export default function StaffDashboardPage() {
   );
 }
 
-// RESTORED ARMORED TRANSACTION MODAL
+// ARMORED TRANSACTION MODAL
 function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -261,6 +261,11 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       const cleanEmail = user.email.toLowerCase().trim();
       const finalEmp = user.emp_id || 'STAFF';
 
+      // 🌟 Clean up the human name safely before sending to Postgres
+      let humanName = user.name || cleanEmail.split('@')[0];
+      humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
+      humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
+
       if (type === 'TICKET') {
         await supabase.from('tickets').insert({
           title: formTitle || 'IT Support Ticket',
@@ -270,7 +275,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           note: formText || 'No details given',
           status: 'Open',
           created_by: cleanEmail,
-          emp_code: finalEmp
+          emp_code: finalEmp,
+          staff_name: humanName // <--- PLUGGED INTO YOUR NEW COLUMN!
         });
       } else if (type === 'REQUEST') {
         await supabase.from('tickets').insert({
@@ -281,7 +287,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           note: formText || `Staff requested ${formCategory}`,
           status: 'Pending',
           created_by: cleanEmail,
-          emp_code: finalEmp
+          emp_code: finalEmp,
+          staff_name: humanName // <--- PLUGGED INTO YOUR NEW COLUMN!
         });
       } else if (type === 'INSPECTION' || type === 'REPLACEMENT') {
         await supabase.from('inspections').insert({

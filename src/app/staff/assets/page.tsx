@@ -2,124 +2,79 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Laptop, CheckCircle2, Loader2, Package, Search, Box } from 'lucide-react';
+import { Laptop, Loader2, MonitorSmartphone } from 'lucide-react';
 
-export default function StaffMyAssignedAssetsPage() {
-  const [myAssets, setMyAssets] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+export default function StaffAssetsPage() {
+  const [loading, setLoading] = useState(true);
+  const [assets, setAssets] = useState<any[]>([]);
 
-  const fetchAssignedHardware = async () => {
-    setIsLoading(true);
-    try {
-      // 1. Get the current user
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = (userData?.user?.email || 'students_app05@outlook.com').trim().toLowerCase();
+  const fetchAssets = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-      // 2. Fetch ALL assets (to ensure we don't miss anything due to query filters)
-      const { data: allAssets, error } = await supabase
-        .from('assets')
-        .select('*');
+    // Fetch profile to get real ID if needed, or just use user.id
+    const { data: profile } = await supabase.from('profiles').select('id').eq('email', user.email).maybeSingle();
+    const targetId = profile?.id || user.id;
 
-      if (error) throw error;
+    const { data } = await supabase
+      .from('assets')
+      .select('*')
+      .eq('assigned_to', targetId)
+      .order('created_at', { ascending: false });
 
-      // 3. BROAD-SPECTRUM MATCHER
-      // This will match if: 
-      // - The emp_code matches 'EMP-7783' OR '7783'
-      // - The assigned_to text contains 'Mohit' or the email address
-      const myMatchingAssets = (allAssets || []).filter(item => {
-        const isAssigned = item.status?.toLowerCase().includes('assign') || item.status?.toLowerCase().includes('deploy');
-        if (!isAssigned) return false;
-
-        const code = (item.emp_code || '').trim().toUpperCase();
-        const assignedTo = (item.assigned_to || '').trim().toLowerCase();
-
-        return (
-          code === 'EMP-7783' || 
-          code === '7783' ||
-          assignedTo.includes('mohit') || 
-          assignedTo.includes('bahuguna') ||
-          assignedTo.includes(userEmail)
-        );
-      });
-
-      setMyAssets(myMatchingAssets);
-    } catch (err) {
-      console.error("Staff portal sync error:", err);
-    } finally {
-      setIsLoading(false);
-    }
+    if (data) setAssets(data);
+    setLoading(false);
   };
 
   useEffect(() => {
-    fetchAssignedHardware();
-
-    // Listen for updates
-    const channel = supabase.channel('staff_assets_page_stream')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
-        fetchAssignedHardware();
-      }).subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    fetchAssets();
+    const sub = supabase.channel('staff_assets_page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, fetchAssets)
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
   }, []);
 
-  const displayedAssets = myAssets.filter(item => 
-    (item.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (item.tag_id || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-[#002B49]" size={32}/></div>;
+  if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans">
-      <div className="bg-white rounded-[24px] p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
-        <div className="flex items-center gap-3">
-          <Box className="text-blue-600" size={26} />
-          <h1 className="text-2xl font-extrabold text-[#002B49]">My Assigned Assets</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">My Assets</h1>
+          <p className="text-sm font-medium text-slate-500 mt-1">Review all hardware physically assigned to your profile.</p>
         </div>
-        <p className="text-sm font-medium text-slate-500">View the details, status, and inspection schedule of hardware assigned to you.</p>
-        <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50/80 border border-blue-100 text-blue-700 rounded-xl font-semibold text-xs">
-          <Laptop size={16} /> Total Assets: {myAssets.length}
-        </div>
+        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Laptop size={24}/></div>
       </div>
 
-      <div className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="text" 
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by name, tag ID, or serial..." 
-            className="w-full pl-10 pr-4 py-2.5 bg-[#F8FAFC] border border-slate-100 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-300"
-          />
-        </div>
-      </div>
-
-      {displayedAssets.length === 0 ? (
-        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-16 text-center space-y-3">
-          <Package className="mx-auto text-slate-300" size={48}/>
-          <h3 className="text-lg font-bold text-[#002B49]">No assets found</h3>
-          <p className="text-sm font-medium text-slate-400">You don't have any matching hardware provisioned to your ID.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {displayedAssets.map(asset => (
-            <div key={asset.id} className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm space-y-4">
-              <div className="flex justify-between items-start">
-                <span className="px-3 py-1 bg-orange-50 text-orange-600 font-bold text-xs rounded-lg uppercase">{asset.tag_id}</span>
-                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg uppercase flex items-center gap-1">
-                  <CheckCircle2 size={12}/> {asset.status}
-                </span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {assets.length === 0 ? (
+          <div className="col-span-full p-12 text-center bg-white rounded-3xl border border-slate-200/80 text-slate-500 font-medium text-sm">
+            No active hardware assigned to you.
+          </div>
+        ) : (
+          assets.map(asset => (
+            <div key={asset.id} className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex flex-col h-full">
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-slate-50 text-slate-700 rounded-xl border border-slate-100"><MonitorSmartphone size={20}/></div>
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider">{asset.status || 'Assigned'}</span>
               </div>
-              <div>
-                <p className="text-base font-bold text-[#002B49]">{asset.name}</p>
-                <p className="text-xs font-medium text-slate-400 mt-1">{asset.brand} • S/N: {asset.serial_number}</p>
+              <h3 className="font-black text-lg text-slate-900 mb-1">{asset.asset_name || 'Generic Device'}</h3>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">{asset.category || 'Hardware'}</p>
+              
+              <div className="mt-auto space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-slate-500">Asset Tag</span>
+                  <span className="text-slate-900 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{asset.asset_tag}</span>
+                </div>
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-slate-500">Serial No.</span>
+                  <span className="text-slate-900 font-mono">{asset.serial_number || 'N/A'}</span>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
