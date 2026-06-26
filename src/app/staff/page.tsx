@@ -120,7 +120,6 @@ export default function StaffDashboardPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* TOP WELCOME BANNER WITH FORMATTED NAME */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
@@ -136,7 +135,6 @@ export default function StaffDashboardPage() {
           </button>
         </div>
 
-        {/* 4 QUICK ACTION BUTTONS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
@@ -151,7 +149,6 @@ export default function StaffDashboardPage() {
           ))}
         </div>
 
-        {/* 3 LIVE METRICS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
             <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Hardware</p><h2 className="text-3xl sm:text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
@@ -167,15 +164,12 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* DUAL FEED SECTION */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units</div>
               <span className="text-xs font-bold text-slate-400">{assignedAssets.length} Total</span>
             </div>
-
             {assignedAssets.length === 0 ? (
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No active machines linked to your ID.</div>
             ) : (
@@ -198,7 +192,6 @@ export default function StaffDashboardPage() {
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
               <span className="text-xs font-bold text-slate-400">{myTickets.length} Raised</span>
             </div>
-
             {myTickets.length === 0 ? (
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
             ) : (
@@ -221,9 +214,7 @@ export default function StaffDashboardPage() {
               </div>
             )}
           </div>
-
         </div>
-
       </div>
 
       {modal.isOpen && (
@@ -257,12 +248,13 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
   const handleLivePostgresSubmit = async () => {
     setIsTransmitting(true);
-    let submitError = null; // Track error here
+    let submitError = null; 
 
     try {
       const cleanEmail = user.email.toLowerCase().trim();
       const finalEmp = user.emp_id || 'STAFF';
 
+      // 🌟 Clean up the human name safely before sending to Postgres
       let humanName = user.name || cleanEmail.split('@')[0];
       humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
       humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
@@ -270,10 +262,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       if (type === 'TICKET') {
         const { error } = await supabase.from('tickets').insert({
           title: formTitle || 'IT Support Ticket',
-          subject: formTitle || 'IT Support Ticket',
           category: formCategory,
           description: formText || 'No details given',
-          note: formText || 'No details given',
           status: 'Open',
           created_by: cleanEmail,
           emp_code: finalEmp,
@@ -283,10 +273,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       } else if (type === 'REQUEST') {
         const { error } = await supabase.from('tickets').insert({
           title: `Asset Request: ${formCategory}`,
-          subject: `Asset Request: ${formCategory}`,
           category: `Request: ${formCategory}`,
           description: formText || `Staff requested ${formCategory}`,
-          note: formText || `Staff requested ${formCategory}`,
           status: 'Pending',
           created_by: cleanEmail,
           emp_code: finalEmp,
@@ -307,7 +295,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         }
       }
 
-      // 🚨 Force the error to trigger the catch block if Supabase blocked it!
       if (submitError) throw submitError;
 
       setSuccessDone(true);
