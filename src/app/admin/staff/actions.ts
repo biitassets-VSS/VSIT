@@ -44,22 +44,26 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
         full_name: fullName || existingUser.user_metadata?.full_name || cleanEmail.split('@')[0]
       }, { onConflict: 'email' });
 
-      if (profileError) console.error("Profile sync warning for existing user:", profileError.message);
+      if (profileError) throw profileError;
 
       return { success: true, message: "User credentials and database profile updated successfully!" };
 
     } else {
-      // 3. User does not exist: Create a brand new profile in Auth Locker
+      // 3. 🌟 FIX: Use direct confirmation metadata to bypass strict SMTP validation blocks
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: cleanEmail,
         password: password,
-        email_confirm: true,
-        user_metadata: { full_name: fullName }
+        // This tells Supabase the email has already been validated, bypassing email server hooks entirely
+        email_confirm: true, 
+        user_metadata: { 
+          full_name: fullName,
+          email_verified: true 
+        }
       });
       
       if (createError) throw createError;
 
-      // Auto-create their linked identity inside your public 'profiles' table instantly!
+      // Auto-create/upsert their linked identity inside your public 'profiles' table instantly!
       if (newUser?.user) {
         const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
           id: newUser.user.id, 
@@ -68,25 +72,20 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
           emp_code: 'STAFF-' + Math.floor(1000 + Math.random() * 9000)
         }, { onConflict: 'email' });
 
-        if (profileError) {
-          console.error("Auth layer built successfully, but relational profile row failed:", profileError.message);
-        }
+        if (profileError) throw profileError;
       }
 
       return { success: true, message: "Login access granted and database profile initialized successfully!" };
     }
   } catch (error: any) {
-    // 🚨 FIXED: Extract real error properties directly so it never prints an empty {}
     let errorMessage = "Unknown Auth Error";
-    
     if (error) {
       if (error.message) errorMessage = error.message;
       else if (error.error_description) errorMessage = error.error_description;
       else if (typeof error === 'string') errorMessage = error;
       else errorMessage = JSON.stringify(error);
     }
-    
-    console.error("Auth Admin Error:", errorMessage, error);
+    console.error("Auth Admin Error Detailed:", errorMessage);
     return { success: false, error: errorMessage };
   }
 }
