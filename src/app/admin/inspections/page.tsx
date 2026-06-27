@@ -61,8 +61,9 @@ function AdminInspectionReviewContent() {
         masterLedger.push({
           ...insp,
           is_submission: true,
-          staff_id: matchedStaff.id, // 🚨 ADDED: Grab staff ID for notifications
+          staff_id: matchedStaff.id,
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
+          category: matchedAsset.category || 'Laptop', // 🌟 Added category for calculation
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
           asset_tag: matchedAsset.asset_tag || 'NO-TAG',
           staff_name: matchedStaff.full_name || matchedStaff.name || insp.user_email || 'Remote Employee',
@@ -82,9 +83,10 @@ function AdminInspectionReviewContent() {
               id: `missing-${asset.id}`,
               asset_id: asset.id,
               is_submission: false, 
-              staff_id: matchedStaff.id, // 🚨 ADDED: Grab staff ID for notifications
+              staff_id: matchedStaff.id,
               created_at: asset.created_at || new Date().toISOString(),
               asset_name: asset.name || asset.asset_name,
+              category: asset.category || 'Laptop', // 🌟 Added category for calculation
               serial_number: asset.serial_number || asset.serial,
               asset_tag: asset.asset_tag || 'NO-TAG',
               staff_name: matchedStaff.full_name || matchedStaff.name || 'Unassigned',
@@ -108,7 +110,6 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // 🚨 UPDATED: Now requires staffId to send the notification
   const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
     if (!confirm(`Are you sure you want to mark this submission as "${verdict}"?`)) return;
 
@@ -124,7 +125,6 @@ function AdminInspectionReviewContent() {
 
       await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
 
-      // 🚨 NEW: FIRE OFF THE REAL-TIME NOTIFICATION TO THE STAFF MEMBER
       if (staffId) {
         await supabase.from('notifications').insert({
           target_user: staffId,
@@ -183,10 +183,30 @@ function AdminInspectionReviewContent() {
     return 'text-blue-700 bg-blue-50 border-blue-200'; 
   };
 
-  const calculateUpcomingDate = (createdDateStr: string) => {
-    const d = new Date(createdDateStr);
-    d.setMonth(d.getMonth() + 6);
-    return d.toLocaleDateString('en-IN');
+  // 🌟 DYNAMIC DUE DATE CALCULATOR
+  const calculateNextDueDate = (lastInspectionDate: string, category: string = 'Laptop') => {
+    if (!lastInspectionDate) return 'N/A';
+    
+    const baseDate = new Date(lastInspectionDate);
+    const isLaptop = (category || '').toLowerCase().includes('laptop');
+    
+    // Laptops = next month. Others = 3 months later.
+    const monthsToAdd = isLaptop ? 1 : 3; 
+    
+    // Target the future month
+    const targetYear = baseDate.getFullYear();
+    const targetMonth = baseDate.getMonth() + monthsToAdd;
+
+    // Find the LAST day of that target month
+    const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0);
+    
+    // Walk backwards until we hit a Saturday (Day 6)
+    const lastSaturday = new Date(lastDayOfTargetMonth);
+    while (lastSaturday.getDay() !== 6) {
+      lastSaturday.setDate(lastSaturday.getDate() - 1);
+    }
+    
+    return lastSaturday.toLocaleDateString('en-IN'); 
   };
 
   return (
@@ -312,18 +332,25 @@ function AdminInspectionReviewContent() {
                     </div>
                   </div>
 
+                  {/* 🌟 UPDATED: Dynamic Labels and Dates applied here */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">{item.is_submission ? 'Submitted Date' : 'Assigned Date'}</span>
+                        <Clock size={14} /> 
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                          {item.is_submission ? 'Submitted Date' : 'Last Inspection'}
+                        </span>
                       </div>
                       <span className="text-xs font-bold text-slate-900">{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <Calendar size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Upcoming Due</span>
+                        <Calendar size={14} /> 
+                        <span className="text-[10px] font-black uppercase tracking-widest">Upcoming Due</span>
                       </div>
-                      <span className="text-xs font-bold text-slate-900">{calculateUpcomingDate(item.created_at)}</span>
+                      <span className="text-xs font-bold text-slate-900">
+                        {calculateNextDueDate(item.created_at, item.category)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -386,7 +413,6 @@ function AdminInspectionReviewContent() {
                        </div>
                     ) : isPending ? (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {/* 🚨 UPDATED: Buttons now pass item.staff_id to executeVerdict */}
                         <button
                           type="button"
                           disabled={updatingId === item.id}
