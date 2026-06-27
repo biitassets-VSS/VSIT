@@ -38,17 +38,24 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
+    // 🌟 CRITICAL FIX: Clean the inputs to prevent mobile keyboard auto-capitalization bugs
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanPassword = password.trim();
+
     try {
       // 1. Guest Fast-Track
-      if (activeTab === 'Guest' && email === 'guest@vss.com' && password === 'vss@123') {
+      if (activeTab === 'Guest' && cleanEmail === 'guest@vss.com' && cleanPassword === 'vss@123') {
         localStorage.setItem('isGuestSession', 'true');
         localStorage.setItem('vsit_staff_session', 'guest@vss.com');
         router.push('/staff');
         return;
       }
 
-      // 2. Official Supabase Auth
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      // 2. Official Supabase Auth (Using polished, clean credentials)
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ 
+        email: cleanEmail, 
+        password: cleanPassword 
+      });
 
       if (authError) {
         setError('Invalid email or password. Please try again.');
@@ -58,7 +65,7 @@ export default function LoginPage() {
 
       if (data.user) {
         localStorage.setItem('user', JSON.stringify(data.user));
-        const userEmail = data.user.email?.toLowerCase();
+        const userEmail = data.user.email?.toLowerCase().trim();
 
         // 3. Strict Admin Gatekeeper
         if (activeTab === 'Admin') {
