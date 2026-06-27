@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
-  Eye, Laptop, User, Calendar, ShieldAlert, AlertTriangle, Search, RefreshCw, X, Image as ImageIcon
+  Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, X, Image as ImageIcon
 } from 'lucide-react';
 
-export default function AdminInspectionReviewPage() {
+// 1. We move the main logic into an internal component to safely use useSearchParams
+function AdminInspectionReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightedId = searchParams.get('id'); 
@@ -25,10 +26,21 @@ export default function AdminInspectionReviewPage() {
     fetchVerificationLedger();
   }, []);
 
+  // 2. Added Auto-Scroll logic for when a specific ID is passed in the URL
+  useEffect(() => {
+    if (highlightedId && !loading && inspections.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`inspection-${highlightedId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100); // Small delay ensures DOM paints first
+    }
+  }, [highlightedId, loading, inspections]);
+
   const fetchVerificationLedger = async () => {
     setLoading(true);
     try {
-      // 1. Fetch from all 3 tables in real-time
       const [inspRes, assetsRes, profilesRes] = await Promise.all([
         supabase.from('inspections').select('*').order('created_at', { ascending: false }),
         supabase.from('assets').select('*'),
@@ -42,7 +54,6 @@ export default function AdminInspectionReviewPage() {
       const masterLedger: any[] = [];
       const processedAssetIds = new Set();
 
-      // 2. Process all actual Staff Submissions
       rawInspections.forEach(insp => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
         const matchedStaff = profilesData.find(p => p.email?.toLowerCase() === insp.user_email?.toLowerCase() || p.id === matchedAsset.assigned_to || p.id === insp.inspected_by) || {};
@@ -61,19 +72,17 @@ export default function AdminInspectionReviewPage() {
         });
       });
 
-      // 3. 🚨 NEW: Find Assets that are "Pending" in the database but staff hasn't submitted yet
       assetsData.forEach(asset => {
         const s = (asset.inspection_status || '').toLowerCase();
         
         if (s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) {
-          // If we haven't already processed a recent submission for this asset
           if (!processedAssetIds.has(String(asset.id))) {
             const matchedStaff = profilesData.find(p => p.id === asset.assigned_to) || {};
             
             masterLedger.push({
               id: `missing-${asset.id}`,
               asset_id: asset.id,
-              is_submission: false, // Flag to show it's missing photos
+              is_submission: false, 
               created_at: asset.created_at || new Date().toISOString(),
               asset_name: asset.name || asset.asset_name,
               serial_number: asset.serial_number || asset.serial,
@@ -88,7 +97,6 @@ export default function AdminInspectionReviewPage() {
         }
       });
 
-      // Sort everything by date so the newest issues are at the top
       masterLedger.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setInspections(masterLedger);
@@ -123,14 +131,11 @@ export default function AdminInspectionReviewPage() {
     }
   };
 
-  // 🚨 FIXED: Smart logic to catch 'Completed' or 'Logged' submissions as Pending Review
   const filteredList = inspections.filter(item => {
     const s = (item.status || '').toLowerCase();
     const isApproved = s.includes('approved') || s.includes('pass');
     const isRejected = s.includes('rejected') || s.includes('not approved') || s.includes('fail');
     const isReInspect = s.includes('re-inspection');
-    
-    // If it's not explicitly approved, rejected, or re-inspection... it requires your attention!
     const isPending = !isApproved && !isRejected && !isReInspect;
 
     const matchesTab = 
@@ -141,12 +146,14 @@ export default function AdminInspectionReviewPage() {
       filterTab === 'rejected' ? isRejected : true;
 
     const query = searchQuery.toLowerCase();
+    
+    // 3. Made Search Null-Safe to prevent string crash
     const matchesSearch = 
-      item.staff_name.toLowerCase().includes(query) ||
-      item.asset_name.toLowerCase().includes(query) ||
-      item.serial_number.toLowerCase().includes(query) ||
-      item.emp_code.toLowerCase().includes(query) ||
-      item.asset_tag.toLowerCase().includes(query);
+      (item.staff_name || '').toLowerCase().includes(query) ||
+      (item.asset_name || '').toLowerCase().includes(query) ||
+      (item.serial_number || '').toLowerCase().includes(query) ||
+      (item.emp_code || '').toLowerCase().includes(query) ||
+      (item.asset_tag || '').toLowerCase().includes(query);
 
     return matchesTab && matchesSearch;
   });
@@ -161,8 +168,8 @@ export default function AdminInspectionReviewPage() {
     if (s.includes('approved')) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
     if (s.includes('re-inspection')) return 'text-amber-700 bg-amber-50 border-amber-200';
     if (s.includes('rejected') || s.includes('not approved')) return 'text-rose-700 bg-rose-50 border-rose-200';
-    if (!isSubmission) return 'text-orange-700 bg-orange-50 border-orange-200'; // Missing Action
-    return 'text-blue-700 bg-blue-50 border-blue-200'; // Ready for Admin Review
+    if (!isSubmission) return 'text-orange-700 bg-orange-50 border-orange-200'; 
+    return 'text-blue-700 bg-blue-50 border-blue-200'; 
   };
 
   const calculateUpcomingDate = (createdDateStr: string) => {
@@ -174,7 +181,7 @@ export default function AdminInspectionReviewPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
       
-      {/* 🌟 PREMIUM HEADER */}
+      {/* HEADER */}
       <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
@@ -203,7 +210,7 @@ export default function AdminInspectionReviewPage() {
         </button>
       </div>
 
-      {/* 🌟 TABS & SEARCH */}
+      {/* TABS & SEARCH */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
           {[
@@ -236,7 +243,7 @@ export default function AdminInspectionReviewPage() {
         </div>
       </div>
 
-      {/* 🌟 ADJUDICATION GRID */}
+      {/* ADJUDICATION GRID */}
       {loading ? (
         <div className="w-full py-32 flex flex-col items-center justify-center gap-4 text-slate-400">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
@@ -260,7 +267,7 @@ export default function AdminInspectionReviewPage() {
                 key={item.id} 
                 id={`inspection-${item.id}`}
                 className={`p-6 md:p-8 bg-white rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 ${
-                  isHighlighted ? 'border-blue-500 ring-4 ring-blue-500/10' : (isPending && item.is_submission) ? 'border-blue-200 shadow-blue-500/5' : 'border-slate-200 opacity-95'
+                  isHighlighted ? 'border-blue-500 ring-4 ring-blue-500/10 scale-[1.01]' : (isPending && item.is_submission) ? 'border-blue-200 shadow-blue-500/5' : 'border-slate-200 opacity-95'
                 }`}
               >
                 
@@ -417,7 +424,7 @@ export default function AdminInspectionReviewPage() {
         </div>
       )}
 
-      {/* 🚀 HIGH-RES PHOTO LIGHTBOX */}
+      {/* PHOTO LIGHTBOX */}
       {previewPhotoModal && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in">
           <button 
@@ -441,5 +448,18 @@ export default function AdminInspectionReviewPage() {
       )}
 
     </div>
+  );
+}
+
+// 4. Default Export wraps the component in Suspense to satisfy Next.js Build Requirements
+export default function AdminInspectionReviewPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50/50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
+      </div>
+    }>
+      <AdminInspectionReviewContent />
+    </Suspense>
   );
 }
