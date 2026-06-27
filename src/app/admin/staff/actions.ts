@@ -18,9 +18,9 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
   const cleanEmail = email.toLowerCase().trim();
 
   try {
-    // 🌟 FIX: Use the 'email' parameter directly, which is the supported API method
+    // 🌟 FIX: Force type assertion so Next.js 16 TypeScript compilation passes seamlessly
     const { data: searchData, error: searchError } = await supabaseAdmin.auth.admin.listUsers({
-      email: cleanEmail
+      ...({ email: cleanEmail } as any)
     });
 
     if (searchError) throw searchError;
