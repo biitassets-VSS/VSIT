@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ClipboardCheck, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Loader2, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 
 export default function StaffInspectionsPage() {
   const [loading, setLoading] = useState(true);
@@ -16,10 +16,10 @@ export default function StaffInspectionsPage() {
     try { email = JSON.parse(sessionStr).email; } catch(e) {}
     const cleanEmail = email?.toLowerCase().trim();
 
-    // 1. Fetch inspections and the associated asset details in one go
+    // Fetch inspections and the associated asset details in one go
     const { data: inspData } = await supabase
       .from('inspections')
-      .select('*, assets(*)') // Get inspection data AND the related asset row
+      .select('*, assets(*)') 
       .ilike('user_email', cleanEmail)
       .order('created_at', { ascending: false });
 
@@ -54,46 +54,7 @@ export default function StaffInspectionsPage() {
         </div>
         <div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><ClipboardCheck size={24}/></div>
       </div>
-{/* 🌟 FIXED: Variable name updated to match your .map() loop */}
-<div className="mt-8">
-  <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-    {/* Ensure 'item' matches the variable used in your .map(item => ...) loop */}
-    Photographic Evidence ({item.photos?.length || 0})
-  </h4>
-  
-  {item.photos && item.photos.length > 0 ? (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      {item.photos.map((photoUrl: string, idx: number) => (
-        <a 
-          key={idx} 
-          href={photoUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="block relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm hover:border-blue-500 hover:shadow-lg transition-all group"
-        >
-          <img 
-            src={photoUrl} 
-            alt={`Audit Evidence ${idx + 1}`} 
-            className="w-full h-32 object-cover group-hover:scale-110 transition-transform duration-500" 
-          />
-          <div className="absolute bottom-0 left-0 right-0 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] p-2 font-black uppercase tracking-widest text-center">
-            View Evidence {idx + 1}
-          </div>
-        </a>
-      ))}
-    </div>
-  ) : (
-    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
-      <AlertTriangle size={16} /> No visual evidence was attached to this payload.
-    </div>
-  )}
-</div>
-  ) : (
-    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
-      <AlertTriangle size={16} /> No visual evidence was attached to this payload.
-    </div>
-  )}
-</div>
+
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         {inspections.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-sm">No inspections have been submitted yet.</div>
@@ -104,24 +65,62 @@ export default function StaffInspectionsPage() {
               const asset = insp.assets || {};
               
               return (
-                <div key={insp.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-3">
-                      {/* 🚨 FIXED: Now shows the actual asset name */}
-                      <h3 className="font-bold text-slate-900 text-lg">
-                        {asset.name || asset.asset_name || asset.model || 'Unknown Device'}
-                      </h3>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getBadge(insp.status)}`}>
-                        {insp.status || 'Pending'}
-                      </span>
+                <div key={insp.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col gap-6">
+                  
+                  {/* Top Section: Audit Details */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-bold text-slate-900 text-lg">
+                          {asset.name || asset.asset_name || asset.model || 'Unknown Device'}
+                        </h3>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getBadge(insp.status)}`}>
+                          {insp.status || 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-600">Condition reported: <strong className="text-slate-800">{insp.condition}</strong></p>
+                      <p className="text-xs font-semibold text-slate-400">Notes: {insp.notes || 'None'}</p>
                     </div>
-                    <p className="text-sm text-slate-600">Condition reported: <strong className="text-slate-800">{insp.condition}</strong></p>
-                    <p className="text-xs font-semibold text-slate-400">Notes: {insp.notes || 'None'}</p>
+                    <div className="text-left sm:text-right shrink-0">
+                      <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">Audit Date</p>
+                      <p className="text-sm font-bold text-slate-900 mt-0.5">{new Date(insp.created_at).toLocaleDateString()}</p>
+                    </div>
                   </div>
-                  <div className="text-left sm:text-right shrink-0">
-                    <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">Audit Date</p>
-                    <p className="text-sm font-bold text-slate-900 mt-0.5">{new Date(insp.created_at).toLocaleDateString()}</p>
+
+                  {/* Bottom Section: Photographic Evidence (Moved safely inside the loop) */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      Photographic Evidence ({insp.photos?.length || 0})
+                    </h4>
+                    
+                    {insp.photos && insp.photos.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {insp.photos.map((photoUrl: string, idx: number) => (
+                          <a 
+                            key={idx} 
+                            href={photoUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="block relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm hover:border-blue-500 hover:shadow-lg transition-all group"
+                          >
+                            <img 
+                              src={photoUrl} 
+                              alt={`Audit Evidence ${idx + 1}`} 
+                              className="w-full h-32 object-cover group-hover:scale-110 transition-transform duration-500" 
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] p-2 font-black uppercase tracking-widest text-center">
+                              View Evidence {idx + 1}
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-xs font-medium flex items-center gap-2 w-fit">
+                        <AlertTriangle size={16} className="text-amber-500" /> No visual evidence was attached to this payload.
+                      </div>
+                    )}
                   </div>
+                  
                 </div>
               );
             })}
