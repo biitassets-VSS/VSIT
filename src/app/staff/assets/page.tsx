@@ -13,7 +13,11 @@ import {
   Loader2, 
   Monitor, 
   Cpu, 
-  Smartphone 
+  Smartphone,
+  Image as ImageIcon,
+  Eye,
+  X,
+  CameraOff
 } from 'lucide-react';
 
 export default function StaffMyAssetsPage() {
@@ -23,14 +27,33 @@ export default function StaffMyAssetsPage() {
   const [inspections, setInspections] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // 🌟 SECURE PHOTO VIEWER STATE
+  const [photoViewer, setPhotoViewer] = useState<{ isOpen: boolean; photos: any[]; assetName: string }>({
+    isOpen: false,
+    photos: [],
+    assetName: ''
+  });
+  const [isWindowFocused, setIsWindowFocused] = useState(true);
+
   useEffect(() => {
     loadMyAssets();
+
+    // 🌟 ANTI-SCREENSHOT ENGINE: Blurs screen when Snipping Tool/Screenshot overlay is activated
+    const handleFocus = () => setIsWindowFocused(true);
+    const handleBlur = () => setIsWindowFocused(false);
+    
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
   }, []);
 
   const loadMyAssets = async () => {
     setLoading(true);
     try {
-      // 1. Authenticate user from local storage
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       if (!sessionStr) {
         router.replace('/');
@@ -47,7 +70,6 @@ export default function StaffMyAssetsPage() {
 
       const cleanEmail = userEmail?.toLowerCase().trim();
 
-      // 2. Fetch User Profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -57,7 +79,6 @@ export default function StaffMyAssetsPage() {
       if (!profile) throw new Error("Profile not found");
       setCurrentUser(profile);
 
-      // 3. Fetch Assigned Assets & Their Inspection History concurrently
       const [assetsRes, inspRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', profile.id).order('created_at', { ascending: false }),
         supabase.from('inspections').select('*').eq('inspected_by', profile.id).order('created_at', { ascending: false })
@@ -72,7 +93,6 @@ export default function StaffMyAssetsPage() {
     }
   };
 
-  // 🌟 ENGINE: Match Admin logic for accurate next due dates
   const calculateNextDueDate = (lastInspectionDate: string, category: string = 'Laptop') => {
     if (!lastInspectionDate) return 'Requires Initial Audit';
     
@@ -80,10 +100,7 @@ export default function StaffMyAssetsPage() {
     const isLaptop = (category || '').toLowerCase().includes('laptop');
     const monthsToAdd = isLaptop ? 1 : 3; 
     
-    // Find the LAST day of the target month
     const lastDayOfTargetMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd + 1, 0);
-    
-    // Walk backwards until we hit a Saturday (Day 6)
     const lastSaturday = new Date(lastDayOfTargetMonth);
     while (lastSaturday.getDay() !== 6) {
       lastSaturday.setDate(lastSaturday.getDate() - 1);
@@ -92,7 +109,6 @@ export default function StaffMyAssetsPage() {
     return lastSaturday.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); 
   };
 
-  // 🌟 ENGINE: Visual Status Badge Styling
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s === 'approved' || s === 'completed') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -120,7 +136,7 @@ export default function StaffMyAssetsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative">
       <div className="max-w-5xl mx-auto space-y-6">
         
         {/* HEADER */}
@@ -151,14 +167,17 @@ export default function StaffMyAssetsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {assets.map(asset => {
-              // Find the latest inspection for this specific asset
               const assetInspections = inspections.filter(i => i.asset_id === asset.id);
               const latestInspection = assetInspections[0]; 
               
-              // Determine live status
               const liveStatus = latestInspection?.status || asset.inspection_status || 'Pending Audit';
               const lastAuditDate = latestInspection?.created_at || asset.last_inspection_date;
               
+              // Normalize photos for viewing
+              const photosArray = Array.isArray(latestInspection?.photos) 
+                ? latestInspection.photos 
+                : Object.values(latestInspection?.photos || {});
+
               return (
                 <div key={asset.id} className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                   
@@ -223,6 +242,17 @@ export default function StaffMyAssetsPage() {
                       </div>
                     </div>
                     
+                    {/* 🌟 VIEW PHOTOS BUTTON */}
+                    {photosArray.length > 0 && (
+                      <button 
+                        onClick={() => setPhotoViewer({ isOpen: true, photos: photosArray, assetName: asset.name || 'Device' })}
+                        className="mt-2 w-full py-3.5 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm group"
+                      >
+                        <ImageIcon size={16} className="text-slate-400 group-hover:text-blue-500 transition-colors"/> 
+                        View Last Inspection Photos ({photosArray.length})
+                      </button>
+                    )}
+                    
                     {liveStatus === 'Re-Inspection' && (
                       <div className="mt-2 p-3 bg-rose-50 rounded-xl border border-rose-200 flex items-start gap-2">
                         <AlertTriangle size={14} className="text-rose-600 shrink-0 mt-0.5" />
@@ -239,6 +269,68 @@ export default function StaffMyAssetsPage() {
           </div>
         )}
       </div>
+
+      {/* 🌟 SECURE LIGHTBOX (NO SCREENSHOT, NO DOWNLOAD) */}
+      {photoViewer.isOpen && (
+        <div 
+          // 1. Right Click globally blocked
+          onContextMenu={(e) => { e.preventDefault(); return false; }} 
+          className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[9999] flex flex-col items-center justify-center p-4 md:p-8 select-none touch-none"
+        >
+          {/* 2. Window Focus Check (Screenshot Blur) */}
+          <div className={`w-full h-full flex flex-col items-center justify-center transition-all duration-100 ${!isWindowFocused ? 'blur-2xl opacity-50 scale-105' : 'blur-0 opacity-100'}`}>
+            
+            <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-50">
+              <div className="text-white">
+                <h3 className="font-black text-lg">{photoViewer.assetName}</h3>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                  <ShieldCheck size={12}/> Secure Viewing Mode
+                </p>
+              </div>
+              <button 
+                onClick={() => setPhotoViewer({ isOpen: false, photos: [], assetName: '' })}
+                className="w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer border border-white/20 backdrop-blur-sm"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {!isWindowFocused && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-50 text-white drop-shadow-2xl">
+                <CameraOff size={48} className="mb-4 text-rose-500" />
+                <h2 className="text-2xl font-black uppercase tracking-widest">Screen Capture Blocked</h2>
+              </div>
+            )}
+            
+            <div className="w-full max-w-6xl overflow-x-auto flex gap-6 snap-x snap-mandatory px-4 pb-8 items-center scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+              {photoViewer.photos.map((url: string, idx: number) => (
+                <div key={idx} className="relative shrink-0 w-[85vw] md:w-[600px] h-[60vh] md:h-[70vh] rounded-3xl overflow-hidden bg-black snap-center shadow-2xl border border-white/10">
+                  
+                  {/* 3. Transparent Overlay to intercept any clicks or drags */}
+                  <div className="absolute inset-0 z-10 w-full h-full cursor-not-allowed" />
+                  
+                  {/* 4. The actual image locked down via CSS */}
+                  <img 
+                    src={url} 
+                    alt="Inspection Evidence" 
+                    draggable={false}
+                    className="w-full h-full object-contain pointer-events-none select-none opacity-90"
+                    style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+                  />
+                  
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20 pointer-events-none">
+                    <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full border border-white/10">
+                      Evidence {idx + 1} of {photoViewer.photos.length}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
