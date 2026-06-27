@@ -6,8 +6,9 @@ import { supabase } from '@/lib/supabaseClient';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Asset, Inspection, Ticket } from '@/types';
 
-// 🌟 ALL REQUIRED ICONS IMPORTED EXPLICITLY
+// 🌟 DEFINITIVE IMPORT LIST
 import { 
+  AlertTriangle,
   Laptop, 
   ClipboardCheck, 
   Ticket as TicketIcon, 
@@ -18,11 +19,10 @@ import {
   Loader2, 
   CheckCircle, 
   Camera, 
-  Bell, 
-  AlertTriangle 
+  Bell
 } from 'lucide-react';
 
-// 🌟 THE AUDIT WINDOW ENGINE
+// --- DATE ENGINE ---
 function getAuditWindowInfo() {
   const today = new Date();
   const year = today.getFullYear();
@@ -85,7 +85,6 @@ export default function StaffDashboardPage() {
       const cleanEmail = sessionUser.email?.toLowerCase().trim();
 
       if (cleanEmail === 'lakhwinder.bi@outlook.com') {
-        alert("Access Redirect: Admins must utilize the Admin Control Desk configuration panels.");
         router.replace('/admin');
         return;
       }
@@ -93,7 +92,7 @@ export default function StaffDashboardPage() {
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
       
       if (!profile || profile.status === 'Disabled') {
-        alert("Access Terminated: This account has been disabled by system operations.");
+        alert("Access Terminated.");
         router.replace('/');
         return;
       }
@@ -232,281 +231,74 @@ export default function StaffDashboardPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
               Welcome back, {formatDisplayName(currentUser.name)} 👋
             </h1>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-500">
-              <span className="text-blue-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-200/60">ID: {currentUser.emp_id}</span>
-              <span>{currentUser.email}</span>
-            </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <button onClick={() => setShowNotifications(!showNotifications)} className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors relative cursor-pointer">
-                <Bell size={20} className="text-slate-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-              
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
-                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-sm">Notifications</h3>
-                    <button onClick={markAllAsRead} className="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:underline cursor-pointer">Mark all read</button>
-                  </div>
-                  <div className="max-h-[300px] overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-500 font-medium">No recent notifications.</div>
-                    ) : (
-                      notifications.map(notif => (
-                        <div key={notif.id} className={`p-4 border-b border-slate-50 text-sm ${notif.is_read ? 'bg-white opacity-60' : 'bg-blue-50/30'}`}>
-                          <p className="font-bold text-slate-900">{notif.title}</p>
-                          <p className="text-xs text-slate-600 mt-1">{notif.message}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 shrink-0 cursor-pointer">
-              <RefreshCw size={14}/> Sync Feeds
+            <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-200 cursor-pointer">
+              <RefreshCw size={14}/> Sync
             </button>
           </div>
         </div>
 
         {activeReInspections.length > 0 && (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4">
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-4">
             <div className="p-2 bg-rose-100 text-rose-600 rounded-full shrink-0"><AlertTriangle size={20} /></div>
             <div>
-              <h4 className="text-sm font-bold text-rose-900 uppercase tracking-widest mb-1">Re-Inspection Required</h4>
-              <p className="text-xs text-rose-700 mb-2">An administrator has returned your recent inspection for review.</p>
-              <div className="bg-white/60 p-3 rounded-xl border border-rose-100 text-xs text-rose-900 font-medium">
-                <span className="font-bold">Admin Remarks: </span> 
-                {activeReInspections[0].admin_remarks || "No reason provided. Please retake photos clearly."}
-              </div>
+              <h4 className="text-sm font-bold text-rose-900 uppercase">Re-Inspection Required</h4>
+              <p className="text-xs text-rose-700">An administrator has returned your recent inspection for review.</p>
             </div>
           </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: TicketIcon, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
-            { name: 'Device Audit', desc: 'Submit asset inspection', icon: ClipboardCheck, color: 'text-amber-600 bg-amber-50 border-amber-100', type: 'INSPECTION' },
-            { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST' },
-            { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT' },
+            { name: 'Raise Ticket', icon: TicketIcon, type: 'TICKET' },
+            { name: 'Device Audit', icon: ClipboardCheck, type: 'INSPECTION' },
           ].map((item) => (
-            <button key={item.name} onClick={() => setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 hover:shadow-md transition-all text-left flex items-start gap-4 group cursor-pointer">
-              <div className={`p-3.5 rounded-xl border shrink-0 transition-transform group-hover:scale-105 ${item.color}`}><item.icon size={22} /></div>
-              <div><h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">{item.name}</h3><p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p></div>
+            <button key={item.name} onClick={() => setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left flex items-start gap-4 cursor-pointer">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><item.icon size={22} /></div>
+              <h3 className="font-bold text-sm text-slate-900">{item.name}</h3>
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Units</p>
-            <h2 className="text-3xl font-black text-slate-900 mt-1">{assignedAssets.length}</h2>
-          </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pending Review</p>
-            <h2 className="text-3xl font-black text-amber-600 mt-1">{pendingInspectionsCount}</h2>
-          </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Re-Inspections</p>
-            <h2 className="text-3xl font-black text-rose-600 mt-1">{activeReInspections.length}</h2>
-          </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Open Tickets</p>
-            <h2 className="text-3xl font-black text-indigo-600 mt-1">{openTixCount}</h2>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units</div>
-              <span className="text-xs font-bold text-slate-400">{assignedAssets.length} Total</span>
-            </div>
-            
-            {assignedAssets.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 font-medium text-xs">No active machines linked to your ID.</div>
-            ) : (
-              assignedAssets.map(asset => {
-                const auditState = getAssetAuditState(asset); 
-                const latestInsp = allInspections.find(i => i.asset_id === asset.id);
-
-                return (
-                  <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col gap-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-900">{asset.name || 'Generic Device'}</h4>
-                        <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag} • S/N: {asset.serial_number}</p>
-                      </div>
-                      <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border ${getStatusBadge(auditState.status)}`}>
-                        {auditState.status}
-                      </span>
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-slate-200">
-                      <div className="text-xs text-slate-500 font-medium space-y-1">
-                        <p>Last Audited: <strong className="text-slate-800">{latestInsp ? new Date(latestInsp.created_at).toLocaleDateString() : 'Never'}</strong></p>
-                        <p>Next Due: <strong className="text-slate-800">{auditWindow.lastSaturday.toLocaleDateString()}</strong></p>
-                      </div>
-                      
-                      <button 
-                        disabled={auditState.disabled}
-                        onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                        className={`px-5 py-2.5 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all text-center ${auditState.classes}`}
-                      >
-                        {auditState.text}
-                      </button>
-                    </div>
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6">
+            <h3 className="font-bold text-sm mb-4">My Hardware Units</h3>
+            {assignedAssets.map(asset => {
+              const auditState = getAssetAuditState(asset); 
+              return (
+                <div key={asset.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center">
+                  <div>
+                    <h4 className="font-bold text-sm">{asset.name}</h4>
+                    <p className="text-xs text-slate-500">Tag: {asset.asset_tag}</p>
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><TicketIcon className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
-              <span className="text-xs font-bold text-slate-400">{myTickets.length} Raised</span>
-            </div>
-            {myTickets.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
-            ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-                {myTickets.map(tix => (
-                  <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-bold text-sm text-slate-900 leading-snug">{tix.title}</span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>
-                        {tix.status || 'Open'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 line-clamp-2 font-normal">{tix.description}</p>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-medium">
-                      <span>Category: <strong className="text-slate-600 font-semibold">{tix.category}</strong></span>
-                      <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <button 
+                    disabled={auditState.disabled}
+                    onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                    className={`px-4 py-2 font-bold text-[10px] rounded-xl ${auditState.classes}`}
+                  >
+                    {auditState.text}
+                  </button>
+                </div>
+              );
+            })}
         </div>
       </div>
 
       {modal.isOpen && (
-        <LiveDatabaseModal type={modal.type} asset={modal.targetAsset} user={currentUser} onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} />
+        <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 max-w-lg w-full">
+                <h3 className="text-lg font-black mb-6 uppercase">Submission Portal</h3>
+                {modal.type === 'INSPECTION' ? (
+                     <div className="text-center">
+                        <p className="mb-6 text-sm">Please scan the QR code to proceed with the device audit.</p>
+                        <button onClick={() => setModal({ isOpen: false, type: '' })} className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold">Close Portal</button>
+                     </div>
+                ) : (
+                    <button onClick={() => setModal({ isOpen: false, type: '' })} className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold">Close</button>
+                )}
+            </div>
+        </div>
       )}
-    </div>
-  );
-}
-
-// 🌟 ARMORED TRANSACTION MODAL
-function LiveDatabaseModal({ type, asset, user, onClose }: any) {
-  const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
-  const [isUnlocked, setIsUnlocked] = useState(!needsLock);
-  const [serialInput, setSerialInput] = useState('');
-  const [lockError, setLockError] = useState(false);
-
-  const [formTitle, setFormTitle] = useState('');
-  const [formText, setFormText] = useState('');
-  const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
-  
-  const [formCondition, setFormCondition] = useState('Pristine / Flawless');
-  const [showQR, setShowQR] = useState(false);
-  const [qrUrl, setQrUrl] = useState('');
-  const [isTransmitting, setIsTransmitting] = useState(false);
-  const [successDone, setSuccessDone] = useState(false);
-
-  const handleAttemptUnlock = () => {
-    if (!asset) { alert("No hardware assigned!"); return; }
-    const typed = serialInput.trim().toLowerCase();
-    if (typed === (asset.serial_number||'').toLowerCase() || typed === (asset.asset_tag||'').toLowerCase()) {
-      setLockError(false); setIsUnlocked(true);
-    } else setLockError(true);
-  };
-
-  const handleLivePostgresSubmit = async () => {
-    if (type === 'INSPECTION') {
-      const url = `${window.location.origin}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(asset?.category || 'Hardware')}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}`;
-      setQrUrl(url); setShowQR(true); return;
-    }
-
-    setIsTransmitting(true);
-    try {
-      if (type === 'TICKET' || type === 'REQUEST') {
-        await supabase.from('tickets').insert({
-          title: type === 'REQUEST' ? `Request: ${formCategory}` : formTitle,
-          category: formCategory,
-          description: formText,
-          status: type === 'REQUEST' ? 'Pending' : 'Open',
-          created_by: user.email,
-          emp_code: user.emp_id,
-          staff_name: user.name 
-        });
-      }
-      setSuccessDone(true);
-      setTimeout(() => onClose(), 1200);
-    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setIsTransmitting(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-        <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><TicketIcon size={20}/></div>
-            <div><h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">Portal Submission</h3></div>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 cursor-pointer"><X size={18}/></button>
-        </div>
-
-        <div className="p-6 sm:p-8 overflow-y-auto space-y-5">
-          {successDone ? (
-            <div className="py-10 text-center"><CheckCircle size={48} className="text-emerald-600 mx-auto animate-bounce"/><h4 className="text-xl font-bold mt-2">Saved!</h4></div>
-          ) : showQR ? (
-            <div className="py-6 text-center space-y-6">
-              <h4 className="text-lg font-black text-slate-900 uppercase">Mobile Device Handoff</h4>
-              <p className="text-xs text-slate-500">Scan this code with your phone to take watermarked photos.</p>
-              <div className="p-4 bg-white border-2 border-slate-200 rounded-3xl inline-block shadow-lg mx-auto">
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan QR" className="w-48 h-48 rounded-xl"/>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {needsLock && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                  <p className="text-xs font-bold text-blue-900 mb-2">🔒 Security Verification Required</p>
-                  <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder="Type exact Tag ID or S/N..." className="flex-1 p-3 rounded-xl border text-xs outline-none"/>
-                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-blue-600 text-white font-bold text-xs rounded-xl cursor-pointer">Verify</button>}
-                  </div>
-                </div>
-              )}
-              {type === 'INSPECTION' && isUnlocked && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Condition</label>
-                  <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full p-3.5 rounded-xl border font-semibold outline-none"><option>Pristine</option><option>Good</option><option>Poor</option></select>
-                </div>
-              )}
-              {isUnlocked && (
-                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notes</label><textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} className="w-full p-3.5 rounded-xl border outline-none"/></div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {!successDone && (
-          <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
-            {!showQR && <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 text-white cursor-pointer">{isTransmitting ? <Loader2 className="animate-spin" size={14}/> : type === 'INSPECTION' ? 'Generate Camera QR' : 'Submit'}</button>}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
