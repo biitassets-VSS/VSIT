@@ -2,46 +2,55 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// We use the service_role key to act as an Admin and bypass standard login rules
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! 
-);
+// Ensure these exist
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error("Missing Supabase environment variables for Admin Auth.");
+}
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function setupStaffAuth(email: string, password?: string, fullName?: string) {
-  if (!password) return { success: true }; // Nothing to do if the password field is empty
+  if (!password) return { success: true };
 
   const cleanEmail = email.toLowerCase().trim();
 
   try {
-    // 1. Fetch all users from the hidden Auth system to see if they already exist
-    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-    if (listError) throw listError;
+    // 1. Try to find the user directly by email instead of listing all users (Performance optimization)
+    const { data: searchData } = await supabaseAdmin.auth.admin.listUsers({
+        filter: { field: 'email', eq: cleanEmail }
+    });
 
-    const existingAuthUser = users.find(u => u.email === cleanEmail);
+    const existingUser = searchData?.users?.[0];
 
-    if (existingAuthUser) {
-      // 2. User exists: Force update their password to what the admin typed
+    if (existingUser) {
+      // 2. User exists: Update their password
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-        existingAuthUser.id,
+        existingUser.id,
         { password: password }
       );
+      
       if (updateError) throw updateError;
-      return { success: true, message: "Password overwritten successfully!" };
+      return { success: true, message: "User credentials updated successfully!" };
 
     } else {
-      // 3. User does not exist: Create their official login credentials
+      // 3. User does not exist: Create them
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: cleanEmail,
         password: password,
-        email_confirm: true, // Auto-confirm so they can log in instantly without checking email
+        email_confirm: true,
         user_metadata: { full_name: fullName }
       });
+      
       if (createError) throw createError;
       return { success: true, message: "Login access granted successfully!" };
     }
   } catch (error: any) {
-    console.error("Auth Admin Error:", error);
-    return { success: false, error: error.message };
+    // Return a readable error message instead of an empty object
+    const errorMessage = error?.message || JSON.stringify(error) || "Unknown Auth Error";
+    console.error("Auth Admin Error:", errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
