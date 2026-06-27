@@ -54,7 +54,39 @@ export default function StaffInspectionsPage() {
         </div>
         <div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><ClipboardCheck size={24}/></div>
       </div>
-
+{/* 🌟 UPDATED PHOTOGRAPHIC EVIDENCE RENDERER */}
+<div className="mt-8">
+  <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+    Photographic Evidence ({inspection.photos?.length || 0})
+  </h4>
+  
+  {inspection.photos && inspection.photos.length > 0 ? (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      {inspection.photos.map((photoUrl: string, idx: number) => (
+        <a 
+          key={idx} 
+          href={photoUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm hover:border-blue-500 hover:shadow-lg transition-all group"
+        >
+          <img 
+            src={photoUrl} 
+            alt={`Audit Evidence ${idx + 1}`} 
+            className="w-full h-32 object-cover group-hover:scale-110 transition-transform duration-500" 
+          />
+          <div className="absolute bottom-0 left-0 right-0 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] p-2 font-black uppercase tracking-widest text-center">
+            View Evidence {idx + 1}
+          </div>
+        </a>
+      ))}
+    </div>
+  ) : (
+    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+      <AlertTriangle size={16} /> No visual evidence was attached to this payload.
+    </div>
+  )}
+</div>
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         {inspections.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-sm">No inspections have been submitted yet.</div>

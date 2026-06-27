@@ -52,14 +52,32 @@ function MobileAuditScanner() {
         // Draw original photo
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        // Prepare Watermark Design
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Dark background box for text readable on any photo
-        ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+        const submitFinalAudit = async () => {
+    setLoading(true);
+    try {
+      // 🌟 NEW: Extract all captured Base64 watermarked photos into a clean array
+      const photoDataArray = Object.values(photos).filter(p => p !== null);
 
-        ctx.font = 'bold 24px monospace';
-        ctx.fillStyle = '#FFE81F'; // Bright yellow highly visible text
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 4;
+      const { error } = await supabase.from('inspections').insert({
+        asset_id: assetId,
+        inspected_by: empCode, 
+        condition: condition,
+        notes: notes + '\n[Mobile Photos Verified]',
+        status: 'Pending',
+        photos: photoDataArray // 🌟 Binds the visual evidence directly to the payload
+      });
+
+      if (error) throw error;
+
+      await supabase.from('assets').update({ inspection_status: 'Pending' }).eq('id', assetId);
+      
+      setSuccess(true);
+    } catch (err: any) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
         // Add Watermark Text
         const dateStr = new Date().toLocaleString();
