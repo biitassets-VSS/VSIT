@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, CheckCircle, Loader2, Monitor, Keyboard, ArrowRight, ShieldCheck, Laptop } from 'lucide-react';
+import { Camera, CheckCircle, Loader2, Monitor, Keyboard, ArrowRight, ShieldCheck, Laptop, Hash } from 'lucide-react';
 
 function MobileAuditScanner() {
   const searchParams = useSearchParams();
