@@ -7,8 +7,40 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera // 🌟 ADDED: Camera icon for the QR handoff UI
+  Camera, Lock
 } from 'lucide-react';
+
+// 🌟 THE AUDIT WINDOW ENGINE
+// Calculates the Last Saturday of the month and the 4-day window before it.
+function getAuditWindowInfo() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+
+  // 1. Find the Last Day of the current month
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+  
+  // 2. Walk backwards to find the Last Saturday (Day 6)
+  const lastSaturday = new Date(lastDayOfMonth);
+  while (lastSaturday.getDay() !== 6) {
+    lastSaturday.setDate(lastSaturday.getDate() - 1);
+  }
+  // Set to end of the day (11:59 PM)
+  lastSaturday.setHours(23, 59, 59, 999);
+
+  // 3. Calculate 4 days before the Last Saturday
+  const windowStart = new Date(lastSaturday);
+  windowStart.setDate(lastSaturday.getDate() - 4);
+  windowStart.setHours(0, 0, 0, 0);
+
+  return {
+    isOpen: today >= windowStart && today <= lastSaturday,
+    windowStart,
+    lastSaturday,
+    year,
+    month
+  };
+}
 
 export default function StaffDashboardPage() {
   const router = useRouter();
@@ -18,12 +50,15 @@ export default function StaffDashboardPage() {
   
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   const [myTickets, setMyTickets] = useState<any[]>([]);
+  const [allInspections, setAllInspections] = useState<any[]>([]); // 🌟 New state to track duplicate audits
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
     type: '',
   });
+
+  const auditWindow = getAuditWindowInfo();
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
@@ -77,6 +112,8 @@ export default function StaffDashboardPage() {
       ]);
 
       if (assetsRes.data) {
+        setAllInspections(inspRes.data || []); // Save to check for duplicates
+
         const compiledAssets = assetsRes.data.map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
           return {
@@ -124,6 +161,19 @@ export default function StaffDashboardPage() {
     return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
+  // 🌟 DYNAMIC BUTTON STATE GENERATOR
+  const getAssetAuditState = (assetId: string) => {
+    // Check if this asset has an inspection submitted in the current month/year
+    const hasAudited = allInspections.some(insp => {
+      const d = new Date(insp.created_at);
+      return insp.asset_id === assetId && d.getFullYear() === auditWindow.year && d.getMonth() === auditWindow.month;
+    });
+
+    if (hasAudited) return { disabled: true, text: "Audited This Month", classes: "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none" };
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none" };
+    return { disabled: false, text: "Audit Device", classes: "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm" };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3">
@@ -157,15 +207,30 @@ export default function StaffDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
-            { name: 'Device Audit', desc: 'Submit asset inspection', icon: ClipboardCheck, color: 'text-amber-600 bg-amber-50 border-amber-100', type: 'INSPECTION' },
+            { name: 'Device Audit', desc: auditWindow.isOpen ? 'Submit asset inspection' : 'Window Currently Closed', icon: ClipboardCheck, color: auditWindow.isOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200', type: 'INSPECTION' },
             { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST' },
             { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT' },
-          ].map((item) => (
-            <button key={item.name} onClick={() => setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 hover:shadow-md transition-all text-left flex items-start gap-4 group cursor-pointer">
-              <div className={`p-3.5 rounded-xl border shrink-0 transition-transform group-hover:scale-105 ${item.color}`}><item.icon size={22} /></div>
-              <div><h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">{item.name}</h3><p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p></div>
-            </button>
-          ))}
+          ].map((item) => {
+            // 🌟 Disable global audit action if window is closed
+            const isActionDisabled = item.type === 'INSPECTION' && !auditWindow.isOpen;
+            
+            return (
+              <button 
+                key={item.name} 
+                onClick={() => !isActionDisabled && setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} 
+                disabled={isActionDisabled}
+                className={`bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-4 group transition-all ${isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
+              >
+                <div className={`p-3.5 rounded-xl border shrink-0 transition-transform ${isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>
+                  {isActionDisabled ? <Lock size={22} /> : <item.icon size={22} />}
+                </div>
+                <div>
+                  <h3 className={`font-bold text-sm ${isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-blue-600'} transition-colors`}>{item.name}</h3>
+                  <p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p>
+                </div>
+              </button>
+            )
+          })}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
@@ -192,17 +257,31 @@ export default function StaffDashboardPage() {
             {assignedAssets.length === 0 ? (
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No active machines linked to your ID.</div>
             ) : (
-              assignedAssets.map(asset => (
-                <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
+              assignedAssets.map(asset => {
+                // 🌟 GENERATE THE BUTTON STATE FOR THIS SPECIFIC ASSET
+                const btnState = getAssetAuditState(asset.id);
+
+                return (
+                  <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
+                    </div>
+                    
+                    {/* 🌟 SMART AUDIT BUTTON IMPLEMENTATION */}
+                    <button 
+                      disabled={btnState.disabled}
+                      onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                      className={`px-4 py-2 font-bold text-xs rounded-xl transition-all shrink-0 text-center flex items-center justify-center gap-1.5 ${btnState.classes}`}
+                    >
+                      {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
+                      {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
+                      {btnState.text}
+                    </button>
+                    
                   </div>
-                  <button onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shrink-0 text-center cursor-pointer">
-                    Audit Device
-                  </button>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -243,7 +322,7 @@ export default function StaffDashboardPage() {
   );
 }
 
-// 🌟 ARMORED TRANSACTION MODAL (Updated for QR Photo Handoff)
+// 🌟 ARMORED TRANSACTION MODAL
 function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -254,7 +333,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
   
-  // State specific to Inspection flow
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
@@ -271,7 +349,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   };
 
   const generateMobileHandoff = () => {
-    // 🌟 Builds a URL pointing to the new /mobile-audit page we created!
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
     const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}`;
@@ -281,7 +358,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   };
 
   const handleLivePostgresSubmit = async () => {
-    // 🚨 IF IT IS AN INSPECTION: Divert the submission to generate the Camera QR Code instead of saving immediately!
     if (type === 'INSPECTION') {
       generateMobileHandoff();
       return;
@@ -364,7 +440,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
               <h4 className="text-xl font-bold text-slate-900">Database Updated!</h4>
             </div>
           ) : showQR ? (
-            // 🌟 THE QR CODE HANDOFF SCREEN
             <div className="py-6 text-center space-y-6 animate-in zoom-in-95 duration-300">
               <div>
                 <h4 className="text-lg font-black text-slate-900 uppercase tracking-widest">Mobile Device Handoff</h4>
@@ -419,7 +494,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                 </>
               )}
 
-              {/* 🌟 New Asset Condition Field inserted for Inspections */}
               {type === 'INSPECTION' && isUnlocked && (
                 <div className="animate-in slide-in-from-top-4 duration-300">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asset Condition</label>
