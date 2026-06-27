@@ -5,9 +5,21 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Asset, Inspection, Ticket } from '@/types';
+
+// 🌟 ALL REQUIRED ICONS IMPORTED EXPLICITLY
 import { 
-  Laptop, ClipboardCheck, Ticket as TicketIcon, PlusCircle, RefreshCw, 
-  AlertCircle, X, Loader2, CheckCircle, Camera, Bell, AlertTriangle 
+  Laptop, 
+  ClipboardCheck, 
+  Ticket as TicketIcon, 
+  PlusCircle, 
+  RefreshCw, 
+  AlertCircle, 
+  X, 
+  Loader2, 
+  CheckCircle, 
+  Camera, 
+  Bell, 
+  AlertTriangle 
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
