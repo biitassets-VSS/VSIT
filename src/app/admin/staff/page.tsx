@@ -9,6 +9,8 @@ import {
   X, RefreshCw, Save, Building, Power, Edit2, 
   Package, CalendarDays, Lock, KeyRound, ShieldCheck
 } from 'lucide-react';
+// 🌟 1. IMPORT THE SERVER ACTION FOR AUTH SYNC
+import { setupStaffAuth } from './actions';
 
 export default function AdminStaffDirectoryPage() {
   const router = useRouter();
@@ -93,10 +95,14 @@ export default function AdminStaffDirectoryPage() {
         status: formData.status
       };
 
-      if (formData.password) {
-        payload.password = formData.password.trim();
-      } else if (!isEditing) {
-        payload.password = 'vsit1234'; 
+      let targetPassword = formData.password?.trim();
+      if (!targetPassword && !isEditing) targetPassword = 'vsit1234';
+
+      // 🌟 2. SYNC SINGLE USER TO SUPABASE AUTH
+      if (targetPassword) {
+        const authResult = await setupStaffAuth(payload.email, targetPassword, payload.full_name);
+        if (!authResult.success) throw new Error(`Failed to create login credentials: ${authResult.error}`);
+        payload.password = targetPassword; 
       }
 
       if (isEditing) {
@@ -107,7 +113,7 @@ export default function AdminStaffDirectoryPage() {
         const { error } = await supabase.from('profiles').insert([{ ...payload, id: generateSafeUuid() }]);
         if (error?.code === '23505') throw new Error(`The email address ${payload.email} is already registered to another employee.`);
         if (error) throw error;
-        alert(`New employee ${formData.full_name} activated with password: ${payload.password}`);
+        alert(`New employee ${formData.full_name} activated with password: ${targetPassword}`);
       }
 
       setIsDossierModalOpen(false); fetchStaff();
@@ -175,6 +181,17 @@ export default function AdminStaffDirectoryPage() {
       const existingToPatch: any[] = [];
       let patchedCount = 0;
 
+      // 🌟 HELPER TO FIX DD/MM/YYYY TO YYYY-MM-DD FOR POSTGRES
+      const formatSafeDate = (dStr: string) => {
+        if (!dStr) return null;
+        const clean = dStr.trim();
+        if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(clean)) {
+          const parts = clean.split(/[\/\-]/);
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        return clean; 
+      };
+
       for (let i = 1; i < lines.length; i++) {
         const row = parseCsvRow(lines[i]);
         const col: Record<string, string> = {};
@@ -187,8 +204,15 @@ export default function AdminStaffDirectoryPage() {
         if (!cleanEmail || !name) continue; 
 
         const pass = col['password'] || col['pass'] || '';
+        const targetPassword = pass || 'vsit1234';
         const rawCode = col['empcode'] || col['emp_code'] || col['id'] || '';
         const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        // 🌟 3. SYNC BULK USERS TO SUPABASE AUTH
+        const authResult = await setupStaffAuth(cleanEmail, targetPassword, name);
+        if (!authResult.success) {
+          console.warn(`Could not sync auth for ${cleanEmail}:`, authResult.error);
+        }
 
         const existingDbUser = profileDbMap.get(cleanEmail);
 
@@ -196,7 +220,7 @@ export default function AdminStaffDirectoryPage() {
           const patchPayload: any = { id: existingDbUser.id, email: existingDbUser.email };
           
           if (name) patchPayload.full_name = name;
-          if (pass) patchPayload.password = pass;
+          patchPayload.password = targetPassword; 
           if (rawCode) patchPayload.emp_code = rawCode.toUpperCase();
           
           const role = col['accessrole'] || col['role'] || col['access'];
@@ -208,11 +232,12 @@ export default function AdminStaffDirectoryPage() {
           const phone = col['phone'] || col['mobile'];
           if (phone) patchPayload.phone = phone;
           
-          const dob = col['dob'] || col['dateofbirth'];
-          if (dob) patchPayload.dob = dob;
+          // 🌟 4. APPLY THE DATE FIXER
+          const dobRaw = col['dob'] || col['dateofbirth'];
+          if (dobRaw) patchPayload.dob = formatSafeDate(dobRaw);
           
-          const join = col['joiningdate'] || col['joining_date'];
-          if (join) patchPayload.joining_date = join;
+          const joinRaw = col['joiningdate'] || col['joining_date'];
+          if (joinRaw) patchPayload.joining_date = formatSafeDate(joinRaw);
 
           existingToPatch.push(patchPayload);
           patchedCount++;
@@ -221,13 +246,13 @@ export default function AdminStaffDirectoryPage() {
             id: generateSafeUuid(),
             full_name: name,
             email: cleanEmail,
-            password: pass || 'vsit1234', 
+            password: targetPassword, 
             emp_code: empCode,
             role: col['accessrole'] || col['role'] || col['access'] || 'Staff',
             department: col['department'] || col['dept'] || 'Migration',
             phone: col['phone'] || col['mobile'] || null,
-            dob: col['dob'] || col['dateofbirth'] || null,
-            joining_date: col['joiningdate'] || col['joining_date'] || null,
+            dob: formatSafeDate(col['dob'] || col['dateofbirth']), // 🌟 FIXED DATE
+            joining_date: formatSafeDate(col['joiningdate'] || col['joining_date']), // 🌟 FIXED DATE
             status: 'Active',
             created_at: new Date().toISOString()
           });
@@ -245,7 +270,7 @@ export default function AdminStaffDirectoryPage() {
         if (err2) throw err2;
       }
 
-      alert(`🎉 BATCH FINISHED!\n\n• Created ${newHiresToInsert.length} brand new staff profiles.\n• Successfully patched missing fields for ${patchedCount} existing employees.`);
+      alert(`🎉 BATCH FINISHED!\n\n• Created/Synced Auth for ${newHiresToInsert.length} new staff profiles.\n• Successfully patched missing fields for ${patchedCount} existing employees.`);
       setIsBulkModalOpen(false); setBulkFile(null); fetchStaff();
 
     } catch (err: any) { alert(`❌ BATCH ABORTED:\n\n${err.message}`); } finally { setIsImporting(false); }
