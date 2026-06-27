@@ -52,35 +52,13 @@ function MobileAuditScanner() {
         // Draw original photo
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        const submitFinalAudit = async () => {
-    setLoading(true);
-    try {
-      // 🌟 NEW: Extract all captured Base64 watermarked photos into a clean array
-      const photoDataArray = Object.values(photos).filter(p => p !== null);
-
-      const { error } = await supabase.from('inspections').insert({
-        asset_id: assetId,
-        inspected_by: empCode, 
-        condition: condition,
-        notes: notes + '\n[Mobile Photos Verified]',
-        status: 'Pending',
-        photos: photoDataArray // 🌟 Binds the visual evidence directly to the payload
-      });
-
-      if (error) throw error;
-
-      await supabase.from('assets').update({ inspection_status: 'Pending' }).eq('id', assetId);
-      
-      setSuccess(true);
-    } catch (err: any) {
-      alert(`Upload failed: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
         // Add Watermark Text
         const dateStr = new Date().toLocaleString();
+        ctx.font = '24px sans-serif'; // Ensure font size is visible
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // White text
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'; // Black shadow for readability
+        ctx.shadowBlur = 4;
+        
         ctx.fillText(`AUDIT BY: ${staffName} (${empCode})`, 20, canvas.height - 60);
         ctx.fillText(`TIMESTAMP: ${dateStr}`, 20, canvas.height - 25);
         ctx.fillText(`ASSET: ${category} | SHOT: ${shotId.toUpperCase()}`, canvas.width - 400, canvas.height - 42);
@@ -100,27 +78,63 @@ function MobileAuditScanner() {
     }
   };
 
+  // 🌟 FIXED: PROPER SEQUENCE (Bucket first, Database second)
   const submitFinalAudit = async () => {
     setLoading(true);
     try {
-      // In a real production app, you would upload these Base64 strings to a Supabase Storage Bucket here.
-      // For now, we simulate the save and update the inspections table.
-      
-      const { error } = await supabase.from('inspections').insert({
+      // 1. Get the actual captured images (ignore nulls)
+      const photoEntries = Object.entries(photos).filter(([_, data]) => data !== null);
+      const finalImageUrls: string[] = [];
+
+      // 2. Loop through and upload to the Supabase Storage Bucket FIRST
+      for (let i = 0; i < photoEntries.length; i++) {
+        const [shotId, base64Data] = photoEntries[i];
+        
+        // Convert Base64 back into a file/blob
+        const fetchResponse = await fetch(base64Data as string);
+        const blob = await fetchResponse.blob();
+        
+        // Create unique filename based on time, asset, and shot angle
+        const fileName = `${assetId}_${Date.now()}_${shotId}.jpg`;
+
+        // Upload directly to 'inspections' bucket
+        const { error: uploadError } = await supabase.storage
+          .from('inspections')
+          .upload(fileName, blob, {
+            contentType: 'image/jpeg',
+            upsert: false
+          });
+
+        if (uploadError) {
+          throw new Error(`Failed to upload ${shotId} image: ${uploadError.message}`);
+        }
+
+        // Get the generated Public URL for the image
+        const { data: publicUrlData } = supabase.storage
+          .from('inspections')
+          .getPublicUrl(fileName);
+
+        finalImageUrls.push(publicUrlData.publicUrl);
+      }
+
+      // 3. NOW insert the form data into the Database, using our clean URL array
+      const { error: dbError } = await supabase.from('inspections').insert({
         asset_id: assetId,
-        inspected_by: empCode, // using emp code as identifier
+        inspected_by: empCode, 
         condition: condition,
         notes: notes + '\n[Mobile Photos Verified]',
         status: 'Pending',
-        // If your database has a JSON column for photos, you can attach the URLs here.
+        photos: finalImageUrls // 🌟 Properly saves the Bucket URLs into the database array!
       });
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
+      // Update asset status
       await supabase.from('assets').update({ inspection_status: 'Pending' }).eq('id', assetId);
       
       setSuccess(true);
     } catch (err: any) {
+      console.error(err);
       alert(`Upload failed: ${err.message}`);
     } finally {
       setLoading(false);
@@ -174,7 +188,6 @@ function MobileAuditScanner() {
                     <Camera size={28} className="mx-auto text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
                     <span className="text-xs font-black uppercase tracking-widest text-blue-700">Open Camera</span>
                   </div>
-                  {/* The capture="environment" tag forces mobile browsers to open the rear camera directly! */}
                   <input type="file" accept="image/*" capture="environment" onChange={(e) => handleCapture(e, shot.id)} className="hidden" />
                 </label>
               )}
