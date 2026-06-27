@@ -8,7 +8,6 @@ import {
   Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, X, Image as ImageIcon
 } from 'lucide-react';
 
-// 1. We move the main logic into an internal component to safely use useSearchParams
 function AdminInspectionReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,7 +25,6 @@ function AdminInspectionReviewContent() {
     fetchVerificationLedger();
   }, []);
 
-  // 2. Added Auto-Scroll logic for when a specific ID is passed in the URL
   useEffect(() => {
     if (highlightedId && !loading && inspections.length > 0) {
       setTimeout(() => {
@@ -34,7 +32,7 @@ function AdminInspectionReviewContent() {
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      }, 100); // Small delay ensures DOM paints first
+      }, 100); 
     }
   }, [highlightedId, loading, inspections]);
 
@@ -63,6 +61,7 @@ function AdminInspectionReviewContent() {
         masterLedger.push({
           ...insp,
           is_submission: true,
+          staff_id: matchedStaff.id, // 🚨 ADDED: Grab staff ID for notifications
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
           asset_tag: matchedAsset.asset_tag || 'NO-TAG',
@@ -83,6 +82,7 @@ function AdminInspectionReviewContent() {
               id: `missing-${asset.id}`,
               asset_id: asset.id,
               is_submission: false, 
+              staff_id: matchedStaff.id, // 🚨 ADDED: Grab staff ID for notifications
               created_at: asset.created_at || new Date().toISOString(),
               asset_name: asset.name || asset.asset_name,
               serial_number: asset.serial_number || asset.serial,
@@ -108,7 +108,8 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected') => {
+  // 🚨 UPDATED: Now requires staffId to send the notification
+  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
     if (!confirm(`Are you sure you want to mark this submission as "${verdict}"?`)) return;
 
     setUpdatingId(inspectionId);
@@ -122,6 +123,17 @@ function AdminInspectionReviewContent() {
       }
 
       await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
+
+      // 🚨 NEW: FIRE OFF THE REAL-TIME NOTIFICATION TO THE STAFF MEMBER
+      if (staffId) {
+        await supabase.from('notifications').insert({
+          target_user: staffId,
+          title: `Inspection ${verdict}`,
+          message: `Your recent device inspection was marked as ${verdict}. Please review your dashboard.`,
+          is_read: false,
+          type: 'alert'
+        });
+      }
 
       setInspections(prev => prev.map(item => item.id === inspectionId ? { ...item, status: verdict } : item));
     } catch (err: any) {
@@ -147,7 +159,6 @@ function AdminInspectionReviewContent() {
 
     const query = searchQuery.toLowerCase();
     
-    // 3. Made Search Null-Safe to prevent string crash
     const matchesSearch = 
       (item.staff_name || '').toLowerCase().includes(query) ||
       (item.asset_name || '').toLowerCase().includes(query) ||
@@ -375,10 +386,11 @@ function AdminInspectionReviewContent() {
                        </div>
                     ) : isPending ? (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* 🚨 UPDATED: Buttons now pass item.staff_id to executeVerdict */}
                         <button
                           type="button"
                           disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Approved')}
+                          onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id)}
                           className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
                         >
                           <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
@@ -387,7 +399,7 @@ function AdminInspectionReviewContent() {
                         <button
                           type="button"
                           disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection')}
+                          onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id)}
                           className="flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
                         >
                           <RefreshCw size={16} /> Re-Inspect
@@ -396,7 +408,7 @@ function AdminInspectionReviewContent() {
                         <button
                           type="button"
                           disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected')}
+                          onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id)}
                           className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-600/20 transition-all cursor-pointer disabled:opacity-50"
                         >
                           <XCircle size={16} /> Reject
@@ -451,7 +463,6 @@ function AdminInspectionReviewContent() {
   );
 }
 
-// 4. Default Export wraps the component in Suspense to satisfy Next.js Build Requirements
 export default function AdminInspectionReviewPage() {
   return (
     <Suspense fallback={

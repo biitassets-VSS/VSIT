@@ -58,17 +58,23 @@ export default function StaffAssetsPage() {
                 <div className="p-3 bg-slate-50 text-slate-700 rounded-xl border border-slate-100"><MonitorSmartphone size={20}/></div>
                 <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider">{asset.status || 'Assigned'}</span>
               </div>
-              <h3 className="font-black text-lg text-slate-900 mb-1">{asset.asset_name || 'Generic Device'}</h3>
+              
+              {/* 🚨 FIXED: Code now checks multiple common database column names for the asset title */}
+              <h3 className="font-black text-lg text-slate-900 mb-1">
+                {asset.name || asset.asset_name || asset.model || 'Generic Device'}
+              </h3>
+              
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">{asset.category || 'Hardware'}</p>
               
               <div className="mt-auto space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                 <div className="flex justify-between text-xs font-semibold">
                   <span className="text-slate-500">Asset Tag</span>
-                  <span className="text-slate-900 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{asset.asset_tag}</span>
+                  <span className="text-slate-900 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{asset.asset_tag || 'NO-TAG'}</span>
                 </div>
                 <div className="flex justify-between text-xs font-semibold">
                   <span className="text-slate-500">Serial No.</span>
-                  <span className="text-slate-900 font-mono">{asset.serial_number || 'N/A'}</span>
+                  {/* 🚨 FIXED: Serial number is also protected against slightly different DB naming */}
+                  <span className="text-slate-900 font-mono">{asset.serial_number || asset.serial || 'N/A'}</span>
                 </div>
               </div>
             </div>
