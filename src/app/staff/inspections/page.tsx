@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ClipboardCheck, Loader2, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
+import { ClipboardCheck, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function StaffInspectionsPage() {
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,18 @@ export default function StaffInspectionsPage() {
               // Get the related asset object
               const asset = insp.assets || {};
               
+              // 🌟 Bulletproof array parser to handle both native Arrays and JSON Strings
+              let safePhotos: string[] = [];
+              try {
+                if (Array.isArray(insp.photos)) {
+                  safePhotos = insp.photos;
+                } else if (typeof insp.photos === 'string') {
+                  safePhotos = JSON.parse(insp.photos);
+                }
+              } catch (e) {
+                console.error("Could not parse photos for inspection", insp.id);
+              }
+              
               return (
                 <div key={insp.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col gap-6">
                   
@@ -87,15 +99,15 @@ export default function StaffInspectionsPage() {
                     </div>
                   </div>
 
-                  {/* Bottom Section: Photographic Evidence (Moved safely inside the loop) */}
+                  {/* Bottom Section: Photographic Evidence */}
                   <div className="pt-4 border-t border-slate-100">
                     <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      Photographic Evidence ({insp.photos?.length || 0})
+                      Photographic Evidence ({safePhotos.length})
                     </h4>
                     
-                    {insp.photos && insp.photos.length > 0 ? (
+                    {safePhotos.length > 0 ? (
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        {insp.photos.map((photoUrl: string, idx: number) => (
+                        {safePhotos.map((photoUrl: string, idx: number) => (
                           <a 
                             key={idx} 
                             href={photoUrl} 
