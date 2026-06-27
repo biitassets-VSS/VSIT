@@ -5,12 +5,29 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Asset, Inspection, Ticket } from '@/types';
+
+// Explicitly pruned down to components actively rendered in layout
 import { 
-  Laptop, ClipboardCheck, Ticket as TicketIcon, PlusCircle, RefreshCw, 
-  AlertCircle, X, Loader2, CheckCircle, Camera, Bell
+  Laptop, 
+  ClipboardCheck, 
+  Ticket as TicketIcon, 
+  PlusCircle, 
+  RefreshCw, 
+  X, 
+  Loader2, 
+  CheckCircle, 
+  Bell, 
+  AlertTriangle 
 } from 'lucide-react';
 
-// --- DATE ENGINE ---
+interface StaffUser {
+  id: string;
+  email: string;
+  emp_id: string;
+  name: string;
+}
+
+// 🌟 THE AUDIT WINDOW ENGINE
 function getAuditWindowInfo() {
   const today = new Date();
   const year = today.getFullYear();
@@ -40,13 +57,13 @@ function getAuditWindowInfo() {
 export default function StaffDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false); 
   
   const [assignedAssets, setAssignedAssets] = useState<Asset[]>([]);
   const [allInspections, setAllInspections] = useState<Inspection[]>([]);
   const [myTickets, setMyTickets] = useState<Ticket[]>([]);
   
-  // Custom hook for realtime notifications
   const { notifications, unreadCount, markAllAsRead } = useNotifications(currentUser?.id);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -73,6 +90,7 @@ export default function StaffDashboardPage() {
       const cleanEmail = sessionUser.email?.toLowerCase().trim();
 
       if (cleanEmail === 'lakhwinder.bi@outlook.com') {
+        alert("Access Redirect: Admins must utilize the Admin Control Desk configuration panels.");
         router.replace('/admin');
         return;
       }
@@ -80,11 +98,12 @@ export default function StaffDashboardPage() {
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
       
       if (!profile || profile.status === 'Disabled') {
+        alert("Access Terminated: This account has been disabled by system operations.");
         router.replace('/');
         return;
       }
 
-      const user = {
+      const user: StaffUser = {
         id: profile.id,
         email: cleanEmail,
         emp_id: profile.emp_code || profile.emp_id || 'STAFF',
@@ -92,8 +111,8 @@ export default function StaffDashboardPage() {
       };
       
       setCurrentUser(user);
+      setIsAuthorized(true); 
 
-      // Initial Data Fetch
       const [assetsRes, inspRes, ticketsRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
@@ -114,7 +133,6 @@ export default function StaffDashboardPage() {
   useEffect(() => {
     loadRealDatabase();
     
-    // REALTIME DASHBOARD SUBSCRIPTIONS
     const channel = supabase.channel('staff_dashboard_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadRealDatabase())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => loadRealDatabase())
@@ -124,18 +142,15 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Calculate Realtime Stats
   const auditWindow = getAuditWindowInfo();
-  
   const activeReInspections = allInspections.filter(i => i.status === 'Re-Inspection');
   const openTixCount = myTickets.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
   const pendingInspectionsCount = allInspections.filter(i => i.status === 'Pending').length;
 
   const getAssetAuditState = (asset: Asset) => {
     const assetInspections = allInspections.filter(i => i.asset_id === asset.id);
-    const latestInspection = assetInspections[0]; // Ordered by created_at desc
+    const latestInspection = assetInspections[0]; 
 
-    // 1. Re-Inspection Override (Immediate Action Required)
     if (latestInspection?.status === 'Re-Inspection') {
       return { 
         disabled: false, 
@@ -145,7 +160,6 @@ export default function StaffDashboardPage() {
       };
     }
 
-    // 2. Pending Approval
     if (latestInspection?.status === 'Pending') {
       return { 
         disabled: true, 
@@ -155,7 +169,6 @@ export default function StaffDashboardPage() {
       };
     }
 
-    // 3. Current Month Duplicate Check
     const hasAuditedThisMonth = assetInspections.some(insp => {
       const d = new Date(insp.created_at);
       return d.getFullYear() === auditWindow.year && d.getMonth() === auditWindow.month;
@@ -170,7 +183,6 @@ export default function StaffDashboardPage() {
       };
     }
 
-    // 4. Overdue Check
     if (auditWindow.today > auditWindow.lastSaturday && !hasAuditedThisMonth) {
       return { 
         disabled: true, 
@@ -180,7 +192,6 @@ export default function StaffDashboardPage() {
       };
     }
 
-    // 5. Future Window Check
     if (!auditWindow.isOpen) {
       return { 
         disabled: true, 
@@ -190,7 +201,6 @@ export default function StaffDashboardPage() {
       };
     }
     
-    // 6. Open Window
     return { 
       disabled: false, 
       text: "Audit Device", 
@@ -216,12 +226,14 @@ export default function StaffDashboardPage() {
     );
   }
 
+  if (!isAuthorized) return null; 
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* PREMIUM HEADER & NOTIFICATION CENTER */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative">
+        {/* Top welcome profile panel */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
               Welcome back, {formatDisplayName(currentUser.name)} 👋
@@ -232,7 +244,6 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Notification Bell */}
             <div className="relative">
               <button onClick={() => setShowNotifications(!showNotifications)} className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors relative cursor-pointer">
                 <Bell size={20} className="text-slate-600" />
@@ -243,7 +254,6 @@ export default function StaffDashboardPage() {
                 )}
               </button>
               
-              {/* Notification Dropdown */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -271,7 +281,7 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* ALERT BANNER SYSTEM */}
+        {/* Warning panel if Re-inspections required */}
         {activeReInspections.length > 0 && (
           <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4">
             <div className="p-2 bg-rose-100 text-rose-600 rounded-full shrink-0"><AlertTriangle size={20} /></div>
@@ -286,6 +296,7 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
+        {/* Action Panel Quick Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: TicketIcon, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
@@ -293,37 +304,52 @@ export default function StaffDashboardPage() {
             { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST' },
             { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT' },
           ].map((item) => (
-            <button key={item.name} onClick={() => setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 hover:shadow-md transition-all text-left flex items-start gap-4 group cursor-pointer">
+            <button 
+              key={item.name} 
+              onClick={() => {
+                // Safeguard against operating on an undefined assigned hardware target
+                if ((item.type === 'INSPECTION' || item.type === 'REPLACEMENT') && assignedAssets.length === 0) {
+                  alert(`Action cancelled: There are no hardware assets currently assigned to your profile to complete a ${item.name.toLowerCase()}.`);
+                  return;
+                }
+                setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] || undefined });
+              }} 
+              className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:border-slate-300 hover:shadow-md transition-all text-left flex items-start gap-4 group cursor-pointer w-full"
+            >
               <div className={`p-3.5 rounded-xl border shrink-0 transition-transform group-hover:scale-105 ${item.color}`}><item.icon size={22} /></div>
-              <div><h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">{item.name}</h3><p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p></div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">{item.name}</h3>
+                <p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p>
+              </div>
             </button>
           ))}
         </div>
 
-        {/* REALTIME STATS */}
+        {/* Counter Stats Metric Panel */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Units</p>
             <h2 className="text-3xl font-black text-slate-900 mt-1">{assignedAssets.length}</h2>
           </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pending Review</p>
             <h2 className="text-3xl font-black text-amber-600 mt-1">{pendingInspectionsCount}</h2>
           </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Re-Inspections</p>
             <h2 className="text-3xl font-black text-rose-600 mt-1">{activeReInspections.length}</h2>
           </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Open Tickets</p>
             <h2 className="text-3xl font-black text-indigo-600 mt-1">{openTixCount}</h2>
           </div>
         </div>
 
+        {/* Primary Functional Data Feeds */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          {/* MY ASSETS & AUDIT CARDS */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+          {/* Linked Hardware Units Section */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units</div>
               <span className="text-xs font-bold text-slate-400">{assignedAssets.length} Total</span>
@@ -368,8 +394,8 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* MY TICKETS */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+          {/* Service Tickets Logs Section */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><TicketIcon className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
               <span className="text-xs font-bold text-slate-400">{myTickets.length} Raised</span>
@@ -400,14 +426,26 @@ export default function StaffDashboardPage() {
       </div>
 
       {modal.isOpen && (
-        <LiveDatabaseModal type={modal.type} asset={modal.targetAsset} user={currentUser} onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} />
+        <LiveDatabaseModal 
+          type={modal.type} 
+          asset={modal.targetAsset} 
+          user={currentUser} 
+          onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} 
+        />
       )}
     </div>
   );
 }
 
-// 🌟 ARMORED TRANSACTION MODAL (Same safe QR integration as before)
-function LiveDatabaseModal({ type, asset, user, onClose }: any) {
+interface LiveDatabaseModalProps {
+  type: string;
+  asset?: Asset;
+  user: StaffUser;
+  onClose: () => void;
+}
+
+// 🌟 ARMORED TRANSACTION MODAL WITH COMPREHENSIVE UI INPUT FORMS
+function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProps) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
@@ -424,27 +462,46 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const [successDone, setSuccessDone] = useState(false);
 
   const handleAttemptUnlock = () => {
-    if (!asset) { alert("No hardware assigned!"); return; }
+    if (!asset) { alert("No hardware assigned target recognized!"); return; }
     const typed = serialInput.trim().toLowerCase();
-    if (typed === (asset.serial_number||'').toLowerCase() || typed === (asset.asset_tag||'').toLowerCase()) {
-      setLockError(false); setIsUnlocked(true);
-    } else setLockError(true);
+    if (typed === (asset.serial_number || '').toLowerCase() || typed === (asset.asset_tag || '').toLowerCase()) {
+      setLockError(false); 
+      setIsUnlocked(true);
+    } else {
+      setLockError(true);
+    }
   };
 
   const handleLivePostgresSubmit = async () => {
-    if (type === 'INSPECTION') {
+    // Basic Form Validations before Postgres syncs
+    if ((type === 'TICKET') && !formTitle.trim()) {
+      alert("Please specify a descriptive ticket title summary.");
+      return;
+    }
+    if (!formText.trim()) {
+      alert("Please populate notes/description tracking data fields.");
+      return;
+    }
+
+    if (type === 'INSPECTION' && asset) {
       const url = `${window.location.origin}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(asset?.category || 'Hardware')}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}`;
-      setQrUrl(url); setShowQR(true); return;
+      setQrUrl(url); 
+      setShowQR(true); 
+      return;
     }
 
     setIsTransmitting(true);
     try {
-      if (type === 'TICKET' || type === 'REQUEST') {
+      if (type === 'TICKET' || type === 'REQUEST' || type === 'REPLACEMENT') {
+        let generatedTitle = formTitle;
+        if (type === 'REQUEST') generatedTitle = `Request: ${formCategory}`;
+        if (type === 'REPLACEMENT') generatedTitle = `Replacement Request: ${asset?.name || 'Assigned Device'}`;
+
         await supabase.from('tickets').insert({
-          title: type === 'REQUEST' ? `Request: ${formCategory}` : formTitle,
+          title: generatedTitle,
           category: formCategory,
           description: formText,
-          status: type === 'REQUEST' ? 'Pending' : 'Open',
+          status: 'Open',
           created_by: user.email,
           emp_code: user.emp_id,
           staff_name: user.name 
@@ -452,23 +509,34 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       }
       setSuccessDone(true);
       setTimeout(() => onClose(), 1200);
-    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setIsTransmitting(false); }
+    } catch (e: any) { 
+      alert(`Error Syncing Transaction: ${e.message}`); 
+    } finally { 
+      setIsTransmitting(false); 
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><TicketIcon size={20}/></div>
-            <div><h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">Portal Submission</h3></div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">
+                {type === 'TICKET' ? 'Raise Support Ticket' : type === 'INSPECTION' ? 'Device Audit Portal' : type === 'REQUEST' ? 'Request Equipment' : 'Request Replacement'}
+              </h3>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 cursor-pointer"><X size={18}/></button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 cursor-pointer transition-colors"><X size={18}/></button>
         </div>
 
         <div className="p-6 sm:p-8 overflow-y-auto space-y-5">
           {successDone ? (
-            <div className="py-10 text-center"><CheckCircle size={48} className="text-emerald-600 mx-auto animate-bounce"/><h4 className="text-xl font-bold mt-2">Saved!</h4></div>
+            <div className="py-10 text-center">
+              <CheckCircle size={48} className="text-emerald-600 mx-auto animate-bounce"/>
+              <h4 className="text-xl font-bold mt-2">Saved Successfully!</h4>
+            </div>
           ) : showQR ? (
             <div className="py-6 text-center space-y-6">
               <h4 className="text-lg font-black text-slate-900 uppercase">Mobile Device Handoff</h4>
@@ -480,22 +548,89 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           ) : (
             <div className="space-y-4">
               {needsLock && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                  <p className="text-xs font-bold text-blue-900 mb-2">🔒 Security Verification Required</p>
+                <div className={`p-4 rounded-xl border transition-colors ${lockError ? 'bg-rose-50 border-rose-200' : 'bg-blue-50 border-blue-200'}`}>
+                  <p className={`text-xs font-bold mb-2 ${lockError ? 'text-rose-900' : 'text-blue-900'}`}>
+                    {lockError ? '❌ Verification Failed. Incorrect Value.' : '🔒 Security Verification Required'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mb-2">Please enter the exact Serial Number or Asset Tag for device: <strong>{asset?.name}</strong></p>
                   <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder="Type exact Tag ID or S/N..." className="flex-1 p-3 rounded-xl border text-xs outline-none"/>
-                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-blue-600 text-white font-bold text-xs rounded-xl cursor-pointer">Verify</button>}
+                    <input 
+                      disabled={isUnlocked} 
+                      value={serialInput} 
+                      onChange={e => setSerialInput(e.target.value)} 
+                      placeholder="Type exact Tag ID or S/N..." 
+                      className="flex-1 p-3 rounded-xl border text-xs bg-white outline-none"
+                    />
+                    {!isUnlocked && (
+                      <button onClick={handleAttemptUnlock} className="px-5 bg-blue-600 text-white font-bold text-xs rounded-xl cursor-pointer hover:bg-blue-700 transition-colors">
+                        Verify
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
-              {type === 'INSPECTION' && isUnlocked && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Condition</label>
-                  <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full p-3.5 rounded-xl border font-semibold outline-none"><option>Pristine</option><option>Good</option><option>Poor</option></select>
-                </div>
-              )}
+
               {isUnlocked && (
-                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notes</label><textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} className="w-full p-3.5 rounded-xl border outline-none"/></div>
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  {/* Dynamic fields rendered dynamically according to portal workflows */}
+                  {type === 'TICKET' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Issue Title Summary</label>
+                      <input 
+                        type="text" 
+                        value={formTitle} 
+                        onChange={e => setFormTitle(e.target.value)} 
+                        placeholder="e.g., Screen display flickering, keys broken..." 
+                        className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 transition-all font-medium"
+                      />
+                    </div>
+                  )}
+
+                  {(type === 'TICKET' || type === 'REQUEST') && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hardware Category</label>
+                      <select 
+                        value={formCategory} 
+                        onChange={e => setFormCategory(e.target.value)} 
+                        className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 font-semibold bg-white"
+                      >
+                        <option value="Laptop">Laptop / Main Workstation</option>
+                        <option value="Monitor">External Monitor Display</option>
+                        <option value="Keyboard/Mouse">Peripherals (Keyboard or Mouse)</option>
+                        <option value="Charger">Power Adapter & Cables</option>
+                        <option value="Other">Other Miscellaneous IT Gear</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {type === 'INSPECTION' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Device Physical State</label>
+                      <select 
+                        value={formCondition} 
+                        onChange={e => setFormCondition(e.target.value)} 
+                        className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 font-semibold bg-white"
+                      >
+                        <option value="Pristine / Flawless">Pristine / Flawless</option>
+                        <option value="Good">Good / Standard Superficial Wear</option>
+                        <option value="Poor">Poor / Damaged (Requires Evaluation)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                      {type === 'INSPECTION' ? 'Audit Inspection Notes' : type === 'TICKET' ? 'Detailed Issue Description' : 'Justification Remarks / Reasoning'}
+                    </label>
+                    <textarea 
+                      rows={3} 
+                      value={formText} 
+                      onChange={e => setFormText(e.target.value)} 
+                      placeholder="Provide comprehensive details for operations reviews..."
+                      className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -503,7 +638,21 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
         {!successDone && (
           <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
-            {!showQR && <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 text-white cursor-pointer">{isTransmitting ? <Loader2 className="animate-spin" size={14}/> : type === 'INSPECTION' ? 'Generate Camera QR' : 'Submit'}</button>}
+            {!showQR && (
+              <button 
+                disabled={isTransmitting || (needsLock && !isUnlocked)} 
+                onClick={handleLivePostgresSubmit} 
+                className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 text-white cursor-pointer hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                {isTransmitting ? (
+                  <Loader2 className="animate-spin mx-auto" size={14}/>
+                ) : type === 'INSPECTION' ? (
+                  'Generate Camera QR'
+                ) : (
+                  'Submit Request'
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>
