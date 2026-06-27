@@ -77,18 +77,20 @@ export default function AdminStaffDirectoryPage() {
     setIsDossierModalOpen(true);
   };
 
-  // 🚨 RE-SYNC UTILITY: For manual alignment of imported users or resetting locked out users
+  // 🚨 RE-SYNC UTILITY FIXED: Targets cleanEmail query safely instead of loose id references
   const handleManualAuthSync = async (user: any) => {
     const password = prompt(`Enter a custom password for ${user.full_name || user.email} to fix their login access:`, "vss@123456");
     if (!password) return;
 
+    const cleanEmail = user.email.toLowerCase().trim();
+
     try {
       setLoading(true);
-      const res = await setupStaffAuth(user.email, password, user.full_name);
+      const res = await setupStaffAuth(cleanEmail, password, user.full_name);
       if (res.success) {
-        // Save password record identifier back to profile table row safely
-        await supabase.from('profiles').update({ password: password }).eq('id', user.id);
-        alert(`🎉 Credentials Overwritten!\n\n${user.email} can now enter the dashboard using password: ${password}`);
+        // Update both password and tracking fields matching the verified unique email key
+        await supabase.from('profiles').update({ password: password }).eq('email', cleanEmail);
+        alert(`🎉 Credentials Overwritten!\n\n${cleanEmail} can now enter the dashboard using password: ${password}`);
         fetchStaff();
       } else {
         alert(`❌ Credentials Sync Error: ${res.error}`);
@@ -106,9 +108,10 @@ export default function AdminStaffDirectoryPage() {
 
     setIsSaving(true);
     try {
+      const cleanEmail = formData.email.toLowerCase().trim();
       const payload: any = {
         full_name: formData.full_name,
-        email: formData.email.toLowerCase().trim(),
+        email: cleanEmail,
         emp_code: formData.emp_code.toUpperCase().trim() || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
         role: formData.role || 'Staff',
         department: formData.department || 'Migration',
@@ -122,13 +125,13 @@ export default function AdminStaffDirectoryPage() {
       if (!targetPassword && !isEditing) targetPassword = 'vsit1234';
 
       if (targetPassword) {
-        const authResult = await setupStaffAuth(payload.email, targetPassword, payload.full_name);
+        const authResult = await setupStaffAuth(cleanEmail, targetPassword, payload.full_name);
         if (!authResult.success) throw new Error(`Failed to create login credentials: ${authResult.error}`);
         payload.password = targetPassword; 
       }
 
       if (isEditing) {
-        const { error } = await supabase.from('profiles').update(payload).eq('id', formData.id);
+        const { error } = await supabase.from('profiles').update(payload).eq('email', cleanEmail);
         if (error) throw error;
         alert(`Dossier for ${formData.full_name} updated successfully!`);
       } else {
@@ -147,9 +150,9 @@ export default function AdminStaffDirectoryPage() {
     if (!window.confirm(`Are you sure you want to change ${user.full_name}'s network access to ${newStatus}?`)) return;
 
     try {
-      const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('id', user.id);
+      const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('email', user.email.toLowerCase().trim());
       if (error) throw error;
-      setStaff(prev => prev.map(s => s.id === user.id ? { ...s, status: newStatus } : s));
+      setStaff(prev => prev.map(s => s.email?.toLowerCase().trim() === user.email?.toLowerCase().trim() ? { ...s, status: newStatus } : s));
     } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
   };
 
@@ -226,7 +229,6 @@ export default function AdminStaffDirectoryPage() {
         const rawCode = col['empcode'] || col['emp_code'] || col['id'] || '';
         const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        // 🚨 PREVENT SILENT ACCIDENTAL OVERPASSES
         const authResult = await setupStaffAuth(cleanEmail, targetPassword, name);
         if (!authResult.success) {
           throw new Error(`Authentication Engine error at line ${i + 1} (${cleanEmail}):\n\nReason: ${authResult.error || 'Password formatting error'}\n\nOperation aborted.`);
@@ -418,7 +420,7 @@ export default function AdminStaffDirectoryPage() {
                     <span className="font-bold text-slate-700 text-xs truncate max-w-[160px]" title={user.email}>{user.email}</span>
                   </div>
 
-                  {/* 🚨 DYNAMIC FIXER Badging: Gives an active button to force re-sync */}
+                  {/* PORTAL CREDENTIAL STATUS & ACTIVATOR BUTTON */}
                   <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
                     <div className="flex items-center gap-2 text-slate-500">
                       <KeyRound size={14} className="text-blue-500"/>
