@@ -9,7 +9,7 @@ import {
   X, RefreshCw, Save, Building, Power, Edit2, 
   Package, CalendarDays, Lock, KeyRound, ShieldCheck
 } from 'lucide-react';
-// 🌟 1. IMPORT THE SERVER ACTION FOR AUTH SYNC
+// 🌟 FIXED IMPORT: Points directly to your server action file
 import { setupStaffAuth } from './actions';
 
 export default function AdminStaffDirectoryPage() {
@@ -77,6 +77,29 @@ export default function AdminStaffDirectoryPage() {
     setIsDossierModalOpen(true);
   };
 
+  // 🚨 RE-SYNC UTILITY: For manual alignment of imported users
+  const handleManualAuthSync = async (user: any) => {
+    const password = prompt(`Enter a new login password for ${user.full_name || user.email}:`, "vsit1234");
+    if (!password) return;
+
+    try {
+      setLoading(true);
+      const res = await setupStaffAuth(user.email, password, user.full_name);
+      if (res.success) {
+        // Save password record identifier back to profile table row
+        await supabase.from('profiles').update({ password: password }).eq('id', user.id);
+        alert(`🎉 Success! Login profile built. ${user.email} can now enter the dashboard using password: ${password}`);
+        fetchStaff();
+      } else {
+        alert(`❌ Credentials Sync Error: ${res.error}`);
+      }
+    } catch (err: any) {
+      alert(`Sync Failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveDossier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.full_name || !formData.email) return alert("Name and Email required.");
@@ -98,7 +121,6 @@ export default function AdminStaffDirectoryPage() {
       let targetPassword = formData.password?.trim();
       if (!targetPassword && !isEditing) targetPassword = 'vsit1234';
 
-      // 🌟 2. SYNC SINGLE USER TO SUPABASE AUTH
       if (targetPassword) {
         const authResult = await setupStaffAuth(payload.email, targetPassword, payload.full_name);
         if (!authResult.success) throw new Error(`Failed to create login credentials: ${authResult.error}`);
@@ -131,9 +153,6 @@ export default function AdminStaffDirectoryPage() {
     } catch (err: any) { alert(`Status Update Failed: ${err.message}`); }
   };
 
-  // ==========================================
-  // 🟢 ARMORED BULK CSV PARSER & PATCH ENGINE
-  // ==========================================
   const parseCsvRow = (line: string) => {
     const result = [];
     let current = '';
@@ -181,7 +200,6 @@ export default function AdminStaffDirectoryPage() {
       const existingToPatch: any[] = [];
       let patchedCount = 0;
 
-      // 🌟 HELPER TO FIX DD/MM/YYYY TO YYYY-MM-DD FOR POSTGRES
       const formatSafeDate = (dStr: string) => {
         if (!dStr) return null;
         const clean = dStr.trim();
@@ -208,7 +226,6 @@ export default function AdminStaffDirectoryPage() {
         const rawCode = col['empcode'] || col['emp_code'] || col['id'] || '';
         const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        // 🌟 3. SYNC BULK USERS TO SUPABASE AUTH
         const authResult = await setupStaffAuth(cleanEmail, targetPassword, name);
         if (!authResult.success) {
           console.warn(`Could not sync auth for ${cleanEmail}:`, authResult.error);
@@ -232,7 +249,6 @@ export default function AdminStaffDirectoryPage() {
           const phone = col['phone'] || col['mobile'];
           if (phone) patchPayload.phone = phone;
           
-          // 🌟 4. APPLY THE DATE FIXER
           const dobRaw = col['dob'] || col['dateofbirth'];
           if (dobRaw) patchPayload.dob = formatSafeDate(dobRaw);
           
@@ -251,8 +267,8 @@ export default function AdminStaffDirectoryPage() {
             role: col['accessrole'] || col['role'] || col['access'] || 'Staff',
             department: col['department'] || col['dept'] || 'Migration',
             phone: col['phone'] || col['mobile'] || null,
-            dob: formatSafeDate(col['dob'] || col['dateofbirth']), // 🌟 FIXED DATE
-            joining_date: formatSafeDate(col['joiningdate'] || col['joining_date']), // 🌟 FIXED DATE
+            dob: formatSafeDate(col['dob'] || col['dateofbirth']), 
+            joining_date: formatSafeDate(col['joiningdate'] || col['joining_date']), 
             status: 'Active',
             created_at: new Date().toISOString()
           });
@@ -285,7 +301,7 @@ export default function AdminStaffDirectoryPage() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 font-sans text-slate-900 bg-slate-50/50 min-h-screen">
       
-      {/* 🌟 PREMIUM HEADER */}
+      {/* PREMIUM HEADER */}
       <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
@@ -312,7 +328,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       </div>
 
-      {/* 🌟 SEARCH BAR */}
+      {/* SEARCH BAR */}
       <div className="bg-white p-2.5 rounded-3xl border border-slate-200 shadow-sm flex items-center">
         <div className="relative w-full">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -324,7 +340,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       </div>
 
-      {/* 🌟 STAFF GRID */}
+      {/* STAFF GRID */}
       {loading ? (
         <div className="w-full py-32 flex flex-col items-center justify-center gap-4 text-slate-400">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
@@ -348,8 +364,6 @@ export default function AdminStaffDirectoryPage() {
                 <div className="p-6 border-b border-slate-50">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4 overflow-hidden">
-                      
-                      {/* 🌟 FROSTED GLASS AVATAR */}
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 relative overflow-hidden shadow-sm ${
                         isActive 
                           ? (isAdmin 
@@ -357,7 +371,6 @@ export default function AdminStaffDirectoryPage() {
                               : 'bg-blue-500/10 text-blue-600 border border-blue-200/50 shadow-[0_4px_12px_rgba(59,130,246,0.05)]') 
                           : 'bg-slate-100 text-slate-400 border border-slate-200'
                       }`}>
-                        {/* Internal Shine Gradient for Glass Effect */}
                         {isActive && <div className="absolute inset-0 bg-gradient-to-br from-white/60 to-transparent opacity-80 z-0"></div>}
                         <span className="relative z-10">{user.full_name?.charAt(0) || <UserCheck size={20} />}</span>
                       </div>
@@ -404,15 +417,26 @@ export default function AdminStaffDirectoryPage() {
                     <span className="font-bold text-slate-700 text-xs truncate max-w-[160px]" title={user.email}>{user.email}</span>
                   </div>
 
-                  {/* 🔑 ADMIN "SUPER-VISION" PASSWORD WARNING BADGE */}
+                  {/* PORTAL CREDENTIAL STATUS & ACTIVATOR BUTTON */}
                   <div className={`flex justify-between items-center bg-white p-3 rounded-xl border shadow-xs ${user.password ? 'border-emerald-100' : 'border-amber-200 bg-amber-50/50'}`}>
                     <div className="flex items-center gap-2 text-slate-500">
                       <KeyRound size={14} className={user.password ? "text-emerald-500" : "text-amber-500"}/>
                       <span className="font-bold text-[10px] uppercase tracking-widest">Login Auth</span>
                     </div>
-                    <span className={`font-mono font-black text-[10px] uppercase tracking-widest ${user.password ? 'text-emerald-700' : 'text-amber-700 animate-pulse'}`}>
-                      {user.password ? 'Secure' : '⚠️ Missing'}
-                    </span>
+                    
+                    {user.password ? (
+                      <span className="font-mono font-black text-[10px] uppercase tracking-widest text-emerald-700">
+                        Secure
+                      </span>
+                    ) : (
+                      <button 
+                        type="button" 
+                        onClick={() => handleManualAuthSync(user)}
+                        className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black text-[9px] uppercase tracking-widest rounded transition-colors cursor-pointer animate-pulse"
+                      >
+                        Grant Access
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -441,7 +465,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       )}
 
-      {/* 🟢 THE HR DOSSIER MODAL */}
+      {/* HR DOSSIER MODAL */}
       {isDossierModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
@@ -568,7 +592,7 @@ export default function AdminStaffDirectoryPage() {
         </div>
       )}
 
-      {/* 🟢 BULK CSV IMPORTER MODAL */}
+      {/* BULK CSV IMPORTER MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-200 space-y-6 text-center animate-in fade-in duration-200">
