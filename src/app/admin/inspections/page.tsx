@@ -58,11 +58,14 @@ function AdminInspectionReviewContent() {
 
         processedAssetIds.add(String(matchedAsset.id));
 
-        // 🌟 FILED ALIGNMENT FIX: Map empty statuses strictly to 'Pending' to align with UI state matrices
         const normalizedStatus = insp.status === 'Pending Review' || !insp.status ? 'Pending' : insp.status;
+
+        // Use asset_id as item fallback identifier if row id is absent
+        const itemIdentifier = insp.id || `insp-${insp.asset_id}`;
 
         masterLedger.push({
           ...insp,
+          id: itemIdentifier,
           is_submission: true,
           staff_id: matchedStaff.id,
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
@@ -123,12 +126,18 @@ function AdminInspectionReviewContent() {
 
     setUpdatingId(inspectionId);
     try {
-      // 1. Save directly to inspections table
-      const { error: inspErr } = await supabase
-        .from('inspections')
-        .update({ status: verdict, admin_remarks: remarks || null })
-        .eq('id', inspectionId);
-        
+      // 🌟 SAFE FIXED ENGINE QUERY: If 'id' is unrecognized by schema, fallback query matching on asset_id and Pending state
+      const isTemporaryId = String(inspectionId).startsWith('insp-') || !inspectionId;
+      
+      let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
+      
+      if (isTemporaryId) {
+        query = query.eq('asset_id', assetId).eq('status', 'Pending');
+      } else {
+        query = query.eq('id', inspectionId);
+      }
+
+      const { error: inspErr } = await query;
       if (inspErr) throw inspErr;
 
       // 2. Synchronize to the main assets table state structure 
@@ -158,7 +167,6 @@ function AdminInspectionReviewContent() {
         });
       }
 
-      // Live mutation patch: local state array re-aligns instantly
       setInspections(prev => prev.map(item => item.id === inspectionId ? { ...item, status: verdict, admin_remarks: remarks || item.admin_remarks } : item));
       alert(`Success: Review locked in as ${verdict}.`);
     } catch (err: any) {
@@ -300,7 +308,6 @@ function AdminInspectionReviewContent() {
           {filteredList.map((item) => {
             const isPending = item.status === 'Pending';
             
-            // Handle both array payloads and legacy object shapes safely
             const photosArray = Array.isArray(item.photos) 
               ? item.photos 
               : Object.values(item.photos || {});
@@ -346,171 +353,4 @@ function AdminInspectionReviewContent() {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <Clock size={14} /> 
-                        <span className="text-[10px] font-black uppercase tracking-widest">
-                          {item.is_submission ? 'Submitted Date' : 'Last Inspection'}
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold text-slate-990">{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <Calendar size={14} /> 
-                        <span className="text-[10px] font-black uppercase tracking-widest">Upcoming Due</span>
-                      </div>
-                      <span className="text-xs font-bold text-slate-905">
-                        {calculateNextDueDate(item.created_at, item.category)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN: Evidence & Action */}
-                <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Evaluation Workspace</h4>
-                    <span className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getSemanticColor(item.status, item.is_submission)}`}>
-                      {item.status === 'Pending' ? 'Ready For Review' : item.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5"><ImageIcon size={12}/> Photographic Evidence ({photosArray.length})</span>
-                    {!item.is_submission ? (
-                      <div className="p-4 rounded-xl border border-dashed border-orange-200 bg-orange-50 text-orange-700 text-xs font-bold flex items-center gap-2">
-                        <Clock size={14} /> Awaiting staff to upload verification photos.
-                      </div>
-                    ) : photosArray.length === 0 ? (
-                      <div className="p-4 rounded-xl border border-dashed border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold flex items-center gap-2">
-                        <ShieldAlert size={14} /> No visual evidence was attached to this payload.
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-3">
-                        {photosArray.map((url: any, idx: number) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => setPreviewPhotoModal(url)}
-                            className="relative group w-24 h-24 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 hover:border-blue-500 transition-all cursor-pointer shadow-sm"
-                          >
-                            <img src={url} alt={`Evidence Shot ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                            <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
-                              <Eye size={20} className="mb-1" />
-                              <span className="text-[9px] font-black uppercase tracking-widest px-1 text-center leading-tight">View Shot {idx + 1}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 font-medium italic leading-relaxed">
-                      "{item.notes || 'No written declaration provided.'}"
-                    </div>
-                  </div>
-
-                  {item.admin_remarks && (
-                    <div className="p-4 bg-slate-100 rounded-2xl border border-slate-300 text-xs font-semibold">
-                      <span className="text-slate-500 font-bold uppercase text-[9px] tracking-wider block mb-1">Administrative Action Remarks:</span>
-                      <p className="text-slate-800">"{item.admin_remarks}"</p>
-                    </div>
-                  )}
-
-                  {/* THE 3-WAY ADJUDICATION ROW */}
-                  <div className="pt-4 border-t border-slate-100 mt-auto">
-                    {!item.is_submission ? (
-                       <div className="flex items-center justify-between px-5 py-4 bg-orange-50 rounded-xl border border-orange-200">
-                         <span className="text-[10px] font-black uppercase tracking-widest text-orange-600">Pending Staff Action</span>
-                         <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-orange-700">
-                           <Clock size={14} /> Waiting on Employee
-                         </div>
-                       </div>
-                    ) : isPending ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <button
-                          type="button"
-                          disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
-                        </button>
-                        
-                        <button
-                          type="button"
-                          disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          <RefreshCw size={16} /> Re-Inspect
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={updatingId === item.id}
-                          onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-600/20 transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          <XCircle size={16} /> Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between px-5 py-4 bg-slate-50 rounded-xl border border-slate-200">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Adjudication Complete</span>
-                        <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
-                          {item.status === 'Approved' && <CheckCircle2 size={14} className="text-emerald-600"/>}
-                          {item.status === 'Re-Inspection' && <RefreshCw size={14} className="text-amber-600"/>}
-                          {item.status === 'Rejected' && <XCircle size={14} className="text-rose-600"/>}
-                          <span className={item.status === 'Approved' ? 'text-emerald-700' : item.status === 'Re-Inspection' ? 'text-amber-700' : 'text-rose-700'}>
-                            {item.status}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* PHOTO LIGHTBOX */}
-      {previewPhotoModal && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in">
-          <button 
-            onClick={() => setPreviewPhotoModal(null)}
-            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer border border-white/20"
-          >
-            <X size={20} />
-          </button>
-          
-          <div className="max-w-6xl w-full h-full flex flex-col items-center justify-center">
-            <img 
-              src={previewPhotoModal} 
-              alt="Hardware High-Res Verification" 
-              className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
-            />
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-export default function AdminInspectionReviewPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-50/50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
-      </div>
-    }>
-      <AdminInspectionReviewContent />
-    </Suspense>
-  );
-}
+                      <div className
