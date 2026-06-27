@@ -54,15 +54,16 @@ export default function StaffInspectionsPage() {
         </div>
         <div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><ClipboardCheck size={24}/></div>
       </div>
-{/* 🌟 UPDATED PHOTOGRAPHIC EVIDENCE RENDERER */}
+{/* 🌟 FIXED: Variable name updated to match your .map() loop */}
 <div className="mt-8">
   <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-    Photographic Evidence ({inspection.photos?.length || 0})
+    {/* Ensure 'item' matches the variable used in your .map(item => ...) loop */}
+    Photographic Evidence ({item.photos?.length || 0})
   </h4>
   
-  {inspection.photos && inspection.photos.length > 0 ? (
+  {item.photos && item.photos.length > 0 ? (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      {inspection.photos.map((photoUrl: string, idx: number) => (
+      {item.photos.map((photoUrl: string, idx: number) => (
         <a 
           key={idx} 
           href={photoUrl} 
@@ -81,6 +82,12 @@ export default function StaffInspectionsPage() {
         </a>
       ))}
     </div>
+  ) : (
+    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+      <AlertTriangle size={16} /> No visual evidence was attached to this payload.
+    </div>
+  )}
+</div>
   ) : (
     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
       <AlertTriangle size={16} /> No visual evidence was attached to this payload.
