@@ -176,8 +176,10 @@ export default function StaffDashboardPage() {
               assignedAssets.map(asset => (
                 <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900">{asset.asset_name || 'Generic Device'}</h4>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag} • S/N: {asset.serial_number || 'N/A'}</p>
+                    {/* 🚨 FIXED: Smart Checking for Asset Name */}
+                    <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
+                    {/* 🚨 FIXED: Smart Checking for Serial Number and Tag */}
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
                   </div>
                   <button onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shrink-0 text-center cursor-pointer">
                     Audit Device
