@@ -18,17 +18,18 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
   const cleanEmail = email.toLowerCase().trim();
 
   try {
-    // 🌟 FIX: Force type assertion so Next.js 16 TypeScript compilation passes seamlessly
-    const { data: searchData, error: searchError } = await supabaseAdmin.auth.admin.listUsers({
-      ...({ email: cleanEmail } as any)
-    });
+    // 1. Fetch user list from auth locker cleanly
+    const { data: searchData, error: searchError } = await supabaseAdmin.auth.admin.listUsers();
 
     if (searchError) throw searchError;
 
-    const existingUser = searchData?.users?.[0];
+    // 🚨 FIXED: Manually scan the array to find the EXACT matching email account
+    const existingUser = searchData?.users?.find(
+      (u: any) => u.email?.toLowerCase().trim() === cleanEmail
+    );
 
     if (existingUser) {
-      // 1. User exists in Auth Locker: Update their password
+      // 2. User exists in Auth Locker: Update their password safely
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
         existingUser.id,
         { password: password }
@@ -36,7 +37,7 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
       
       if (updateError) throw updateError;
 
-      // 🚨 Ensure a matching row exists in the profiles table for this existing user
+      // Ensure a matching row exists in the profiles table for this existing user
       const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
         id: existingUser.id,
         email: cleanEmail,
@@ -48,7 +49,7 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
       return { success: true, message: "User credentials and database profile updated successfully!" };
 
     } else {
-      // 2. User does not exist: Create them in Auth Locker
+      // 3. User does not exist: Create a brand new profile in Auth Locker
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: cleanEmail,
         password: password,
@@ -58,14 +59,14 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
       
       if (createError) throw createError;
 
-      // 🚨 NEW: Auto-create their linked identity inside your public 'profiles' table instantly!
+      // Auto-create their linked identity inside your public 'profiles' table instantly!
       if (newUser?.user) {
-        const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-          id: newUser.user.id, // Locks their unique authentication ID to their profile ID card
+        const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+          id: newUser.user.id, 
           email: cleanEmail,
           full_name: fullName || cleanEmail.split('@')[0],
-          emp_code: 'STAFF-' + Math.floor(1000 + Math.random() * 9000) // Formats a clean temporary fallback code
-        });
+          emp_code: 'STAFF-' + Math.floor(1000 + Math.random() * 9000)
+        }, { onConflict: 'email' });
 
         if (profileError) {
           console.error("Auth layer built successfully, but relational profile row failed:", profileError.message);
