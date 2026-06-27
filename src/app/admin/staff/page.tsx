@@ -130,16 +130,17 @@ export default function AdminStaffDirectoryPage() {
         payload.password = targetPassword; 
       }
 
-      if (isEditing) {
-        const { error } = await supabase.from('profiles').update(payload).eq('email', cleanEmail);
-        if (error) throw error;
-        alert(`Dossier for ${formData.full_name} updated successfully!`);
-      } else {
-        const { error } = await supabase.from('profiles').insert([{ ...payload, id: generateSafeUuid() }]);
-        if (error?.code === '23505') throw new Error(`The email address ${payload.email} is already registered to another employee.`);
-        if (error) throw error;
-        alert(`New employee ${formData.full_name} activated with password: ${targetPassword}`);
-      }
+      // 🚨 FIX: Replaced explicit .insert statement with clean upsert logic to support pre-imported list records
+      const { error } = await supabase.from('profiles').upsert(
+        { 
+          ...payload, 
+          id: isEditing ? formData.id : generateSafeUuid() 
+        }, 
+        { onConflict: 'email' }
+      );
+
+      if (error) throw error;
+      alert(`Employee profile successfully saved and activated with password: ${targetPassword}`);
 
       setIsDossierModalOpen(false); fetchStaff();
     } catch (err: any) { alert(`Save Failed: ${err.message}`); } finally { setIsSaving(false); }
