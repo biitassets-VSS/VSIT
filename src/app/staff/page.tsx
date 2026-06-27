@@ -13,6 +13,7 @@ export default function StaffDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
+  const [isAuthorized, setIsAuthorized] = useState(false); // 🌟 Added safe state gate
   
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   const [myTickets, setMyTickets] = useState<any[]>([]);
@@ -43,15 +44,36 @@ export default function StaffDashboardPage() {
 
       const cleanEmail = user.email?.toLowerCase().trim();
 
+      // 🛑 RULE 1: Direct admin user emails strictly to the Admin Control Desk
+      if (cleanEmail === 'lakhwinder.bi@outlook.com') {
+        alert("Access Redirect: Admins must utilize the Admin Control Desk configuration panels.");
+        router.replace('/admin');
+        return;
+      }
+
+      // Fetch the actual profile record
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
+      
       if (profile) {
+        // 🛑 RULE 2: If the profile is marked as 'Disabled', completely terminate access
+        if (profile.status === 'Disabled') {
+          alert("Access Terminated: This account has been disabled by system operations.");
+          router.replace('/');
+          return;
+        }
+
         user.emp_id = profile.emp_code || profile.emp_id || 'STAFF';
         user.name = profile.full_name || profile.name || user.name;
         user.id = profile.id;
       } else {
-        user.emp_id = 'STAFF-UNLINKED';
+        // No match in database batches? Treat as unlinked intruder
+        alert("Unauthorized account entry path detected.");
+        router.replace('/');
+        return;
       }
+      
       setCurrentUser(user);
+      setIsAuthorized(true); // Open the interface gateway safely
 
       const [assetsRes, inspRes, ticketsRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
@@ -116,6 +138,8 @@ export default function StaffDashboardPage() {
     );
   }
 
+  if (!isAuthorized) return null; // Complete layout intercept block
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -176,9 +200,7 @@ export default function StaffDashboardPage() {
               assignedAssets.map(asset => (
                 <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    {/* 🚨 FIXED: Smart Checking for Asset Name */}
                     <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
-                    {/* 🚨 FIXED: Smart Checking for Serial Number and Tag */}
                     <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
                   </div>
                   <button onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shrink-0 text-center cursor-pointer">
@@ -256,7 +278,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       const cleanEmail = user.email.toLowerCase().trim();
       const finalEmp = user.emp_id || 'STAFF';
 
-      // 🌟 Clean up the human name safely before sending to Postgres
       let humanName = user.name || cleanEmail.split('@')[0];
       humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
       humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
