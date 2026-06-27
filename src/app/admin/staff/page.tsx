@@ -175,6 +175,7 @@ export default function AdminStaffDirectoryPage() {
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
   };
 
+  // 🚨 FULLY ARMORED: Batch processing logic with explicit termination gates
   const executeStaffBulkImport = async () => {
     if (!bulkFile) return alert("Please select a CSV file.");
     setIsImporting(true);
@@ -210,6 +211,7 @@ export default function AdminStaffDirectoryPage() {
         return clean; 
       };
 
+      // Loop sequentially using for...of to handle await statements correctly
       for (let i = 1; i < lines.length; i++) {
         const row = parseCsvRow(lines[i]);
         const col: Record<string, string> = {};
@@ -226,9 +228,10 @@ export default function AdminStaffDirectoryPage() {
         const rawCode = col['empcode'] || col['emp_code'] || col['id'] || '';
         const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
+        // 🚨 CRUCIAL CHECK: Throw an explicit exit exception if auth layer rejects credentials
         const authResult = await setupStaffAuth(cleanEmail, targetPassword, name);
         if (!authResult.success) {
-          console.warn(`Could not sync auth for ${cleanEmail}:`, authResult.error);
+          throw new Error(`Authentication Layer Blocked Entry on CSV Row ${i + 1} (${cleanEmail}):\n\nReason: ${authResult.error || 'Password requirement mismatch'}\n\nBatch stopped immediately.`);
         }
 
         const existingDbUser = profileDbMap.get(cleanEmail);
@@ -417,7 +420,6 @@ export default function AdminStaffDirectoryPage() {
                     <span className="font-bold text-slate-700 text-xs truncate max-w-[160px]" title={user.email}>{user.email}</span>
                   </div>
 
-                  {/* PORTAL CREDENTIAL STATUS & ACTIVATOR BUTTON */}
                   <div className={`flex justify-between items-center bg-white p-3 rounded-xl border shadow-xs ${user.password ? 'border-emerald-100' : 'border-amber-200 bg-amber-50/50'}`}>
                     <div className="flex items-center gap-2 text-slate-500">
                       <KeyRound size={14} className={user.password ? "text-emerald-500" : "text-amber-500"}/>
