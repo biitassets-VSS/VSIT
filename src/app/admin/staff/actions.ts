@@ -18,10 +18,12 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
   const cleanEmail = email.toLowerCase().trim();
 
   try {
-    // 1. Try to find the user directly by email instead of listing all users (Performance optimization)
-    const { data: searchData } = await supabaseAdmin.auth.admin.listUsers({
-        filter: { field: 'email', eq: cleanEmail }
+    // 🌟 FIX: Use the 'email' parameter directly, which is the supported API method
+    const { data: searchData, error: searchError } = await supabaseAdmin.auth.admin.listUsers({
+      email: cleanEmail
     });
+
+    if (searchError) throw searchError;
 
     const existingUser = searchData?.users?.[0];
 
@@ -49,7 +51,7 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
     }
   } catch (error: any) {
     // Return a readable error message instead of an empty object
-    const errorMessage = error?.message || JSON.stringify(error) || "Unknown Auth Error";
+    const errorMessage = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error)) || "Unknown Auth Error";
     console.error("Auth Admin Error:", errorMessage);
     return { success: false, error: errorMessage };
   }
