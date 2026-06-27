@@ -23,7 +23,7 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
 
     if (searchError) throw searchError;
 
-    // 🚨 FIXED: Manually scan the array to find the EXACT matching email account
+    // Manually scan the array to find the EXACT matching email account
     const existingUser = searchData?.users?.find(
       (u: any) => u.email?.toLowerCase().trim() === cleanEmail
     );
@@ -76,9 +76,17 @@ export async function setupStaffAuth(email: string, password?: string, fullName?
       return { success: true, message: "Login access granted and database profile initialized successfully!" };
     }
   } catch (error: any) {
-    // Return a readable error message instead of an empty object
-    const errorMessage = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error)) || "Unknown Auth Error";
-    console.error("Auth Admin Error:", errorMessage);
+    // 🚨 FIXED: Extract real error properties directly so it never prints an empty {}
+    let errorMessage = "Unknown Auth Error";
+    
+    if (error) {
+      if (error.message) errorMessage = error.message;
+      else if (error.error_description) errorMessage = error.error_description;
+      else if (typeof error === 'string') errorMessage = error;
+      else errorMessage = JSON.stringify(error);
+    }
+    
+    console.error("Auth Admin Error:", errorMessage, error);
     return { success: false, error: errorMessage };
   }
 }
