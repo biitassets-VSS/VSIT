@@ -29,9 +29,7 @@ function AdminInspectionReviewContent() {
     if (highlightedId && !loading && inspections.length > 0) {
       setTimeout(() => {
         const el = document.getElementById(`inspection-${highlightedId}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100); 
     }
   }, [highlightedId, loading, inspections]);
@@ -57,7 +55,6 @@ function AdminInspectionReviewContent() {
         const matchedStaff = profilesData.find(p => p.email?.toLowerCase() === insp.user_email?.toLowerCase() || p.id === matchedAsset.assigned_to || p.id === insp.inspected_by) || {};
 
         processedAssetIds.add(String(matchedAsset.id));
-
         const normalizedStatus = insp.status === 'Pending Review' || !insp.status ? 'Pending' : insp.status;
         const itemIdentifier = insp.id || `insp-${insp.asset_id}`;
 
@@ -78,11 +75,9 @@ function AdminInspectionReviewContent() {
 
       assetsData.forEach(asset => {
         const s = (asset.inspection_status || '').toLowerCase();
-        
         if (s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) {
           if (!processedAssetIds.has(String(asset.id))) {
             const matchedStaff = profilesData.find(p => p.id === asset.assigned_to) || {};
-            
             masterLedger.push({
               id: `missing-${asset.id}`,
               asset_id: asset.id,
@@ -106,7 +101,6 @@ function AdminInspectionReviewContent() {
       masterLedger.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setInspections(masterLedger);
     } catch (err: any) {
-      console.error("Admin fetch failed:", err);
       alert("Failed to fetch inspection records.");
     } finally {
       setLoading(false);
@@ -114,6 +108,9 @@ function AdminInspectionReviewContent() {
   };
 
   const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
+    // 🌟 1. STRICT GUARD: Prevent execution if identifiers are missing
+    if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
+
     let remarks = '';
     if (verdict === 'Re-Inspection' || verdict === 'Rejected') {
       remarks = prompt(`Provide administrative remarks/reason for marking this device as ${verdict}:`) || '';
@@ -127,10 +124,11 @@ function AdminInspectionReviewContent() {
       const isTemporaryId = String(inspectionId).startsWith('insp-') || !inspectionId;
       let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
       
+      // 🌟 2. DOUBLE-LOCK DATABASE QUERY: Target only this specific asset's specific inspection
       if (isTemporaryId) {
         query = query.eq('asset_id', assetId).eq('status', 'Pending');
       } else {
-        query = query.eq('id', inspectionId);
+        query = query.eq('id', inspectionId).eq('asset_id', assetId);
       }
 
       const { error: inspErr } = await query;
@@ -153,15 +151,19 @@ function AdminInspectionReviewContent() {
         await supabase.from('notifications').insert({
           user_id: staffId,
           title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ ${verdict} Action Required`,
-          message: verdict === 'Approved' 
-            ? `Your recent hardware audit has been approved.` 
-            : `Audit returned: ${remarks}`,
+          message: verdict === 'Approved' ? `Your recent hardware audit has been approved.` : `Audit returned: ${remarks}`,
           is_read: false,
           type: verdict === 'Approved' ? 'success' : 'warning'
         });
       }
 
-      setInspections(prev => prev.map(item => item.id === inspectionId ? { ...item, status: verdict, admin_remarks: remarks || item.admin_remarks } : item));
+      // 🌟 3. DOUBLE-LOCK REACT STATE: Ensure only the exact matching card flips to the new status
+      setInspections(prev => prev.map(item => 
+        (item.id === inspectionId && item.asset_id === assetId) 
+          ? { ...item, status: verdict, admin_remarks: remarks || item.admin_remarks } 
+          : item
+      ));
+
       alert(`Success: Review locked in as ${verdict}.`);
     } catch (err: any) {
       alert(`Error transmitting verdict: ${err.message}`);
@@ -189,7 +191,6 @@ function AdminInspectionReviewContent() {
       (item.staff_name || '').toLowerCase().includes(query) ||
       (item.asset_name || '').toLowerCase().includes(query) ||
       (item.serial_number || '').toLowerCase().includes(query) ||
-      (item.emp_code || '').toLowerCase().includes(query) ||
       (item.asset_tag || '').toLowerCase().includes(query);
 
     return matchesTab && matchesSearch;
@@ -209,21 +210,16 @@ function AdminInspectionReviewContent() {
   const calculateNextDueDate = (lastInspectionDate: string, category: string = 'Laptop') => {
     if (!lastInspectionDate) return 'N/A';
     const baseDate = new Date(lastInspectionDate);
-    const isLaptop = (category || '').toLowerCase().includes('laptop');
-    const monthsToAdd = isLaptop ? 1 : 3; 
-    
+    const monthsToAdd = (category || '').toLowerCase().includes('laptop') ? 1 : 3; 
     const lastDayOfTargetMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd + 1, 0);
     const lastSaturday = new Date(lastDayOfTargetMonth);
-    while (lastSaturday.getDay() !== 6) {
-      lastSaturday.setDate(lastSaturday.getDate() - 1);
-    }
+    while (lastSaturday.getDay() !== 6) lastSaturday.setDate(lastSaturday.getDate() - 1);
     return lastSaturday.toLocaleDateString('en-IN'); 
   };
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
       
-      {/* HEADER */}
       <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
           <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
@@ -252,7 +248,6 @@ function AdminInspectionReviewContent() {
         </button>
       </div>
 
-      {/* TABS & SEARCH */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
           {[
@@ -285,7 +280,6 @@ function AdminInspectionReviewContent() {
         </div>
       </div>
 
-      {/* ADJUDICATION GRID */}
       {loading ? (
         <div className="w-full py-32 flex flex-col items-center justify-center gap-4 text-slate-400">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
@@ -312,7 +306,6 @@ function AdminInspectionReviewContent() {
                   isHighlighted ? 'border-blue-500 ring-4 ring-blue-500/10 scale-[1.01]' : (isPending && item.is_submission) ? 'border-blue-200 shadow-blue-500/5' : 'border-slate-200 opacity-95'
                 }`}
               >
-                {/* LEFT COLUMN: Identity Metrics */}
                 <div className="w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r border-slate-100 pb-6 xl:pb-0 xl:pr-8">
                   <div className="flex items-start gap-4">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shrink-0 border ${item.is_submission ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
@@ -363,7 +356,6 @@ function AdminInspectionReviewContent() {
                   </div>
                 </div>
 
-                {/* RIGHT COLUMN: Interactive Workspaces */}
                 <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Evaluation Workspace</h4>
@@ -416,7 +408,6 @@ function AdminInspectionReviewContent() {
                     </div>
                   )}
 
-                  {/* BOTTOM HOOK CONTROLS */}
                   <div className="pt-4 border-t border-slate-100 mt-auto">
                     {!item.is_submission ? (
                        <div className="flex items-center justify-between px-5 py-4 bg-orange-50 rounded-xl border border-orange-200">
@@ -431,7 +422,7 @@ function AdminInspectionReviewContent() {
                           type="button"
                           disabled={updatingId === item.id}
                           onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
+                          className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
                         >
                           <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
                         </button>
@@ -440,7 +431,7 @@ function AdminInspectionReviewContent() {
                           type="button"
                           disabled={updatingId === item.id}
                           onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+                          className="flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50"
                         >
                           <RefreshCw size={16} /> Re-Inspect
                         </button>
@@ -449,7 +440,7 @@ function AdminInspectionReviewContent() {
                           type="button"
                           disabled={updatingId === item.id}
                           onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-600/20 transition-all cursor-pointer disabled:opacity-50"
+                          className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-600/20 cursor-pointer disabled:opacity-50"
                         >
                           <XCircle size={16} /> Reject
                         </button>
@@ -476,7 +467,6 @@ function AdminInspectionReviewContent() {
         </div>
       )}
 
-      {/* PHOTO LIGHTBOX */}
       {previewPhotoModal && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in">
           <button 
