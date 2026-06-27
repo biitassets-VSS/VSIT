@@ -77,18 +77,18 @@ export default function AdminStaffDirectoryPage() {
     setIsDossierModalOpen(true);
   };
 
-  // 🚨 RE-SYNC UTILITY: For manual alignment of imported users
+  // 🚨 RE-SYNC UTILITY: For manual alignment of imported users or resetting locked out users
   const handleManualAuthSync = async (user: any) => {
-    const password = prompt(`Enter a new login password for ${user.full_name || user.email}:`, "vsit1234");
+    const password = prompt(`Enter a custom password for ${user.full_name || user.email} to fix their login access:`, "vss@123456");
     if (!password) return;
 
     try {
       setLoading(true);
       const res = await setupStaffAuth(user.email, password, user.full_name);
       if (res.success) {
-        // Save password record identifier back to profile table row
+        // Save password record identifier back to profile table row safely
         await supabase.from('profiles').update({ password: password }).eq('id', user.id);
-        alert(`🎉 Success! Login profile built. ${user.email} can now enter the dashboard using password: ${password}`);
+        alert(`🎉 Credentials Overwritten!\n\n${user.email} can now enter the dashboard using password: ${password}`);
         fetchStaff();
       } else {
         alert(`❌ Credentials Sync Error: ${res.error}`);
@@ -175,7 +175,6 @@ export default function AdminStaffDirectoryPage() {
     const a = document.createElement('a'); a.href = url; a.download = 'VS_Staff_Batch_Template.csv'; a.click();
   };
 
-  // 🚨 FULLY ARMORED: Batch processing logic with explicit termination gates
   const executeStaffBulkImport = async () => {
     if (!bulkFile) return alert("Please select a CSV file.");
     setIsImporting(true);
@@ -211,7 +210,6 @@ export default function AdminStaffDirectoryPage() {
         return clean; 
       };
 
-      // Loop sequentially using for...of to handle await statements correctly
       for (let i = 1; i < lines.length; i++) {
         const row = parseCsvRow(lines[i]);
         const col: Record<string, string> = {};
@@ -228,10 +226,10 @@ export default function AdminStaffDirectoryPage() {
         const rawCode = col['empcode'] || col['emp_code'] || col['id'] || '';
         const empCode = rawCode ? rawCode.toUpperCase() : `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        // 🚨 CRUCIAL CHECK: Throw an explicit exit exception if auth layer rejects credentials
+        // 🚨 PREVENT SILENT ACCIDENTAL OVERPASSES
         const authResult = await setupStaffAuth(cleanEmail, targetPassword, name);
         if (!authResult.success) {
-          throw new Error(`Authentication Layer Blocked Entry on CSV Row ${i + 1} (${cleanEmail}):\n\nReason: ${authResult.error || 'Password requirement mismatch'}\n\nBatch stopped immediately.`);
+          throw new Error(`Authentication Engine error at line ${i + 1} (${cleanEmail}):\n\nReason: ${authResult.error || 'Password formatting error'}\n\nOperation aborted.`);
         }
 
         const existingDbUser = profileDbMap.get(cleanEmail);
@@ -420,25 +418,20 @@ export default function AdminStaffDirectoryPage() {
                     <span className="font-bold text-slate-700 text-xs truncate max-w-[160px]" title={user.email}>{user.email}</span>
                   </div>
 
-                  <div className={`flex justify-between items-center bg-white p-3 rounded-xl border shadow-xs ${user.password ? 'border-emerald-100' : 'border-amber-200 bg-amber-50/50'}`}>
+                  {/* 🚨 DYNAMIC FIXER Badging: Gives an active button to force re-sync */}
+                  <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
                     <div className="flex items-center gap-2 text-slate-500">
-                      <KeyRound size={14} className={user.password ? "text-emerald-500" : "text-amber-500"}/>
+                      <KeyRound size={14} className="text-blue-500"/>
                       <span className="font-bold text-[10px] uppercase tracking-widest">Login Auth</span>
                     </div>
                     
-                    {user.password ? (
-                      <span className="font-mono font-black text-[10px] uppercase tracking-widest text-emerald-700">
-                        Secure
-                      </span>
-                    ) : (
-                      <button 
-                        type="button" 
-                        onClick={() => handleManualAuthSync(user)}
-                        className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white font-black text-[9px] uppercase tracking-widest rounded transition-colors cursor-pointer animate-pulse"
-                      >
-                        Grant Access
-                      </button>
-                    )}
+                    <button 
+                      type="button" 
+                      onClick={() => handleManualAuthSync(user)}
+                      className="px-3 py-1 bg-blue-50 hover:bg-blue-600 border border-blue-200 hover:border-transparent text-blue-700 hover:text-white font-black text-[9px] uppercase tracking-widest rounded-lg transition-all cursor-pointer"
+                    >
+                      Overwrite Password
+                    </button>
                   </div>
                 </div>
 
