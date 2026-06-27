@@ -6,14 +6,15 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
-  Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle
+  Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
+  Camera // 🌟 ADDED: Camera icon for the QR handoff UI
 } from 'lucide-react';
 
 export default function StaffDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
-  const [isAuthorized, setIsAuthorized] = useState(false); // 🌟 Added safe state gate
+  const [isAuthorized, setIsAuthorized] = useState(false); 
   
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   const [myTickets, setMyTickets] = useState<any[]>([]);
@@ -24,13 +25,12 @@ export default function StaffDashboardPage() {
     type: '',
   });
 
-  // 🌟 SMART NAME FORMATTER: Turns "meenakshi.bi" into "Meenakshi"
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
-    let s = raw.split('@')[0];       // Strip email domain
-    s = s.split('.')[0];             // Chop off ".bi" or ".vss"
-    s = s.replace(/[_-]/g, ' ');     // Clean up underscores/dashes
-    return s.charAt(0).toUpperCase() + s.slice(1); // Capitalize first letter
+    let s = raw.split('@')[0];       
+    s = s.split('.')[0];             
+    s = s.replace(/[_-]/g, ' ');     
+    return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
   const loadRealDatabase = async () => {
@@ -44,36 +44,31 @@ export default function StaffDashboardPage() {
 
       const cleanEmail = user.email?.toLowerCase().trim();
 
-      // 🛑 RULE 1: Direct admin user emails strictly to the Admin Control Desk
       if (cleanEmail === 'lakhwinder.bi@outlook.com') {
         alert("Access Redirect: Admins must utilize the Admin Control Desk configuration panels.");
         router.replace('/admin');
         return;
       }
 
-      // Fetch the actual profile record
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
       
       if (profile) {
-        // 🛑 RULE 2: If the profile is marked as 'Disabled', completely terminate access
         if (profile.status === 'Disabled') {
           alert("Access Terminated: This account has been disabled by system operations.");
           router.replace('/');
           return;
         }
-
         user.emp_id = profile.emp_code || profile.emp_id || 'STAFF';
         user.name = profile.full_name || profile.name || user.name;
         user.id = profile.id;
       } else {
-        // No match in database batches? Treat as unlinked intruder
         alert("Unauthorized account entry path detected.");
         router.replace('/');
         return;
       }
       
       setCurrentUser(user);
-      setIsAuthorized(true); // Open the interface gateway safely
+      setIsAuthorized(true); 
 
       const [assetsRes, inspRes, ticketsRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
@@ -138,7 +133,7 @@ export default function StaffDashboardPage() {
     );
   }
 
-  if (!isAuthorized) return null; // Complete layout intercept block
+  if (!isAuthorized) return null; 
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
@@ -248,7 +243,7 @@ export default function StaffDashboardPage() {
   );
 }
 
-// ARMORED TRANSACTION MODAL
+// 🌟 ARMORED TRANSACTION MODAL (Updated for QR Photo Handoff)
 function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -258,7 +253,12 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const [formTitle, setFormTitle] = useState('');
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
+  
+  // State specific to Inspection flow
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
+  const [showQR, setShowQR] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
+
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
 
@@ -270,7 +270,23 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
     } else setLockError(true);
   };
 
+  const generateMobileHandoff = () => {
+    // 🌟 Builds a URL pointing to the new /mobile-audit page we created!
+    const baseUrl = window.location.origin;
+    const cat = asset?.category || formCategory;
+    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}`;
+    
+    setQrUrl(url);
+    setShowQR(true);
+  };
+
   const handleLivePostgresSubmit = async () => {
+    // 🚨 IF IT IS AN INSPECTION: Divert the submission to generate the Camera QR Code instead of saving immediately!
+    if (type === 'INSPECTION') {
+      generateMobileHandoff();
+      return;
+    }
+
     setIsTransmitting(true);
     let submitError = null; 
 
@@ -304,7 +320,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           staff_name: humanName
         });
         submitError = error;
-      } else if (type === 'INSPECTION' || type === 'REPLACEMENT') {
+      } else if (type === 'REPLACEMENT') {
         const { error: inspError } = await supabase.from('inspections').insert({
           asset_id: asset.id, inspected_by: user.id || user.emp_id, user_email: cleanEmail,
           condition: formCondition, notes: formText || `Submitted ${type}`, status: 'Pending'
@@ -313,7 +329,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         
         if (!inspError) {
           await supabase.from('assets').update({
-            inspection_status: 'Pending', status: type === 'REPLACEMENT' ? 'Replacement Requested' : 'Assigned'
+            inspection_status: 'Pending', status: 'Replacement Requested'
           }).eq('id', asset.id);
         }
       }
@@ -347,6 +363,42 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
               <CheckCircle size={48} className="text-emerald-600 mx-auto animate-bounce"/>
               <h4 className="text-xl font-bold text-slate-900">Database Updated!</h4>
             </div>
+          ) : showQR ? (
+            // 🌟 THE QR CODE HANDOFF SCREEN
+            <div className="py-6 text-center space-y-6 animate-in zoom-in-95 duration-300">
+              <div>
+                <h4 className="text-lg font-black text-slate-900 uppercase tracking-widest">Mobile Device Handoff</h4>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Scan this code with your phone camera to take certified watermark photos of the asset.</p>
+              </div>
+              
+              <div className="p-4 bg-white border-2 border-slate-200 rounded-3xl inline-block shadow-lg mx-auto">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} 
+                  alt="Scan to Audit" 
+                  className="w-48 h-48 rounded-xl"
+                />
+              </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-left">
+                <h5 className="text-[10px] font-black uppercase text-blue-800 tracking-widest mb-2 flex items-center gap-2">
+                  <Camera size={14}/> Photo Requirements
+                </h5>
+                <ul className="text-xs text-blue-900 font-medium space-y-1.5 ml-1">
+                  {(asset?.category || '').toLowerCase().includes('laptop') ? (
+                    <>
+                      <li>✅ Screen & Keypad view</li>
+                      <li>✅ Top and Bottom (with Tag)</li>
+                      <li>✅ Left and Right Side Ports</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>✅ Clear Front / Top View</li>
+                      <li>✅ Bottom View (showing Asset Tag)</li>
+                    </>
+                  )}
+                </ul>
+              </div>
+            </div>
           ) : (
             <div className="space-y-4 text-sm font-medium">
               {needsLock && (
@@ -367,17 +419,37 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                 </>
               )}
 
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Detailed Explanation</label><textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} placeholder="Describe what happened..." className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm"/></div>
+              {/* 🌟 New Asset Condition Field inserted for Inspections */}
+              {type === 'INSPECTION' && isUnlocked && (
+                <div className="animate-in slide-in-from-top-4 duration-300">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asset Condition</label>
+                  <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-200 font-semibold mb-4 outline-none focus:border-blue-600">
+                    <option>Pristine / Flawless</option>
+                    <option>Good / Minor Scratches</option>
+                    <option>Poor / Damaged (Requires Fix)</option>
+                    <option>Non-Functional / Dead</option>
+                  </select>
+                </div>
+              )}
+
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : 'Detailed Explanation'}</label><textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm"/></div>
             </div>
           )}
         </div>
 
         {!successDone && (
           <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 shrink-0">
-            <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer">Cancel</button>
-            <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2">
-              {isTransmitting && <Loader2 size={14} className="animate-spin"/>} Transmit
-            </button>
+            {showQR ? (
+              <button onClick={onClose} className="w-full py-3.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm transition-colors">Close Portal (Awaiting Mobile Scan)</button>
+            ) : (
+              <>
+                <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer">Cancel</button>
+                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest">
+                  {isTransmitting && <Loader2 size={14} className="animate-spin"/>} 
+                  {type === 'INSPECTION' ? 'Generate Camera QR' : 'Transmit'}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
