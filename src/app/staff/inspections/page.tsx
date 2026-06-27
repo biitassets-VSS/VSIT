@@ -16,14 +16,14 @@ export default function StaffInspectionsPage() {
     try { email = JSON.parse(sessionStr).email; } catch(e) {}
     const cleanEmail = email?.toLowerCase().trim();
 
-    // Fetch inspections by email
-    const { data } = await supabase
+    // 1. Fetch inspections and the associated asset details in one go
+    const { data: inspData } = await supabase
       .from('inspections')
-      .select('*')
+      .select('*, assets(*)') // Get inspection data AND the related asset row
       .ilike('user_email', cleanEmail)
       .order('created_at', { ascending: false });
 
-    if (data) setInspections(data);
+    if (inspData) setInspections(inspData);
     setLoading(false);
   };
 
@@ -40,7 +40,7 @@ export default function StaffInspectionsPage() {
     if (s === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     if (s === 'rejected' || s === 'not approved') return 'bg-rose-50 text-rose-700 border-rose-200';
     if (s === 're-inspection') return 'bg-orange-50 text-orange-700 border-orange-200';
-    return 'bg-blue-50 text-blue-700 border-blue-200'; // Default Pending
+    return 'bg-blue-50 text-blue-700 border-blue-200';
   };
 
   if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-8 h-8 text-amber-600 animate-spin" /></div>;
@@ -60,22 +60,32 @@ export default function StaffInspectionsPage() {
           <div className="p-12 text-center text-slate-500 font-medium text-sm">No inspections have been submitted yet.</div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {inspections.map(insp => (
-              <div key={insp.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-bold text-slate-900 text-lg">Hardware Audit</h3>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getBadge(insp.status)}`}>{insp.status || 'Pending'}</span>
+            {inspections.map(insp => {
+              // Get the related asset object
+              const asset = insp.assets || {};
+              
+              return (
+                <div key={insp.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-3">
+                      {/* 🚨 FIXED: Now shows the actual asset name */}
+                      <h3 className="font-bold text-slate-900 text-lg">
+                        {asset.name || asset.asset_name || asset.model || 'Unknown Device'}
+                      </h3>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getBadge(insp.status)}`}>
+                        {insp.status || 'Pending'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600">Condition reported: <strong className="text-slate-800">{insp.condition}</strong></p>
+                    <p className="text-xs font-semibold text-slate-400">Notes: {insp.notes || 'None'}</p>
                   </div>
-                  <p className="text-sm text-slate-600">Condition reported: <strong className="text-slate-800">{insp.condition}</strong></p>
-                  <p className="text-xs font-semibold text-slate-400">Notes: {insp.notes || 'None'}</p>
+                  <div className="text-left sm:text-right shrink-0">
+                    <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">Audit Date</p>
+                    <p className="text-sm font-bold text-slate-900 mt-0.5">{new Date(insp.created_at).toLocaleDateString()}</p>
+                  </div>
                 </div>
-                <div className="text-left sm:text-right shrink-0">
-                  <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">Audit Date</p>
-                  <p className="text-sm font-bold text-slate-900 mt-0.5">{new Date(insp.created_at).toLocaleDateString()}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
