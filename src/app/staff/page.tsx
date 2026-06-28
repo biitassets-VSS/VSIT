@@ -444,7 +444,7 @@ interface LiveDatabaseModalProps {
   onClose: () => void;
 }
 
-// 🌟 ARMORED TRANSACTION MODAL WITH COMPREHENSIVE UI INPUT FORMS
+// 🌟 ARMORED TRANSACTION MODAL WITH ADVANCED TICKET FEATURES
 function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProps) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -453,8 +453,12 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
 
   const [formTitle, setFormTitle] = useState('');
   const [formText, setFormText] = useState('');
-  const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
+  const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Laptop / Main Workstation');
   
+  // 🌟 Optional Screenshot Attachment State
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
@@ -469,6 +473,33 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
       setIsUnlocked(true);
     } else {
       setLockError(true);
+    }
+  };
+
+  // 🌟 Handles uploading screenshot to Supabase 'tickets' bucket
+  const handleScreenshotChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `tickets/${user.emp_id || 'staff'}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('tickets')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('tickets').getPublicUrl(filePath);
+      setScreenshotUrl(data.publicUrl);
+    } catch (err: any) {
+      console.error("Upload error:", err.message);
+      alert("Failed to attach screenshot, but you can still submit the ticket without it.");
+    } finally {
+      setUploadingFile(false);
     }
   };
 
@@ -504,7 +535,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
           status: 'Open',
           created_by: user.email,
           emp_code: user.emp_id,
-          staff_name: user.name 
+          staff_name: user.name,
+          screenshot_attachment: screenshotUrl // 🌟 Saves the secure file link to database
         });
       }
       setSuccessDone(true);
@@ -519,6 +551,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
   return (
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+        
+        {/* MODAL HEADER */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><TicketIcon size={20}/></div>
@@ -572,33 +606,34 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
 
               {isUnlocked && (
                 <div className="space-y-4 animate-in fade-in duration-200">
-                  {/* Dynamic fields rendered dynamically according to portal workflows */}
+                  
+                  {/* 🌟 TICKET UI MATCHING THE SCREENSHOT EXACTLY */}
                   {type === 'TICKET' && (
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Issue Title Summary</label>
+                      <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Issue Title Summary</label>
                       <input 
                         type="text" 
                         value={formTitle} 
                         onChange={e => setFormTitle(e.target.value)} 
                         placeholder="e.g., Screen display flickering, keys broken..." 
-                        className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 transition-all font-medium"
+                        className="w-full p-3.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 transition-all font-medium bg-white"
                       />
                     </div>
                   )}
 
                   {(type === 'TICKET' || type === 'REQUEST') && (
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hardware Category</label>
+                      <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Hardware Category</label>
                       <select 
                         value={formCategory} 
                         onChange={e => setFormCategory(e.target.value)} 
-                        className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 font-semibold bg-white"
+                        className="w-full p-3.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 font-semibold bg-white"
                       >
-                        <option value="Laptop">Laptop / Main Workstation</option>
-                        <option value="Monitor">External Monitor Display</option>
-                        <option value="Keyboard/Mouse">Peripherals (Keyboard or Mouse)</option>
-                        <option value="Charger">Power Adapter & Cables</option>
-                        <option value="Other">Other Miscellaneous IT Gear</option>
+                        <option value="Laptop / Main Workstation">Laptop / Main Workstation</option>
+                        <option value="Headphone">Headphone</option>
+                        <option value="Monitor / Display">Monitor / Display</option>
+                        <option value="Keyboard / Mouse Accessory">Keyboard / Mouse Accessory</option>
+                        <option value="Other / Unlisted Device">Other / Unlisted Device</option>
                       </select>
                     </div>
                   )}
@@ -619,17 +654,45 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
                   )}
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
                       {type === 'INSPECTION' ? 'Audit Inspection Notes' : type === 'TICKET' ? 'Detailed Issue Description' : 'Justification Remarks / Reasoning'}
                     </label>
                     <textarea 
                       rows={3} 
                       value={formText} 
                       onChange={e => setFormText(e.target.value)} 
-                      placeholder="Provide comprehensive details for operations reviews..."
-                      className="w-full p-3.5 rounded-xl border text-sm outline-none focus:border-blue-500 transition-all"
+                      placeholder={type === 'TICKET' ? 'Provide comprehensive details for operations reviews...' : 'Add diagnostic evaluation notes...'}
+                      className="w-full p-3.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 transition-all bg-white resize-none"
                     />
                   </div>
+
+                  {/* 🌟 OPTIONAL FEATURE: SCREENSHOT UPLOADER */}
+                  {type === 'TICKET' && (
+                    <div className="pt-1">
+                      <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                        Upload Screenshot <span className="text-slate-400 font-medium lowercase italic">(optional)</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleScreenshotChange} 
+                          id="screenshot-file" 
+                          className="hidden" 
+                        />
+                        <label 
+                          htmlFor="screenshot-file" 
+                          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-700 cursor-pointer transition-colors"
+                        >
+                          {uploadingFile ? 'Uploading...' : 'Choose File'}
+                        </label>
+                        <span className="text-xs text-slate-500 truncate font-semibold">
+                          {screenshotUrl ? '✓ Ready to attach image' : 'No image attached'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
             </div>
@@ -640,7 +703,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
           <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
             {!showQR && (
               <button 
-                disabled={isTransmitting || (needsLock && !isUnlocked)} 
+                disabled={isTransmitting || (needsLock && !isUnlocked) || uploadingFile} 
                 onClick={handleLivePostgresSubmit} 
                 className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 text-white cursor-pointer hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm"
               >
