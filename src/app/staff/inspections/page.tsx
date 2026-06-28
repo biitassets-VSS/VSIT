@@ -17,10 +17,8 @@ const calculateNextDueDate = (lastInspectionDate: string, category: string = 'La
   const targetYear = baseDate.getFullYear();
   const targetMonth = baseDate.getMonth() + monthsToAdd;
 
-  // Find the LAST day of that target month
   const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0);
   
-  // Walk backwards until we hit a Saturday (Day 6)
   const lastSaturday = new Date(lastDayOfTargetMonth);
   while (lastSaturday.getDay() !== 6) {
     lastSaturday.setDate(lastSaturday.getDate() - 1);
@@ -58,21 +56,30 @@ export default function StaffInspectionsPage() {
     const cleanEmail = email?.toLowerCase().trim();
 
     try {
-      const { data: profile } = await supabase.from('profiles').select('id').ilike('email', cleanEmail).maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('id, emp_code').ilike('email', cleanEmail).maybeSingle();
       const currentUserId = profile?.id;
+      const empCode = profile?.emp_code;
 
-      // 🌟 STRICT CACHE BUSTER: Forces absolute live truth from database
+      // 🚨 BUG FIX: Build a dynamic query that checks Email OR User ID OR Employee Code 
+      // This guarantees mobile uploads (which use Emp Code) are never missed!
+      let orQuery = `user_email.ilike.${cleanEmail}`;
+      if (currentUserId) orQuery += `,inspected_by.eq.${currentUserId}`;
+      if (empCode) orQuery += `,inspected_by.eq.${empCode}`;
+
+      // 🌟 STRICT CACHE BUSTER + UNFILTERED HISTORY
       const { data: inspData, error: inspError } = await supabase
         .from('inspections')
         .select('*, assets(*)') 
-        .ilike('user_email', cleanEmail)
+        .or(orQuery)
         .neq('id', `bust-cache-${Date.now()}`) 
         .order('created_at', { ascending: false });
 
       if (inspError) throw inspError;
       
       if (inspData) {
-        setInspections(inspData); // Show true chronological history
+        // 🚨 BUG FIX: Removed deduplication. 
+        // This now strictly saves and shows ALL historical submissions!
+        setInspections(inspData);
       }
 
       if (currentUserId) {
@@ -240,7 +247,7 @@ export default function StaffInspectionsPage() {
                   <div className="flex-1 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Last Audit Date</span>
+                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Audit Date</span>
                       </div>
                       <span className="text-xs font-bold text-slate-900">{new Date(insp.created_at).toLocaleDateString('en-IN')}</span>
                     </div>
