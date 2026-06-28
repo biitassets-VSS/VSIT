@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useNotifications } from '@/hooks/useNotifications';
-import { Asset, Inspection, Ticket } from '@/types';
+import { Asset, Inspection } from '@/types';
 
 // Explicitly pruned down to components actively rendered in layout
 import { 
@@ -18,7 +18,7 @@ import {
   CheckCircle, 
   Bell, 
   AlertTriangle,
-  ShieldCheck // 🌟 Added for the Admin Notes icon
+  ShieldCheck 
 } from 'lucide-react';
 
 interface StaffUser {
@@ -63,7 +63,9 @@ export default function StaffDashboardPage() {
   
   const [assignedAssets, setAssignedAssets] = useState<Asset[]>([]);
   const [allInspections, setAllInspections] = useState<Inspection[]>([]);
-  const [myTickets, setMyTickets] = useState<Ticket[]>([]);
+  
+  // 🌟 FIXED TYPE ERROR: Set to any[] to allow dynamic database columns like admin_notes
+  const [myTickets, setMyTickets] = useState<any[]>([]);
   
   const { notifications, unreadCount, markAllAsRead } = useNotifications(currentUser?.id);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -122,7 +124,7 @@ export default function StaffDashboardPage() {
 
       if (assetsRes.data) setAssignedAssets(assetsRes.data as Asset[]);
       if (inspRes.data) setAllInspections(inspRes.data as Inspection[]);
-      if (ticketsRes.data) setMyTickets(ticketsRes.data as Ticket[]);
+      if (ticketsRes.data) setMyTickets(ticketsRes.data);
 
     } catch (err) {
       console.error("Data sync failure:", err);
@@ -234,7 +236,6 @@ export default function StaffDashboardPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Top welcome profile panel */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
@@ -283,7 +284,6 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* Warning panel if Re-inspections required */}
         {activeReInspections.length > 0 && (
           <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4">
             <div className="p-2 bg-rose-100 text-rose-600 rounded-full shrink-0"><AlertTriangle size={20} /></div>
@@ -298,7 +298,6 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        {/* Action Panel Quick Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: TicketIcon, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
@@ -309,7 +308,6 @@ export default function StaffDashboardPage() {
             <button 
               key={item.name} 
               onClick={() => {
-                // Safeguard against operating on an undefined assigned hardware target
                 if ((item.type === 'INSPECTION' || item.type === 'REPLACEMENT') && assignedAssets.length === 0) {
                   alert(`Action cancelled: There are no hardware assets currently assigned to your profile to complete a ${item.name.toLowerCase()}.`);
                   return;
@@ -327,7 +325,6 @@ export default function StaffDashboardPage() {
           ))}
         </div>
 
-        {/* Counter Stats Metric Panel */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Units</p>
@@ -347,10 +344,8 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* Primary Functional Data Feeds */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          {/* Linked Hardware Units Section */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units</div>
@@ -396,7 +391,6 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* 🌟 UPGRADED: Service Tickets Logs Section with Admin Notes Tracker */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><TicketIcon className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
@@ -417,7 +411,6 @@ export default function StaffDashboardPage() {
                     
                     <p className="text-xs text-slate-600 line-clamp-2 font-medium">{tix.description}</p>
                     
-                    {/* 🌟 ADMIN LIVE NOTE VISIBILITY ENGINE */}
                     {tix.admin_notes && (
                       <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100/80 flex flex-col gap-1.5 mt-1">
                         <div className="flex items-center justify-between">
@@ -463,7 +456,6 @@ interface LiveDatabaseModalProps {
   onClose: () => void;
 }
 
-// 🌟 ARMORED TRANSACTION MODAL WITH ADVANCED TICKET FEATURES
 function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProps) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -474,7 +466,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Laptop / Main Workstation');
   
-  // 🌟 Optional Screenshot Attachment State
   const [uploadingFile, setUploadingFile] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
