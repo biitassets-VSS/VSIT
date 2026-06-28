@@ -64,8 +64,11 @@ export default function StaffDashboardPage() {
   // 🌟 ANTI-TRAP SESSION WATCHER: Safely redirects the moment "Logout" is clicked
   useEffect(() => {
     const watcher = setInterval(() => {
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
       const activeSession = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!activeSession) {
+      
+      // If NO session and NOT a guest, kick them to login
+      if (!activeSession && !isGuest) {
         window.location.replace('/');
       }
     }, 500);
@@ -74,6 +77,32 @@ export default function StaffDashboardPage() {
 
   const loadRealDatabase = async () => {
     try {
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+
+      // 🚀 GUEST BYPASS: Load dummy data instantly without touching Supabase
+      if (isGuest) {
+        setCurrentUser({
+          id: 'guest-mock-uuid',
+          email: 'demo_user@virtualstaffing.com',
+          emp_id: 'DEMO-001',
+          name: 'Demo Guest User',
+        });
+        
+        const demoAssets = [
+          { id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', serial_number: 'SN-DEMO-1', category: 'Laptop' },
+          { id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', serial_number: 'SN-DEMO-2', category: 'Hardware' }
+        ];
+        
+        setAssignedAssets(demoAssets);
+        setAllInspections([]);
+        setMyTickets([]);
+        setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
+        setIsAuthorized(true);
+        setLoading(false);
+        return; // Important: Stops the function before it hits Supabase!
+      }
+
+      // 🔐 REAL USER AUTHENTICATION
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
       if (!sessionStr) { 
@@ -148,6 +177,10 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     loadRealDatabase();
+    
+    // Prevent Guest users from opening realtime database connections
+    if (localStorage.getItem('isGuestSession') === 'true') return;
+
     const ticketSubscription = supabase
       .channel('public:tickets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
@@ -201,7 +234,11 @@ export default function StaffDashboardPage() {
               Welcome back, {formatDisplayName(currentUser.name)} 👋
             </h1>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-500">
-              <span className="text-blue-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-200/60">ID: {currentUser.emp_id}</span>
+              {currentUser.id === 'guest-mock-uuid' ? (
+                <span className="text-emerald-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-emerald-50 rounded-md border border-emerald-200/60">GUEST MODE (DEMO)</span>
+              ) : (
+                <span className="text-blue-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-blue-50 rounded-md border border-blue-200/60">ID: {currentUser.emp_id}</span>
+              )}
               <span>{currentUser.email}</span>
             </div>
           </div>
@@ -345,6 +382,13 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
   const handleAttemptUnlock = () => {
     if (!asset) { alert("No hardware assigned to test against!"); return; }
+    
+    // GUEST BYPASS: Accept any input for the demo user
+    if (user.id === 'guest-mock-uuid') {
+      setLockError(false); setIsUnlocked(true);
+      return;
+    }
+
     const typed = serialInput.trim().toLowerCase();
     if (typed === (asset.serial_number||'').toLowerCase() || typed === (asset.asset_tag||'').toLowerCase()) {
       setLockError(false); setIsUnlocked(true);
@@ -367,6 +411,17 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
     }
 
     setIsTransmitting(true);
+
+    // 🚀 GUEST BYPASS: Fake a successful transmission without hitting Supabase
+    if (user.id === 'guest-mock-uuid') {
+      setTimeout(() => {
+        setIsTransmitting(false);
+        setSuccessDone(true);
+        setTimeout(() => onClose(), 1200);
+      }, 800); // 800ms fake delay
+      return;
+    }
+
     let submitError = null; 
 
     try {
@@ -483,7 +538,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                 <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-3">
                   <p className="text-xs font-bold text-blue-900">🔒 Security Verification Required</p>
                   <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder="Type exact Tag ID or S/N..." className="flex-1 p-3 bg-white rounded-xl border border-blue-200 text-xs font-bold outline-none"/>
+                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest mode...' : 'Type exact Tag ID or S/N...'} className="flex-1 p-3 bg-white rounded-xl border border-blue-200 text-xs font-bold outline-none"/>
                     {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-blue-600 text-white font-bold text-xs rounded-xl cursor-pointer">Verify</button>}
                   </div>
                   {lockError && <p className="text-[11px] text-rose-600 font-bold">Incorrect device code.</p>}
