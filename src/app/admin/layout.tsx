@@ -51,9 +51,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                            localStorage.getItem('vsit_staff_session') || 
                            localStorage.getItem('user');
         
+        // 🌟 FIX: Hard redirect if no session is found, preventing the loading trap!
         if (!rawSession) {
-          setLayoutCrash("REASON: localStorage has no login session tokens. Available browser keys: " + Object.keys(localStorage).join(', '));
-          setIsCheckingAuth(false);
+          window.location.href = '/';
           return; 
         }
 
@@ -132,7 +132,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const triggerPopup = (title: string, message: string, type: string) => {
     setActiveAlert({ title, message, type });
-    setTimeout(() => setActiveAlert(null), 6000); // Auto-dismiss after 6 seconds
+    setTimeout(() => setActiveAlert(null), 6000); 
   };
 
   const markAsRead = async (id: string) => {
@@ -140,10 +140,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setNotifications(current => current.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
+  // 🌟 FIX: Using window.location.href ensures Next.js dumps cache and unmounts the layout safely.
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
-    router.replace('/');
+    window.location.href = '/'; 
   };
 
   // 🚨 TRAP DISPLAY 

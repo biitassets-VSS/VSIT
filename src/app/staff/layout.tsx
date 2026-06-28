@@ -46,8 +46,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
+      // 🌟 FIX 1: Hard redirect if they shouldn't be here
       if (!sessionString) {
-        router.replace('/'); 
+        window.location.href = '/'; 
         return; 
       }
 
@@ -124,10 +125,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
   }, [staffProfile.id]);
 
+  // 🌟 FIX 2: Hard redirect completely breaks out of the Next.js routing trap
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
-    router.replace('/');
+    window.location.href = '/';
   };
 
   const markNotificationAsRead = async (notificationId: string) => {
