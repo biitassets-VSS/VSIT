@@ -1,365 +1,314 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  ArrowLeft, Search, Ticket, Clock, 
-  CheckCircle2, AlertCircle, MessageSquare, Wrench,
-  Hourglass, Save, RefreshCw, X, User, Play, Pause
+  ArrowLeft, Ticket as TicketIcon, Clock, CheckCircle2, 
+  AlertTriangle, Search, RefreshCw, ShieldCheck, Image as ImageIcon, PauseCircle, PlayCircle
 } from 'lucide-react';
 
-function TicketsWorkbenchContent() {
+export default function AdminTicketsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  const [filterTab, setFilterTab] = useState<'all' | 'open' | 'in_process' | 'hold' | 'resolved'>('open');
-  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
-  
-  const [formStatus, setFormStatus] = useState('open');
-  const [formWaitTime, setFormWaitTime] = useState('15 Mins');
-  const [formResolutionNote, setFormResolutionNote] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => { fetchTickets(); }, []);
+  const [filterTab, setFilterTab] = useState<'open' | 'progress' | 'hold' | 'resolved'>('open');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (tickets.length === 0) return;
-    const targetId = searchParams.get('view') || searchParams.get('id');
-    if (targetId && !selectedTicket) {
-      const found = tickets.find(t => t.id === targetId);
-      if (found) handleSelectTicket(found);
-    }
-  }, [tickets, searchParams]);
+    fetchTickets();
+  }, []);
 
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-      if (data) setTickets(data);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  };
-
-  const handleSelectTicket = (ticket: any) => {
-    setSelectedTicket(ticket);
-    setFormStatus(ticket.status || 'open');
-    setFormWaitTime(ticket.waiting_time || '15 Mins');
-    setFormResolutionNote(ticket.resolution_note || '');
-  };
-
-  const closeWorkbench = () => {
-    setSelectedTicket(null);
-    router.replace('/admin/tickets'); 
-  };
-
-  const handleCommitUpdates = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTicket) return;
-
-    setIsSaving(true);
-    try {
-      const isMarkingDone = formStatus === 'resolved' || formStatus === 'closed';
-      const timeResolvedStamp = isMarkingDone ? new Date().toISOString() : selectedTicket.resolved_at;
-
-      const payloadToSend = {
-        status: formStatus,
-        waiting_time: formWaitTime, 
-        resolution_note: formResolutionNote,
-        resolved_at: timeResolvedStamp
-      };
-      
-      console.log("🚀 SENDING PAYLOAD TO SUPABASE:", payloadToSend);
-
-      const { error } = await supabase
+      // Pull tickets and join with profiles to get the user ID for notifications
+      const { data, error } = await supabase
         .from('tickets')
-        .update(payloadToSend)
-        .eq('id', selectedTicket.id);
+        .select(`
+          *,
+          profiles:emp_code (id)
+        `)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-
-      const patched = { ...selectedTicket, ...payloadToSend };
-      setSelectedTicket(patched);
-      setTickets(prev => prev.map(t => t.id === selectedTicket.id ? patched : t));
-      alert("Ticket updated successfully.");
-    } catch (err: any) { 
-      console.error("FULL POSTGRES ERROR:", err);
-      alert(`Update Failed: ${err.message || JSON.stringify(err)}`); 
-    } finally { 
-      setIsSaving(false); 
+      setTickets(data || []);
+    } catch (err: any) {
+      alert(`Error loading tickets: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const s = (status || 'open').toLowerCase();
-    if (s.includes('process') || s.includes('repair')) return { label: 'In Process', css: 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse', icon: <Play size={10}/> };
-    if (s.includes('hold')) return { label: 'On Hold', css: 'bg-purple-100 text-purple-800 border-purple-300', icon: <Pause size={10}/> };
-    if (s.includes('resolve') || s.includes('close')) return { label: 'Resolved', css: 'bg-emerald-100 text-emerald-800 border-emerald-300', icon: <CheckCircle2 size={10}/> };
-    return { label: 'Open', css: 'bg-rose-100 text-rose-800 border-rose-300', icon: <AlertCircle size={10}/> };
+  // 🌟 THE ADMIN ADJUDICATION ENGINE
+  const executeTicketVerdict = async (ticketId: string, newStatus: string, staffEmail: string) => {
+    // 1. Force the admin to leave a note for the staff member
+    const remarks = prompt(`Please provide an update note for the staff member (Status changing to: ${newStatus}):`) || '';
+    
+    if (!confirm(`Confirm status change to "${newStatus}"?`)) return;
+
+    setUpdatingId(ticketId);
+    try {
+      // 2. Save directly to the new columns the Staff Dashboard is listening to
+      const { error: tixErr } = await supabase
+        .from('tickets')
+        .update({ 
+          status: newStatus, 
+          admin_notes: remarks || 'Status updated by IT Administration.',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticketId);
+        
+      if (tixErr) throw tixErr;
+
+      // 3. Find the profile ID from the email to trigger a live push notification
+      const { data: profile } = await supabase.from('profiles').select('id').eq('email', staffEmail).single();
+
+      if (profile?.id) {
+        await supabase.from('notifications').insert({
+          user_id: profile.id,
+          title: newStatus === 'Resolved' ? '✔ Ticket Resolved' : `🛠 Ticket Update: ${newStatus}`,
+          message: remarks || `Your ticket status was changed to ${newStatus}.`,
+          is_read: false,
+          type: newStatus === 'Resolved' ? 'success' : 'info'
+        });
+      }
+
+      // 4. Instantly update the admin UI
+      setTickets(prev => prev.map(t => 
+        t.id === ticketId 
+          ? { ...t, status: newStatus, admin_notes: remarks, updated_at: new Date().toISOString() } 
+          : t
+      ));
+
+    } catch (err: any) {
+      alert(`Error updating ticket: ${err.message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    const s = (status || '').toLowerCase().trim();
+    if (s.includes('progress')) return 'text-blue-700 bg-blue-50 border-blue-200';
+    if (s.includes('hold')) return 'text-amber-700 bg-amber-50 border-amber-200';
+    if (s.includes('resolved') || s.includes('closed')) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    return 'text-slate-700 bg-slate-50 border-slate-200';
   };
 
   const filteredTickets = tickets.filter(t => {
-    const s = (t.status || 'open').toLowerCase();
-    const matchesTab = 
-      filterTab === 'all' ? true :
-      filterTab === 'open' ? s === 'open' || s === 'pending' :
-      filterTab === 'in_process' ? s.includes('process') || s.includes('repair') :
-      filterTab === 'hold' ? s.includes('hold') : s.includes('resolve') || s.includes('close');
+    const s = (t.status || '').toLowerCase().trim();
+    const isResolved = s.includes('resolved') || s.includes('closed');
+    const isProgress = s.includes('progress');
+    const isHold = s.includes('hold');
+    const isOpen = !isResolved && !isProgress && !isHold;
 
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = !q || (
-      t.subject?.toLowerCase().includes(q) || t.user_email?.toLowerCase().includes(q) ||
-      t.emp_code?.toLowerCase().includes(q) || t.id?.toLowerCase().includes(q) ||
-      t.resolution_note?.toLowerCase().includes(q)
-    );
+    const matchesTab = 
+      filterTab === 'open' ? isOpen :
+      filterTab === 'progress' ? isProgress :
+      filterTab === 'hold' ? isHold :
+      filterTab === 'resolved' ? isResolved : true;
+
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = 
+      (t.title || '').toLowerCase().includes(query) ||
+      (t.emp_code || '').toLowerCase().includes(query) ||
+      (t.staff_name || '').toLowerCase().includes(query);
 
     return matchesTab && matchesSearch;
   });
 
-  const countOpen = tickets.filter(t => (t.status || '').toLowerCase() === 'open').length;
+  const openCount = tickets.filter(t => {
+    const s = (t.status || '').toLowerCase().trim();
+    return !(s.includes('resolved') || s.includes('progress') || s.includes('hold'));
+  }).length;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans overflow-hidden">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
       
-      {/* TOP DASHBOARD LINK HEADER */}
-      <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-gray-50 rounded-2xl border border-gray-100 text-gray-600 transition-colors cursor-pointer">
+      {/* HEADER */}
+      <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
             <ArrowLeft size={20} />
           </button>
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black text-[#002B49] uppercase tracking-wide">IT Helpdesk Command</h1>
-              <span className="px-3 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 font-extrabold text-xs rounded-full">
-                {tickets.length} Total Records
-              </span>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Support Desk Commander</h1>
+              {openCount > 0 && (
+                <span className="px-3 py-1 bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-sm">
+                  {openCount} New Tickets
+                </span>
+              )}
             </div>
-            <p className="text-xs text-gray-400 font-bold mt-0.5">Click any ticket in the queue to open the diagnostic workbench and resolve the issue</p>
+            <p className="text-xs text-slate-500 font-semibold">Triage, update, and resolve staff hardware and IT requests.</p>
+          </div>
+        </div>
+        <button 
+          onClick={fetchTickets} 
+          disabled={loading}
+          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+        >
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Sync
+        </button>
+      </div>
+
+      {/* TABS & SEARCH */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+          {[
+            { id: 'open', label: `Open (${openCount})` },
+            { id: 'progress', label: 'In Progress' },
+            { id: 'hold', label: 'On Hold' },
+            { id: 'resolved', label: 'Resolved' }
+          ].map(tab => (
+            <button
+              key={tab.id} onClick={() => setFilterTab(tab.id as any)}
+              className={`px-5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest shrink-0 cursor-pointer transition-all ${
+                filterTab === tab.id ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="bg-white p-2.5 rounded-3xl border border-slate-200 shadow-sm flex items-center">
+          <div className="relative w-full">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by Employee Name, ID, or Ticket Title..." 
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-2xl text-sm font-bold text-slate-900 outline-none transition-all"
+            />
           </div>
         </div>
       </div>
 
-      {/* SHORTCUT STATUS TABS + SEARCH */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-white p-3 rounded-3xl border border-gray-100 shadow-2xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
-          <button onClick={() => setFilterTab('open')} className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer ${filterTab === 'open' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' : 'text-gray-500 hover:bg-gray-50'}`}>
-            Open ({countOpen})
-          </button>
-          <button onClick={() => setFilterTab('in_process')} className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer ${filterTab === 'in_process' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20' : 'text-gray-500 hover:bg-gray-50'}`}>
-            In Process
-          </button>
-          <button onClick={() => setFilterTab('hold')} className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer ${filterTab === 'hold' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20' : 'text-gray-500 hover:bg-gray-50'}`}>
-            On Hold
-          </button>
-          <button onClick={() => setFilterTab('resolved')} className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer ${filterTab === 'resolved' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'text-gray-500 hover:bg-gray-50'}`}>
-            Resolved
-          </button>
-          <button onClick={() => setFilterTab('all')} className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer ${filterTab === 'all' ? 'bg-[#002B49] text-white shadow-md shadow-[#002B49]/20' : 'text-gray-500 hover:bg-gray-50'}`}>
-            All ({tickets.length})
-          </button>
-        </div>
-
-        <div className="relative min-w-[280px]">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search subject, employee, or fix notes..." 
-            className="w-full pl-11 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-800 outline-none focus:border-blue-600 focus:bg-white transition-all"
-          />
-        </div>
-      </div>
-
-      {/* THE DYNAMIC SPLIT-VIEW MATRIX */}
+      {/* TICKETS GRID */}
       {loading ? (
-        <div className="w-full py-24 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#002B49]"></div></div>
+        <div className="w-full py-32 flex flex-col items-center justify-center gap-4 text-slate-400">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-blue-600"></div>
+          <span className="text-[11px] font-black tracking-widest uppercase">Fetching Tickets...</span>
+        </div>
+      ) : filteredTickets.length === 0 ? (
+        <div className="w-full py-24 bg-white rounded-3xl border border-slate-200 text-center space-y-3 shadow-sm">
+          <TicketIcon size={48} className="mx-auto text-slate-300" />
+          <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">No Tickets Found</h3>
+          <p className="text-xs text-slate-400 font-bold">The queue is clear for this category.</p>
+        </div>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-6 items-start relative min-h-[500px]">
-          
-          {/* LEFT COLUMN: SCROLLABLE QUEUE LIST */}
-          <div className={`space-y-3 max-h-[800px] overflow-y-auto pr-1 custom-scrollbar shrink-0 transition-all duration-300 ease-in-out ${selectedTicket ? 'hidden lg:block lg:w-5/12' : 'w-full'}`}>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-2 block mb-1">Queue Feed ({filteredTickets.length})</span>
-            
-            {filteredTickets.map(ticket => {
-              const badge = getStatusBadge(ticket.status);
-              const isSelected = selectedTicket?.id === ticket.id;
-
-              return (
-                <div 
-                  key={ticket.id} 
-                  onClick={() => handleSelectTicket(ticket)}
-                  className={`p-4 rounded-3xl border transition-all cursor-pointer shadow-2xs flex flex-col justify-between gap-3 ${
-                    isSelected 
-                      ? 'bg-[#002B49] text-white border-[#002B49] shadow-lg shadow-[#002B49]/20 scale-[1.01]' 
-                      : 'bg-white text-gray-800 border-gray-200/70 hover:border-blue-400'
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-400'}`}>
-                        <MessageSquare size={14} />
-                      </div>
-                      <h4 className="text-sm font-black truncate">{ticket.subject || ticket.title || 'Support Ticket'}</h4>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${isSelected ? 'bg-white/20 text-white border-transparent' : badge.css}`}>
-                      {badge.label}
+        <div className="space-y-6">
+          {filteredTickets.map(tix => (
+            <div key={tix.id} className="p-6 md:p-8 bg-white rounded-3xl border border-slate-200 shadow-sm transition-all flex flex-col xl:flex-row gap-8">
+              
+              {/* LEFT: Ticket Context & User Info */}
+              <div className="w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r border-slate-100 pb-6 xl:pb-0 xl:pr-8">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getStatusColor(tix.status)}`}>
+                      {tix.status || 'Open'}
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                      {tix.category}
                     </span>
                   </div>
+                  <h3 className="text-lg font-black text-slate-900 leading-snug">{tix.title}</h3>
+                </div>
 
-                  <div className="flex items-center justify-between text-[11px] pl-10">
-                    <span className={`font-bold truncate ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                      {ticket.staff_name || ticket.created_by?.split('@')[0]}
-                    </span>
-                    <span className={`font-mono font-bold text-[10px] ${isSelected ? 'text-amber-300' : 'text-blue-600'}`}>
-                      ⏳ {ticket.waiting_time || '15 Mins'}
-                    </span>
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-400 uppercase tracking-widest">Employee</span>
+                    <span className="font-black text-slate-700">{tix.staff_name || tix.created_by}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-3">
+                    <span className="font-bold text-slate-400 uppercase tracking-widest">Emp ID</span>
+                    <span className="font-mono font-black text-blue-600">{tix.emp_code}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-3">
+                    <span className="font-bold text-slate-400 uppercase tracking-widest">Submitted</span>
+                    <span className="font-bold text-slate-900">{new Date(tix.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </div>
-              );
-            })}
-            
-            {filteredTickets.length === 0 && (
-              <div className="py-12 text-center text-gray-400 font-bold text-xs">
-                No tickets match your search.
               </div>
-            )}
-          </div>
 
-          {/* RIGHT COLUMN: DETAIL WIDE & RESOLUTION FORM */}
-          {selectedTicket && (() => {
-            const activeBadge = getStatusBadge(selectedTicket.status);
-
-            return (
-              <div className="w-full lg:w-7/12 bg-white rounded-3xl border border-gray-200/80 shadow-xl shadow-blue-900/5 p-6 lg:sticky lg:top-6 animate-in slide-in-from-right-8 duration-300 relative">
+              {/* RIGHT: Details, Screenshot, and Admin Controls */}
+              <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
                 
-                <button 
-                  onClick={closeWorkbench} 
-                  className="absolute top-4 right-4 text-gray-400 hover:text-rose-600 bg-gray-50 hover:bg-rose-50 p-2 rounded-full transition-colors z-10 cursor-pointer"
-                  title="Close Workbench"
-                >
-                  <X size={18}/>
-                </button>
-
-                <form onSubmit={handleCommitUpdates} className="space-y-6 pt-2">
-                  
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-gray-100 pr-10">
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-blue-600 uppercase tracking-widest">TICKET REF: #{selectedTicket.id.split('-')[0]}</span>
-                      <h2 className="text-lg font-black text-[#002B49] leading-tight mt-0.5">{selectedTicket.subject || selectedTicket.title || 'IT Support Ticket'}</h2>
-                    </div>
-
-                    <div className="flex gap-2 shrink-0">
-                      <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-xl text-xs font-mono font-black flex items-center gap-1">
-                        <Hourglass size={12} className="text-blue-500"/> {selectedTicket.waiting_time || '15 Mins'}
-                      </span>
-                      <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border flex items-center gap-1 ${activeBadge.css}`}>
-                        {activeBadge.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200/60 text-xs">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-0.5 flex items-center gap-1"><Clock size={11}/> Time Logged (Opened)</span>
-                      <strong className="font-mono text-gray-800">{new Date(selectedTicket.created_at).toLocaleString()}</strong>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-0.5 flex items-center gap-1"><CheckCircle2 size={11}/> Time Resolved (Closed)</span>
-                      <strong className={`font-mono ${selectedTicket.resolved_at ? 'text-emerald-700 font-bold' : 'text-amber-600 italic'}`}>
-                        {selectedTicket.resolved_at ? new Date(selectedTicket.resolved_at).toLocaleString() : 'Active (Not stamped yet)'}
-                      </strong>
-                    </div>
-                  </div>
-
+                <div className="space-y-4">
                   <div className="space-y-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                      <AlertTriangle size={14}/> Problem Description
+                    </h4>
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm text-slate-700 font-medium whitespace-pre-wrap leading-relaxed">
+                      {tix.description}
+                    </div>
+                  </div>
+
+                  {/* 🌟 THE ADMIN SCREENSHOT VIEWER */}
+                  {tix.screenshot_attachment && (
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500 flex items-center gap-1.5">
+                        <ImageIcon size={14}/> User Attached Screenshot
+                      </h4>
+                      <div className="p-2 border border-slate-200 rounded-2xl inline-block bg-slate-50 shadow-sm hover:border-blue-400 transition-all cursor-pointer overflow-hidden">
+                        <img 
+                          onClick={() => window.open(tix.screenshot_attachment, '_blank')}
+                          src={tix.screenshot_attachment} 
+                          alt="Ticket Evidence" 
+                          className="h-32 object-contain rounded-xl"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {tix.admin_notes && (
+                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 flex items-center gap-1.5">
+                        <ShieldCheck size={14}/> Your Last Update Note
+                      </span>
+                      <p className="text-sm font-medium text-emerald-900 italic">"{tix.admin_notes}"</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 🌟 ADMIN ACTION CONTROLS */}
+                <div className="pt-6 border-t border-slate-100 mt-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     
-                    {/* 2. PLACED THE VIEW SCREEN BUTTON HERE, NEXT TO USER DETAILS */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
-                      <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
-                        <User size={14} className="text-blue-600"/>
-                        <span>
-                          Submitted By: <strong className="text-slate-900">{selectedTicket.staff_name || selectedTicket.created_by?.split('@')[0]}</strong>
-                        </span>
-                        <span className="hidden sm:inline">•</span>
-                        <span className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">EMP: {selectedTicket.emp_code || 'N/A'}</span>
-                      </div>
-                      
-                      
-                    </div>
-
-                    <div className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100 text-xs text-gray-800 leading-relaxed font-medium">
-                      <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Issue Description</span>
-                      "{selectedTicket.description || selectedTicket.note || 'No descriptive text supplied by user.'}"
-                    </div>
-                  </div>
-
-                  <hr className="border-gray-100" />
-
-                  <div className="space-y-4 bg-blue-50/40 p-5 rounded-2xl border border-blue-200/80">
-                    <span className="text-xs font-black uppercase tracking-widest text-[#002B49] block flex items-center gap-1.5"><Wrench size={14}/> Live Status & Wait Time Editor</span>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Update SLA Status</label>
-                        <select 
-                          value={formStatus} onChange={e => setFormStatus(e.target.value)}
-                          className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-xs font-black text-gray-900 uppercase tracking-wider outline-none cursor-pointer"
-                        >
-                          <option value="open">🔴 Open / Pending</option>
-                          <option value="in_process">🟡 In Process / Working</option>
-                          <option value="hold">🟣 On Hold</option>
-                          <option value="resolved">🟢 Resolved / Closed</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-1">Update Wait Time</label>
-                        <select 
-                          value={formWaitTime} onChange={e => setFormWaitTime(e.target.value)}
-                          className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-blue-900 outline-none cursor-pointer"
-                        >
-                          <option value="10 Mins">⏳ 10 Mins</option><option value="15 Mins">⏳ 15 Mins</option>
-                          <option value="25 Mins">⏳ 25 Mins</option><option value="40 Mins">⏳ 40 Mins</option>
-                          <option value="1 Hour">⌛ 1 Hour</option><option value="24 Hours">📅 Next Day (24h)</option>
-                          <option value="On Hold">🛑 On Hold</option><option value="Resolved">✅ Resolved (0 Mins)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">How Was This Resolved? (Fix Notes)</label>
-                      <textarea 
-                        rows={2} required={formStatus === 'resolved' || formStatus === 'closed'}
-                        placeholder="Type solution (e.g. 'Replaced keyboard USB cable', 'Reset AnyDesk Password')..."
-                        value={formResolutionNote} onChange={e => setFormResolutionNote(e.target.value)}
-                        className="w-full p-3 bg-white border border-gray-300 rounded-xl text-xs font-medium text-gray-900 outline-none focus:border-[#002B49]"
-                      />
-                    </div>
-
-                    <button type="submit" disabled={isSaving} className="w-full py-3.5 bg-[#002B49] hover:bg-[#001d33] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all">
-                      {isSaving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
-                      <span>{isSaving ? 'Syncing to Supabase...' : 'Update Ticket State & Stamp Fix'}</span>
+                    <button
+                      disabled={updatingId === tix.id}
+                      onClick={() => executeTicketVerdict(tix.id, 'In Progress', tix.created_by)}
+                      className="flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                    >
+                      <PlayCircle size={16} /> Work on it
                     </button>
+                    
+                    <button
+                      disabled={updatingId === tix.id}
+                      onClick={() => executeTicketVerdict(tix.id, 'On Hold', tix.created_by)}
+                      className="flex items-center justify-center gap-2 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                    >
+                      <PauseCircle size={16} /> Place On Hold
+                    </button>
+
+                    <button
+                      disabled={updatingId === tix.id}
+                      onClick={() => executeTicketVerdict(tix.id, 'Resolved', tix.created_by)}
+                      className="flex items-center justify-center gap-2 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                    >
+                      <CheckCircle2 size={16} /> Resolve
+                    </button>
+
                   </div>
+                </div>
 
-                </form>
               </div>
-            );
-          })()}
-
+            </div>
+          ))}
         </div>
       )}
-
     </div>
-  );
-}
-
-export default function AdminTicketsPage() {
-  return (
-    <Suspense fallback={<div className="w-full h-screen flex items-center justify-center bg-[#F8FAFC]"><div className="animate-spin h-8 w-8 border-b-2 border-[#002B49]"></div></div>}>
-      <TicketsWorkbenchContent />
-    </Suspense>
   );
 }
