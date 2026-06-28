@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ClipboardCheck, Loader2, AlertTriangle, Eye, X, CameraOff, Bell, CheckCircle2 } from 'lucide-react';
+import { ClipboardCheck, Loader2, AlertTriangle, Eye, X, CameraOff, Bell, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export default function StaffInspectionsPage() {
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [inspections, setInspections] = useState<any[]>([]);
   
   // 🌟 NOTIFICATIONS STATE
@@ -19,40 +20,51 @@ export default function StaffInspectionsPage() {
   const [isWindowFocused, setIsWindowFocused] = useState(true);
 
   const fetchRealtimeData = async () => {
+    setIsRefreshing(true);
     const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-    if (!sessionStr) return;
+    if (!sessionStr) {
+      setIsRefreshing(false);
+      setLoading(false);
+      return;
+    }
     
     let email = sessionStr;
     try { email = JSON.parse(sessionStr).email; } catch(e) {}
     const cleanEmail = email?.toLowerCase().trim();
 
-    // 1. Fetch user profile to get the exact ID for notifications
-    const { data: profile } = await supabase.from('profiles').select('id').ilike('email', cleanEmail).maybeSingle();
-    const currentUserId = profile?.id;
-    if (currentUserId) setUserId(currentUserId);
+    try {
+      // 1. Fetch user profile to get the exact ID for notifications
+      const { data: profile } = await supabase.from('profiles').select('id').ilike('email', cleanEmail).maybeSingle();
+      const currentUserId = profile?.id;
+      if (currentUserId) setUserId(currentUserId);
 
-    // 2. Fetch Inspections
-    const { data: inspData } = await supabase
-      .from('inspections')
-      .select('*, assets(*)') 
-      .ilike('user_email', cleanEmail)
-      .order('created_at', { ascending: false });
-
-    if (inspData) setInspections(inspData);
-
-    // 3. Fetch Unread Notifications (Alerts from Admin)
-    if (currentUserId) {
-      const { data: notifData } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('target_user', currentUserId)
-        .eq('is_read', false)
+      // 2. Fetch Inspections (Forcing fresh data)
+      const { data: inspData, error: inspError } = await supabase
+        .from('inspections')
+        .select('*, assets(*)') 
+        .ilike('user_email', cleanEmail)
         .order('created_at', { ascending: false });
-        
-      if (notifData) setNotifications(notifData);
-    }
 
-    setLoading(false);
+      if (inspError) throw inspError;
+      if (inspData) setInspections(inspData);
+
+      // 3. Fetch Unread Notifications (Alerts from Admin)
+      if (currentUserId) {
+        const { data: notifData } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('target_user', currentUserId)
+          .eq('is_read', false)
+          .order('created_at', { ascending: false });
+          
+        if (notifData) setNotifications(notifData);
+      }
+    } catch (err) {
+      console.error("Failed to sync inspections:", err);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -65,11 +77,11 @@ export default function StaffInspectionsPage() {
     window.addEventListener('blur', handleBlur);
     
     // 🌟 REALTIME SUBSCRIPTIONS
-    const subInsp = supabase.channel('staff_insp_page')
+    const subInsp = supabase.channel('staff_insp_page_live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, fetchRealtimeData)
       .subscribe();
       
-    const subNotif = supabase.channel('staff_notif_page')
+    const subNotif = supabase.channel('staff_notif_page_live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, fetchRealtimeData)
       .subscribe();
       
@@ -106,7 +118,18 @@ export default function StaffInspectionsPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Audit History</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Review the compliance and condition history of your devices.</p>
         </div>
-        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><ClipboardCheck size={24}/></div>
+        <div className="flex items-center gap-3">
+          {/* 🌟 NEW MANUAL SYNC BUTTON */}
+          <button 
+            onClick={fetchRealtimeData} 
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
+            <span className="hidden sm:inline">Sync Live</span>
+          </button>
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><ClipboardCheck size={24}/></div>
+        </div>
       </div>
 
       {/* 🌟 REALTIME ALERTS & NOTIFICATIONS BANNER */}
@@ -149,7 +172,13 @@ export default function StaffInspectionsPage() {
       )}
 
       {/* 🌟 AUDIT LEDGER */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden relative">
+        {isRefreshing && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-blue-100 overflow-hidden z-10">
+            <div className="w-1/3 h-full bg-blue-600 animate-[pulse_1s_ease-in-out_infinite] translate-x-full" />
+          </div>
+        )}
+        
         {inspections.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-sm">No inspections have been submitted yet.</div>
         ) : (
