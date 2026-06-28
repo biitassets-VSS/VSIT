@@ -3,302 +3,281 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { useNotifications } from '@/hooks/useNotifications';
-import { Asset, Inspection, Ticket } from '@/types';
-
-// 🌟 DEFINITIVE IMPORT LIST
 import { 
-  AlertTriangle,
-  Laptop, 
-  ClipboardCheck, 
-  Ticket as TicketIcon, 
-  PlusCircle, 
-  RefreshCw, 
-  AlertCircle, 
-  X, 
-  Loader2, 
-  CheckCircle, 
-  Camera, 
-  Bell
+  Shield, 
+  Users, 
+  User, 
+  Mail, 
+  Lock, 
+  MonitorSmartphone, 
+  ArrowLeft, 
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
-// --- DATE ENGINE ---
-function getAuditWindowInfo() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-
-  const lastDayOfMonth = new Date(year, month + 1, 0);
-  const lastSaturday = new Date(lastDayOfMonth);
-  while (lastSaturday.getDay() !== 6) {
-    lastSaturday.setDate(lastSaturday.getDate() - 1);
+// 🌟 NEON THEME ENGINE
+const themes = {
+  Admin: {
+    glow: 'bg-orange-500/40',
+    button: 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/40',
+    text: 'text-orange-600',
+    icon: 'text-orange-500',
+    ring: 'focus:border-orange-500 focus:ring-orange-500/20',
+    badge: 'bg-orange-50 text-orange-600 border-orange-100',
+  },
+  Staff: {
+    glow: 'bg-purple-500/40',
+    button: 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/40',
+    text: 'text-purple-600',
+    icon: 'text-purple-500',
+    ring: 'focus:border-purple-500 focus:ring-purple-500/20',
+    badge: 'bg-purple-50 text-purple-600 border-purple-100',
+  },
+  Guest: {
+    glow: 'bg-emerald-500/40',
+    button: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/40',
+    text: 'text-emerald-600',
+    icon: 'text-emerald-500',
+    ring: 'focus:border-emerald-500 focus:ring-emerald-500/20',
+    badge: 'bg-emerald-50 text-emerald-600 border-emerald-100',
   }
-  lastSaturday.setHours(23, 59, 59, 999);
+};
 
-  const windowStart = new Date(lastSaturday);
-  windowStart.setDate(lastSaturday.getDate() - 4);
-  windowStart.setHours(0, 0, 0, 0);
-
-  return {
-    isOpen: today >= windowStart && today <= lastSaturday,
-    windowStart,
-    lastSaturday,
-    year,
-    month,
-    today
-  };
-}
-
-export default function StaffDashboardPage() {
+export default function RootLoginPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isAuthorized, setIsAuthorized] = useState(false); 
   
-  const [assignedAssets, setAssignedAssets] = useState<Asset[]>([]);
-  const [allInspections, setAllInspections] = useState<Inspection[]>([]);
-  const [myTickets, setMyTickets] = useState<Ticket[]>([]);
+  // UI State
+  const [activeRole, setActiveRole] = useState<'Admin' | 'Staff' | 'Guest'>('Admin');
   
-  const { notifications, unreadCount, markAllAsRead } = useNotifications(currentUser?.id);
-  const [showNotifications, setShowNotifications] = useState(false);
+  // Auth State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
-  const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: Asset }>({
-    isOpen: false,
-    type: '',
-  });
+  const activeTheme = themes[activeRole];
 
-  const formatDisplayName = (raw: string) => {
-    if (!raw) return 'Staff Member';
-    let s = raw.split('@')[0].split('.')[0].replace(/[_-]/g, ' ');
-    return s.charAt(0).toUpperCase() + s.slice(1); 
-  };
+  // 1. Check for existing sessions securely (No looping)
+  useEffect(() => {
+    const checkSession = async () => {
+      const staffSession = localStorage.getItem('vsit_staff_session');
+      const adminSession = localStorage.getItem('vsit_admin_session');
+      const guestSession = localStorage.getItem('isGuestSession');
 
-  const loadRealDatabase = async () => {
-    try {
-      const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!sessionStr) { router.replace('/'); return; }
-
-      let sessionUser: any = {};
-      try { sessionUser = JSON.parse(sessionStr); } 
-      catch (e) { sessionUser = { email: sessionStr }; }
-
-      const cleanEmail = sessionUser.email?.toLowerCase().trim();
-
-      if (cleanEmail === 'lakhwinder.bi@outlook.com') {
+      if (adminSession) {
         router.replace('/admin');
+      } else if (staffSession || guestSession === 'true') {
+        router.replace('/staff');
+      } else {
+        setIsCheckingSession(false);
+      }
+    };
+    checkSession();
+  }, [router]);
+
+  // 2. Handle Login Submission
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // 🌟 GUEST MODE BYPASS (Zero Database Contact)
+      if (activeRole === 'Guest') {
+        // We create a fake session payload so the Staff Dashboard 
+        // doesn't crash when it looks for user data.
+        const mockGuestSession = {
+          id: 'guest-mock-uuid',
+          email: 'demo_user@virtualstaffing.com',
+          name: 'Demo Guest User',
+          emp_id: 'DEMO-001',
+          role: 'guest'
+        };
+        
+        localStorage.setItem('isGuestSession', 'true');
+        localStorage.setItem('vsit_staff_session', JSON.stringify(mockGuestSession));
+        
+        // Simulate network delay for effect
+        setTimeout(() => {
+          router.push('/staff');
+        }, 800);
         return;
       }
 
-      const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
-      
-      if (!profile || profile.status === 'Disabled') {
-        alert("Access Terminated.");
-        router.replace('/');
-        return;
+      // REAL DATABASE AUTHENTICATION (Admin & Staff)
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password
+      });
+
+      if (authError) throw authError;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+      if (profile?.status === 'Disabled') throw new Error('Account disabled by administrator.');
+
+      const isAdminEmail = email.trim().toLowerCase() === 'lakhwinder.bi@outlook.com';
+      const isActuallyAdmin = profile?.role === 'admin' || isAdminEmail;
+
+      if (activeRole === 'Admin' && !isActuallyAdmin) {
+        throw new Error('Not authorized for Admin access.');
       }
 
-      const user = {
-        id: profile.id,
-        email: cleanEmail,
-        emp_id: profile.emp_code || profile.emp_id || 'STAFF',
-        name: profile.full_name || profile.name || cleanEmail.split('@')[0],
-      };
-      
-      setCurrentUser(user);
-      setIsAuthorized(true); 
+      if (isActuallyAdmin && activeRole === 'Admin') {
+        localStorage.setItem('vsit_admin_session', JSON.stringify(profile || authData.user));
+        router.push('/admin');
+      } else {
+        localStorage.setItem('vsit_staff_session', JSON.stringify(profile || authData.user));
+        router.push('/staff');
+      }
 
-      const [assetsRes, inspRes, ticketsRes] = await Promise.all([
-        supabase.from('assets').select('*').eq('assigned_to', user.id),
-        supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
-        supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false })
-      ]);
-
-      if (assetsRes.data) setAssignedAssets(assetsRes.data as Asset[]);
-      if (inspRes.data) setAllInspections(inspRes.data as Inspection[]);
-      if (ticketsRes.data) setMyTickets(ticketsRes.data as Ticket[]);
-
-    } catch (err) {
-      console.error("Data sync failure:", err);
-    } finally {
+    } catch (err: any) {
+      setError(err.message || 'Invalid login credentials.');
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadRealDatabase();
-    
-    const channel = supabase.channel('staff_dashboard_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadRealDatabase())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => loadRealDatabase())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => loadRealDatabase())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  const auditWindow = getAuditWindowInfo();
-  const activeReInspections = allInspections.filter(i => i.status === 'Re-Inspection');
-  const openTixCount = myTickets.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
-  const pendingInspectionsCount = allInspections.filter(i => i.status === 'Pending').length;
-
-  const getAssetAuditState = (asset: Asset) => {
-    const assetInspections = allInspections.filter(i => i.asset_id === asset.id);
-    const latestInspection = assetInspections[0]; 
-
-    if (latestInspection?.status === 'Re-Inspection') {
-      return { 
-        disabled: false, 
-        text: "Re-Audit Required", 
-        classes: "bg-rose-600 hover:bg-rose-700 text-white shadow-md cursor-pointer animate-pulse",
-        status: "Re-inspection Required"
-      };
-    }
-
-    if (latestInspection?.status === 'Pending') {
-      return { 
-        disabled: true, 
-        text: "Awaiting Approval", 
-        classes: "bg-amber-100 text-amber-700 border border-amber-200 cursor-not-allowed",
-        status: "Pending Approval"
-      };
-    }
-
-    const hasAuditedThisMonth = assetInspections.some(insp => {
-      const d = new Date(insp.created_at);
-      return d.getFullYear() === auditWindow.year && d.getMonth() === auditWindow.month;
-    });
-
-    if (hasAuditedThisMonth) {
-      return { 
-        disabled: true, 
-        text: "Audited This Month", 
-        classes: "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-not-allowed opacity-80",
-        status: latestInspection?.status || "Completed"
-      };
-    }
-
-    if (auditWindow.today > auditWindow.lastSaturday && !hasAuditedThisMonth) {
-      return { 
-        disabled: true, 
-        text: "Window Closed", 
-        classes: "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed",
-        status: "Overdue"
-      };
-    }
-
-    if (!auditWindow.isOpen) {
-      return { 
-        disabled: true, 
-        text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, 
-        classes: "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed",
-        status: "Not Started"
-      };
-    }
-    
-    return { 
-      disabled: false, 
-      text: "Audit Device", 
-      classes: "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm",
-      status: "Ready for Inspection"
-    };
-  };
-
-  const getStatusBadge = (status: string) => {
-    const s = (status || '').toLowerCase().trim();
-    if (s.includes('open') || s.includes('pending')) return 'bg-amber-50 text-amber-700 border-amber-200';
-    if (s.includes('re-inspection')) return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (s.includes('resolved') || s.includes('approved')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    return 'bg-slate-50 text-slate-600 border-slate-200';
-  };
-
-  if (loading || !currentUser) {
+  if (isCheckingSession) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Connecting real-time database...</p>
+      <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
       </div>
     );
   }
 
-  if (!isAuthorized) return null; 
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#F0F4F8] flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+      
+      {/* THE GLOWING NEON AURA */}
+      <div className="relative w-full max-w-md">
+        <div className={`absolute inset-0 blur-[60px] rounded-[40px] z-0 pointer-events-none scale-110 transition-colors duration-700 ${activeTheme.glow}`} />
         
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-              Welcome back, {formatDisplayName(currentUser.name)} 👋
+        <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-xl border border-white/80 relative z-10 text-center">
+          
+          {/* Logo & Header */}
+          <div className="mb-6">
+            <img 
+              src="/logo.png" 
+              alt="Virtual Staffing Solutions Logo" 
+              className="h-16 mx-auto mb-5 object-contain"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+            <h1 className="text-2xl sm:text-[26px] font-black text-slate-900 tracking-tight leading-tight transition-colors">
+              Virtual Staffing Solutions
             </h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-200 cursor-pointer">
-              <RefreshCw size={14}/> Sync
-            </button>
-          </div>
-        </div>
-
-        {activeReInspections.length > 0 && (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-4">
-            <div className="p-2 bg-rose-100 text-rose-600 rounded-full shrink-0"><AlertTriangle size={20} /></div>
-            <div>
-              <h4 className="text-sm font-bold text-rose-900 uppercase">Re-Inspection Required</h4>
-              <p className="text-xs text-rose-700">An administrator has returned your recent inspection for review.</p>
+            
+            <div className={`inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full border transition-colors duration-500 ${activeTheme.badge}`}>
+              <MonitorSmartphone size={14} className="stroke-[2.5]" />
+              <span className="text-[10px] font-extrabold uppercase tracking-widest">
+                IT Assets and Staff Management
+              </span>
             </div>
           </div>
-        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { name: 'Raise Ticket', icon: TicketIcon, type: 'TICKET' },
-            { name: 'Device Audit', icon: ClipboardCheck, type: 'INSPECTION' },
-          ].map((item) => (
-            <button key={item.name} onClick={() => setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left flex items-start gap-4 cursor-pointer">
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><item.icon size={22} /></div>
-              <h3 className="font-bold text-sm text-slate-900">{item.name}</h3>
-            </button>
-          ))}
-        </div>
+          {/* Role Tabs */}
+          <div className="bg-slate-50 p-1.5 rounded-2xl flex gap-1 mb-8 border border-slate-100">
+            {(['Admin', 'Staff', 'Guest'] as const).map((role) => {
+              const isActive = activeRole === role;
+              let Icon = User;
+              if (role === 'Admin') Icon = Shield;
+              if (role === 'Staff') Icon = Users;
+              if (role === 'Guest') Icon = Sparkles;
 
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6">
-            <h3 className="font-bold text-sm mb-4">My Hardware Units</h3>
-            {assignedAssets.map(asset => {
-              const auditState = getAssetAuditState(asset); 
               return (
-                <div key={asset.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold text-sm">{asset.name}</h4>
-                    <p className="text-xs text-slate-500">Tag: {asset.asset_tag}</p>
-                  </div>
-                  <button 
-                    disabled={auditState.disabled}
-                    onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                    className={`px-4 py-2 font-bold text-[10px] rounded-xl ${auditState.classes}`}
-                  >
-                    {auditState.text}
-                  </button>
-                </div>
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => {
+                    setActiveRole(role);
+                    setError('');
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                    isActive 
+                      ? `bg-white shadow-sm border border-slate-200/50 ${themes[role].text}` 
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
+                  }`}
+                >
+                  <Icon size={14} className={isActive ? themes[role].icon : 'text-slate-400'} />
+                  {role}
+                </button>
               );
             })}
+          </div>
+
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="space-y-5 text-left relative">
+            {error && (
+              <div className="p-3 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold border border-rose-100 text-center animate-in fade-in zoom-in-95">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700 ml-1">Email Address</label>
+              <div className="relative">
+                <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 ${activeRole === 'Guest' ? activeTheme.icon : 'text-slate-400'}`} size={18} />
+                <input 
+                  type="email" 
+                  required
+                  disabled={activeRole === 'Guest'}
+                  value={activeRole === 'Guest' ? 'demo_user@virtualstaffing.com' : email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none transition-all placeholder:text-slate-400 ${activeTheme.ring} ${activeRole === 'Guest' ? 'text-emerald-700 bg-emerald-50/50 cursor-not-allowed' : 'text-slate-900'}`}
+                  placeholder={activeRole === 'Admin' ? 'admin@virtualstaffing.com' : 'staff@virtualstaffing.com'}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700 ml-1">Password</label>
+              <div className="relative">
+                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 ${activeRole === 'Guest' ? activeTheme.icon : 'text-slate-400'}`} size={18} />
+                <input 
+                  type="password" 
+                  required
+                  disabled={activeRole === 'Guest'}
+                  value={activeRole === 'Guest' ? 'demopassword123' : password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm font-medium outline-none transition-all placeholder:text-slate-400 ${activeTheme.ring} ${activeRole === 'Guest' ? 'text-emerald-700 bg-emerald-50/50 cursor-not-allowed tracking-widest' : 'text-slate-900'}`}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            {activeRole === 'Guest' && (
+              <p className="text-[11px] font-bold text-emerald-600 text-center bg-emerald-50 py-2 rounded-lg border border-emerald-100 animate-in slide-in-from-bottom-2">
+                Simulated Sandbox Mode. Database is bypassed.
+              </p>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              className={`w-full py-4 text-white rounded-2xl text-sm font-bold shadow-lg transition-all duration-500 flex justify-center items-center gap-2 disabled:opacity-70 mt-2 ${activeTheme.button}`}
+            >
+              {loading ? <Loader2 size={18} className="animate-spin" /> : `Sign in as ${activeRole}`}
+            </button>
+          </form>
+
+          {/* Back to Home Link */}
+          <button className="mt-8 flex items-center justify-center gap-2 mx-auto text-slate-400 hover:text-slate-600 transition-colors text-sm font-semibold">
+            <ArrowLeft size={16} /> Back to Home
+          </button>
+
         </div>
       </div>
 
-      {modal.isOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-8 max-w-lg w-full">
-                <h3 className="text-lg font-black mb-6 uppercase">Submission Portal</h3>
-                {modal.type === 'INSPECTION' ? (
-                     <div className="text-center">
-                        <p className="mb-6 text-sm">Please scan the QR code to proceed with the device audit.</p>
-                        <button onClick={() => setModal({ isOpen: false, type: '' })} className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold">Close Portal</button>
-                     </div>
-                ) : (
-                    <button onClick={() => setModal({ isOpen: false, type: '' })} className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold">Close</button>
-                )}
-            </div>
-        </div>
-      )}
+      {/* Credit Footer */}
+      <div className="mt-8 text-sm font-semibold text-slate-500 relative z-10 transition-colors duration-500">
+        Design by <span className={`font-bold transition-colors duration-500 ${activeTheme.text}`}>Ainodeat</span>
+      </div>
+
     </div>
   );
 }

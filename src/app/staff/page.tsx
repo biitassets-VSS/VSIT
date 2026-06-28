@@ -61,13 +61,23 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
+  // 🌟 ANTI-TRAP SESSION WATCHER: Safely redirects the moment "Logout" is clicked
+  useEffect(() => {
+    const watcher = setInterval(() => {
+      const activeSession = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+      if (!activeSession) {
+        window.location.replace('/');
+      }
+    }, 500);
+    return () => clearInterval(watcher);
+  }, []);
+
   const loadRealDatabase = async () => {
     try {
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
-      // 🌟 FIX 1: Hard redirect completely escapes the infinite loading trap
       if (!sessionStr) { 
-        window.location.href = '/'; 
+        window.location.replace('/'); 
         return; 
       }
 
@@ -77,29 +87,23 @@ export default function StaffDashboardPage() {
 
       const cleanEmail = user.email?.toLowerCase().trim();
 
-      // 🌟 FIX 2: Hard redirect for admin check
       if (cleanEmail === 'lakhwinder.bi@outlook.com') {
-        alert("Access Redirect: Admins must utilize the Admin Control Desk configuration panels.");
-        window.location.href = '/admin';
+        window.location.replace('/admin');
         return;
       }
 
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
       
       if (profile) {
-        // 🌟 FIX 3: Hard redirect for disabled accounts
         if (profile.status === 'Disabled') {
-          alert("Access Terminated: This account has been disabled by system operations.");
-          window.location.href = '/';
+          window.location.replace('/');
           return;
         }
         user.emp_id = profile.emp_code || profile.emp_id || 'STAFF';
         user.name = profile.full_name || profile.name || user.name;
         user.id = profile.id;
       } else {
-        // 🌟 FIX 4: Hard redirect for unauthorized accounts
-        alert("Unauthorized account entry path detected.");
-        window.location.href = '/';
+        window.location.replace('/');
         return;
       }
       
@@ -180,7 +184,7 @@ export default function StaffDashboardPage() {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Connecting live database...</p>
+        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Connecting real-time database...</p>
       </div>
     );
   }
