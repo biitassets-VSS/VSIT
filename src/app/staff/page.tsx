@@ -17,7 +17,8 @@ import {
   Loader2, 
   CheckCircle, 
   Bell, 
-  AlertTriangle 
+  AlertTriangle,
+  ShieldCheck // 🌟 Added for the Admin Notes icon
 } from 'lucide-react';
 
 interface StaffUser {
@@ -211,9 +212,10 @@ export default function StaffDashboardPage() {
 
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
+    if (s.includes('in progress')) return 'bg-blue-50 text-blue-700 border-blue-200';
     if (s.includes('open') || s.includes('pending')) return 'bg-amber-50 text-amber-700 border-amber-200';
     if (s.includes('re-inspection')) return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (s.includes('resolved') || s.includes('approved')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (s.includes('resolved') || s.includes('closed') || s.includes('approved')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
@@ -394,7 +396,7 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* Service Tickets Logs Section */}
+          {/* 🌟 UPGRADED: Service Tickets Logs Section with Admin Notes Tracker */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><TicketIcon className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
@@ -403,17 +405,34 @@ export default function StaffDashboardPage() {
             {myTickets.length === 0 ? (
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
             ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
                 {myTickets.map(tix => (
-                  <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-2">
+                  <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-bold text-sm text-slate-900 leading-snug">{tix.title}</span>
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>
                         {tix.status || 'Open'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 line-clamp-2 font-normal">{tix.description}</p>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-medium">
+                    
+                    <p className="text-xs text-slate-600 line-clamp-2 font-medium">{tix.description}</p>
+                    
+                    {/* 🌟 ADMIN LIVE NOTE VISIBILITY ENGINE */}
+                    {tix.admin_notes && (
+                      <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100/80 flex flex-col gap-1.5 mt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-blue-700 flex items-center gap-1.5">
+                            <ShieldCheck size={12} className="text-blue-600"/> Support Update
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-400">
+                            {tix.updated_at ? new Date(tix.updated_at).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 font-medium italic">"{tix.admin_notes}"</p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100 font-medium">
                       <span>Category: <strong className="text-slate-600 font-semibold">{tix.category}</strong></span>
                       <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
                     </div>
@@ -476,7 +495,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
     }
   };
 
-  // 🌟 Handles uploading screenshot to Supabase 'tickets' bucket
   const handleScreenshotChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -504,7 +522,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
   };
 
   const handleLivePostgresSubmit = async () => {
-    // Basic Form Validations before Postgres syncs
     if ((type === 'TICKET') && !formTitle.trim()) {
       alert("Please specify a descriptive ticket title summary.");
       return;
@@ -536,7 +553,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
           created_by: user.email,
           emp_code: user.emp_id,
           staff_name: user.name,
-          screenshot_attachment: screenshotUrl // 🌟 Saves the secure file link to database
+          screenshot_attachment: screenshotUrl 
         });
       }
       setSuccessDone(true);
@@ -552,7 +569,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
         
-        {/* MODAL HEADER */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><TicketIcon size={20}/></div>
@@ -607,7 +623,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
               {isUnlocked && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   
-                  {/* 🌟 TICKET UI MATCHING THE SCREENSHOT EXACTLY */}
                   {type === 'TICKET' && (
                     <div>
                       <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Issue Title Summary</label>
@@ -666,7 +681,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: LiveDatabaseModalProp
                     />
                   </div>
 
-                  {/* 🌟 OPTIONAL FEATURE: SCREENSHOT UPLOADER */}
                   {type === 'TICKET' && (
                     <div className="pt-1">
                       <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
