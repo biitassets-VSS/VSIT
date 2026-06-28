@@ -7,6 +7,7 @@ import { ClipboardCheck, Loader2, AlertTriangle, Eye, X, CameraOff, Bell, CheckC
 export default function StaffInspectionsPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string>('');
   const [inspections, setInspections] = useState<any[]>([]);
   
   // 🌟 NOTIFICATIONS STATE
@@ -33,32 +34,44 @@ export default function StaffInspectionsPage() {
     const cleanEmail = email?.toLowerCase().trim();
 
     try {
-      // 1. Fetch user profile to get the exact ID for notifications
       const { data: profile } = await supabase.from('profiles').select('id').ilike('email', cleanEmail).maybeSingle();
       const currentUserId = profile?.id;
       if (currentUserId) setUserId(currentUserId);
 
-      // 2. Fetch Inspections (Forcing fresh data)
+      // 🌟 CACHE BUSTER APPLIED HERE: The `.neq` with Date.now() forces Next.js & Browser to fetch fresh data!
       const { data: inspData, error: inspError } = await supabase
         .from('inspections')
         .select('*, assets(*)') 
         .ilike('user_email', cleanEmail)
+        .neq('id', `bust-cache-${Date.now()}`) 
         .order('created_at', { ascending: false });
 
       if (inspError) throw inspError;
-      if (inspData) setInspections(inspData);
+      
+      // 🌟 DUPLICATE FILTER: If an asset was re-inspected and then approved on a newer row, only show the newest row!
+      if (inspData) {
+        const uniqueAssets = new Map();
+        inspData.forEach(insp => {
+          if (!uniqueAssets.has(insp.asset_id)) {
+            uniqueAssets.set(insp.asset_id, insp);
+          }
+        });
+        setInspections(Array.from(uniqueAssets.values()));
+      }
 
-      // 3. Fetch Unread Notifications (Alerts from Admin)
       if (currentUserId) {
         const { data: notifData } = await supabase
           .from('notifications')
           .select('*')
           .eq('target_user', currentUserId)
           .eq('is_read', false)
+          .neq('id', `bust-cache-${Date.now()}`) // Cache buster for notifications too
           .order('created_at', { ascending: false });
           
         if (notifData) setNotifications(notifData);
       }
+      
+      setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to sync inspections:", err);
     } finally {
@@ -70,13 +83,11 @@ export default function StaffInspectionsPage() {
   useEffect(() => {
     fetchRealtimeData();
     
-    // 🌟 ANTI-SCREENSHOT ENGINE
     const handleFocus = () => setIsWindowFocused(true);
     const handleBlur = () => setIsWindowFocused(false);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
     
-    // 🌟 REALTIME SUBSCRIPTIONS
     const subInsp = supabase.channel('staff_insp_page_live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, fetchRealtimeData)
       .subscribe();
@@ -94,9 +105,7 @@ export default function StaffInspectionsPage() {
   }, []);
 
   const markNotificationAsRead = async (notifId: string) => {
-    // Optimistically update UI
     setNotifications(prev => prev.filter(n => n.id !== notifId));
-    // Update Database
     await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
   };
 
@@ -118,21 +127,22 @@ export default function StaffInspectionsPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Audit History</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Review the compliance and condition history of your devices.</p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* 🌟 NEW MANUAL SYNC BUTTON */}
-          <button 
-            onClick={fetchRealtimeData} 
-            disabled={isRefreshing}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
-            <span className="hidden sm:inline">Sync Live</span>
-          </button>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><ClipboardCheck size={24}/></div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={fetchRealtimeData} 
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
+              <span className="hidden sm:inline">Sync Live</span>
+            </button>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><ClipboardCheck size={24}/></div>
+          </div>
+          {lastSynced && <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-2">Last Synced: {lastSynced}</p>}
         </div>
       </div>
 
-      {/* 🌟 REALTIME ALERTS & NOTIFICATIONS BANNER */}
       {notifications.length > 0 && (
         <div className="space-y-3 mb-8 animate-in slide-in-from-top-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -171,7 +181,6 @@ export default function StaffInspectionsPage() {
         </div>
       )}
 
-      {/* 🌟 AUDIT LEDGER */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden relative">
         {isRefreshing && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-blue-100 overflow-hidden z-10">
@@ -202,7 +211,7 @@ export default function StaffInspectionsPage() {
                       <p className="text-sm text-slate-600">Condition: <strong>{insp.condition}</strong></p>
                     </div>
                     <div className="text-left sm:text-right">
-                      <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">Audit Date</p>
+                      <p className="text-[10px] font-black tracking-widest uppercase text-slate-400">Latest Audit Date</p>
                       <p className="text-sm font-bold text-slate-900">{new Date(insp.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
@@ -227,7 +236,6 @@ export default function StaffInspectionsPage() {
         )}
       </div>
 
-      {/* 🌟 SECURE LIGHTBOX */}
       {photoViewer.isOpen && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[9999] flex flex-col items-center justify-center p-4">
           <div className={`w-full h-full flex flex-col items-center justify-center transition-all ${!isWindowFocused ? 'blur-2xl opacity-50' : 'blur-0'}`}>
