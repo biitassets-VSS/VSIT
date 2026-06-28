@@ -23,13 +23,10 @@ export default function AdminTicketsPage() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      // Pull tickets and join with profiles to get the user ID for notifications
+      // 🌟 FIX: Removed the failing join. We just pull the raw tickets!
       const { data, error } = await supabase
         .from('tickets')
-        .select(`
-          *,
-          profiles:emp_code (id)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -62,17 +59,23 @@ export default function AdminTicketsPage() {
         
       if (tixErr) throw tixErr;
 
-      // 3. Find the profile ID from the email to trigger a live push notification
-      const { data: profile } = await supabase.from('profiles').select('id').eq('email', staffEmail).single();
+      // 3. Find the profile ID from the email to trigger a live push notification securely
+      if (staffEmail) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', staffEmail)
+          .maybeSingle();
 
-      if (profile?.id) {
-        await supabase.from('notifications').insert({
-          user_id: profile.id,
-          title: newStatus === 'Resolved' ? '✔ Ticket Resolved' : `🛠 Ticket Update: ${newStatus}`,
-          message: remarks || `Your ticket status was changed to ${newStatus}.`,
-          is_read: false,
-          type: newStatus === 'Resolved' ? 'success' : 'info'
-        });
+        if (profile?.id) {
+          await supabase.from('notifications').insert({
+            user_id: profile.id,
+            title: newStatus === 'Resolved' ? '✔ Ticket Resolved' : `🛠 Ticket Update: ${newStatus}`,
+            message: remarks || `Your ticket status was changed to ${newStatus}.`,
+            is_read: false,
+            type: newStatus === 'Resolved' ? 'success' : 'info'
+          });
+        }
       }
 
       // 4. Instantly update the admin UI
