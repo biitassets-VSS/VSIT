@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Users, Search, RefreshCw, Plus, 
-  Mail, Hash, ShieldCheck, UserX, UserCheck, Loader2
+  Mail, Hash, ShieldCheck, UserX, UserCheck, Loader2, AlertTriangle
 } from 'lucide-react';
 
 export default function AdminStaffDirectoryPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authError, setAuthError] = useState(''); // 🌟 NEW: Prevents Infinite Loops
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -24,7 +25,7 @@ export default function AdminStaffDirectoryPage() {
       const sessionStr = localStorage.getItem('vsit_admin_session') || localStorage.getItem('user');
       
       if (!sessionStr) {
-        window.location.replace('/');
+        router.replace('/');
         return;
       }
 
@@ -38,36 +39,28 @@ export default function AdminStaffDirectoryPage() {
         setIsAuthorized(true);
         await fetchStaffDirectory(); 
       } else {
-        // 🌟 THE FIX: Destroy the invalid session before kicking the user out!
-        // This breaks the infinite redirect loop.
-        localStorage.removeItem('vsit_admin_session');
-        localStorage.removeItem('vsit_staff_session');
-        localStorage.removeItem('user');
-        
-        alert("Access Denied: You do not possess structural administrative clearance levels. Please log in again.");
-        window.location.replace('/');
+        // 🌟 NO MORE AUTO-REDIRECTS! We show a hard error screen instead to break the loop.
+        setAuthError('Access Denied: You do not possess structural administrative clearance levels.');
       }
     } catch (err) {
       console.error("Authorization check failed:", err);
-      // Failsafe clear
-      localStorage.removeItem('vsit_admin_session');
-      window.location.replace('/');
+      setAuthError('Session verification failed. Please log in again.');
     }
+  };
+
+  // 🌟 THE MANUAL KILL SWITCH FOR GHOST SESSIONS
+  const handleSecureLogout = async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    await supabase.auth.signOut();
+    window.location.href = '/'; 
   };
 
   const fetchStaffDirectory = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("Supabase Error fetching users:", error.message);
-        throw error;
-      }
-      
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
       setStaffList(data || []);
     } catch (err: any) {
       console.error("Failed to load staff:", err);
@@ -99,6 +92,27 @@ export default function AdminStaffDirectoryPage() {
       </span>
     );
   };
+
+  // 🌟 RENDERS THE ERROR SCREEN TO STOP THE LOOP
+  if (authError) {
+    return (
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-6 bg-[#F8FAFC] p-4 text-center">
+        <div className="p-6 bg-rose-50 text-rose-600 rounded-full border-4 border-rose-100">
+          <AlertTriangle size={48} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Authorization Failed</h1>
+          <p className="text-sm font-bold text-slate-500 mt-2 max-w-md mx-auto">{authError}</p>
+        </div>
+        <button 
+          onClick={handleSecureLogout} 
+          className="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all"
+        >
+          Secure Logout & Return to Login
+        </button>
+      </div>
+    );
+  }
 
   if (!isAuthorized || loading) {
     return (
