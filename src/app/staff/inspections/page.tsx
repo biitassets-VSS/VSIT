@@ -49,11 +49,18 @@ export default function StaffInspectionsPage() {
       return;
     }
     
-    let email = sessionStr;
+    let email = '';
+    let sessionEmpCode = '';
+    
     try { 
       const parsed = JSON.parse(sessionStr);
-      if (parsed && parsed.email) email = parsed.email;
-    } catch(e) {}
+      if (parsed) {
+        email = parsed.email || '';
+        sessionEmpCode = parsed.emp_id || parsed.emp_code || '';
+      }
+    } catch(e) {
+      email = sessionStr;
+    }
     
     const cleanEmail = (email || '').toLowerCase().trim();
 
@@ -64,20 +71,23 @@ export default function StaffInspectionsPage() {
     }
 
     try {
+      // Get profile data
       const { data: profile } = await supabase.from('profiles').select('id, emp_code').ilike('email', cleanEmail).maybeSingle();
       const currentUserId = profile?.id;
-      const empCode = profile?.emp_code;
+      const dbEmpCode = profile?.emp_code;
+      
+      // Use whichever Emp Code we successfully found
+      const finalEmpCode = dbEmpCode || sessionEmpCode;
 
-      // 🚨 BLANK PAGE FIX: Safely construct the OR query array so Supabase doesn't crash
-      const queryFilters = [`user_email.eq.${cleanEmail}`];
+      // 🚨 DATABASE FIX: Catch ALL rows by checking Email OR User ID OR Employee Code
+      const queryFilters = [`user_email.ilike.${cleanEmail}`];
       if (currentUserId) queryFilters.push(`inspected_by.eq.${currentUserId}`);
-      if (empCode) queryFilters.push(`inspected_by.eq.${empCode}`);
+      if (finalEmpCode) queryFilters.push(`inspected_by.eq.${finalEmpCode}`);
 
       const { data: inspData, error: inspError } = await supabase
         .from('inspections')
         .select('*, assets(*)') 
         .or(queryFilters.join(','))
-        .neq('id', `bust-cache-${Date.now()}`) 
         .order('created_at', { ascending: false });
 
       if (inspError) throw inspError;
@@ -92,7 +102,6 @@ export default function StaffInspectionsPage() {
           .select('*')
           .eq('target_user', currentUserId)
           .eq('is_read', false)
-          .neq('id', `bust-cache-${Date.now()}`) 
           .order('created_at', { ascending: false });
           
         if (notifData) setNotifications(notifData);
@@ -151,8 +160,8 @@ export default function StaffInspectionsPage() {
       
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Audit History</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Review the compliance and condition history of your devices.</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Audit History Ledger</h1>
+          <p className="text-sm font-medium text-slate-500 mt-1">Review the complete historical log of your device compliance.</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-3">
@@ -178,7 +187,6 @@ export default function StaffInspectionsPage() {
           </h3>
           <div className="grid grid-cols-1 gap-3">
             {notifications.map(notif => {
-              // 🚨 BLANK PAGE FIX: Added safety fallback `|| ''` to prevent .toLowerCase() from crashing
               const s = (notif.title || '').toLowerCase();
               const isReject = s.includes('reject');
               const isReInspect = s.includes('re-inspect');
@@ -224,8 +232,12 @@ export default function StaffInspectionsPage() {
               const asset = insp.assets || {};
               let safePhotos: string[] = [];
               try {
-                if (Array.isArray(insp.photos)) safePhotos = insp.photos;
-                else if (typeof insp.photos === 'string') safePhotos = JSON.parse(insp.photos);
+                if (Array.isArray(insp.photos)) {
+                  safePhotos = insp.photos;
+                } else if (typeof insp.photos === 'string') {
+                  const parsed = JSON.parse(insp.photos);
+                  if (Array.isArray(parsed)) safePhotos = parsed;
+                }
               } catch (e) {}
               
               const isApproved = (insp.status || '').toLowerCase().includes('approved');
@@ -251,13 +263,13 @@ export default function StaffInspectionsPage() {
                   <div className="flex-1 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Last Audit Date</span>
+                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Submission Date</span>
                       </div>
                       <span className="text-xs font-bold text-slate-900">{insp.created_at ? new Date(insp.created_at).toLocaleDateString('en-IN') : 'Unknown'}</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-200 pt-3">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <Calendar size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Upcoming Due</span>
+                        <Calendar size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Next Due Date</span>
                       </div>
                       <span className={`text-xs font-bold ${isApproved ? 'text-blue-600' : 'text-slate-400'}`}>
                         {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending Approval'}
