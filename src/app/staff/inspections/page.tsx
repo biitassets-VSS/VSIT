@@ -32,8 +32,6 @@ export default function StaffInspectionsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string>('');
   const [inspections, setInspections] = useState<any[]>([]);
-  
-  // 🌟 NOTIFICATIONS STATE
   const [notifications, setNotifications] = useState<any[]>([]);
 
   // 🌟 SECURE LIGHTBOX STATE
@@ -52,33 +50,39 @@ export default function StaffInspectionsPage() {
     }
     
     let email = sessionStr;
-    try { email = JSON.parse(sessionStr).email; } catch(e) {}
-    const cleanEmail = email?.toLowerCase().trim();
+    try { 
+      const parsed = JSON.parse(sessionStr);
+      if (parsed && parsed.email) email = parsed.email;
+    } catch(e) {}
+    
+    const cleanEmail = (email || '').toLowerCase().trim();
+
+    if (!cleanEmail) {
+      setLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
 
     try {
       const { data: profile } = await supabase.from('profiles').select('id, emp_code').ilike('email', cleanEmail).maybeSingle();
       const currentUserId = profile?.id;
       const empCode = profile?.emp_code;
 
-      // 🚨 BUG FIX: Build a dynamic query that checks Email OR User ID OR Employee Code 
-      // This guarantees mobile uploads (which use Emp Code) are never missed!
-      let orQuery = `user_email.ilike.${cleanEmail}`;
-      if (currentUserId) orQuery += `,inspected_by.eq.${currentUserId}`;
-      if (empCode) orQuery += `,inspected_by.eq.${empCode}`;
+      // 🚨 BLANK PAGE FIX: Safely construct the OR query array so Supabase doesn't crash
+      const queryFilters = [`user_email.eq.${cleanEmail}`];
+      if (currentUserId) queryFilters.push(`inspected_by.eq.${currentUserId}`);
+      if (empCode) queryFilters.push(`inspected_by.eq.${empCode}`);
 
-      // 🌟 STRICT CACHE BUSTER + UNFILTERED HISTORY
       const { data: inspData, error: inspError } = await supabase
         .from('inspections')
         .select('*, assets(*)') 
-        .or(orQuery)
+        .or(queryFilters.join(','))
         .neq('id', `bust-cache-${Date.now()}`) 
         .order('created_at', { ascending: false });
 
       if (inspError) throw inspError;
       
       if (inspData) {
-        // 🚨 BUG FIX: Removed deduplication. 
-        // This now strictly saves and shows ALL historical submissions!
         setInspections(inspData);
       }
 
@@ -106,7 +110,6 @@ export default function StaffInspectionsPage() {
   useEffect(() => {
     fetchRealtimeData();
     
-    // 🌟 ANTI-SCREENSHOT ENGINE
     const handleFocus = () => setIsWindowFocused(true);
     const handleBlur = () => setIsWindowFocused(false);
     window.addEventListener('focus', handleFocus);
@@ -135,9 +138,9 @@ export default function StaffInspectionsPage() {
 
   const getBadge = (status: string) => {
     const s = (status || '').toLowerCase();
-    if (s === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    if (s === 'rejected' || s === 'not approved') return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (s === 're-inspection') return 'bg-orange-50 text-orange-700 border-orange-200';
+    if (s.includes('approved')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (s.includes('reject') || s.includes('not approved')) return 'bg-rose-50 text-rose-700 border-rose-200';
+    if (s.includes('re-inspection')) return 'bg-orange-50 text-orange-700 border-orange-200';
     return 'bg-blue-50 text-blue-700 border-blue-200';
   };
 
@@ -175,7 +178,8 @@ export default function StaffInspectionsPage() {
           </h3>
           <div className="grid grid-cols-1 gap-3">
             {notifications.map(notif => {
-              const s = notif.title.toLowerCase();
+              // 🚨 BLANK PAGE FIX: Added safety fallback `|| ''` to prevent .toLowerCase() from crashing
+              const s = (notif.title || '').toLowerCase();
               const isReject = s.includes('reject');
               const isReInspect = s.includes('re-inspect');
               const isApprove = s.includes('approve');
@@ -190,8 +194,8 @@ export default function StaffInspectionsPage() {
                       {isApprove ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
                     </div>
                     <div>
-                      <h4 className={`font-bold text-sm ${iconColor}`}>{notif.title}</h4>
-                      <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message}</p>
+                      <h4 className={`font-bold text-sm ${iconColor}`}>{notif.title || 'System Alert'}</h4>
+                      <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
                     </div>
                   </div>
                   <button onClick={() => markNotificationAsRead(notif.id)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
@@ -238,7 +242,7 @@ export default function StaffInspectionsPage() {
                       </span>
                     </div>
                     <div className="text-sm text-slate-600 space-y-1">
-                      <p>Condition: <strong className="text-slate-800">{insp.condition}</strong></p>
+                      <p>Condition: <strong className="text-slate-800">{insp.condition || 'N/A'}</strong></p>
                       <p className="text-xs italic">"{insp.notes || 'No notes provided'}"</p>
                     </div>
                   </div>
@@ -247,9 +251,9 @@ export default function StaffInspectionsPage() {
                   <div className="flex-1 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-slate-500">
-                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Audit Date</span>
+                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Last Audit Date</span>
                       </div>
-                      <span className="text-xs font-bold text-slate-900">{new Date(insp.created_at).toLocaleDateString('en-IN')}</span>
+                      <span className="text-xs font-bold text-slate-900">{insp.created_at ? new Date(insp.created_at).toLocaleDateString('en-IN') : 'Unknown'}</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-200 pt-3">
                       <div className="flex items-center gap-2 text-slate-500">
@@ -289,7 +293,7 @@ export default function StaffInspectionsPage() {
       {photoViewer.isOpen && (
         <div 
           className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[9999] flex flex-col items-center justify-center p-4 select-none"
-          onContextMenu={(e) => e.preventDefault()} // Blocks right click
+          onContextMenu={(e) => e.preventDefault()} 
         >
           <div className={`w-full h-full flex flex-col items-center justify-center transition-all duration-300 ${!isWindowFocused ? 'blur-3xl opacity-0 scale-95' : 'blur-0 opacity-100 scale-100'}`}>
             <button onClick={() => setPhotoViewer({ isOpen: false, photos: [], title: '' })} className="absolute top-6 right-6 p-4 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors cursor-pointer z-[10000] border border-white/20"><X size={24}/></button>
@@ -308,11 +312,10 @@ export default function StaffInspectionsPage() {
                   <img 
                     src={url} 
                     alt="Secure Evidence" 
-                    draggable={false} // Blocks drag-and-drop saving
+                    draggable={false} 
                     className="max-h-full max-w-full rounded-2xl pointer-events-none select-none border-2 border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]" 
                     style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
                   />
-                  {/* Invisible overlay to block right-clicks on the image itself */}
                   <div className="absolute inset-0 z-10 bg-transparent"></div>
                 </div>
               ))}
