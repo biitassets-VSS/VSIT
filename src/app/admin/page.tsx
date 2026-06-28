@@ -4,254 +4,210 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Users, Laptop, ClipboardCheck, Ticket, 
-  Activity, ArrowRight, ShieldCheck, AlertCircle, Clock
+  ArrowLeft, Users, Search, RefreshCw, Plus, 
+  Mail, Hash, ShieldCheck, UserX, UserCheck, Loader2
 } from 'lucide-react';
 
-export default function AdminDashboardPage() {
+export default function AdminStaffDirectoryPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [adminName, setAdminName] = useState('Admin');
-  
-  // Dashboard Stats
-  const [stats, setStats] = useState({
-    totalAssets: 0,
-    pendingInspections: 0,
-    activeTickets: 0,
-    totalStaff: 0
-  });
-
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    loadAdminData();
+    checkAdminAuthorization();
   }, []);
 
-  const loadAdminData = async () => {
-    setLoading(true);
-
-    // 🚀 THE ARMORED AUTH BYPASSER
-    // We check for the custom login ticket instead of Supabase's strict vault
-    const rawSession = localStorage.getItem('vsit_admin_session') || 
-                       localStorage.getItem('vsit_staff_session') || 
-                       localStorage.getItem('user');
-
-    if (!rawSession) {
-      router.replace('/');
-      return;
-    }
-
+  const checkAdminAuthorization = async () => {
     try {
-      let activeUser: any = {};
-      try { activeUser = JSON.parse(rawSession); }
-      catch (e) { activeUser = { name: rawSession.split('@')[0] }; }
+      const sessionStr = localStorage.getItem('vsit_admin_session') || localStorage.getItem('user');
       
-      setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
-
-      // 1. Safe Fetch: Assets
-      let assetCount = 0;
-      const { count: assets } = await supabase.from('assets').select('*', { count: 'exact', head: true });
-      assetCount = assets || 0;
-
-      // 2. Safe Fetch: Pending Inspections
-      let pendingCount = 0;
-      let recentLogs: any[] = [];
-      const { data: inspections } = await supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false });
-      if (inspections) {
-        pendingCount = inspections.filter(i => i.status?.toLowerCase().includes('pending')).length;
-        recentLogs = inspections.slice(0, 5);
+      if (!sessionStr) {
+        window.location.replace('/');
+        return;
       }
 
-      // 3. Safe Fetch: Tickets
-      let ticketCount = 0;
-      const { data: tickets } = await supabase.from('tickets').select('*');
-      if (tickets) {
-        ticketCount = tickets.filter(t => t.status === 'open' || t.status === 'in_repair' || t.status === 'pending').length;
+      let sessionUser: any = {};
+      try { sessionUser = JSON.parse(sessionStr); } 
+      catch (e) { sessionUser = { email: sessionStr }; }
+
+      const cleanEmail = sessionUser.email?.toLowerCase().trim();
+
+      if (cleanEmail === 'lakhwinder.bi@outlook.com' || sessionUser.role === 'admin') {
+        setIsAuthorized(true);
+        await fetchStaffDirectory(); 
+      } else {
+        // 🌟 THE FIX: Destroy the invalid session before kicking the user out!
+        // This breaks the infinite redirect loop.
+        localStorage.removeItem('vsit_admin_session');
+        localStorage.removeItem('vsit_staff_session');
+        localStorage.removeItem('user');
+        
+        alert("Access Denied: You do not possess structural administrative clearance levels. Please log in again.");
+        window.location.replace('/');
       }
-
-      // 4. Safe Fetch: Staff Profiles
-      let staffCount = 0;
-      const { count: staff } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-      staffCount = staff || 0;
-
-      setStats({
-        totalAssets: assetCount,
-        pendingInspections: pendingCount,
-        activeTickets: ticketCount,
-        totalStaff: staffCount
-      });
-      setRecentActivity(recentLogs);
-      setLoading(false);
-
-    } catch (e) { 
-      console.error('Data load error:', e);
-      setLoading(false); 
+    } catch (err) {
+      console.error("Authorization check failed:", err);
+      // Failsafe clear
+      localStorage.removeItem('vsit_admin_session');
+      window.location.replace('/');
     }
   };
 
-  if (loading) {
+  const fetchStaffDirectory = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Supabase Error fetching users:", error.message);
+        throw error;
+      }
+      
+      setStaffList(data || []);
+    } catch (err: any) {
+      console.error("Failed to load staff:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredStaff = staffList.filter(user => {
+    const query = searchQuery.toLowerCase();
+    const nameMatch = (user.full_name || user.name || '').toLowerCase().includes(query);
+    const emailMatch = (user.email || '').toLowerCase().includes(query);
+    const idMatch = (user.emp_code || user.emp_id || '').toLowerCase().includes(query);
+    return nameMatch || emailMatch || idMatch;
+  });
+
+  const getStatusBadge = (status: string) => {
+    const s = (status || 'Active').toLowerCase();
+    if (s === 'disabled' || s === 'inactive') {
+      return (
+        <span className="px-3 py-1 flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-black uppercase tracking-widest">
+          <UserX size={12} /> Disabled
+        </span>
+      );
+    }
+    return (
+      <span className="px-3 py-1 flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-widest">
+        <UserCheck size={12} /> Active
+      </span>
+    );
+  };
+
+  if (!isAuthorized || loading) {
     return (
       <div className="w-full h-screen flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-[#002B49]"></div>
-        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Initializing Command Center...</p>
+        <Loader2 className="animate-spin h-10 w-10 border-b-4 text-blue-600" />
+        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Authenticating Control clearance...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 font-sans">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
       
-      {/* 🚀 ENTERPRISE HEADER */}
-      <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <ShieldCheck size={28} className="text-blue-600" />
-            <h1 className="text-3xl font-black text-[#002B49] tracking-tight">Systems Overview</h1>
-          </div>
-          <p className="text-sm font-bold text-gray-500">Welcome back, {adminName}. Here is your IT infrastructure status.</p>
-        </div>
-        <div className="px-5 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-2xs">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          All Systems Operational
-        </div>
-      </div>
-
-      {/* 📊 HIGH-LEVEL STATS GRID */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-blue-200 transition-colors">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors"><Laptop size={24} /></div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Inventory</span>
-          </div>
+      {/* HEADER */}
+      <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
+            <ArrowLeft size={20} />
+          </button>
           <div>
-            <h2 className="text-4xl font-black text-gray-900">{stats.totalAssets}</h2>
-            <p className="text-xs font-bold text-gray-500 mt-1">Total hardware units</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-orange-200 transition-colors relative overflow-hidden">
-          {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-bl-full" />}
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-orange-50 text-orange-500 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-colors">
-              {stats.pendingInspections > 0 ? <AlertCircle size={24} /> : <ClipboardCheck size={24} />}
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Staff Directory</h1>
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 font-black text-[10px] uppercase tracking-widest rounded-full shadow-sm">
+                {staffList.length} Total
+              </span>
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Verifications</span>
-          </div>
-          <div>
-            <h2 className={`text-4xl font-black ${stats.pendingInspections > 0 ? 'text-orange-600' : 'text-gray-900'}`}>{stats.pendingInspections}</h2>
-            <p className="text-xs font-bold text-gray-500 mt-1">Pending approval</p>
+            <p className="text-xs text-slate-500 font-semibold">Manage employee access, profiles, and active statuses.</p>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-rose-200 transition-colors">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl group-hover:bg-rose-500 group-hover:text-white transition-colors"><Ticket size={24} /></div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Helpdesk</span>
-          </div>
-          <div>
-            <h2 className="text-4xl font-black text-gray-900">{stats.activeTickets}</h2>
-            <p className="text-xs font-bold text-gray-500 mt-1">Active IT tickets</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-emerald-200 transition-colors">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Users size={24} /></div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Network</span>
-          </div>
-          <div>
-            <h2 className="text-4xl font-black text-gray-900">{stats.totalStaff}</h2>
-            <p className="text-xs font-bold text-gray-500 mt-1">Active staff accounts</p>
-          </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchStaffDirectory} 
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Sync
+          </button>
+          <button 
+            onClick={() => router.push('/admin/staff/add')} 
+            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-blue-600/20"
+          >
+            <Plus size={16} /> Add Staff
+          </button>
         </div>
       </div>
 
-      {/* 🧭 NAVIGATION ACTION CARDS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 pl-2">System Modules</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            
-            <button onClick={() => router.push('/admin/inspections')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center"><ClipboardCheck size={20} /></div>
-                <h4 className="text-sm font-black text-gray-900">Review Inspections</h4>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Audit smartphone visual submissions and approve hardware.</p>
-                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-orange-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
-              </div>
-            </button>
-
-            <button onClick={() => router.push('/admin/assets')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Laptop size={20} /></div>
-                <h4 className="text-sm font-black text-gray-900">Asset Registry</h4>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Manage full hardware lifecycle, assignments, and serial tags.</p>
-                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
-              </div>
-            </button>
-
-            <button onClick={() => router.push('/admin/tickets')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center"><Ticket size={20} /></div>
-                <h4 className="text-sm font-black text-gray-900">IT Helpdesk</h4>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Resolve staff hardware issues and repair requests.</p>
-                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-rose-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
-              </div>
-            </button>
-
-            <button onClick={() => router.push('/admin/staff')} className="text-left bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center"><Users size={20} /></div>
-                <h4 className="text-sm font-black text-gray-900">Staff Directory</h4>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <p className="text-[11px] font-bold text-gray-400 max-w-[180px]">Manage employee access codes and profile data.</p>
-                <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-emerald-500 group-hover:text-white flex items-center justify-center text-gray-400 transition-colors"><ArrowRight size={14} /></div>
-              </div>
-            </button>
-          </div>
+      {/* SEARCH BAR */}
+      <div className="bg-white p-2.5 rounded-3xl border border-slate-200 shadow-sm flex items-center">
+        <div className="relative w-full">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input 
+            type="text" 
+            value={searchQuery} 
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by Employee Name, Email, or ID Code..." 
+            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-2xl text-sm font-bold text-slate-900 outline-none transition-all"
+          />
         </div>
+      </div>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 pl-2">Live Activity Log</h3>
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 h-[300px] overflow-hidden flex flex-col">
+      {/* STAFF GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredStaff.map(user => (
+          <div key={user.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
             
-            {recentActivity.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50">
-                <Activity size={32} className="text-gray-300 mb-2" />
-                <p className="text-xs font-bold text-gray-500">No recent network activity</p>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-                {recentActivity.map((log: any) => (
-                  <div key={log.id} className="flex gap-3 relative pb-4 border-b border-gray-50 last:border-0 last:pb-0">
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
-                      <Clock size={12} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black text-gray-800">
-                        {log.user_email?.split('@')[0] || 'A user'} <span className="font-bold text-gray-400">submitted an inspection.</span>
-                      </p>
-                      <p className="text-[10px] font-mono text-gray-400 mt-1">{new Date(log.created_at).toLocaleTimeString()}</p>
-                    </div>
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black border border-blue-100 shrink-0">
+                  {(user.full_name || user.name || user.email || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="overflow-hidden">
+                  <h3 className="text-sm font-black text-slate-900 truncate" title={user.full_name || user.name}>
+                    {user.full_name || user.name || 'Unnamed User'}
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <ShieldCheck size={12} className={user.role === 'admin' ? 'text-rose-500' : 'text-blue-500'} />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      {user.role || 'Staff'}
+                    </span>
                   </div>
-                ))}
+                </div>
               </div>
-            )}
-            
-            <button onClick={() => router.push('/admin/inspections')} className="mt-4 w-full py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-[11px] font-black uppercase tracking-wider text-gray-600 transition-colors">
-              View All Logs
-            </button>
-          </div>
-        </div>
+            </div>
 
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-3 text-xs">
+                <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><Hash size={12}/></div>
+                <span className="font-mono font-black text-slate-700">{user.emp_code || user.emp_id || 'NO-ID'}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><Mail size={12}/></div>
+                <span className="font-medium text-slate-600 truncate" title={user.email}>{user.email}</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              {getStatusBadge(user.status)}
+              
+              <button 
+                onClick={() => router.push(`/admin/staff/${user.emp_code || user.id}`)}
+                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                Manage Profile &rarr;
+              </button>
+            </div>
+
+          </div>
+        ))}
       </div>
     </div>
   );
