@@ -4,51 +4,42 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  ArrowLeft, Users, Search, RefreshCw, Plus, 
-  Mail, Hash, ShieldCheck, UserX, UserCheck, Loader2, AlertTriangle
+  Users, Laptop, ClipboardCheck, Ticket, 
+  Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
+  Moon, Sun, LogOut, AlertTriangle, CheckCircle
 } from 'lucide-react';
 
-export default function AdminStaffDirectoryPage() {
+export default function AdminDashboardPage() {
   const router = useRouter();
+  
+  // State
   const [loading, setLoading] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [authError, setAuthError] = useState(''); // 🌟 NEW: Prevents Infinite Loops
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [adminName, setAdminName] = useState('Admin');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [authError, setAuthError] = useState('');
+  
+  // Dashboard Stats
+  const [stats, setStats] = useState({
+    totalAssets: 0,
+    pendingInspections: 0,
+    activeTickets: 0,
+    totalStaff: 0
+  });
+
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
-    checkAdminAuthorization();
+    const savedTheme = localStorage.getItem('vsit_theme');
+    if (savedTheme === 'dark') setIsDarkMode(true);
+    
+    loadAdminData();
   }, []);
 
-  const checkAdminAuthorization = async () => {
-    try {
-      const sessionStr = localStorage.getItem('vsit_admin_session') || localStorage.getItem('user');
-      
-      if (!sessionStr) {
-        router.replace('/');
-        return;
-      }
-
-      let sessionUser: any = {};
-      try { sessionUser = JSON.parse(sessionStr); } 
-      catch (e) { sessionUser = { email: sessionStr }; }
-
-      const cleanEmail = sessionUser.email?.toLowerCase().trim();
-
-      if (cleanEmail === 'lakhwinder.bi@outlook.com' || sessionUser.role === 'admin') {
-        setIsAuthorized(true);
-        await fetchStaffDirectory(); 
-      } else {
-        // 🌟 NO MORE AUTO-REDIRECTS! We show a hard error screen instead to break the loop.
-        setAuthError('Access Denied: You do not possess structural administrative clearance levels.');
-      }
-    } catch (err) {
-      console.error("Authorization check failed:", err);
-      setAuthError('Session verification failed. Please log in again.');
-    }
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+    localStorage.setItem('vsit_theme', !isDarkMode ? 'dark' : 'light');
   };
 
-  // 🌟 THE MANUAL KILL SWITCH FOR GHOST SESSIONS
   const handleSecureLogout = async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -56,172 +47,275 @@ export default function AdminStaffDirectoryPage() {
     window.location.href = '/'; 
   };
 
-  const fetchStaffDirectory = async () => {
+  const loadAdminData = async () => {
     setLoading(true);
+
+    // 🚀 THE ARMORED AUTH BYPASSER
+    const rawSession = localStorage.getItem('vsit_admin_session') || 
+                       localStorage.getItem('vsit_staff_session') || 
+                       localStorage.getItem('user');
+
+    if (!rawSession) {
+      window.location.replace('/');
+      return;
+    }
+
     try {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      setStaffList(data || []);
-    } catch (err: any) {
-      console.error("Failed to load staff:", err);
-    } finally {
+      let activeUser: any = {};
+      try { activeUser = JSON.parse(rawSession); }
+      catch (e) { activeUser = { name: rawSession.split('@')[0], email: rawSession }; }
+      
+      const cleanEmail = activeUser.email?.toLowerCase().trim();
+      
+      // Verify Admin status to stop loops
+      if (cleanEmail !== 'lakhwinder.bi@outlook.com' && activeUser.role !== 'admin') {
+        await supabase.auth.signOut();
+        localStorage.clear();
+        setAuthError('Access Denied: You do not possess administrative clearance.');
+        return;
+      }
+
+      setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
+
+      // 1. Safe Fetch: Assets
+      let assetCount = 0;
+      const { count: assets } = await supabase.from('assets').select('*', { count: 'exact', head: true });
+      assetCount = assets || 0;
+
+      // 2. Safe Fetch: Pending Inspections
+      let pendingCount = 0;
+      let recentLogs: any[] = [];
+      const { data: inspections } = await supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false });
+      if (inspections) {
+        pendingCount = inspections.filter(i => i.status?.toLowerCase().includes('pending')).length;
+        recentLogs = inspections.slice(0, 5);
+      }
+
+      // 3. Safe Fetch: Tickets
+      let ticketCount = 0;
+      const { data: tickets } = await supabase.from('tickets').select('*');
+      if (tickets) {
+        ticketCount = tickets.filter(t => t.status === 'open' || t.status === 'in_repair' || t.status === 'pending').length;
+      }
+
+      // 4. Safe Fetch: Staff Profiles
+      let staffCount = 0;
+      const { count: staff } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+      staffCount = staff || 0;
+
+      setStats({
+        totalAssets: assetCount,
+        pendingInspections: pendingCount,
+        activeTickets: ticketCount,
+        totalStaff: staffCount
+      });
+      
+      setRecentActivity(recentLogs);
       setLoading(false);
+
+    } catch (e) { 
+      console.error('Data load error:', e);
+      setLoading(false); 
     }
   };
 
-  const filteredStaff = staffList.filter(user => {
-    const query = searchQuery.toLowerCase();
-    const nameMatch = (user.full_name || user.name || '').toLowerCase().includes(query);
-    const emailMatch = (user.email || '').toLowerCase().includes(query);
-    const idMatch = (user.emp_code || user.emp_id || '').toLowerCase().includes(query);
-    return nameMatch || emailMatch || idMatch;
-  });
-
-  const getStatusBadge = (status: string) => {
-    const s = (status || 'Active').toLowerCase();
-    if (s === 'disabled' || s === 'inactive') {
-      return (
-        <span className="px-3 py-1 flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-black uppercase tracking-widest">
-          <UserX size={12} /> Disabled
-        </span>
-      );
-    }
-    return (
-      <span className="px-3 py-1 flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-widest">
-        <UserCheck size={12} /> Active
-      </span>
-    );
-  };
-
-  // 🌟 RENDERS THE ERROR SCREEN TO STOP THE LOOP
+  // --- RENDERING ERROR STATE ---
   if (authError) {
     return (
-      <div className="w-full h-screen flex flex-col items-center justify-center gap-6 bg-[#F8FAFC] p-4 text-center">
-        <div className="p-6 bg-rose-50 text-rose-600 rounded-full border-4 border-rose-100">
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-6 bg-zinc-950 p-4 text-center">
+        <div className="p-6 bg-rose-500/20 text-rose-500 rounded-full border-4 border-rose-500/30">
           <AlertTriangle size={48} />
         </div>
         <div>
-          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Authorization Failed</h1>
-          <p className="text-sm font-bold text-slate-500 mt-2 max-w-md mx-auto">{authError}</p>
+          <h1 className="text-2xl font-black text-white uppercase tracking-tight">Authorization Failed</h1>
+          <p className="text-sm font-bold text-zinc-400 mt-2">{authError}</p>
         </div>
-        <button 
-          onClick={handleSecureLogout} 
-          className="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all"
-        >
-          Secure Logout & Return to Login
+        <button onClick={handleSecureLogout} className="px-8 py-4 bg-white hover:bg-zinc-200 text-zinc-900 rounded-2xl text-xs font-black uppercase tracking-widest transition-all">
+          Secure Logout & Return
         </button>
       </div>
     );
   }
 
-  if (!isAuthorized || loading) {
+  // --- RENDERING LOADING STATE ---
+  if (loading) {
     return (
-      <div className="w-full h-screen flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
-        <Loader2 className="animate-spin h-10 w-10 border-b-4 text-blue-600" />
-        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Authenticating Control clearance...</p>
+      <div className={`w-full h-screen flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'bg-zinc-950' : 'bg-[#F8FAFC]'}`}>
+        <div className={`animate-spin rounded-full h-10 w-10 border-b-4 ${isDarkMode ? 'border-zinc-100' : 'border-[#002B49]'}`}></div>
+        <p className={`text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-zinc-500' : 'text-gray-400'}`}>Initializing Command Center...</p>
       </div>
     );
   }
 
+  // --- CARBON BLACK & GRAY BLACK THEME DEFINITIONS ---
+  const theme = {
+    bg: isDarkMode ? 'bg-zinc-950' : 'bg-[#F8FAFC]',
+    card: isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-100',
+    text: isDarkMode ? 'text-zinc-100' : 'text-[#002B49]',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-gray-500',
+    cardHover: isDarkMode ? 'hover:border-zinc-700 hover:bg-zinc-800/50' : 'hover:border-gray-200 hover:shadow-md',
+    iconBg: {
+      blue: isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
+      orange: isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-500',
+      rose: isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-500',
+      emerald: isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-500',
+      gray: isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-gray-50 text-gray-400',
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
-      
-      {/* HEADER */}
-      <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-5">
-          <button onClick={() => router.push('/admin')} className="p-3 hover:bg-slate-100 rounded-2xl border border-slate-200 text-slate-500 cursor-pointer transition-colors">
-            <ArrowLeft size={20} />
-          </button>
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans pb-10`}>
+      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+        
+        {/* 🚀 ENTERPRISE HEADER */}
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-colors`}>
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Staff Directory</h1>
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 font-black text-[10px] uppercase tracking-widest rounded-full shadow-sm">
-                {staffList.length} Total
-              </span>
+              <ShieldCheck size={28} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+              <h1 className={`text-2xl md:text-3xl font-black tracking-tight ${theme.text}`}>Systems Overview</h1>
             </div>
-            <p className="text-xs text-slate-500 font-semibold">Manage employee access, profiles, and active statuses.</p>
+            <p className={`text-sm font-bold ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
+          </div>
+          
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              All Systems Operational
+            </div>
+            <button onClick={toggleTheme} className={`p-3 rounded-xl border transition-colors ${theme.card} ${theme.cardHover}`}>
+              {isDarkMode ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-600" />}
+            </button>
+            <button onClick={handleSecureLogout} className={`p-3 rounded-xl border transition-colors ${theme.card} hover:bg-rose-500 hover:text-white hover:border-rose-500 text-rose-500`}>
+              <LogOut size={18} />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={fetchStaffDirectory} 
-            disabled={loading}
-            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Sync
-          </button>
-          <button 
-            onClick={() => router.push('/admin/staff/add')} 
-            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-blue-600/20"
-          >
-            <Plus size={16} /> Add Staff
-          </button>
-        </div>
-      </div>
-
-      {/* SEARCH BAR */}
-      <div className="bg-white p-2.5 rounded-3xl border border-slate-200 shadow-sm flex items-center">
-        <div className="relative w-full">
-          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
-            value={searchQuery} 
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by Employee Name, Email, or ID Code..." 
-            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-2xl text-sm font-bold text-slate-900 outline-none transition-all"
-          />
-        </div>
-      </div>
-
-      {/* STAFF GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredStaff.map(user => (
-          <div key={user.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-            
+        {/* 📊 HIGH-LEVEL STATS GRID */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Inventory */}
+          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between group transition-all ${theme.cardHover}`}>
             <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black border border-blue-100 shrink-0">
-                  {(user.full_name || user.name || user.email || '?').charAt(0).toUpperCase()}
-                </div>
-                <div className="overflow-hidden">
-                  <h3 className="text-sm font-black text-slate-900 truncate" title={user.full_name || user.name}>
-                    {user.full_name || user.name || 'Unnamed User'}
-                  </h3>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <ShieldCheck size={12} className={user.role === 'admin' ? 'text-rose-500' : 'text-blue-500'} />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {user.role || 'Staff'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.blue} group-hover:bg-blue-600 group-hover:text-white`}><Laptop size={24} /></div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subText}`}>Inventory</span>
             </div>
-
-            <div className="space-y-3 pt-4 border-t border-slate-100">
-              <div className="flex items-center gap-3 text-xs">
-                <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><Hash size={12}/></div>
-                <span className="font-mono font-black text-slate-700">{user.emp_code || user.emp_id || 'NO-ID'}</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><Mail size={12}/></div>
-                <span className="font-medium text-slate-600 truncate" title={user.email}>{user.email}</span>
-              </div>
+            <div>
+              <h2 className={`text-4xl font-black ${theme.text}`}>{stats.totalAssets}</h2>
+              <p className={`text-xs font-bold mt-1 ${theme.subText}`}>Total hardware units</p>
             </div>
+          </div>
 
-            <div className="mt-6 flex items-center justify-between">
-              {getStatusBadge(user.status)}
+          {/* Verifications */}
+          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between group transition-all relative overflow-hidden ${theme.cardHover}`}>
+            {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-bl-full" />}
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.orange} group-hover:bg-orange-500 group-hover:text-white`}>
+                {stats.pendingInspections > 0 ? <AlertCircle size={24} /> : <ClipboardCheck size={24} />}
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subText}`}>Verifications</span>
+            </div>
+            <div>
+              <h2 className={`text-4xl font-black ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.text}`}>{stats.pendingInspections}</h2>
+              <p className={`text-xs font-bold mt-1 ${theme.subText}`}>Pending approval</p>
+            </div>
+          </div>
+
+          {/* Helpdesk */}
+          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between group transition-all ${theme.cardHover}`}>
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.rose} group-hover:bg-rose-500 group-hover:text-white`}><Ticket size={24} /></div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
+            </div>
+            <div>
+              <h2 className={`text-4xl font-black ${theme.text}`}>{stats.activeTickets}</h2>
+              <p className={`text-xs font-bold mt-1 ${theme.subText}`}>Active IT tickets</p>
+            </div>
+          </div>
+
+          {/* Network */}
+          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between group transition-all ${theme.cardHover}`}>
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.emerald} group-hover:bg-emerald-500 group-hover:text-white`}><Users size={24} /></div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subText}`}>Network</span>
+            </div>
+            <div>
+              <h2 className={`text-4xl font-black ${theme.text}`}>{stats.totalStaff}</h2>
+              <p className={`text-xs font-bold mt-1 ${theme.subText}`}>Active staff accounts</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 🧭 NAVIGATION ACTION CARDS */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <div className="lg:col-span-2 space-y-4">
+            <h3 className={`text-xs font-black uppercase tracking-widest pl-2 ${theme.subText}`}>System Modules</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
-              <button 
-                onClick={() => router.push(`/admin/staff/${user.emp_code || user.id}`)}
-                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                Manage Profile &rarr;
+              {[
+                { title: 'Review Inspections', desc: 'Audit smartphone visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: 'orange' },
+                { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'blue' },
+                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose' },
+                { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald' },
+              ].map((module, i) => (
+                <button 
+                  key={i}
+                  onClick={() => router.push(module.path)} 
+                  className={`text-left ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group relative overflow-hidden flex flex-col justify-between min-h-[140px] ${theme.cardHover}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
+                      <module.icon size={20} />
+                    </div>
+                    <h4 className={`text-sm font-black ${theme.text}`}>{module.title}</h4>
+                  </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <p className={`text-[11px] font-bold max-w-[180px] ${theme.subText}`}>{module.desc}</p>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${theme.iconBg.gray} group-hover:bg-${module.color}-500 group-hover:text-white`}>
+                      <ArrowRight size={14} />
+                    </div>
+                  </div>
+                </button>
+              ))}
+
+            </div>
+          </div>
+
+          {/* 📡 LIVE ACTIVITY LOG */}
+          <div className="space-y-4">
+            <h3 className={`text-xs font-black uppercase tracking-widest pl-2 ${theme.subText}`}>Live Activity Log</h3>
+            <div className={`${theme.card} rounded-3xl border shadow-sm p-5 h-[320px] overflow-hidden flex flex-col transition-colors`}>
+              
+              {recentActivity.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50">
+                  <Activity size={32} className={`${theme.subText} mb-2`} />
+                  <p className={`text-xs font-bold ${theme.subText}`}>No recent network activity</p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+                  {recentActivity.map((log: any) => (
+                    <div key={log.id} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-gray-50'}`}>
+                      <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border ${theme.iconBg.blue} ${isDarkMode ? 'border-blue-900/30' : 'border-blue-100'}`}>
+                        <Clock size={12} />
+                      </div>
+                      <div>
+                        <p className={`text-xs font-black ${theme.text}`}>
+                          {log.user_email?.split('@')[0] || 'A user'} <span className={`font-bold ${theme.subText}`}>submitted an inspection.</span>
+                        </p>
+                        <p className={`text-[10px] font-mono mt-1 ${theme.subText}`}>{new Date(log.created_at).toLocaleTimeString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-gray-50 hover:bg-gray-100 text-gray-600'}`}>
+                View All Logs
               </button>
             </div>
-
           </div>
-        ))}
+
+        </div>
       </div>
     </div>
   );
