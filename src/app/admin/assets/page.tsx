@@ -7,7 +7,7 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
-  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, Clock, AlertTriangle
+  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, Clock, AlertTriangle, FileSignature
 } from 'lucide-react';
 
 const ASSET_CATEGORIES = [
@@ -26,7 +26,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
   const t = {
     bg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-white border-slate-200',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     menu: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
     hover: isDarkMode ? 'hover:bg-[#18181b]' : 'hover:bg-blue-50',
     header: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-500' : 'bg-slate-50 border-slate-100 text-slate-500',
@@ -57,14 +57,14 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
   return (
     <div className="relative" ref={wrapperRef}>
       <div className={`flex items-center w-full p-3.5 border rounded-xl focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all ${t.bg}`}>
-        <Search size={14} className={`${t.textSub} mr-2 shrink-0`} />
+        <Search size={14} className={`${t.subText} mr-2 shrink-0`} />
         <input 
           type="text" value={open ? query : query || ''} 
           onChange={e => { setQuery(e.target.value); setOpen(true); onChange(''); }}
           onFocus={() => setOpen(true)} placeholder={placeholder}
           className={`w-full text-xs font-semibold outline-none bg-transparent ${t.text}`}
         />
-        <ChevronDown size={14} className={`${t.textSub} ml-2 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
+        <ChevronDown size={14} className={`${t.subText} ml-2 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
       </div>
 
       {open && (
@@ -73,7 +73,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
             -- Warehouse Inventory (Unassigned) --
           </div>
           {filtered.length === 0 ? (
-            <div className={`p-4 text-center text-xs font-semibold ${t.textSub}`}>No staff found matching query.</div>
+            <div className={`p-4 text-center text-xs font-semibold ${t.subText}`}>No staff found matching query.</div>
           ) : (
             filtered.map((s: any) => (
               <div 
@@ -144,9 +144,39 @@ export default function AssetRegistryPage() {
     fetchRegistryData();
   }, []);
 
+  // 🚀 FIX: Preserve 4-digit numeric ID when switching categories during Creation
   useEffect(() => {
-    if (isAddModalOpen) setNewAssetTag(generateCategoryPrefix(newAssetCategory));
+    if (isAddModalOpen) {
+      setNewAssetTag(prevTag => generateCategoryPrefix(newAssetCategory, prevTag));
+    }
   }, [newAssetCategory, isAddModalOpen]);
+
+  // 🚀 FIX: Smart Category Prefix Generator (Preserves Suffix)
+  const generateCategoryPrefix = (category: string, currentTag?: string) => {
+    let prefix = 'VS-OTH';
+    const cat = (category || '').toLowerCase();
+    
+    if (cat.includes('laptop')) prefix = 'VS-LAP';
+    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
+    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
+    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
+    else if (cat.includes('headphone')) prefix = 'VS-HDP';
+    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
+    else if (cat.includes('stand')) prefix = 'VS-STN';
+
+    // If we have an existing tag (e.g., VS-LAP-1234), extract the "1234" and attach it to the new prefix.
+    if (currentTag && currentTag.includes('-')) {
+      const parts = currentTag.split('-');
+      const lastPart = parts[parts.length - 1];
+      // Check if the last part is a 4-digit number
+      if (/^\d{4}$/.test(lastPart)) {
+        return `${prefix}-${lastPart}`;
+      }
+    }
+
+    // If no existing valid suffix is found, generate a new random 4-digit suffix
+    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  };
 
   useEffect(() => {
     const scanId = searchParams.get('view');
@@ -156,24 +186,6 @@ export default function AssetRegistryPage() {
     }
   }, [searchParams, assets]);
 
-  const generateCategoryPrefix = (category: string, existingUuid?: string) => {
-    let prefix = 'VS-OTH';
-    const cat = (category || '').toLowerCase();
-    if (cat.includes('laptop')) prefix = 'VS-LAP';
-    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
-    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
-    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
-    else if (cat.includes('headphone')) prefix = 'VS-HDP';
-    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
-    else if (cat.includes('stand')) prefix = 'VS-STN';
-
-    if (existingUuid && existingUuid.length > 20) {
-      const numsOnly = existingUuid.replace(/[^0-9]/g, '');
-      const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
-      return `${prefix}-${stableDigits}`;
-    }
-    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
-  };
 
   const generateSafeUuid = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -199,12 +211,13 @@ export default function AssetRegistryPage() {
       const compiledAssets = assetData.map(asset => {
         const assignee = staffData.find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
         const latestInspection = inspectionData.find(i => i.asset_id === asset.id);
+        
         return {
           ...asset,
           safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
           staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
           emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
-          clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
+          clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.asset_tag),
           live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null
         };
@@ -213,7 +226,6 @@ export default function AssetRegistryPage() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  // 🎨 Carbon/Slate Aware Badges
   const getStockStatusBadge = (status: string) => {
     const s = status || 'In Stock (Unassigned)';
     if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -233,7 +245,7 @@ export default function AssetRegistryPage() {
   };
 
   const openAssetViewModal = (asset: any) => {
-    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.id);
+    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.asset_tag);
     setViewAssetModal({ ...asset, clean_tag: stableTag });
     setIsEditingAsset(false);
     setEditForm({
@@ -290,6 +302,19 @@ export default function AssetRegistryPage() {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
     return `${baseDomain}/admin/assets?view=${targetRef}`;
+  };
+
+  // 📝 NEW HANDOVER AGREEMENT FUNCTION (Placeholder for API Integration)
+  const handleSendHandoverAgreement = async (asset: any) => {
+    if (!asset.assigned_to) {
+      alert("This asset is not assigned to anyone. Please assign it first.");
+      return;
+    }
+    const confirmSend = confirm(`Send PDF Handover Agreement to ${asset.staff_name}?`);
+    if (!confirmSend) return;
+
+    // TODO: Connect this to your /api/send-email route to generate and send the PDF link.
+    alert(`Handover Agreement notification sent to ${asset.staff_name}! They will be prompted to digitally sign the document.`);
   };
 
   // 🖨️ Clean, High-Readability Print Sticker Logic
@@ -353,7 +378,7 @@ export default function AssetRegistryPage() {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
     modalOverlay: 'bg-black/80 backdrop-blur-sm z-50',
@@ -369,7 +394,7 @@ export default function AssetRegistryPage() {
         {/* HEADER */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors`}>
           <div className="flex items-center gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 rounded-xl border transition-colors ${theme.card} ${theme.cardHover} ${theme.textSub}`}>
+            <button onClick={() => router.push('/admin')} className={`p-2.5 rounded-xl border transition-colors ${theme.card} ${theme.cardHover} ${theme.subText}`}>
               <ArrowLeft size={18} />
             </button>
             <div>
@@ -377,7 +402,7 @@ export default function AssetRegistryPage() {
                 <h1 className={`text-2xl font-semibold tracking-tight ${theme.textMain}`}>Hardware Registry</h1>
                 <span className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest ${isDarkMode ? 'bg-[#27272a] text-zinc-300' : 'bg-slate-100 text-slate-700'}`}>{assets.length} Units</span>
               </div>
-              <p className={`text-sm ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
+              <p className={`text-sm ${theme.subText}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
             </div>
           </div>
 
@@ -404,7 +429,7 @@ export default function AssetRegistryPage() {
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wider shrink-0 transition-all ${
                   selectedCategory === cat.name 
                     ? 'bg-blue-600 text-white shadow-md' 
-                    : `${theme.card} ${theme.textSub} hover:text-blue-500`
+                    : `${theme.card} ${theme.subText} hover:text-blue-500`
                 }`}
               >
                 {cat.icon} <span>{cat.name}</span>
@@ -415,7 +440,7 @@ export default function AssetRegistryPage() {
 
           <div className={`p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
             <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.subText}`} />
               <input 
                 type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search by Tag ID, Assets Name, S/N, Holder Name, or EMP Code..." 
@@ -429,7 +454,7 @@ export default function AssetRegistryPage() {
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
             <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-500' : 'border-blue-600'}`}></div>
-            <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.textSub}`}>Loading Database</span>
+            <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.subText}`}>Loading Database</span>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -444,7 +469,7 @@ export default function AssetRegistryPage() {
                       </div>
                       <div className="overflow-hidden">
                         <h3 className={`text-sm font-semibold leading-tight truncate max-w-[170px] ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
-                        <p className={`text-[11px] mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
+                        <p className={`text-[11px] mt-0.5 truncate ${theme.subText}`}>{asset.brand || 'Standard Brand'}</p>
                       </div>
                     </div>
                     <button onClick={() => openAssetViewModal(asset)} className={`p-2.5 rounded-xl transition-colors cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a] hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600'}`}>
@@ -460,17 +485,17 @@ export default function AssetRegistryPage() {
 
                 <div className={`p-5 space-y-3 flex-1 ${isDarkMode ? 'bg-[#0a0a0a]/50' : 'bg-slate-50/50'}`}>
                   <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
-                    <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
+                    <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.subText}`}>Tag ID</span> 
                     <span className={`font-mono font-bold text-xs ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{asset.clean_tag}</span>
                   </div>
                   <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
-                    <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
+                    <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.subText}`}>Serial S/N</span> 
                     <span className={`font-mono font-bold text-[11px] truncate max-w-[140px] ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
                   </div>
                   
                   <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-colors ${theme.card} group-hover:border-blue-500/30`}>
                     <div className="flex flex-col">
-                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Holder</span> 
+                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.subText}`}>Holder</span> 
                       <span className={`font-bold text-[11px] truncate max-w-[120px] ${theme.textMain}`} title={asset.staff_name}>{asset.staff_name}</span>
                     </div>
                     <span className={`font-mono font-bold px-2 py-1 rounded-lg text-[9px] ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-slate-100 text-slate-500'}`}>{asset.emp_code}</span>
@@ -479,9 +504,9 @@ export default function AssetRegistryPage() {
 
                 <div className={`p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-100/80 border-slate-200'}`}>
                   <div className="flex items-center gap-2">
-                    <Clock size={14} className={theme.textSub} />
+                    <Clock size={14} className={theme.subText} />
                     <div className="flex flex-col">
-                      <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
+                      <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.subText}`}>Last Audited</span>
                       <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'No Log'}</span>
                     </div>
                   </div>
@@ -508,7 +533,7 @@ export default function AssetRegistryPage() {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
         return (
-          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
             <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
               
               {/* Left Column: CLEAN QR Matrix Design */}
@@ -518,7 +543,7 @@ export default function AssetRegistryPage() {
                 {/* 1. Header */}
                 <h3 className={`text-2xl font-bold tracking-widest uppercase mb-8 mt-4 ${theme.textMain}`}>VSS</h3>
                 
-                {/* 2. Pure White QR Code Box (Crucial for scanner readability in dark mode) */}
+                {/* 2. Pure White QR Code Box */}
                 <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200 mb-8 relative group">
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
                 </div>
@@ -529,12 +554,21 @@ export default function AssetRegistryPage() {
                 </div>
                 
                 {/* 4. S/N */}
-                <p className={`text-sm font-semibold tracking-wide ${theme.textSub} mb-8 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
+                <p className={`text-sm font-semibold tracking-wide ${theme.subText} mb-6 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
                   S/N: {editForm.serial || viewAssetModal.serial_number}
                 </p>
 
-                <div className="flex w-full gap-2 mt-auto">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
+                <div className="flex flex-col w-full gap-3 mt-auto">
+                  {/* 📝 NEW: HANDOVER AGREEMENT BUTTON */}
+                  {viewAssetModal.status === 'Assigned' && (
+                    <button 
+                      onClick={() => handleSendHandoverAgreement(viewAssetModal)}
+                      className="w-full py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+                    >
+                      <FileSignature size={16} /> Issue Handover Agreement
+                    </button>
+                  )}
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`w-full py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
                     <Printer size={16} /> Print Sticker
                   </button>
                 </div>
@@ -548,7 +582,7 @@ export default function AssetRegistryPage() {
                   
                   <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b gap-4 ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
                     <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Logistics State:</span>
+                      <span className={`text-[10px] font-semibold uppercase tracking-widest ${theme.subText}`}>Logistics State:</span>
                       <span className={`px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
                     </div>
 
@@ -568,12 +602,13 @@ export default function AssetRegistryPage() {
 
                       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
                         <div>
-                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
+                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Asset Category *</label>
                           <select 
                             value={editForm.category} 
                             onChange={e => {
                               const newCat = e.target.value;
-                              setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat) });
+                              // FIX: Maintain Tag ID Suffix
+                              setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) });
                             }}
                             className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}
                           >
@@ -583,33 +618,33 @@ export default function AssetRegistryPage() {
                         <div>
                           <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
                             <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
+                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force random refresh)</button>
                           </label>
                           <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
                         </div>
                       </div>
 
                       <div>
-                        <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (S/N) *</label>
+                        <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Factory Serial Number (S/N) *</label>
                         <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Assets Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
                       </div>
 
                       <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
+                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
                         <div>
-                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Inspection State</label>
+                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Inspection State</label>
                           <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}>
                             <option value="Approved">✅ Approved</option><option value="Re-Inspection">🔄 Re-Inspection</option><option value="Not Approved">⚠️ Not Approved</option><option value="Rejected">❌ Rejected</option>
                           </select>
@@ -617,7 +652,7 @@ export default function AssetRegistryPage() {
                       </div>
 
                       <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
-                        <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
+                        <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.subText}`}>Re-Assign Holder</label>
                         <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
                       </div>
 
@@ -631,13 +666,13 @@ export default function AssetRegistryPage() {
                   ) : (
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'Laptop'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
+                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.safe_display_name}</p></div>
+                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Brand</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
+                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Assets Name</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.safe_display_name}</p></div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -653,16 +688,16 @@ export default function AssetRegistryPage() {
                         </div>
                       </div>
 
-                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#18181b] border-blue-500/30' : 'bg-blue-50/50 border-blue-100'}`}>
+                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50/50 border-blue-100'}`}>
                         <div>
-                          <span className={`text-[10px] font-semibold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
+                          <span className={`text-[10px] font-semibold uppercase tracking-widest block mb-1.5 ${theme.subText}`}>Assigned Employee Holder:</span>
                           <div className="flex items-center gap-3">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${theme.iconBgBlue}`}><User size={16}/></div>
                             <span className={`text-base font-semibold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
                           </div>
                         </div>
                         <div className="flex flex-col items-end">
-                           <span className={`text-[9px] font-semibold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
+                           <span className={`text-[9px] font-semibold uppercase tracking-widest mb-1 ${theme.subText}`}>EMP CODE</span>
                            <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/30 text-blue-400' : 'bg-white border-blue-100 text-blue-800'}`}>{viewAssetModal.emp_code}</span>
                         </div>
                       </div>
