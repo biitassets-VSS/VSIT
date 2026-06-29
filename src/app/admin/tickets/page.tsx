@@ -107,12 +107,12 @@ export default function AdminTicketsPage() {
     return isDarkMode ? 'text-zinc-400 bg-zinc-800 border-zinc-700' : 'text-slate-700 bg-slate-50 border-slate-200';
   };
 
-  // 🌟 MASTER THEME DICTIONARY
+  // 🌟 MASTER THEME DICTIONARY (Fully Standardized to subText)
   const theme = {
     bg: isDarkMode ? 'bg-zinc-950' : 'bg-slate-50',
     card: isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200/80',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-blue-500 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-slate-50',
     divider: isDarkMode ? 'border-zinc-800' : 'border-slate-100',
@@ -164,7 +164,7 @@ export default function AdminTicketsPage() {
                   </span>
                 )}
               </div>
-              <p className={`text-sm ${theme.textSub}`}>Triage, update, and resolve staff hardware and IT requests.</p>
+              <p className={`text-sm ${theme.subText}`}>Triage, update, and resolve staff hardware and IT requests.</p>
             </div>
           </div>
           <button 
@@ -190,7 +190,7 @@ export default function AdminTicketsPage() {
                 className={`px-5 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wider shrink-0 transition-all ${
                   filterTab === tab.id 
                     ? 'bg-blue-600 text-white shadow-md' 
-                    : `${theme.card} ${theme.textSub} hover:text-blue-500`
+                    : `${theme.card} ${theme.subText} hover:text-blue-500`
                 }`}
               >
                 {tab.label}
@@ -200,7 +200,7 @@ export default function AdminTicketsPage() {
 
           <div className={`p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
             <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.subText}`} />
               <input 
                 type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search by Employee Name, ID, or Ticket Title..." 
@@ -214,13 +214,13 @@ export default function AdminTicketsPage() {
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
             <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-400' : 'border-blue-600'}`}></div>
-            <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.textSub}`}>Fetching Tickets...</span>
+            <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.subText}`}>Fetching Tickets...</span>
           </div>
         ) : filteredTickets.length === 0 ? (
           <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm transition-colors ${theme.card}`}>
             <TicketIcon size={48} className={`mx-auto ${isDarkMode ? 'text-zinc-700' : 'text-slate-300'}`} />
             <h3 className={`text-sm font-bold uppercase tracking-widest ${theme.textMain}`}>No Tickets Found</h3>
-            <p className={`text-xs font-semibold ${theme.textSub}`}>The queue is clear for this category.</p>
+            <p className={`text-xs font-semibold ${theme.subText}`}>The queue is clear for this category.</p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -243,15 +243,15 @@ export default function AdminTicketsPage() {
 
                   <div className={`p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
                     <div className="flex justify-between items-center text-xs">
-                      <span className={`font-semibold uppercase tracking-widest ${theme.textSub}`}>Employee</span>
+                      <span className={`font-semibold uppercase tracking-widest ${theme.subText}`}>Employee</span>
                       <span className={`font-bold ${theme.textMain}`}>{tix.staff_name || tix.created_by}</span>
                     </div>
                     <div className={`flex justify-between items-center text-xs border-t pt-3 ${theme.divider}`}>
-                      <span className={`font-semibold uppercase tracking-widest ${theme.textSub}`}>Emp ID</span>
+                      <span className={`font-semibold uppercase tracking-widest ${theme.subText}`}>Emp ID</span>
                       <span className={`font-mono font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{tix.emp_code || 'N/A'}</span>
                     </div>
                     <div className={`flex justify-between items-center text-xs border-t pt-3 ${theme.divider}`}>
-                      <span className={`font-semibold uppercase tracking-widest ${theme.textSub}`}>Submitted</span>
+                      <span className={`font-semibold uppercase tracking-widest ${theme.subText}`}>Submitted</span>
                       <span className={`font-bold ${theme.textMain}`}>{new Date(tix.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
@@ -262,7 +262,7 @@ export default function AdminTicketsPage() {
                   
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <h4 className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}>
+                      <h4 className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.subText}`}>
                         <AlertTriangle size={14}/> Problem Description
                       </h4>
                       <div className={`p-5 rounded-2xl border text-sm font-medium whitespace-pre-wrap leading-relaxed ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800 text-zinc-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
