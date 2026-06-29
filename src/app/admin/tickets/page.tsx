@@ -348,11 +348,12 @@ export default function AssetRegistryPage() {
     return matchesSearch && matchesCat;
   });
 
-  // 🌟 MASTER THEME DICTIONARY (Fully Standardized to `subText` and Carbon Black)
+  // 🌟 MASTER THEME DICTIONARY (Bulletproofed for TypeScript)
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
