@@ -213,7 +213,6 @@ export default function AssetRegistryPage() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  // 🎨 Carbon/Slate Aware Badges
   const getStockStatusBadge = (status: string) => {
     const s = status || 'In Stock (Unassigned)';
     if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -292,7 +291,6 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
-  // 🖨️ Clean, High-Readability Print Sticker Logic
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
     const printWindow = window.open('', '_blank', 'width=400,height=400');
@@ -348,7 +346,7 @@ export default function AssetRegistryPage() {
     return matchesSearch && matchesCat;
   });
 
-  // 🌟 MASTER THEME DICTIONARY (Fully Standardized to `subText`)
+  // 🌟 MASTER THEME DICTIONARY (Standardized keys)
   const theme = {
     bg: isDarkMode ? 'bg-zinc-950' : 'bg-slate-50',
     card: isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200/60',
@@ -502,180 +500,6 @@ export default function AssetRegistryPage() {
         )}
 
       </div>
-
-      {/* 🚀 VIEW & EDIT MODAL (UPDATED QR LAYOUT) */}
-      {viewAssetModal && (() => {
-        const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
-        
-        return (
-          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
-            <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
-              
-              {/* Left Column: CLEAN QR Matrix Design */}
-              <div className={`w-full md:w-[35%] p-8 flex flex-col items-center border-b md:border-b-0 md:border-r ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-slate-50 border-slate-200'} relative shrink-0`}>
-                <button onClick={() => setViewAssetModal(null)} className={`absolute md:hidden top-4 right-4 p-2 rounded-full shadow-sm ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-white text-slate-400'}`}><X size={14}/></button>
-                
-                {/* 1. Header */}
-                <h3 className={`text-2xl font-bold tracking-widest uppercase mb-8 mt-4 ${theme.textMain}`}>VSS</h3>
-                
-                {/* 2. Pure White QR Code Box (Crucial for scanner readability in dark mode) */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200 mb-8 relative group">
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
-                </div>
-
-                {/* 3. Asset ID (No black button, highly readable) */}
-                <div className={`text-2xl font-bold tracking-widest mb-3 ${theme.textMain}`}>
-                  {liveModalTag}
-                </div>
-                
-                {/* 4. S/N */}
-                <p className={`text-sm font-semibold tracking-wide ${theme.subText} mb-8 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
-                  S/N: {editForm.serial || viewAssetModal.serial_number}
-                </p>
-
-                <div className="flex w-full gap-2 mt-auto">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
-                    <Printer size={16} /> Print Sticker
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: Editor Workspace */}
-              <div className={`w-full md:w-[65%] flex flex-col overflow-y-auto custom-scrollbar relative ${theme.modalBody}`}>
-                <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex absolute top-6 right-6 p-2.5 rounded-full cursor-pointer z-10 transition-colors ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={18}/></button>
-
-                <div className="p-8 md:p-10 space-y-8">
-                  
-                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b gap-4 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-semibold uppercase tracking-widest ${theme.subText}`}>Logistics State:</span>
-                      <span className={`px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                    </div>
-
-                    {!isEditingAsset && (
-                      <button onClick={() => setIsEditingAsset(true)} className={`px-5 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors sm:ml-auto ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white'}`}>
-                        <Edit2 size={14} /> Edit Record
-                      </button>
-                    )}
-                  </div>
-
-                  {isEditingAsset ? (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                      
-                      <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-zinc-800' : 'border-blue-100'}`}>
-                        <span className={`text-sm font-semibold uppercase tracking-widest ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>Editing Hardware Record</span>
-                      </div>
-
-                      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-blue-50/30 border-blue-100'}`}>
-                        <div>
-                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Asset Category *</label>
-                          <select 
-                            value={editForm.category} 
-                            onChange={e => {
-                              const newCat = e.target.value;
-                              setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat) });
-                            }}
-                            className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}
-                          >
-                            {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-                            <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
-                          </label>
-                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-zinc-950 border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Factory Serial Number (S/N) *</label>
-                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Assets Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                      </div>
-
-                      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
-                        <div>
-                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.subText}`}>Inspection State</label>
-                          <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}>
-                            <option value="Approved">✅ Approved</option><option value="Re-Inspection">🔄 Re-Inspection</option><option value="Not Approved">⚠️ Not Approved</option><option value="Rejected">❌ Rejected</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
-                        <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.subText}`}>Re-Assign Holder</label>
-                        <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
-                      </div>
-
-                      <div className="flex gap-4 pt-6">
-                        <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                        <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
-                          {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'Laptop'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Brand</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.subText}`}>Assets Name</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.safe_display_name}</p></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Purchase Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{viewAssetModal.purchase_date ? new Date(viewAssetModal.purchase_date).toLocaleDateString('en-IN') : 'Not Recorded'}</p></div>
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Warranty Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{viewAssetModal.warranty_expiry ? new Date(viewAssetModal.warranty_expiry).toLocaleDateString('en-IN') : 'No Warranty'}</p></div>
-                        <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}>
-                          <p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Inspection Status</p>
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>
-                              {viewAssetModal.live_inspection_status || 'Approved'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50/50 border-blue-100'}`}>
-                        <div>
-                          <span className={`text-[10px] font-semibold uppercase tracking-widest block mb-1.5 ${theme.subText}`}>Assigned Employee Holder:</span>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${theme.iconBgBlue}`}><User size={16}/></div>
-                            <span className={`text-base font-semibold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                           <span className={`text-[9px] font-semibold uppercase tracking-widest mb-1 ${theme.subText}`}>EMP CODE</span>
-                           <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-zinc-900 border-blue-500/30 text-blue-400' : 'bg-white border-blue-100 text-blue-800'}`}>{viewAssetModal.emp_code}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
-
     </div>
   );
 }
