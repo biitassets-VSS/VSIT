@@ -304,19 +304,45 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
-  // 📝 NEW HANDOVER AGREEMENT FUNCTION (Placeholder for API Integration)
+ // 📝 REAL HANDOVER AGREEMENT FUNCTION
   const handleSendHandoverAgreement = async (asset: any) => {
     if (!asset.assigned_to) {
       alert("This asset is not assigned to anyone. Please assign it first.");
       return;
     }
-    const confirmSend = confirm(`Send PDF Handover Agreement to ${asset.staff_name}?`);
+    const confirmSend = confirm(`Send Handover Agreement to ${asset.staff_name}?`);
     if (!confirmSend) return;
 
-    // TODO: Connect this to your /api/send-email route to generate and send the PDF link.
-    alert(`Handover Agreement notification sent to ${asset.staff_name}! They will be prompted to digitally sign the document.`);
-  };
+    try {
+      // 1. Update the asset to 'Pending' status
+      const { error } = await supabase
+        .from('assets')
+        .update({ handover_status: 'Pending' })
+        .eq('id', asset.id);
 
+      if (error) throw error;
+
+      // 2. Trigger a notification for the staff member
+      const { data: profile } = await supabase.from('profiles').select('id').eq('email', asset.assigned_to).maybeSingle();
+      if (profile?.id) {
+        await supabase.from('notifications').insert({
+          user_id: profile.id,
+          title: '📄 Action Required: Asset Handover',
+          message: `Please sign the handover agreement for your new asset (${asset.clean_tag}).`,
+          type: 'info',
+          is_read: false
+        });
+      }
+
+      alert(`Agreement sent to ${asset.staff_name}! They will see it on their Staff Dashboard.`);
+      
+      // Update local state to show it was sent
+      setViewAssetModal((prev: any) => ({ ...prev, handover_status: 'Pending' }));
+      fetchRegistryData();
+    } catch (err: any) {
+      alert(`Error sending agreement: ${err.message}`);
+    }
+  };
   // 🖨️ Clean, High-Readability Print Sticker Logic
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
