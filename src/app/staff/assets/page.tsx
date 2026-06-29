@@ -2,237 +2,318 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Laptop, Loader2, FileSignature, CheckCircle2, ShieldCheck, AlertTriangle, X } from 'lucide-react';
+import { 
+  Laptop, Loader2, ShieldCheck, AlertTriangle, 
+  FileSignature, CheckCircle2, QrCode, PenTool, X 
+} from 'lucide-react';
 
-export default function StaffMyAssetsPage() {
+export default function StaffAssetsPage() {
   const [loading, setLoading] = useState(true);
-  const [assets, setAssets] = useState<any[]>([]);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [signModal, setSignModal] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
+  
+  // E-Sign Modal State
+  const [signModalAsset, setSignModalAsset] = useState<any>(null);
   const [signatureName, setSignatureName] = useState('');
   const [isSigning, setIsSigning] = useState(false);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('vsit_theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
     fetchMyAssets();
   }, []);
 
   const fetchMyAssets = async () => {
     setLoading(true);
     try {
-      const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!sessionStr) return;
-      
-      let email = sessionStr;
-      try { email = JSON.parse(sessionStr).email; } catch(e) {}
-      const cleanEmail = email?.toLowerCase().trim();
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+      let user: any = {};
 
-      // Fetch assets assigned to this email or where profile ID matches
-      const { data, error } = await supabase
+      if (isGuest) {
+        user = { id: 'guest-mock-uuid', email: 'guest@vsit.com', emp_id: 'DEMO-001', name: 'Demo Guest' };
+        setCurrentUser(user);
+        
+        // Demo Data
+        setAssignedAssets([
+          { 
+            id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', 
+            serial_number: 'SN-DEMO-1', category: 'Laptop', inspection_status: 'Pending', status: 'Assigned' 
+          },
+          { 
+            id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', 
+            serial_number: 'SN-DEMO-2', category: 'Hardware', inspection_status: 'Approved', status: 'Assigned' 
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      // 1. Get Session User
+      const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+      if (!sessionStr) {
+        window.location.replace('/');
+        return;
+      }
+
+      try { user = JSON.parse(sessionStr); } 
+      catch (e) { user = { email: sessionStr }; }
+
+      const cleanEmail = user.email?.toLowerCase().trim();
+      const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
+      
+      const empId = profile?.emp_code || profile?.emp_id || 'STAFF';
+      const userId = profile?.id || user.id;
+      const userName = profile?.full_name || profile?.name || cleanEmail.split('@')[0];
+
+      setCurrentUser({ id: userId, email: cleanEmail, emp_id: empId, name: userName });
+
+      // 🌟 2. THE SMART MATCH FILTER (Fixes missing assets)
+      // Matches if assigned_to equals their UUID, their Email, OR their Emp Code
+      const { data: assetsRes, error } = await supabase
         .from('assets')
         .select('*')
-        .or(`assigned_to.ilike.${cleanEmail}`)
-        .order('created_at', { ascending: false });
+        .or(`assigned_to.eq.${userId},assigned_to.ilike.${cleanEmail},assigned_to.eq.${empId}`);
 
       if (error) throw error;
-      setAssets(data || []);
-    } catch (err: any) {
-      console.error(err);
+      
+      setAssignedAssets(assetsRes || []);
+
+    } catch (err) {
+      console.error("Error fetching assets:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const submitDigitalSignature = async (e: React.FormEvent) => {
+  // 🌟 THE E-SIGN SUBMISSION LOGIC
+  const handleSignAgreement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signatureName.trim()) return alert("Please type your name to sign.");
-    
     setIsSigning(true);
+
     try {
-      const timestamp = new Date().toISOString();
-      const signatureData = `Digitally Signed by: ${signatureName} | Date: ${new Date(timestamp).toLocaleString()}`;
+      if (currentUser.id === 'guest-mock-uuid') {
+        // Guest Bypass
+        setTimeout(() => {
+          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, inspection_status: 'Approved' } : a));
+          setSignModalAsset(null);
+          setIsSigning(false);
+          setSignatureName('');
+        }, 800);
+        return;
+      }
 
-      const { error } = await supabase
+      // 1. Mark Asset as Approved
+      const { error: assetError } = await supabase
         .from('assets')
-        .update({ 
-          handover_status: 'Signed',
-          handover_signature: signatureData
-        })
-        .eq('id', signModal.id);
+        .update({ inspection_status: 'Approved' })
+        .eq('id', signModalAsset.id);
 
-      if (error) throw error;
+      if (assetError) throw assetError;
 
-      alert("Thank you! Handover Agreement signed successfully.");
-      setSignModal(null);
+      // 2. Log the legally binding agreement in inspections table
+      await supabase.from('inspections').insert({
+        asset_id: signModalAsset.id,
+        inspected_by: currentUser.id || currentUser.emp_id,
+        user_email: currentUser.email,
+        condition: 'Pristine / Flawless',
+        status: 'Approved',
+        notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
+      });
+
+      // Update UI instantly
+      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, inspection_status: 'Approved' } : a));
+      setSignModalAsset(null);
       setSignatureName('');
-      fetchMyAssets(); // Refresh the list
+
     } catch (err: any) {
-      alert(`Error signing document: ${err.message}`);
+      alert(`Error signing agreement: ${err.message}`);
     } finally {
       setIsSigning(false);
     }
   };
 
-  // 🌟 MASTER THEME DICTIONARY
-  const theme = {
-    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
-    card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/80',
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
-    modalOverlay: 'bg-black/80 backdrop-blur-sm z-50',
-    modalBody: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
-  };
+  if (loading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Inventory...</p>
+      </div>
+    );
+  }
 
-  if (loading) return (
-    <div className={`flex h-[60vh] items-center justify-center ${theme.bg}`}>
-      <Loader2 className={`w-8 h-8 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-indigo-600'}`} />
-    </div>
-  );
+  // Find assets that need a handover signature (Pending status)
+  const pendingAssets = assignedAssets.filter(a => (a.inspection_status || '').toLowerCase() === 'pending' || (a.status || '').toLowerCase() === 'pending handover');
 
   return (
-    <div className={`space-y-6 antialiased font-sans ${theme.bg} min-h-[80vh] p-4 md:p-6 rounded-3xl`}>
+    <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in duration-500">
       
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
-          <h1 className={`text-2xl font-bold tracking-tight ${theme.textMain}`}>My Assigned Assets</h1>
-          <p className={`text-sm font-medium mt-1 ${theme.textSub}`}>View your hardware and sign pending agreements.</p>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">My Hardware</h1>
+          <p className="text-sm font-medium text-slate-500 mt-1">Manage your assigned equipment and sign handover agreements.</p>
         </div>
-        <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-indigo-50 text-indigo-600'}`}>
-          <Laptop size={24}/>
+        <div className="flex items-center gap-3 bg-blue-50 px-4 py-2.5 rounded-xl border border-blue-100">
+          <ShieldCheck className="text-blue-600" size={20} />
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total Units</p>
+            <p className="text-lg font-black text-blue-700 leading-none">{assignedAssets.length}</p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {assets.length === 0 ? (
-          <div className={`col-span-full p-12 text-center font-medium text-sm rounded-3xl border ${theme.card} ${theme.textSub}`}>
-            You have no hardware assets assigned to you yet.
-          </div>
-        ) : (
-          assets.map(asset => (
-            <div key={asset.id} className={`p-6 rounded-3xl border shadow-sm transition-colors flex flex-col justify-between ${theme.card}`}>
-              
+      {/* 🚨 PENDING E-SIGN ALERTS */}
+      {pendingAssets.length > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-200 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-5"><FileSignature size={120} /></div>
+          <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-rose-500 text-white rounded-2xl shadow-md shrink-0 animate-pulse">
+                <AlertTriangle size={24} />
+              </div>
               <div>
-                <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-black text-rose-900">Action Required: Sign Handover Agreement</h3>
+                <p className="text-sm font-medium text-rose-700 mt-1 max-w-lg">
+                  You have {pendingAssets.length} new asset(s) assigned to you. You must electronically sign the IT asset handover policy to finalize the assignment.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3 relative z-10">
+            {pendingAssets.map(asset => (
+              <div key={asset.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-rose-100 shadow-sm">
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category}</p>
+                  <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
+                </div>
+                <button 
+                  onClick={() => setSignModalAsset(asset)}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-md transition-colors"
+                >
+                  <PenTool size={14} /> Review & Sign
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ASSETS GRID */}
+      {assignedAssets.length === 0 ? (
+        <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
+          <Laptop size={48} className="text-slate-300 mb-4" />
+          <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
+          <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID. If you recently requested equipment, please wait for IT approval.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {assignedAssets.map(asset => {
+            const isPending = (asset.inspection_status || '').toLowerCase() === 'pending' || (asset.status || '').toLowerCase() === 'pending handover';
+            
+            return (
+              <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
+                <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDarkMode ? 'bg-zinc-800 text-zinc-300' : 'bg-slate-100 text-slate-600'}`}>
-                      <Laptop size={18} />
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                      <Laptop size={18}/>
                     </div>
                     <div>
-                      <h3 className={`font-bold ${theme.textMain}`}>{asset.name || asset.asset_name}</h3>
-                      <p className={`text-[11px] uppercase tracking-widest ${theme.textSub}`}>{asset.asset_tag}</p>
+                      <h4 className="font-bold text-sm text-slate-900 line-clamp-1">{asset.name || asset.category || 'Hardware Unit'}</h4>
+                      <p className="text-[11px] font-medium text-slate-500 mt-0.5">{asset.brand || 'Standard'}</p>
                     </div>
                   </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm"><QrCode size={16} className="text-slate-400"/></div>
                 </div>
 
-                <div className={`p-4 rounded-2xl border space-y-2 mb-6 ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="flex justify-between text-xs">
-                    <span className={theme.textSub}>Category</span>
-                    <span className={`font-bold ${theme.textMain}`}>{asset.category}</span>
+                <div className="p-5 space-y-4 flex-1">
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tag ID</span>
+                    <span className="font-mono font-bold text-xs text-slate-800">{asset.asset_tag || 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className={theme.textSub}>Serial Number</span>
-                    <span className={`font-mono font-bold ${theme.textMain}`}>{asset.serial_number || 'N/A'}</span>
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Serial No.</span>
+                    <span className="font-mono font-bold text-xs text-slate-800">{asset.serial_number || 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className={theme.textSub}>Condition</span>
-                    <span className={`font-bold ${theme.textMain}`}>{asset.asset_condition || 'New'}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</span>
+                    {isPending ? (
+                      <span className="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-wider rounded border border-rose-200 flex items-center gap-1">
+                        <AlertTriangle size={10} /> Signature Required
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-wider rounded border border-emerald-200 flex items-center gap-1">
+                        <CheckCircle2 size={10} /> Active & Assigned
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {/* 🚨 HANDOVER AGREEMENT STATUS ENGINE */}
-              <div className="mt-auto pt-4 border-t border-slate-100/10">
-                {asset.handover_status === 'Pending' ? (
-                  <button 
-                    onClick={() => setSignModal(asset)}
-                    className="w-full py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-rose-500/20 transition-colors animate-pulse"
-                  >
-                    <AlertTriangle size={16} /> Action Required: Sign Agreement
-                  </button>
-                ) : asset.handover_status === 'Signed' ? (
-                  <div className={`w-full p-4 rounded-xl border flex flex-col gap-2 ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'}`}>
-                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                      <CheckCircle2 size={16} /> Agreement Signed
-                    </div>
-                    <p className={`text-[10px] font-mono leading-relaxed ${isDarkMode ? 'text-emerald-200/70' : 'text-emerald-900/70'}`}>
-                      {asset.handover_signature}
-                    </p>
-                  </div>
-                ) : (
-                  <div className={`w-full py-3 text-center rounded-xl text-[10px] font-bold uppercase tracking-widest border ${isDarkMode ? 'bg-[#0a0a0a] text-zinc-500 border-[#27272a]' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    No Pending Agreements
-                  </div>
-                )}
-              </div>
-
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* 🚀 DIGITAL SIGNATURE MODAL */}
-      {signModal && (
-        <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
-          <div className={`rounded-3xl max-w-lg w-full shadow-2xl flex flex-col border ${theme.modalBody}`}>
+      {/* 📝 DIGITAL E-SIGN MODAL */}
+      {signModalAsset && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             
-            <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}>
-                <FileSignature size={18} className="text-blue-500"/> IT Handover Agreement
-              </h3>
-              <button onClick={() => setSignModal(null)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:text-slate-900'}`}>
-                <X size={16}/>
-              </button>
+            <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                  <FileSignature size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Asset Handover Agreement</h3>
+                  <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
+                </div>
+              </div>
+              <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"><X size={20}/></button>
             </div>
 
-            <form onSubmit={submitDigitalSignature} className="p-6 md:p-8 space-y-6">
-              
-              <div className={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/50 border-blue-100'}`}>
-                <div className="flex justify-between text-xs">
-                  <span className={theme.textSub}>Asset:</span>
-                  <span className={`font-bold ${theme.textMain}`}>{signModal.name}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className={theme.textSub}>Tag ID:</span>
-                  <span className={`font-mono font-bold ${theme.textMain}`}>{signModal.asset_tag}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className={theme.textSub}>Serial (S/N):</span>
-                  <span className={`font-mono font-bold ${theme.textMain}`}>{signModal.serial_number || 'N/A'}</span>
-                </div>
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 gap-4">
+                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900">{signModalAsset.name || signModalAsset.category}</span></div>
+                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
+                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
+                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assigned Date</span> <span className="font-bold text-slate-900">{new Date().toLocaleDateString()}</span></div>
               </div>
 
-              <div className={`p-5 rounded-2xl border text-xs leading-relaxed font-medium ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                <p className="mb-2 font-bold uppercase tracking-widest text-blue-500">Terms & Conditions:</p>
-                I hereby acknowledge receipt of the IT asset listed above. I agree to take proper care of this equipment and use it strictly for official company business. I understand that I am responsible for returning this asset in good working condition upon termination of my employment or upon request by the IT Department.
+              <div className="prose prose-sm prose-slate max-w-none">
+                <p>I, <strong>{currentUser.name}</strong> (Emp ID: {currentUser.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
+                <ul className="space-y-2 mt-4 text-xs">
+                  <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
+                  <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
+                  <li><strong>3. Return Policy:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management.</li>
+                  <li><strong>4. Liability:</strong> I acknowledge that gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
+                </ul>
               </div>
 
-              <div>
-                <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.textSub}`}>Digital Signature (Type your full name) *</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="e.g. John Doe" 
-                  value={signatureName}
-                  onChange={(e) => setSignatureName(e.target.value)}
-                  className={`w-full p-4 rounded-xl text-sm font-bold outline-none transition-all border ${theme.inputBg}`}
-                />
-              </div>
+              <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-200 space-y-4">
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Electronic Signature</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Type your full legal name to sign..."
+                    value={signatureName}
+                    onChange={(e) => setSignatureName(e.target.value)}
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
+                  />
+                  <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
+                    <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
+                  </p>
+                </div>
 
-              <button 
-                type="submit" 
-                disabled={isSigning}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50"
-              >
-                {isSigning ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-                I Agree and Sign Document
-              </button>
-
-            </form>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setSignModalAsset(null)} className="px-6 py-4 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
+                  <button type="submit" disabled={isSigning || !signatureName.trim()} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
+                    {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
+                    {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
