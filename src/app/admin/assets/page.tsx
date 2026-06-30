@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -16,7 +16,7 @@ const ASSET_CATEGORIES = [
 ];
 
 // ==========================================
-// SEARCHABLE STAFF DROPDOWN COMPONENT (Themed)
+// SEARCHABLE STAFF DROPDOWN COMPONENT 
 // ==========================================
 const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Search name or emp code..." }: any) => {
   const [query, setQuery] = useState('');
@@ -94,9 +94,9 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
 };
 
 // ==========================================
-// MAIN PAGE COMPONENT
+// CORE CONTENT COMPONENT
 // ==========================================
-export default function AssetRegistryPage() {
+function AssetRegistryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -260,6 +260,17 @@ export default function AssetRegistryPage() {
         status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Approved'
       }]);
       if (error) throw error;
+      
+      // Send notification if assigned
+      if (newAssetAssignee) {
+        await supabase.from('notifications').insert({
+          title: 'New Hardware Assigned',
+          message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
+          target_user: newAssetAssignee,
+          is_read: false
+        });
+      }
+
       setIsAddModalOpen(false); fetchRegistryData();
     } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
   };
@@ -284,6 +295,16 @@ export default function AssetRegistryPage() {
 
       const { error } = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
       if (error) throw error;
+
+      if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) {
+        await supabase.from('notifications').insert({
+          title: 'New Hardware Assigned',
+          message: `An admin has assigned ${editForm.name} (${editForm.asset_tag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
+          target_user: editForm.assignee,
+          is_read: false
+        });
+      }
+
       setIsEditingAsset(false); fetchRegistryData();
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
@@ -325,12 +346,10 @@ export default function AssetRegistryPage() {
     printWindow.document.close();
   };
 
-  // 📝 HANDOVER AGREEMENT PDF GENERATOR
   const handlePrintAgreement = (asset: any) => {
     const printWindow = window.open('', '_blank', 'width=800,height=900');
     if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to download the PDF.");
 
-    // Determines if we show the real signature or a "PENDING" stamp
     const isPending = asset.status === 'Pending Handover' || asset.live_inspection_status === 'Pending';
     const signatureText = isPending 
       ? '[ PENDING ELECTRONIC SIGNATURE FROM STAFF ]'
@@ -427,13 +446,11 @@ export default function AssetRegistryPage() {
     return matchesSearch && matchesCat;
   });
 
-  // 🌟 MASTER THEME DICTIONARY (Bulletproofed for TypeScript)
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
-    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
     modalOverlay: 'bg-black/80 backdrop-blur-sm z-50',
@@ -588,7 +605,7 @@ export default function AssetRegistryPage() {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
         return (
-          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
             <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
               
               {/* Left Column: CLEAN QR Matrix Design */}
@@ -598,7 +615,7 @@ export default function AssetRegistryPage() {
                 {/* 1. Header */}
                 <h3 className={`text-2xl font-bold tracking-widest uppercase mb-8 mt-4 ${theme.textMain}`}>VSS</h3>
                 
-                {/* 2. Pure White QR Code Box (Crucial for scanner readability in dark mode) */}
+                {/* 2. Pure White QR Code Box */}
                 <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200 mb-8 relative group">
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
                 </div>
@@ -641,7 +658,6 @@ export default function AssetRegistryPage() {
 
                   {isEditingAsset ? (
                     <div className="space-y-6 animate-in fade-in duration-200">
-                      
                       <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-blue-100'}`}>
                         <span className={`text-sm font-semibold uppercase tracking-widest ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>Editing Hardware Record</span>
                       </div>
@@ -649,14 +665,7 @@ export default function AssetRegistryPage() {
                       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
                         <div>
                           <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                          <select 
-                            value={editForm.category} 
-                            onChange={e => {
-                              const newCat = e.target.value;
-                              setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat) });
-                            }}
-                            className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}
-                          >
+                          <select value={editForm.category} onChange={e => { const newCat = e.target.value; setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat) }); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
                             {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                           </select>
                         </div>
@@ -747,7 +756,7 @@ export default function AssetRegistryPage() {
                         </div>
                       </div>
 
-                      {/* 🌟 NEW: ALWAYS SHOW AGREEMENT IF ASSIGNED TO SOMEONE */}
+                      {/* 🌟 HANDOVER AGREEMENT VIEWER */}
                       {viewAssetModal.staff_name !== 'Unassigned' && (
                         <div className={`p-5 rounded-2xl border mt-5 flex items-center justify-between ${
                           viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
@@ -790,6 +799,104 @@ export default function AssetRegistryPage() {
         );
       })()}
 
+      {/* 🚀 ADD NEW ASSET MODAL */}
+      {isAddModalOpen && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className={`rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border ${theme.modalBody}`}>
+            <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
+              <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
+              <button onClick={() => setIsAddModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
+            </div>
+            
+            <form onSubmit={handleSaveNewAsset} className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
+                <div>
+                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
+                  <select value={newAssetCategory} onChange={e => setNewAssetCategory(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
+                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
+                    <span>Asset Tag ID</span>
+                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
+                  </label>
+                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
+                </div>
+              </div>
+
+              <div>
+                <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (S/N) *</label>
+                <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="Scan factory S/N barcode..." className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name *</label><input type="text" required value={newAssetName} onChange={e => setNewAssetName(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+              </div>
+
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
+                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Demo Use">🧪 Demo</option></select></div>
+              </div>
+
+              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
+                <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.textSub}`}>Assign to Employee (Optional)</label>
+                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} isDarkMode={isDarkMode} />
+              </div>
+
+              <div className="flex gap-4 pt-6">
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#121212] border-[#27272a] text-zinc-300 hover:bg-[#18181b]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
+                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
+                  {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Register New Asset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 BULK UPLOAD MODAL */}
+      {isBulkModalOpen && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
+            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
+              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18}/> Bulk Asset Import</h3>
+              <button onClick={() => setIsBulkModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
+            </div>
+            
+            <div className="space-y-4 text-left">
+              <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>
+                <Download size={16}/> <span>Download CSV Template</span>
+              </button>
+            </div>
+
+            <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-[#3f3f46] bg-[#0a0a0a] hover:bg-[#18181b]' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'}`}>
+              <FileSpreadsheet size={48} className="text-blue-500 animate-pulse" />
+              <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-blue-600 file:text-white hover:file:bg-blue-700' : 'text-slate-700 file:bg-slate-900 file:text-white'}`} />
+            </div>
+
+            <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all bg-slate-300 text-white cursor-not-allowed`}>
+              Execute Batch Upload
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
+  );
+}
+
+export default function AssetRegistryPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0a0a0a]"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>}>
+      <AssetRegistryContent />
+    </Suspense>
   );
 }
