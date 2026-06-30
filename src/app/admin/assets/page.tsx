@@ -7,7 +7,7 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
-  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, Clock, AlertTriangle, FileSignature
+  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, Clock, AlertTriangle
 } from 'lucide-react';
 
 const ASSET_CATEGORIES = [
@@ -144,39 +144,9 @@ export default function AssetRegistryPage() {
     fetchRegistryData();
   }, []);
 
-  // 🚀 FIX: Preserve 4-digit numeric ID when switching categories during Creation
   useEffect(() => {
-    if (isAddModalOpen) {
-      setNewAssetTag(prevTag => generateCategoryPrefix(newAssetCategory, prevTag));
-    }
+    if (isAddModalOpen) setNewAssetTag(generateCategoryPrefix(newAssetCategory));
   }, [newAssetCategory, isAddModalOpen]);
-
-  // 🚀 FIX: Smart Category Prefix Generator (Preserves Suffix)
-  const generateCategoryPrefix = (category: string, currentTag?: string) => {
-    let prefix = 'VS-OTH';
-    const cat = (category || '').toLowerCase();
-    
-    if (cat.includes('laptop')) prefix = 'VS-LAP';
-    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
-    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
-    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
-    else if (cat.includes('headphone')) prefix = 'VS-HDP';
-    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
-    else if (cat.includes('stand')) prefix = 'VS-STN';
-
-    // If we have an existing tag (e.g., VS-LAP-1234), extract the "1234" and attach it to the new prefix.
-    if (currentTag && currentTag.includes('-')) {
-      const parts = currentTag.split('-');
-      const lastPart = parts[parts.length - 1];
-      // Check if the last part is a 4-digit number
-      if (/^\d{4}$/.test(lastPart)) {
-        return `${prefix}-${lastPart}`;
-      }
-    }
-
-    // If no existing valid suffix is found, generate a new random 4-digit suffix
-    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
-  };
 
   useEffect(() => {
     const scanId = searchParams.get('view');
@@ -186,6 +156,24 @@ export default function AssetRegistryPage() {
     }
   }, [searchParams, assets]);
 
+  const generateCategoryPrefix = (category: string, existingUuid?: string) => {
+    let prefix = 'VS-OTH';
+    const cat = (category || '').toLowerCase();
+    if (cat.includes('laptop')) prefix = 'VS-LAP';
+    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
+    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
+    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
+    else if (cat.includes('headphone')) prefix = 'VS-HDP';
+    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
+    else if (cat.includes('stand')) prefix = 'VS-STN';
+
+    if (existingUuid && existingUuid.length > 20) {
+      const numsOnly = existingUuid.replace(/[^0-9]/g, '');
+      const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
+      return `${prefix}-${stableDigits}`;
+    }
+    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  };
 
   const generateSafeUuid = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -211,13 +199,12 @@ export default function AssetRegistryPage() {
       const compiledAssets = assetData.map(asset => {
         const assignee = staffData.find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
         const latestInspection = inspectionData.find(i => i.asset_id === asset.id);
-        
         return {
           ...asset,
           safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
           staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
           emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
-          clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.asset_tag),
+          clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
           live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null
         };
@@ -226,6 +213,7 @@ export default function AssetRegistryPage() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
+  // 🎨 Carbon/Slate Aware Badges
   const getStockStatusBadge = (status: string) => {
     const s = status || 'In Stock (Unassigned)';
     if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -245,7 +233,7 @@ export default function AssetRegistryPage() {
   };
 
   const openAssetViewModal = (asset: any) => {
-    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.asset_tag);
+    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.id);
     setViewAssetModal({ ...asset, clean_tag: stableTag });
     setIsEditingAsset(false);
     setEditForm({
@@ -304,45 +292,6 @@ export default function AssetRegistryPage() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
- // 📝 REAL HANDOVER AGREEMENT FUNCTION
-  const handleSendHandoverAgreement = async (asset: any) => {
-    if (!asset.assigned_to) {
-      alert("This asset is not assigned to anyone. Please assign it first.");
-      return;
-    }
-    const confirmSend = confirm(`Send Handover Agreement to ${asset.staff_name}?`);
-    if (!confirmSend) return;
-
-    try {
-      // 1. Update the asset to 'Pending' status
-      const { error } = await supabase
-        .from('assets')
-        .update({ handover_status: 'Pending' })
-        .eq('id', asset.id);
-
-      if (error) throw error;
-
-      // 2. Trigger a notification for the staff member
-      const { data: profile } = await supabase.from('profiles').select('id').eq('email', asset.assigned_to).maybeSingle();
-      if (profile?.id) {
-        await supabase.from('notifications').insert({
-          user_id: profile.id,
-          title: '📄 Action Required: Asset Handover',
-          message: `Please sign the handover agreement for your new asset (${asset.clean_tag}).`,
-          type: 'info',
-          is_read: false
-        });
-      }
-
-      alert(`Agreement sent to ${asset.staff_name}! They will see it on their Staff Dashboard.`);
-      
-      // Update local state to show it was sent
-      setViewAssetModal((prev: any) => ({ ...prev, handover_status: 'Pending' }));
-      fetchRegistryData();
-    } catch (err: any) {
-      alert(`Error sending agreement: ${err.message}`);
-    }
-  };
   // 🖨️ Clean, High-Readability Print Sticker Logic
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
@@ -399,11 +348,12 @@ export default function AssetRegistryPage() {
     return matchesSearch && matchesCat;
   });
 
-  // 🌟 MASTER THEME DICTIONARY
+  // 🌟 MASTER THEME DICTIONARY (Bulletproofed for TypeScript)
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
@@ -559,7 +509,7 @@ export default function AssetRegistryPage() {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
         return (
-          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
             <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
               
               {/* Left Column: CLEAN QR Matrix Design */}
@@ -569,7 +519,7 @@ export default function AssetRegistryPage() {
                 {/* 1. Header */}
                 <h3 className={`text-2xl font-bold tracking-widest uppercase mb-8 mt-4 ${theme.textMain}`}>VSS</h3>
                 
-                {/* 2. Pure White QR Code Box */}
+                {/* 2. Pure White QR Code Box (Crucial for scanner readability in dark mode) */}
                 <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200 mb-8 relative group">
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
                 </div>
@@ -580,21 +530,12 @@ export default function AssetRegistryPage() {
                 </div>
                 
                 {/* 4. S/N */}
-                <p className={`text-sm font-semibold tracking-wide ${theme.subText} mb-6 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
+                <p className={`text-sm font-semibold tracking-wide ${theme.subText} mb-8 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
                   S/N: {editForm.serial || viewAssetModal.serial_number}
                 </p>
 
-                <div className="flex flex-col w-full gap-3 mt-auto">
-                  {/* 📝 NEW: HANDOVER AGREEMENT BUTTON */}
-                  {viewAssetModal.status === 'Assigned' && (
-                    <button 
-                      onClick={() => handleSendHandoverAgreement(viewAssetModal)}
-                      className="w-full py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
-                    >
-                      <FileSignature size={16} /> Issue Handover Agreement
-                    </button>
-                  )}
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`w-full py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
+                <div className="flex w-full gap-2 mt-auto">
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
                     <Printer size={16} /> Print Sticker
                   </button>
                 </div>
@@ -633,8 +574,7 @@ export default function AssetRegistryPage() {
                             value={editForm.category} 
                             onChange={e => {
                               const newCat = e.target.value;
-                              // FIX: Maintain Tag ID Suffix
-                              setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) });
+                              setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat) });
                             }}
                             className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}
                           >
@@ -644,7 +584,7 @@ export default function AssetRegistryPage() {
                         <div>
                           <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
                             <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force random refresh)</button>
+                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
                           </label>
                           <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
                         </div>
@@ -714,7 +654,7 @@ export default function AssetRegistryPage() {
                         </div>
                       </div>
 
-                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50/50 border-blue-100'}`}>
+                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#18181b] border-blue-500/30' : 'bg-blue-50/50 border-blue-100'}`}>
                         <div>
                           <span className={`text-[10px] font-semibold uppercase tracking-widest block mb-1.5 ${theme.subText}`}>Assigned Employee Holder:</span>
                           <div className="flex items-center gap-3">
