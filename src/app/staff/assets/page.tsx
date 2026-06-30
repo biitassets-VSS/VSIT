@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, Loader2, ShieldCheck, AlertTriangle, 
-  FileSignature, CheckCircle2, QrCode, PenTool, X 
+  FileSignature, CheckCircle2, QrCode, PenTool, X, CalendarClock
 } from 'lucide-react';
 
 export default function StaffAssetsPage() {
@@ -35,18 +35,19 @@ export default function StaffAssetsPage() {
         setAssignedAssets([
           { 
             id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', 
-            serial_number: 'SN-DEMO-1', category: 'Laptop', inspection_status: 'Pending', status: 'Assigned' 
+            serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', status: 'Assigned',
+            live_inspection_date: null
           },
           { 
             id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', 
-            serial_number: 'SN-DEMO-2', category: 'Hardware', inspection_status: 'Approved', status: 'Assigned' 
+            serial_number: 'SN-DEMO-2', category: 'Hardware', live_inspection_status: 'Approved', status: 'Assigned',
+            live_inspection_date: new Date().toISOString()
           }
         ]);
         setLoading(false);
         return;
       }
 
-      // 1. Get Session User
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       if (!sessionStr) {
         window.location.replace('/');
@@ -65,8 +66,7 @@ export default function StaffAssetsPage() {
 
       setCurrentUser({ id: userId, email: cleanEmail, emp_id: empId, name: userName });
 
-      // 🌟 2. THE SMART MATCH FILTER (Fixes missing assets)
-      // Matches if assigned_to equals their UUID, their Email, OR their Emp Code
+      // SMART MATCH: Finds assets via UUID, Email, or Employee Code
       const { data: assetsRes, error } = await supabase
         .from('assets')
         .select('*')
@@ -74,7 +74,22 @@ export default function StaffAssetsPage() {
 
       if (error) throw error;
       
-      setAssignedAssets(assetsRes || []);
+      // Fetch inspections to check if it has been signed/audited
+      const { data: inspectionsRes } = await supabase
+        .from('inspections')
+        .select('asset_id, status, created_at')
+        .order('created_at', { ascending: false });
+
+      const compiledAssets = (assetsRes || []).map(asset => {
+        const latestInsp = (inspectionsRes || []).find(i => i.asset_id === asset.id);
+        return {
+          ...asset,
+          live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
+          live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
+        };
+      });
+
+      setAssignedAssets(compiledAssets);
 
     } catch (err) {
       console.error("Error fetching assets:", err);
@@ -83,7 +98,6 @@ export default function StaffAssetsPage() {
     }
   };
 
-  // 🌟 THE E-SIGN SUBMISSION LOGIC
   const handleSignAgreement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signatureName.trim()) return alert("Please type your name to sign.");
@@ -91,9 +105,8 @@ export default function StaffAssetsPage() {
 
     try {
       if (currentUser.id === 'guest-mock-uuid') {
-        // Guest Bypass
         setTimeout(() => {
-          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, inspection_status: 'Approved' } : a));
+          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: new Date().toISOString() } : a));
           setSignModalAsset(null);
           setIsSigning(false);
           setSignatureName('');
@@ -101,10 +114,15 @@ export default function StaffAssetsPage() {
         return;
       }
 
-      // 1. Mark Asset as Approved
+      const now = new Date().toISOString();
+
+      // 1. Mark Asset as Approved and stamp the date
       const { error: assetError } = await supabase
         .from('assets')
-        .update({ inspection_status: 'Approved' })
+        .update({ 
+          inspection_status: 'Approved',
+          last_inspection_date: now 
+        })
         .eq('id', signModalAsset.id);
 
       if (assetError) throw assetError;
@@ -119,8 +137,7 @@ export default function StaffAssetsPage() {
         notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
       });
 
-      // Update UI instantly
-      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, inspection_status: 'Approved' } : a));
+      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now } : a));
       setSignModalAsset(null);
       setSignatureName('');
 
@@ -140,8 +157,12 @@ export default function StaffAssetsPage() {
     );
   }
 
-  // Find assets that need a handover signature (Pending status)
-  const pendingAssets = assignedAssets.filter(a => (a.inspection_status || '').toLowerCase() === 'pending' || (a.status || '').toLowerCase() === 'pending handover');
+  // 🌟 FIX: If an asset has no inspection date, or is marked pending, flag it for signature!
+  const pendingAssets = assignedAssets.filter(a => 
+    !a.live_inspection_date || 
+    ['pending', 'not approved', 're-inspection'].includes((a.live_inspection_status || '').toLowerCase()) || 
+    (a.status || '').toLowerCase() === 'pending handover'
+  );
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in duration-500">
@@ -183,7 +204,7 @@ export default function StaffAssetsPage() {
             {pendingAssets.map(asset => (
               <div key={asset.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-rose-100 shadow-sm">
                 <div>
-                  <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category}</p>
+                  <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
                   <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
                 </div>
                 <button 
@@ -208,8 +229,13 @@ export default function StaffAssetsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {assignedAssets.map(asset => {
-            const isPending = (asset.inspection_status || '').toLowerCase() === 'pending' || (asset.status || '').toLowerCase() === 'pending handover';
+            const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((asset.live_inspection_status || '').toLowerCase()) || (asset.status || '').toLowerCase() === 'pending handover';
             
+            // Calculate Due Date (+6 Months)
+            const dueDate = asset.live_inspection_date 
+              ? new Date(new Date(asset.live_inspection_date).setMonth(new Date(asset.live_inspection_date).getMonth() + 6)) 
+              : null;
+
             return (
               <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
@@ -225,28 +251,58 @@ export default function StaffAssetsPage() {
                   <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm"><QrCode size={16} className="text-slate-400"/></div>
                 </div>
 
-                <div className="p-5 space-y-4 flex-1">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                <div className="p-5 space-y-3 flex-1">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tag ID</span>
                     <span className="font-mono font-bold text-xs text-slate-800">{asset.asset_tag || 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Serial No.</span>
                     <span className="font-mono font-bold text-xs text-slate-800">{asset.serial_number || 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  
+                  {/* 🌟 ADDED: Last Inspection & Due Date */}
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><CalendarClock size={10}/> Last Inspection</span>
+                    <span className="font-bold text-xs text-slate-800">
+                      {asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'Pending Signature'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-50">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><AlertTriangle size={10}/> Next Due Date</span>
+                    <span className={`font-bold text-xs ${dueDate && dueDate < new Date() ? 'text-rose-600' : 'text-slate-800'}`}>
+                      {dueDate ? dueDate.toLocaleDateString('en-IN') : 'Immediate'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</span>
                     {isPending ? (
                       <span className="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-wider rounded border border-rose-200 flex items-center gap-1">
-                        <AlertTriangle size={10} /> Signature Required
+                         Signature Required
                       </span>
                     ) : (
                       <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-wider rounded border border-emerald-200 flex items-center gap-1">
-                        <CheckCircle2 size={10} /> Active & Assigned
+                         Active & Assigned
                       </span>
                     )}
                   </div>
                 </div>
+
+                {/* 🌟 ADDED: Persistent Handover Agreement Button */}
+                <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0">
+                  <button 
+                    onClick={() => setSignModalAsset(asset)}
+                    className={`w-full py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                      isPending 
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md' 
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-blue-600'
+                    }`}
+                  >
+                    {isPending ? <><PenTool size={14}/> Sign Handover Form</> : <><FileSignature size={14}/> View Agreement</>}
+                  </button>
+                </div>
+
               </div>
             );
           })}
@@ -254,69 +310,90 @@ export default function StaffAssetsPage() {
       )}
 
       {/* 📝 DIGITAL E-SIGN MODAL */}
-      {signModalAsset && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
-                  <FileSignature size={20} />
+      {signModalAsset && (() => {
+        const isModalPending = !signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover';
+        
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              
+              <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                    <FileSignature size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Asset Handover Agreement</h3>
+                    <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Asset Handover Agreement</h3>
-                  <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
-                </div>
-              </div>
-              <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"><X size={20}/></button>
-            </div>
-
-            <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 gap-4">
-                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900">{signModalAsset.name || signModalAsset.category}</span></div>
-                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
-                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
-                <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assigned Date</span> <span className="font-bold text-slate-900">{new Date().toLocaleDateString()}</span></div>
+                <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"><X size={20}/></button>
               </div>
 
-              <div className="prose prose-sm prose-slate max-w-none">
-                <p>I, <strong>{currentUser.name}</strong> (Emp ID: {currentUser.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
-                <ul className="space-y-2 mt-4 text-xs">
-                  <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
-                  <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-                  <li><strong>3. Return Policy:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management.</li>
-                  <li><strong>4. Liability:</strong> I acknowledge that gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
-                </ul>
+              <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 gap-4">
+                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900">{signModalAsset.name || signModalAsset.category}</span></div>
+                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
+                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
+                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? new Date(signModalAsset.live_inspection_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</span></div>
+                </div>
+
+                <div className="prose prose-sm prose-slate max-w-none">
+                  <p>I, <strong>{currentUser.name}</strong> (Emp ID: {currentUser.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
+                  <ul className="space-y-2 mt-4 text-xs">
+                    <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
+                    <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
+                    <li><strong>3. Return Policy:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management.</li>
+                    <li><strong>4. Liability:</strong> I acknowledge that gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
+                  </ul>
+                </div>
+
+                {/* Conditional Form: If Signed vs If Pending */}
+                {isModalPending ? (
+                  <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-200 space-y-4">
+                    <div>
+                      <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Electronic Signature</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Type your full legal name to sign..."
+                        value={signatureName}
+                        onChange={(e) => setSignatureName(e.target.value)}
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
+                      />
+                      <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
+                        <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button type="button" onClick={() => setSignModalAsset(null)} className="px-6 py-4 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
+                      <button type="submit" disabled={isSigning || !signatureName.trim()} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
+                        {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
+                        {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="pt-4">
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                      <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
+                      <div>
+                        <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Agreement Signed & Accepted</h4>
+                        <p className="text-xs font-medium text-emerald-700 mt-1">This asset is actively assigned to you. The digital handover agreement is legally logged in the system.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setSignModalAsset(null)} className="w-full mt-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer">
+                      Close Document
+                    </button>
+                  </div>
+                )}
+
               </div>
-
-              <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-200 space-y-4">
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Electronic Signature</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="Type your full legal name to sign..."
-                    value={signatureName}
-                    onChange={(e) => setSignatureName(e.target.value)}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
-                  />
-                  <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
-                    <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setSignModalAsset(null)} className="px-6 py-4 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
-                  <button type="submit" disabled={isSigning || !signatureName.trim()} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
-                    {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
-                    {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
