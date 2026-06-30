@@ -66,7 +66,6 @@ export default function StaffAssetsPage() {
 
       setCurrentUser({ id: userId, email: cleanEmail, emp_id: empId, name: userName });
 
-      // SMART MATCH: Finds assets via UUID, Email, or Employee Code
       const { data: assetsRes, error } = await supabase
         .from('assets')
         .select('*')
@@ -74,7 +73,6 @@ export default function StaffAssetsPage() {
 
       if (error) throw error;
       
-      // Fetch inspections to check if it has been signed/audited
       const { data: inspectionsRes } = await supabase
         .from('inspections')
         .select('asset_id, status, created_at')
@@ -108,7 +106,6 @@ export default function StaffAssetsPage() {
 
       if (currentUser.id === 'guest-mock-uuid') {
         setTimeout(() => {
-          // 🌟 THE FIX: Update `status` to 'Assigned' instantly in UI for Demo
           setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
           setSignModalAsset(null);
           setIsSigning(false);
@@ -117,19 +114,19 @@ export default function StaffAssetsPage() {
         return;
       }
 
-      // 🌟 THE FIX: Mark Asset as Approved AND change status to 'Assigned'
+      // 1. Mark Asset as Approved AND change status to 'Assigned'
       const { error: assetError } = await supabase
         .from('assets')
         .update({ 
           inspection_status: 'Approved',
           last_inspection_date: now,
-          status: 'Assigned' // This clears the pending loop!
+          status: 'Assigned'
         })
         .eq('id', signModalAsset.id);
 
       if (assetError) throw assetError;
 
-      // Log the legally binding agreement in inspections table
+      // 2. Log the legally binding agreement in inspections table
       await supabase.from('inspections').insert({
         asset_id: signModalAsset.id,
         inspected_by: currentUser.id || currentUser.emp_id,
@@ -139,7 +136,15 @@ export default function StaffAssetsPage() {
         notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
       });
 
-      // Update UI instantly to remove the red banner
+      // 🌟 3. NEW: SEND ALERT TO ADMIN DASHBOARD
+      await supabase.from('notifications').insert({
+        title: 'Agreement Signed',
+        message: `${currentUser.name} has electronically signed the Handover Agreement for ${signModalAsset.name || signModalAsset.category} (${signModalAsset.asset_tag}).`,
+        target_role: 'admin',
+        is_read: false
+      });
+
+      // Update UI instantly
       setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
       setSignModalAsset(null);
       setSignatureName('');
@@ -160,7 +165,6 @@ export default function StaffAssetsPage() {
     );
   }
 
-  // Identifies assets missing signatures or stuck in pending modes
   const pendingAssets = assignedAssets.filter(a => 
     !a.live_inspection_date || 
     ['pending', 'not approved', 're-inspection'].includes((a.live_inspection_status || '').toLowerCase()) || 
@@ -233,11 +237,7 @@ export default function StaffAssetsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {assignedAssets.map(asset => {
             const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((asset.live_inspection_status || '').toLowerCase()) || (asset.status || '').toLowerCase() === 'pending handover';
-            
-            // Calculate Due Date (+6 Months)
-            const dueDate = asset.live_inspection_date 
-              ? new Date(new Date(asset.live_inspection_date).setMonth(new Date(asset.live_inspection_date).getMonth() + 6)) 
-              : null;
+            const dueDate = asset.live_inspection_date ? new Date(new Date(asset.live_inspection_date).setMonth(new Date(asset.live_inspection_date).getMonth() + 6)) : null;
 
             return (
               <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
@@ -349,7 +349,6 @@ export default function StaffAssetsPage() {
                   </ul>
                 </div>
 
-                {/* Conditional Form: If Signed vs If Pending */}
                 {isModalPending ? (
                   <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-200 space-y-4">
                     <div>
