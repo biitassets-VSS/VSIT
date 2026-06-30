@@ -85,26 +85,50 @@ export default function AdminDashboardPage() {
 
       setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
 
-      // Safe Data Fetching
-      const [{ count: assets }, { data: inspections }, { data: tickets }, { count: staff }] = await Promise.all([
+      // 🌟 FIXED: We now select the FULL profiles data so we can map Names & Emp Codes to the logs
+      const [
+        { count: assets }, 
+        { data: inspections }, 
+        { data: tickets }, 
+        staffRes
+      ] = await Promise.all([
         supabase.from('assets').select('*', { count: 'exact', head: true }),
         supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true })
+        supabase.from('profiles').select('*') // Full fetch instead of just count
       ]);
 
+      const staffData = staffRes.data || [];
       const pendingCount = inspections?.filter(i => i.status?.toLowerCase().includes('pending')).length || 0;
-      const recentLogs = inspections?.slice(0, 5) || [];
       const ticketCount = tickets?.filter(t => ['open', 'in_repair', 'pending'].includes(t.status)).length || 0;
+
+      // 🌟 NEW: Map inspections to actual User Names and EMP Codes
+      const formattedRecentLogs = (inspections?.slice(0, 5) || []).map(log => {
+        // Try to find the profile that matches this log's email or ID
+        const matchedProfile = staffData.find(p => 
+          p.email?.toLowerCase() === log.user_email?.toLowerCase() || 
+          p.id === log.inspected_by
+        );
+
+        let displayName = log.user_email?.split('@')[0] || 'A user'; // Fallback
+        
+        if (matchedProfile) {
+          const name = matchedProfile.full_name || matchedProfile.name || displayName;
+          const empCode = matchedProfile.emp_code || matchedProfile.emp_id || 'N/A';
+          displayName = `${name} (${empCode})`;
+        }
+
+        return { ...log, displayName };
+      });
 
       setStats({
         totalAssets: assets || 0,
         pendingInspections: pendingCount,
         activeTickets: ticketCount,
-        totalStaff: staff || 0
+        totalStaff: staffData.length || 0 // Re-mapped count
       });
       
-      setRecentActivity(recentLogs);
+      setRecentActivity(formattedRecentLogs);
       setLoading(false);
 
     } catch (e) { 
@@ -315,8 +339,9 @@ export default function AdminDashboardPage() {
                         <Clock size={12} />
                       </div>
                       <div>
+                        {/* 🌟 DISPLAY THE FULL NAME AND EMP CODE IN THE LOG */}
                         <p className={`text-xs font-medium ${theme.text}`}>
-                          {log.user_email?.split('@')[0] || 'A user'} <span className={`${theme.subText}`}>submitted an inspection.</span>
+                          {log.displayName} <span className={`${theme.subText}`}>submitted an inspection/action.</span>
                         </p>
                         <p className={`text-[10px] mt-1 ${theme.subText}`}>{new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                       </div>
