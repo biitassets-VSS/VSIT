@@ -35,7 +35,7 @@ export default function StaffAssetsPage() {
         setAssignedAssets([
           { 
             id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', 
-            serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', status: 'Assigned',
+            serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', status: 'Pending Handover',
             live_inspection_date: null
           },
           { 
@@ -104,9 +104,12 @@ export default function StaffAssetsPage() {
     setIsSigning(true);
 
     try {
+      const now = new Date().toISOString();
+
       if (currentUser.id === 'guest-mock-uuid') {
         setTimeout(() => {
-          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: new Date().toISOString() } : a));
+          // 🌟 THE FIX: Update `status` to 'Assigned' instantly in UI for Demo
+          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
           setSignModalAsset(null);
           setIsSigning(false);
           setSignatureName('');
@@ -114,20 +117,19 @@ export default function StaffAssetsPage() {
         return;
       }
 
-      const now = new Date().toISOString();
-
-      // 1. Mark Asset as Approved and stamp the date
+      // 🌟 THE FIX: Mark Asset as Approved AND change status to 'Assigned'
       const { error: assetError } = await supabase
         .from('assets')
         .update({ 
           inspection_status: 'Approved',
-          last_inspection_date: now 
+          last_inspection_date: now,
+          status: 'Assigned' // This clears the pending loop!
         })
         .eq('id', signModalAsset.id);
 
       if (assetError) throw assetError;
 
-      // 2. Log the legally binding agreement in inspections table
+      // Log the legally binding agreement in inspections table
       await supabase.from('inspections').insert({
         asset_id: signModalAsset.id,
         inspected_by: currentUser.id || currentUser.emp_id,
@@ -137,7 +139,8 @@ export default function StaffAssetsPage() {
         notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
       });
 
-      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now } : a));
+      // Update UI instantly to remove the red banner
+      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
       setSignModalAsset(null);
       setSignatureName('');
 
@@ -157,7 +160,7 @@ export default function StaffAssetsPage() {
     );
   }
 
-  // 🌟 FIX: If an asset has no inspection date, or is marked pending, flag it for signature!
+  // Identifies assets missing signatures or stuck in pending modes
   const pendingAssets = assignedAssets.filter(a => 
     !a.live_inspection_date || 
     ['pending', 'not approved', 're-inspection'].includes((a.live_inspection_status || '').toLowerCase()) || 
@@ -261,7 +264,6 @@ export default function StaffAssetsPage() {
                     <span className="font-mono font-bold text-xs text-slate-800">{asset.serial_number || 'N/A'}</span>
                   </div>
                   
-                  {/* 🌟 ADDED: Last Inspection & Due Date */}
                   <div className="flex justify-between items-center pb-2 border-b border-slate-50">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><CalendarClock size={10}/> Last Inspection</span>
                     <span className="font-bold text-xs text-slate-800">
@@ -289,7 +291,6 @@ export default function StaffAssetsPage() {
                   </div>
                 </div>
 
-                {/* 🌟 ADDED: Persistent Handover Agreement Button */}
                 <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0">
                   <button 
                     onClick={() => setSignModalAsset(asset)}
