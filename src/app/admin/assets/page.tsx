@@ -16,18 +16,44 @@ const ASSET_CATEGORIES = [
 ];
 
 // ==========================================
-// 🛡️ SAFE FORMATTERS (Prevents Render Crashes)
+// 🛡️ SAFE HELPERS & PARSERS
 // ==========================================
-const safeDate = (dateStr: any) => {
+function safeDate(dateStr: any) {
   if (!dateStr) return 'N/A';
   const d = new Date(dateStr);
   return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString('en-IN');
-};
+}
 
-const safeString = (val: any) => {
+function safeString(val: any) {
   if (val === null || val === undefined) return '';
   return String(val);
-};
+}
+
+function generateSafeUuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function generateCategoryPrefix(category: string, existingUuid?: string) {
+  let prefix = 'VS-OTH';
+  const cat = safeString(category).toLowerCase();
+  if (cat.includes('laptop')) prefix = 'VS-LAP';
+  else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
+  else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
+  else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
+  else if (cat.includes('headphone')) prefix = 'VS-HDP';
+  else if (cat.includes('cleaning')) prefix = 'VS-CLN';
+  else if (cat.includes('stand')) prefix = 'VS-STN';
+
+  if (existingUuid && String(existingUuid).length > 20) {
+    const numsOnly = String(existingUuid).replace(/[^0-9]/g, '');
+    const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
+    return `${prefix}-${stableDigits}`;
+  }
+  return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
 
 // ==========================================
 // SEARCHABLE STAFF DROPDOWN COMPONENT 
@@ -145,34 +171,7 @@ function AssetRegistryContent() {
   const [editForm, setEditForm] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Helper generators defined securely at the top
-  const generateCategoryPrefix = (category: string, existingUuid?: string) => {
-    let prefix = 'VS-OTH';
-    const cat = (category || '').toLowerCase();
-    if (cat.includes('laptop')) prefix = 'VS-LAP';
-    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
-    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
-    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
-    else if (cat.includes('headphone')) prefix = 'VS-HDP';
-    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
-    else if (cat.includes('stand')) prefix = 'VS-STN';
-
-    if (existingUuid && String(existingUuid).length > 20) {
-      const numsOnly = String(existingUuid).replace(/[^0-9]/g, '');
-      const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
-      return `${prefix}-${stableDigits}`;
-    }
-    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
-  };
-
-  const generateSafeUuid = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
-
-  // 🌟 GLOBAL THEME SYNC & DATA FETCH
+  // 🌟 GLOBAL THEME SYNC
   useEffect(() => {
     const savedTheme = localStorage.getItem('vsit_theme');
     if (savedTheme === 'dark') {
@@ -280,7 +279,7 @@ function AssetRegistryContent() {
         await supabase.from('notifications').insert({
           title: 'New Hardware Assigned',
           message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-          target_role: newAssetAssignee, // Changed target
+          target_role: newAssetAssignee, 
           is_read: false
         });
       }
@@ -445,7 +444,6 @@ function AssetRegistryContent() {
     return assets.filter(a => safeString(a.category).toLowerCase() === filterName.toLowerCase()).length;
   };
 
-  // 🛡️ Safe filter block to prevent render crashes
   const filteredAssets = assets.filter(a => {
     const q = safeString(searchQuery).toLowerCase();
     const cleanTag = safeString(a.clean_tag).toLowerCase();
@@ -457,7 +455,6 @@ function AssetRegistryContent() {
       safeString(a.staff_name).toLowerCase().includes(q) || 
       safeString(a.emp_code).toLowerCase().includes(q)
     );
-    
     let matchesCat = true;
     if (selectedCategory !== 'All') {
       if (selectedCategory === 'Accessories') matchesCat = ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category);
@@ -472,10 +469,8 @@ function AssetRegistryContent() {
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
-    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
-    modalOverlay: 'bg-black/80 backdrop-blur-sm z-[9999]', // GUARANTEES MODAL SITS ON TOP
     modalBody: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
     modalHeader: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-100',
     iconBgBlue: isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
@@ -627,7 +622,7 @@ function AssetRegistryContent() {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
         return (
-          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
             <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
               
               {/* Left Column: CLEAN QR Matrix Design */}
@@ -773,7 +768,7 @@ function AssetRegistryContent() {
                         </div>
                       </div>
 
-                      {/* 🌟 HANDOVER AGREEMENT VIEWER */}
+                      {/* 🌟 NEW: ALWAYS SHOW AGREEMENT IF ASSIGNED TO SOMEONE */}
                       {viewAssetModal.staff_name !== 'Unassigned' && (
                         <div className={`p-5 rounded-2xl border mt-5 flex items-center justify-between ${
                           viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
@@ -818,7 +813,7 @@ function AssetRegistryContent() {
 
       {/* 🚀 ADD NEW ASSET MODAL */}
       {isAddModalOpen && (
-        <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className={`rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border ${theme.modalBody}`}>
             <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
               <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
@@ -881,7 +876,7 @@ function AssetRegistryContent() {
 
       {/* 🚀 BULK UPLOAD MODAL */}
       {isBulkModalOpen && (
-        <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
             <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
               <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18}/> Bulk Asset Import</h3>
