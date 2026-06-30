@@ -543,6 +543,8 @@ export default function AdminStaffDirectoryPage() {
                     <option value="DOE">DOE</option>
                     <option value="Accounts">Accounts</option>
                     <option value="Education">Education</option>
+                     <option value="Social Media">Social Media</option>
+                      <option value="Administration">Administration</option>
                   </select>
                 </div>
               </div>
