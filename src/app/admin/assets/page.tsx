@@ -7,7 +7,8 @@ import {
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
-  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, Clock, AlertTriangle, FileSignature
+  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
+  Clock, AlertTriangle, FileSignature, Loader2 
 } from 'lucide-react';
 
 const ASSET_CATEGORIES = [
@@ -275,13 +276,18 @@ function AssetRegistryContent() {
       }]);
       if (error) throw error;
       
+      // Notify assigned staff
       if (newAssetAssignee) {
-        await supabase.from('notifications').insert({
-          title: 'New Hardware Assigned',
-          message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-          target_role: newAssetAssignee, 
-          is_read: false
-        });
+        try {
+          await supabase.from('notifications').insert({
+            title: 'New Hardware Assigned',
+            message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
+            target_role: newAssetAssignee, 
+            is_read: false
+          });
+        } catch (notifError) {
+          console.warn("Notification could not be sent:", notifError);
+        }
       }
 
       setIsAddModalOpen(false); 
@@ -311,12 +317,16 @@ function AssetRegistryContent() {
       if (error) throw error;
 
       if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) {
-        await supabase.from('notifications').insert({
-          title: 'New Hardware Assigned',
-          message: `An admin has assigned ${editForm.name} (${editForm.asset_tag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-          target_role: editForm.assignee,
-          is_read: false
-        });
+        try {
+          await supabase.from('notifications').insert({
+            title: 'New Hardware Assigned',
+            message: `An admin has assigned ${editForm.name} (${editForm.asset_tag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
+            target_role: editForm.assignee,
+            is_read: false
+          });
+        } catch (notifError) {
+          console.warn("Notification could not be sent:", notifError);
+        }
       }
 
       setIsEditingAsset(false); 
