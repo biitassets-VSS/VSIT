@@ -16,6 +16,20 @@ const ASSET_CATEGORIES = [
 ];
 
 // ==========================================
+// 🛡️ SAFE FORMATTERS (Prevents Render Crashes)
+// ==========================================
+const safeDate = (dateStr: any) => {
+  if (!dateStr) return 'N/A';
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString('en-IN');
+};
+
+const safeString = (val: any) => {
+  if (val === null || val === undefined) return '';
+  return String(val);
+};
+
+// ==========================================
 // SEARCHABLE STAFF DROPDOWN COMPONENT 
 // ==========================================
 const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Search name or emp code..." }: any) => {
@@ -131,7 +145,34 @@ function AssetRegistryContent() {
   const [editForm, setEditForm] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // 🌟 GLOBAL THEME SYNC
+  // Helper generators defined securely at the top
+  const generateCategoryPrefix = (category: string, existingUuid?: string) => {
+    let prefix = 'VS-OTH';
+    const cat = (category || '').toLowerCase();
+    if (cat.includes('laptop')) prefix = 'VS-LAP';
+    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
+    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
+    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
+    else if (cat.includes('headphone')) prefix = 'VS-HDP';
+    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
+    else if (cat.includes('stand')) prefix = 'VS-STN';
+
+    if (existingUuid && String(existingUuid).length > 20) {
+      const numsOnly = String(existingUuid).replace(/[^0-9]/g, '');
+      const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
+      return `${prefix}-${stableDigits}`;
+    }
+    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  };
+
+  const generateSafeUuid = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  // 🌟 GLOBAL THEME SYNC & DATA FETCH
   useEffect(() => {
     const savedTheme = localStorage.getItem('vsit_theme');
     if (savedTheme === 'dark') {
@@ -148,36 +189,10 @@ function AssetRegistryContent() {
   useEffect(() => {
     const scanId = searchParams.get('view');
     if (scanId && assets.length > 0) {
-      const foundAsset = assets.find(a => a.id === scanId || a.asset_tag === scanId || a.clean_tag === scanId);
+      const foundAsset = assets.find(a => safeString(a.id) === scanId || safeString(a.asset_tag) === scanId || safeString(a.clean_tag) === scanId);
       if (foundAsset) openAssetViewModal(foundAsset);
     }
   }, [searchParams, assets]);
-
-  const generateCategoryPrefix = (category: string, existingUuid?: string) => {
-    let prefix = 'VS-OTH';
-    const cat = (category || '').toLowerCase();
-    if (cat.includes('laptop')) prefix = 'VS-LAP';
-    else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
-    else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
-    else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
-    else if (cat.includes('headphone')) prefix = 'VS-HDP';
-    else if (cat.includes('cleaning')) prefix = 'VS-CLN';
-    else if (cat.includes('stand')) prefix = 'VS-STN';
-
-    if (existingUuid && existingUuid.length > 20) {
-      const numsOnly = existingUuid.replace(/[^0-9]/g, '');
-      const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
-      return `${prefix}-${stableDigits}`;
-    }
-    return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
-  };
-
-  const generateSafeUuid = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
 
   const fetchRegistryData = async () => {
     setLoading(true);
@@ -201,7 +216,7 @@ function AssetRegistryContent() {
           safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
           staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
           emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
-          clean_tag: (asset.asset_tag && asset.asset_tag.length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
+          clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
           live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
           live_inspection_notes: latestInspection?.notes || null
@@ -213,7 +228,7 @@ function AssetRegistryContent() {
 
   // 🎨 Carbon/Slate Aware Badges
   const getStockStatusBadge = (status: string) => {
-    const s = status || 'In Stock (Unassigned)';
+    const s = safeString(status);
     if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
     if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse';
     if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200';
@@ -223,7 +238,7 @@ function AssetRegistryContent() {
   };
 
   const getInspectionStatusColor = (status: string) => {
-    const s = (status || '').toLowerCase().trim();
+    const s = safeString(status).toLowerCase().trim();
     if (s === 'approved') return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
     if (s === 're-inspection') return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
     if (s === 'not approved') return isDarkMode ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-orange-700 bg-orange-50 border-orange-200';
@@ -261,17 +276,17 @@ function AssetRegistryContent() {
       }]);
       if (error) throw error;
       
-      // Send notification if assigned
       if (newAssetAssignee) {
         await supabase.from('notifications').insert({
           title: 'New Hardware Assigned',
           message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-          target_user: newAssetAssignee,
+          target_role: newAssetAssignee, // Changed target
           is_read: false
         });
       }
 
-      setIsAddModalOpen(false); fetchRegistryData();
+      setIsAddModalOpen(false); 
+      fetchRegistryData();
     } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
   };
 
@@ -300,12 +315,13 @@ function AssetRegistryContent() {
         await supabase.from('notifications').insert({
           title: 'New Hardware Assigned',
           message: `An admin has assigned ${editForm.name} (${editForm.asset_tag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-          target_user: editForm.assignee,
+          target_role: editForm.assignee,
           is_read: false
         });
       }
 
-      setIsEditingAsset(false); fetchRegistryData();
+      setIsEditingAsset(false); 
+      fetchRegistryData();
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
@@ -355,7 +371,7 @@ function AssetRegistryContent() {
       ? '[ PENDING ELECTRONIC SIGNATURE FROM STAFF ]'
       : asset.live_inspection_notes?.includes('Digitally Signed') 
         ? asset.live_inspection_notes 
-        : `Digitally Signed Handover Agreement by ${asset.staff_name} on ${new Date(asset.live_inspection_date || new Date()).toLocaleString()}`;
+        : `Digitally Signed Handover Agreement by ${asset.staff_name} on ${safeDate(asset.live_inspection_date)}`;
 
     const doc = `
       <html>
@@ -426,17 +442,22 @@ function AssetRegistryContent() {
     if (filterName === 'All') return assets.length;
     if (filterName === 'Accessories') return assets.filter(a => ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category)).length;
     if (filterName === 'Other') return assets.filter(a => ['Cleaning kit', 'Others'].includes(a.category)).length;
-    return assets.filter(a => a.category?.toLowerCase() === filterName.toLowerCase()).length;
+    return assets.filter(a => safeString(a.category).toLowerCase() === filterName.toLowerCase()).length;
   };
 
+  // 🛡️ Safe filter block to prevent render crashes
   const filteredAssets = assets.filter(a => {
-    const q = searchQuery.toLowerCase();
-    const cleanTag = (a.clean_tag || '').toLowerCase();
+    const q = safeString(searchQuery).toLowerCase();
+    const cleanTag = safeString(a.clean_tag).toLowerCase();
     const matchesSearch = !q || (
-      a.id.toLowerCase().includes(q) || cleanTag.includes(q) ||
-      (a.safe_display_name || '').toLowerCase().includes(q) || (a.serial_number || '').toLowerCase().includes(q) ||
-      (a.staff_name || '').toLowerCase().includes(q) || (a.emp_code || '').toLowerCase().includes(q)
+      safeString(a.id).toLowerCase().includes(q) || 
+      cleanTag.includes(q) ||
+      safeString(a.safe_display_name).toLowerCase().includes(q) || 
+      safeString(a.serial_number).toLowerCase().includes(q) ||
+      safeString(a.staff_name).toLowerCase().includes(q) || 
+      safeString(a.emp_code).toLowerCase().includes(q)
     );
+    
     let matchesCat = true;
     if (selectedCategory !== 'All') {
       if (selectedCategory === 'Accessories') matchesCat = ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category);
@@ -451,9 +472,10 @@ function AssetRegistryContent() {
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
-    modalOverlay: 'bg-black/80 backdrop-blur-sm z-50',
+    modalOverlay: 'bg-black/80 backdrop-blur-sm z-[9999]', // GUARANTEES MODAL SITS ON TOP
     modalBody: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
     modalHeader: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-100',
     iconBgBlue: isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
@@ -579,7 +601,7 @@ function AssetRegistryContent() {
                     <Clock size={14} className={theme.textSub} />
                     <div className="flex flex-col">
                       <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
-                      <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'No Log'}</span>
+                      <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
                     </div>
                   </div>
                   <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${getInspectionStatusColor(asset.live_inspection_status)}`}>
@@ -600,32 +622,28 @@ function AssetRegistryContent() {
 
       </div>
 
-      {/* 🚀 VIEW & EDIT MODAL (UPDATED QR LAYOUT) */}
+      {/* 🚀 VIEW & EDIT MODAL */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         
         return (
-          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
             <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
               
               {/* Left Column: CLEAN QR Matrix Design */}
               <div className={`w-full md:w-[35%] p-8 flex flex-col items-center border-b md:border-b-0 md:border-r ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'} relative shrink-0`}>
                 <button onClick={() => setViewAssetModal(null)} className={`absolute md:hidden top-4 right-4 p-2 rounded-full shadow-sm ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-white text-slate-400'}`}><X size={14}/></button>
                 
-                {/* 1. Header */}
                 <h3 className={`text-2xl font-bold tracking-widest uppercase mb-8 mt-4 ${theme.textMain}`}>VSS</h3>
                 
-                {/* 2. Pure White QR Code Box */}
                 <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200 mb-8 relative group">
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
                 </div>
 
-                {/* 3. Asset ID */}
                 <div className={`text-2xl font-bold tracking-widest mb-3 ${theme.textMain}`}>
                   {liveModalTag}
                 </div>
                 
-                {/* 4. S/N */}
                 <p className={`text-sm font-semibold tracking-wide ${theme.textSub} mb-8 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
                   S/N: {editForm.serial || viewAssetModal.serial_number}
                 </p>
@@ -642,7 +660,6 @@ function AssetRegistryContent() {
                 <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex absolute top-6 right-6 p-2.5 rounded-full cursor-pointer z-10 transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={18}/></button>
 
                 <div className="p-8 md:p-10 space-y-8">
-                  
                   <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b gap-4 ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
                     <div className="flex items-center gap-3">
                       <span className={`text-[10px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Logistics State:</span>
@@ -730,8 +747,8 @@ function AssetRegistryContent() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Purchase Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{viewAssetModal.purchase_date ? new Date(viewAssetModal.purchase_date).toLocaleDateString('en-IN') : 'Not Recorded'}</p></div>
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Warranty Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{viewAssetModal.warranty_expiry ? new Date(viewAssetModal.warranty_expiry).toLocaleDateString('en-IN') : 'No Warranty'}</p></div>
+                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Purchase Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
+                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Warranty Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
                         <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}>
                           <p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Inspection Status</p>
                           <div className="flex items-center gap-1.5 mt-1.5">
@@ -775,7 +792,7 @@ function AssetRegistryContent() {
                             <p className={`text-[11px] mt-1 ${isDarkMode ? 'opacity-70 text-amber-200' : 'opacity-80 text-emerald-800'}`}>
                               {viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
                                 ? 'Awaiting staff electronic signature.'
-                                : `Staff accepted terms on ${viewAssetModal.live_inspection_date ? new Date(viewAssetModal.live_inspection_date).toLocaleDateString() : 'Record Logged'}`
+                                : `Staff accepted terms on ${safeDate(viewAssetModal.live_inspection_date)}`
                               }
                             </p>
                           </div>
@@ -801,7 +818,7 @@ function AssetRegistryContent() {
 
       {/* 🚀 ADD NEW ASSET MODAL */}
       {isAddModalOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+        <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
           <div className={`rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border ${theme.modalBody}`}>
             <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
               <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
@@ -864,7 +881,7 @@ function AssetRegistryContent() {
 
       {/* 🚀 BULK UPLOAD MODAL */}
       {isBulkModalOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
+        <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
           <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
             <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
               <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18}/> Bulk Asset Import</h3>
