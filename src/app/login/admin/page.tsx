@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+// ❌ Removed: import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Shield, Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,10 +24,9 @@ export default function AdminLoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
 
-      // Give browser time to store the token before hitting the protected layout
-      setTimeout(() => {
-        router.push('/admin');
-      }, 800);
+      // 🌟 THE FIX: Hard redirect forces the browser to reload.
+      // This guarantees your middleware and layouts will read the fresh session token.
+      window.location.href = '/admin';
 
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');

@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Users, Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export default function StaffLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,9 +23,9 @@ export default function StaffLoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
 
-      setTimeout(() => {
-        router.push('/staff');
-      }, 800);
+      // 🌟 THE FIX: Hard redirect forces the browser to reload.
+      // This guarantees your middleware and layouts will read the fresh session token.
+      window.location.href = '/staff';
 
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
