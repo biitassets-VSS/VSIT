@@ -23,9 +23,18 @@ export default function StaffLoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
 
-      // 🌟 THE FIX: Hard redirect forces the browser to reload.
-      // This guarantees your middleware and layouts will read the fresh session token.
-      window.location.href = '/staff';
+      // Listen for Supabase to confirm the session is written to storage
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          authListener.subscription.unsubscribe();
+          window.location.href = '/staff';
+        }
+      });
+
+      // Fallback timeout just in case the event fires too fast
+      setTimeout(() => {
+        window.location.href = '/staff';
+      }, 1000);
 
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
@@ -37,27 +46,34 @@ export default function StaffLoginPage() {
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 font-sans antialiased">
       <div className="relative w-full max-w-md">
         
-        {/* 🌟 NEON GLOW EFFECT BACKGROUND */}
+        {/* EMERALD NEON GLOW */}
         <div className="absolute -inset-1 bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 rounded-[2.5rem] blur-md opacity-75 animate-pulse"></div>
         
-        {/* MAIN CARD */}
-        <div className="relative bg-[#121212] rounded-[2rem] p-8 md:p-10 border border-[#27272a] shadow-2xl flex flex-col items-center">
+        <div className="relative bg-[#121212] rounded-[2rem] p-8 md:p-10 border border-[#27272a] shadow-2xl flex flex-col items-center text-center">
           
-          <div className="w-16 h-16 bg-emerald-600/20 rounded-2xl flex items-center justify-center mb-6 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+          <img 
+            src="/logo.png" 
+            alt="Virtual Staffing Solution Logo" 
+            className="h-12 w-auto mb-5 object-contain"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+
+          <div className="w-16 h-16 bg-emerald-600/20 rounded-2xl flex items-center justify-center mb-4 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
             <Users size={28} />
           </div>
           
+          <h2 className="text-sm font-black uppercase tracking-widest text-emerald-500 mb-1">Virtual Staffing Solution</h2>
           <h1 className="text-2xl font-bold tracking-tight mb-2 text-zinc-100">Staff Portal</h1>
-          <p className="text-sm font-semibold tracking-wide text-zinc-400 mb-8 text-center">View hardware & sign agreements</p>
+          <p className="text-sm font-semibold tracking-wide text-zinc-400 mb-8">View hardware & sign agreements</p>
 
           {error && (
-            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 border border-rose-500/20 text-rose-400">
+            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-left">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <p className="text-xs font-semibold">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="w-full space-y-5">
+          <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
             <div className="space-y-1.5">
               <label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Employee Email</label>
               <div className="relative">
