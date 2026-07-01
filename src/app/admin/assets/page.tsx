@@ -262,18 +262,35 @@ function AssetRegistryContent() {
   const handleSaveNewAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAssetName || !newAssetSerial) return alert("Assets Name and Serial Number are required.");
+    
     setIsSaving(true);
     try {
+      const serialUpper = newAssetSerial.toUpperCase();
+
+      // 🌟 CHECK FOR DUPLICATE SERIAL NUMBER
+      const { data: existingSerial } = await supabase
+        .from('assets')
+        .select('serial_number')
+        .eq('serial_number', serialUpper)
+        .maybeSingle();
+
+      if (existingSerial) {
+        alert(`Error: An asset with the Serial Number "${serialUpper}" already exists in the system.`);
+        setIsSaving(false);
+        return;
+      }
+
       const resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
       const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
       const { error } = await supabase.from('assets').insert([{
         id: generateSafeUuid(), asset_tag: finalTag.toUpperCase(), name: newAssetName, 
-        brand: newAssetBrand || 'Standard', serial_number: newAssetSerial.toUpperCase(), 
+        brand: newAssetBrand || 'Standard', serial_number: serialUpper, 
         category: newAssetCategory, price: newAssetPrice ? parseFloat(newAssetPrice) : null, 
         vendor: newAssetVendor || 'Direct', purchase_date: newAssetPurchaseDate || null, 
         warranty_expiry: newAssetWarranty || null, asset_condition: newAssetCondition,
         status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Approved'
       }]);
+      
       if (error) throw error;
       
       // Notify assigned staff
@@ -292,12 +309,32 @@ function AssetRegistryContent() {
 
       setIsAddModalOpen(false); 
       fetchRegistryData();
-    } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
+    } catch (err: any) { 
+      alert(`Error: ${err.message}`); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleUpdateExistingAsset = async () => {
     setIsUpdating(true);
     try {
+      const serialUpper = editForm.serial.toUpperCase();
+
+      // 🌟 CHECK FOR DUPLICATE SERIAL NUMBER (Excluding current asset)
+      const { data: duplicateCheck } = await supabase
+        .from('assets')
+        .select('id, serial_number')
+        .eq('serial_number', serialUpper)
+        .neq('id', viewAssetModal.id)
+        .maybeSingle();
+
+      if (duplicateCheck) {
+        alert(`Error: The Serial Number "${serialUpper}" is already assigned to another asset.`);
+        setIsUpdating(false);
+        return;
+      }
+
       let resolvedStatus = editForm.status;
       if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) {
         resolvedStatus = 'Pending Handover';
@@ -306,7 +343,7 @@ function AssetRegistryContent() {
       }
 
       const updatePayload = {
-        category: editForm.category, serial_number: editForm.serial.toUpperCase(), asset_tag: editForm.asset_tag.toUpperCase(),
+        category: editForm.category, serial_number: serialUpper, asset_tag: editForm.asset_tag.toUpperCase(),
         name: editForm.name, brand: editForm.brand, price: editForm.price ? parseFloat(editForm.price) : null,
         vendor: editForm.vendor, purchase_date: editForm.purchase_date || null, warranty_expiry: editForm.warranty_expiry || null, 
         asset_condition: editForm.condition, status: resolvedStatus, inspection_status: editForm.inspection_status || 'Approved',
@@ -331,7 +368,11 @@ function AssetRegistryContent() {
 
       setIsEditingAsset(false); 
       fetchRegistryData();
-    } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
+    } catch (err: any) { 
+      alert(`Error updating: ${err.message}`); 
+    } finally { 
+      setIsUpdating(false); 
+    }
   };
 
   const getAssetViewUrl = (asset: any) => {
