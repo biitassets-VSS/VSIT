@@ -16,7 +16,6 @@ export default function DemoLoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    // No actual database auth required for guests. Just delay for effect and route.
     setTimeout(() => {
       router.push('/demo');
     }, 1000);
