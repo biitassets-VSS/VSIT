@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Shield, Mail, Lock, ArrowRight, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -13,7 +13,7 @@ export default function AdminLoginPage() {
 
   // Initialize theme
   useEffect(() => {
-    const isSystemDark = document.documentElement.classList.contains('dark') || true; // Defaulting to dark
+    const isSystemDark = document.documentElement.classList.contains('dark') || true;
     setIsDark(isSystemDark);
     if (isSystemDark) document.documentElement.classList.add('dark');
   }, []);
@@ -65,89 +65,88 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 font-sans antialiased transition-colors duration-500 ${isDark ? 'bg-[#09090b]' : 'bg-slate-50'}`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 md:p-8 font-sans antialiased transition-colors duration-500 ${isDark ? 'bg-[#09090b]' : 'bg-slate-50'}`}>
       
       {/* Theme Toggle Button */}
       <button 
         onClick={toggleTheme}
-        className={`absolute top-6 right-6 p-2.5 rounded-full backdrop-blur-md border transition-all duration-300 ${isDark ? 'bg-white/10 border-white/10 text-zinc-400 hover:text-white hover:bg-white/20' : 'bg-black/5 border-black/10 text-slate-500 hover:text-slate-900 hover:bg-black/10'}`}
+        aria-label="Toggle Dark Mode"
+        className={`absolute top-6 right-6 p-3 rounded-full backdrop-blur-md border shadow-sm transition-all duration-300 z-50 ${isDark ? 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/50' : 'bg-white/80 border-slate-200 text-slate-500 hover:text-orange-500 hover:border-orange-300'}`}
       >
-        {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        {isDark ? <Sun size={20} className="stroke-[2.5]" /> : <Moon size={20} className="stroke-[2.5]" />}
       </button>
 
-      <div className="relative w-full max-w-[420px]">
+      <div className="relative w-full max-w-[440px]">
         
-        {/* Glow Effect */}
-        <div className={`absolute -inset-1 rounded-[2.5rem] blur-xl opacity-50 animate-pulse transition-colors duration-700 ${isDark ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gradient-to-r from-blue-200 to-indigo-200'}`}></div>
+        {/* Neon Orange Glow Effect */}
+        <div className={`absolute -inset-1 rounded-[2.5rem] blur-2xl opacity-40 animate-pulse transition-colors duration-700 ${isDark ? 'bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600' : 'bg-gradient-to-r from-orange-300 via-amber-300 to-orange-300'}`}></div>
         
         {/* Main Glass Card */}
-        <div className={`relative rounded-[2rem] p-8 md:p-10 border shadow-2xl flex flex-col items-center transition-colors duration-500 ${isDark ? 'bg-[#121212]/95 backdrop-blur-xl border-zinc-800' : 'bg-white/95 backdrop-blur-xl border-white shadow-blue-900/5'}`}>
+        <div className={`relative rounded-[2rem] p-8 sm:p-10 border shadow-2xl flex flex-col items-center transition-colors duration-500 ${isDark ? 'bg-[#121212]/95 backdrop-blur-2xl border-zinc-800' : 'bg-white/95 backdrop-blur-2xl border-white shadow-orange-900/5'}`}>
           
-          {/* Smart Logo Container - Ensures readability in both themes */}
-          <div className={`mb-6 p-3 rounded-2xl transition-colors duration-500 ${isDark ? 'bg-white/10 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]' : 'bg-transparent'}`}>
+          {/* Smart Logo Container */}
+          <div className={`mb-8 p-4 rounded-2xl w-full flex justify-center transition-colors duration-500 ${isDark ? 'bg-white/10 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)] border border-white/5' : 'bg-transparent'}`}>
             <img 
               src="/logo.png" 
               alt="Virtual Staffing Solution Logo" 
-              className="h-10 w-auto object-contain"
+              className="h-12 sm:h-14 w-auto object-contain drop-shadow-md"
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           </div>
           
+          {/* Typography Header */}
           <div className="w-full text-center mb-8">
-            <h2 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 transition-colors ${isDark ? 'text-blue-500' : 'text-blue-600'}`}>
+            <h2 className="text-[11px] sm:text-xs font-black uppercase tracking-[0.25em] mb-2 text-orange-500">
               Virtual Staffing Solution
             </h2>
-            <h1 className={`text-2xl font-bold tracking-tight mb-2 transition-colors ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight mb-2.5 transition-colors ${isDark ? 'text-zinc-100' : 'text-slate-900'}`}>
               Admin Portal
             </h1>
-            <p className={`text-sm font-medium transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-500'}`}>
-              System management & secure registry
+            <p className={`text-sm sm:text-base font-medium transition-colors ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+              Secure system management registry
             </p>
           </div>
 
+          {/* Error Message */}
           {error && (
-            <div className={`w-full p-4 mb-6 rounded-xl flex items-start gap-3 border text-left transition-colors ${isDark ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
-              <p className="text-xs font-semibold leading-relaxed">{error}</p>
+            <div className={`w-full p-4 mb-6 rounded-xl flex items-start gap-3 border text-left transition-colors ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-200 text-red-600'}`}>
+              <AlertCircle size={20} className="shrink-0 mt-0.5" />
+              <p className="text-sm font-semibold leading-relaxed">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="w-full space-y-4 text-left">
-            <div className="space-y-1.5">
-              <label className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-500'}`}>Admin Email</label>
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
+            <div className="space-y-2">
+              <label className={`text-xs font-bold uppercase tracking-widest transition-colors ml-1 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Admin Email</label>
               <div className="relative">
-                <Mail size={16} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-400'}`} />
+                <Mail size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-400'}`} />
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@virtualstaffing.com"
-                  className={`w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all border ${isDark ? 'bg-[#09090b] border-zinc-800 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'}`}
+                  className={`w-full pl-12 pr-4 py-4 rounded-xl text-sm sm:text-base font-semibold outline-none transition-all border ${isDark ? 'bg-[#18181b] border-zinc-700 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 placeholder:text-zinc-600' : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder:text-slate-400'}`}
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-500'}`}>Password</label>
+            <div className="space-y-2">
+              <label className={`text-xs font-bold uppercase tracking-widest transition-colors ml-1 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Password</label>
               <div className="relative">
-                <Lock size={16} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-400'}`} />
+                <Lock size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-zinc-500' : 'text-slate-400'}`} />
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className={`w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all border ${isDark ? 'bg-[#09090b] border-zinc-800 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-600' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'}`}
+                  className={`w-full pl-12 pr-4 py-4 rounded-xl text-sm sm:text-base font-semibold outline-none transition-all border ${isDark ? 'bg-[#18181b] border-zinc-700 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 placeholder:text-zinc-600' : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder:text-slate-400'}`}
                 />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className={`w-full py-4 mt-4 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 text-white shadow-lg transition-all disabled:opacity-70 ${isDark ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'}`}>
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Secure Login <ArrowRight size={16} /></>}
+            <button type="submit" disabled={loading} className="w-full py-4 mt-6 rounded-xl text-sm font-extrabold uppercase tracking-widest flex items-center justify-center gap-3 text-white bg-orange-500 hover:bg-orange-600 shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:shadow-[0_4px_25px_rgba(249,115,22,0.4)] transition-all disabled:opacity-70 active:scale-[0.98]">
+              {loading ? <><Loader2 size={20} className="animate-spin" /> Authenticating...</> : <>Secure Login <ArrowRight size={18} className="stroke-[2.5]" /></>}
             </button>
           </form>
           
         </div>
-      </div>
-
-      {/* Page-Level Copyright Footer */}
-      <div className={`absolute bottom-6 text-[11px] font-semibold tracking-wider transition-colors duration-500 ${isDark ? 'text-zinc-600' : 'text-slate-400'}`}>
-        Copyright © {new Date().getFullYear()} AinodeArt
       </div>
     </div>
   );
