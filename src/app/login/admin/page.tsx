@@ -20,17 +20,21 @@ export default function AdminLoginPage() {
     setError(null);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-      
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
-      if (!data.session) throw new Error('No session returned from database.');
 
-      // 🌟 THE BULLETPROOF FIX: 
-      // Wait exactly 400ms to guarantee the browser writes the token to localStorage, 
-      // then force a hard reload to the admin dashboard.
+      // Listen for Supabase to confirm the session is written to storage
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          authListener.subscription.unsubscribe();
+          window.location.href = '/admin';
+        }
+      });
+
+      // Fallback timeout just in case the event fires too fast
       setTimeout(() => {
         window.location.href = '/admin';
-      }, 400);
+      }, 1000);
 
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
@@ -42,30 +46,22 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 font-sans antialiased">
       <div className="relative w-full max-w-md">
         
-        {/* 🌟 ORANGE NEON GLOW EFFECT BACKGROUND */}
+        {/* ORANGE NEON GLOW */}
         <div className="absolute -inset-1 bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-[2.5rem] blur-md opacity-75 animate-pulse"></div>
         
-        {/* MAIN CARD */}
         <div className="relative bg-[#121212] rounded-[2rem] p-8 md:p-10 border border-[#27272a] shadow-2xl flex flex-col items-center text-center">
           
-          {/* COMPANY LOGO */}
-          {/* Ensure logo.png is inside your public/ folder */}
           <img 
             src="/logo.png" 
             alt="Virtual Staffing Solution Logo" 
             className="h-12 w-auto mb-5 object-contain"
-            onError={(e) => {
-              // Fallback if logo is missing from public folder
-              e.currentTarget.style.display = 'none';
-            }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
-          {/* ORANGE SHIELD ICON */}
           <div className="w-16 h-16 bg-orange-600/20 rounded-2xl flex items-center justify-center mb-4 text-orange-400 border border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.5)]">
             <Shield size={28} />
           </div>
           
-          {/* ADDED COMPANY NAME & TITLES */}
           <h2 className="text-sm font-black uppercase tracking-widest text-orange-500 mb-1">Virtual Staffing Solution</h2>
           <h1 className="text-2xl font-bold tracking-tight mb-2 text-zinc-100">Admin Portal</h1>
           <p className="text-sm font-semibold tracking-wide text-zinc-400 mb-8">System management & registry access</p>
