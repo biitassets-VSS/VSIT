@@ -21,7 +21,7 @@ export default function RootLayout({
         </main>
         
         {/* Global Bottom-Right Watermark */}
-        <div className="fixed bottom-4 right-5 text-[10px] sm:text-[11px] font-black tracking-widest text-slate-400/60 dark:text-zinc-500/50 z-[9999] pointer-events-none uppercase">
+        <div className="fixed bottom-4 right-5 text-[10px] sm:text-[11px] font-black tracking-widest text-slate-400/60 dark:text-zinc-500/50 z-[9999] pointer-events-none Senstive case ">
           Designed by AinodeArt
         </div>
 
