@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-// ❌ Removed: import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Shield, Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
@@ -21,12 +20,17 @@ export default function AdminLoginPage() {
     setError(null);
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      
       if (authError) throw authError;
+      if (!data.session) throw new Error('No session returned from database.');
 
-      // 🌟 THE FIX: Hard redirect forces the browser to reload.
-      // This guarantees your middleware and layouts will read the fresh session token.
-      window.location.href = '/admin';
+      // 🌟 THE BULLETPROOF FIX: 
+      // Wait exactly 400ms to guarantee the browser writes the token to localStorage, 
+      // then force a hard reload to the admin dashboard.
+      setTimeout(() => {
+        window.location.href = '/admin';
+      }, 400);
 
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
@@ -38,27 +42,42 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 font-sans antialiased">
       <div className="relative w-full max-w-md">
         
-        {/* 🌟 NEON GLOW EFFECT BACKGROUND */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 rounded-[2.5rem] blur-md opacity-75 animate-pulse"></div>
+        {/* 🌟 ORANGE NEON GLOW EFFECT BACKGROUND */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-[2.5rem] blur-md opacity-75 animate-pulse"></div>
         
         {/* MAIN CARD */}
-        <div className="relative bg-[#121212] rounded-[2rem] p-8 md:p-10 border border-[#27272a] shadow-2xl flex flex-col items-center">
+        <div className="relative bg-[#121212] rounded-[2rem] p-8 md:p-10 border border-[#27272a] shadow-2xl flex flex-col items-center text-center">
           
-          <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mb-6 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+          {/* COMPANY LOGO */}
+          {/* Ensure logo.png is inside your public/ folder */}
+          <img 
+            src="/logo.png" 
+            alt="Virtual Staffing Solution Logo" 
+            className="h-12 w-auto mb-5 object-contain"
+            onError={(e) => {
+              // Fallback if logo is missing from public folder
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+
+          {/* ORANGE SHIELD ICON */}
+          <div className="w-16 h-16 bg-orange-600/20 rounded-2xl flex items-center justify-center mb-4 text-orange-400 border border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.5)]">
             <Shield size={28} />
           </div>
           
+          {/* ADDED COMPANY NAME & TITLES */}
+          <h2 className="text-sm font-black uppercase tracking-widest text-orange-500 mb-1">Virtual Staffing Solution</h2>
           <h1 className="text-2xl font-bold tracking-tight mb-2 text-zinc-100">Admin Portal</h1>
-          <p className="text-sm font-semibold tracking-wide text-zinc-400 mb-8 text-center">System management & registry access</p>
+          <p className="text-sm font-semibold tracking-wide text-zinc-400 mb-8">System management & registry access</p>
 
           {error && (
-            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 border border-rose-500/20 text-rose-400">
+            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-left">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <p className="text-xs font-semibold">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="w-full space-y-5">
+          <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
             <div className="space-y-1.5">
               <label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Admin Email</label>
               <div className="relative">
@@ -66,7 +85,7 @@ export default function AdminLoginPage() {
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-[#0a0a0a] border border-[#27272a] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-zinc-100"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-[#0a0a0a] border border-[#27272a] focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-zinc-100"
                 />
               </div>
             </div>
@@ -78,12 +97,12 @@ export default function AdminLoginPage() {
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-[#0a0a0a] border border-[#27272a] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-zinc-100"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-[#0a0a0a] border border-[#27272a] focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-zinc-100"
                 />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-blue-600 hover:bg-blue-700 shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all disabled:opacity-70">
+            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-orange-600 hover:bg-orange-700 shadow-[0_0_20px_rgba(249,115,22,0.4)] transition-all disabled:opacity-70">
               {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Secure Login <ArrowRight size={16} /></>}
             </button>
           </form>
