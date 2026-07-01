@@ -1,3 +1,4 @@
+// src/app/admin/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
-  Moon, Sun, LogOut, AlertTriangle, Bell
+  Moon, Sun, LogOut, AlertTriangle, Bell, Monitor // 🌟 Added Monitor Icon
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -182,6 +183,7 @@ export default function AdminDashboardPage() {
       orange: isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600',
       rose: isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600',
       emerald: isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600',
+      indigo: isDarkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600', // 🌟 NEW: Added for Remote Module
       gray: isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-500',
     }
   };
@@ -297,6 +299,7 @@ export default function AdminDashboardPage() {
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'blue' },
                 { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose' },
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald' },
+                { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo' }, // 🌟 NEW MODULE ADDED
               ].map((module, i) => (
                 <button 
                   key={i}

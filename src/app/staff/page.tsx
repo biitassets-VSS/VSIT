@@ -1,12 +1,14 @@
+// src/app/staff/dashboard/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation'; // 🌟 ADDED: Router for navigation
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock
+  Camera, Lock, Monitor // 🌟 ADDED: Monitor Icon for Team Screen
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
@@ -37,6 +39,8 @@ function getAuditWindowInfo() {
 }
 
 export default function StaffDashboardPage() {
+  const router = useRouter(); // 🌟 INITIALIZED ROUTER
+  
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   const [isAuthorized, setIsAuthorized] = useState(false); 
@@ -247,19 +251,31 @@ export default function StaffDashboardPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 🌟 UPDATED: GRID COLUMNS ADJUSTED TO xl:grid-cols-5 TO FIT THE NEW CARD */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
             { name: 'Device Audit', desc: auditWindow.isOpen ? 'Submit asset inspection' : 'Window Currently Closed', icon: ClipboardCheck, color: auditWindow.isOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200', type: 'INSPECTION' },
             { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST' },
             { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT' },
+            // 🌟 NEW REMOTE SCREEN CARD
+            { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'REMOTE', path: '/staff/dashboard/remote' },
           ].map((item) => {
             const isActionDisabled = item.type === 'INSPECTION' && !auditWindow.isOpen;
             
             return (
               <button 
                 key={item.name} 
-                onClick={() => !isActionDisabled && setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] })} 
+                onClick={() => {
+                  if (isActionDisabled) return;
+                  
+                  // Route handler for path-based cards, fallback to Modal for the rest
+                  if (item.path) {
+                    router.push(item.path);
+                  } else {
+                    setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] });
+                  }
+                }} 
                 disabled={isActionDisabled}
                 className={`bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-4 group transition-all ${isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
               >
