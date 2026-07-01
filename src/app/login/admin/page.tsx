@@ -20,21 +20,40 @@ export default function AdminLoginPage() {
     setError(null);
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      // 1. Authenticate with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+        email: email.trim(), 
+        password 
+      });
       if (authError) throw authError;
 
-      // Listen for Supabase to confirm the session is written to storage
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          authListener.subscription.unsubscribe();
-          window.location.href = '/admin';
-        }
-      });
+      // 2. Fetch the user's profile to verify roles and status
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
 
-      // Fallback timeout just in case the event fires too fast
+      if (profileError) throw profileError;
+      if (profile?.status === 'Disabled') throw new Error('Account disabled by administrator.');
+
+      // 3. Verify Admin Authorization
+      const isAdminEmail = email.trim().toLowerCase() === 'lakhwinder.bi@outlook.com';
+      const isActuallyAdmin = profile?.role === 'admin' || isAdminEmail;
+
+      if (!isActuallyAdmin) {
+        // Sign them out of Supabase immediately if they aren't an admin
+        await supabase.auth.signOut();
+        throw new Error('Not authorized for Admin access.');
+      }
+
+      // 4. 🌟 THE CRITICAL FIX: Set the exact local storage key your layout expects
+      localStorage.setItem('vsit_admin_session', JSON.stringify(profile || authData.user));
+
+      // 5. Force a hard redirect so the layout reads the fresh local storage data
       setTimeout(() => {
         window.location.href = '/admin';
-      }, 1000);
+      }, 400);
 
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
