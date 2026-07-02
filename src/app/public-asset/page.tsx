@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient'; // Make sure this path matches your setup
+import { supabase } from '@/lib/supabaseClient';
 import { Laptop, AlertTriangle, CheckCircle2, User, Loader2 } from 'lucide-react';
 
 function PublicAssetContent() {
@@ -13,31 +13,45 @@ function PublicAssetContent() {
 
   useEffect(() => {
     const fetchAsset = async () => {
-      const assetId = searchParams.get('id');
-      if (!assetId) {
+      const rawId = searchParams.get('id');
+      if (!rawId) {
         setError('No Asset ID provided in the URL.');
         setLoading(false);
         return;
       }
 
+      // Decode in case the QR code scanner added weird characters
+      const assetId = decodeURIComponent(rawId).trim();
+
       try {
-        // Query Supabase for the specific asset
-        const { data, error: fetchError } = await supabase
-          .from('assets')
-          .select('*')
-          .or(`id.eq.${assetId},asset_tag.eq.${assetId}`)
-          .single();
+        // 1. SAFE DATABASE QUERY ROUTING
+        // Check if the scanned string is a UUID format or a text Tag
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assetId);
 
-        if (fetchError || !data) throw new Error('Asset not found in the database.');
+        let query = supabase.from('assets').select('*');
+        
+        if (isUuid) {
+          query = query.eq('id', assetId); // Search by exact UUID
+        } else {
+          query = query.ilike('asset_tag', assetId); // Search by Tag (case-insensitive)
+        }
 
-        // Fetch assignee details if assigned
+        const { data, error: fetchError } = await query.single();
+
+        if (fetchError) {
+          console.error("Supabase Database Error:", fetchError);
+          throw new Error('Asset not found in the database. (Check Supabase RLS policies if you are certain this asset exists)');
+        }
+        if (!data) throw new Error('Asset not found.');
+
+        // 2. FETCH ASSIGNEE (Graceful fallback if profiles table is locked)
         let staffName = 'Unassigned';
         if (data.assigned_to) {
           const { data: staffData } = await supabase
             .from('profiles')
             .select('full_name, name')
             .eq('id', data.assigned_to)
-            .single();
+            .maybeSingle(); 
           
           if (staffData) staffName = staffData.full_name || staffData.name || 'Unknown Staff';
         }
@@ -67,7 +81,7 @@ function PublicAssetContent() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
         <AlertTriangle className="w-16 h-16 text-red-500 mb-4" />
         <h1 className="text-xl font-bold text-slate-800 mb-2">Asset Not Found</h1>
-        <p className="text-slate-500 text-sm max-w-md">{error || "The QR code you scanned is invalid or the asset has been removed from the system."}</p>
+        <p className="text-slate-500 text-sm max-w-md">{error}</p>
       </div>
     );
   }
