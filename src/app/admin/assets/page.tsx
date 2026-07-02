@@ -381,10 +381,60 @@ function AssetRegistryContent() {
     return `${baseDomain}/admin/assets?view=${targetRef}`;
   };
 
+  // ========================================================
+  // 🖨️ UPDATED: SYSTEM PRINT DESIGN WITH CUSTOM DIMENSIONS
+  // ========================================================
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getAssetViewUrl(asset))}`;
-    const printWindow = window.open('', '_blank', 'width=400,height=400');
+    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
+    const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
+    
+    // To completely eliminate the localStorage error from image_6cb8a1.png, 
+    // routes intended for scanning should map to a public view file (e.g., /view-asset?id=...)
+    const scanUrl = `${baseDomain}/admin/assets?view=${targetRef}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
+    
+    const printWindow = window.open('', '_blank', 'width=600,height=600');
     if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print hardware stickers.");
+
+    // Variable Setup according to specific Category Constraints
+    let width = '2.5in';
+    let height = '2.5in';
+    let qrSize = '1.2in';
+    let brandTextSize = '9pt';
+    let tagTextSize = '10pt';
+    let serialTextSize = '7pt';
+    let layoutDirection = 'column';
+    let innerGap = '4px';
+
+    const cat = safeString(asset.category).toLowerCase();
+
+    if (cat.includes('laptop')) {
+      width = '4in';
+      height = '2in';
+      qrSize = '1.2in';
+      brandTextSize = '11pt';
+      tagTextSize = '12pt';
+      serialTextSize = '8pt';
+      layoutDirection = 'row'; // Rows save scaling workspace horizontally
+      innerGap = '15px';
+    } else if (cat.includes('mouse') && !cat.includes('pad')) {
+      width = '1in';
+      height = '0.5in';
+      qrSize = '0.32in';
+      brandTextSize = '4.5pt';
+      tagTextSize = '4.5pt';
+      serialTextSize = '3.5pt';
+      innerGap = '1px';
+    } else if (cat.includes('headphone')) {
+      width = '2.5in';
+      height = '1in';
+      qrSize = '0.65in';
+      brandTextSize = '7.5pt';
+      tagTextSize = '8pt';
+      serialTextSize = '6pt';
+      layoutDirection = 'row';
+      innerGap = '10px';
+    }
 
     const printableDocument = `
       <!DOCTYPE html>
@@ -392,17 +442,87 @@ function AssetRegistryContent() {
         <head>
           <title>Print_${cleanTag}</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap');
-            body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; font-family: 'Inter', sans-serif; background: #fff; color: #000; -webkit-font-smoothing: antialiased; }
-            @media print { @page { margin: 0mm; size: auto; } body { padding: 0; background: #fff; } }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap');
+            body { 
+              margin: 0; 
+              padding: 0; 
+              display: flex; 
+              justify-content: center; 
+              align-items: center; 
+              font-family: 'Inter', sans-serif; 
+              background: #fff; 
+              color: #000; 
+              -webkit-font-smoothing: antialiased; 
+            }
+            @media print { 
+              @page { margin: 0mm; size: ${width} ${height}; } 
+              body { padding: 0; background: #fff; } 
+            }
+            .sticker-container {
+              width: ${width};
+              height: ${height};
+              box-sizing: border-box;
+              padding: 4px;
+              display: flex;
+              flex-direction: ${layoutDirection};
+              justify-content: center;
+              align-items: center;
+              text-align: center;
+              gap: ${innerGap};
+              overflow: hidden;
+            }
+            .content-block {
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: ${layoutDirection === 'row' ? 'flex-start' : 'center'};
+              text-align: ${layoutDirection === 'row' ? 'left' : 'center'};
+              max-width: 100%;
+            }
+            .brand-heading {
+              font-size: ${brandTextSize};
+              font-weight: 800;
+              letter-spacing: -0.2px;
+              line-height: 1.1;
+              color: #000;
+              margin-bottom: 2px;
+              text-transform: uppercase;
+            }
+            .qr-image {
+              width: ${qrSize};
+              height: ${qrSize};
+              display: block;
+              mix-blend-mode: multiply;
+              shrink: 0;
+            }
+            .tag-id {
+              font-size: ${tagTextSize};
+              font-weight: 800;
+              letter-spacing: 0.2px;
+              line-height: 1.1;
+              margin-top: 2px;
+            }
+            .serial-string {
+              font-size: ${serialTextSize};
+              font-weight: 600;
+              color: #333;
+              line-height: 1;
+              margin-top: 1px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              max-width: 100%;
+            }
           </style>
         </head>
-        <body onload="setTimeout(() => { window.print(); window.close(); }, 300)">
-          <div style="width: 50mm; height: 50mm; box-sizing: border-box; padding: 3mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-            <div style="font-size: 14pt; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px;">VSS</div>
-            <img src="${qrUrl}" style="width: 28mm; height: 28mm; display: block; margin: 3px 0;" />
-            <div style="font-size: 13pt; font-weight: 800; margin-top: 4px; letter-spacing: 0.5px;">${cleanTag}</div>
-            <div style="font-size: 8pt; font-weight: 600; color: #444; margin-top: 3px;">S/N: ${asset.serial_number || 'N/A'}</div>
+        <body onload="setTimeout(() => { window.print(); window.close(); }, 350)">
+          <div class="sticker-container">
+            <img src="${qrUrl}" class="qr-image" />
+            <div class="content-block">
+              <div class="brand-heading">Virtual Staffing Solution Assets</div>
+              <div class="tag-id">${cleanTag}</div>
+              <div class="serial-string">S/N: ${asset.serial_number || 'N/A'}</div>
+            </div>
           </div>
         </body>
       </html>
@@ -795,14 +915,7 @@ function AssetRegistryContent() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Purchase Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
                         <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Warranty Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
-                        <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}>
-                          <p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Inspection Status</p>
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>
-                              {viewAssetModal.live_inspection_status || 'Approved'}
-                            </span>
-                          </div>
-                        </div>
+                        <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Inspection Status</p><div className="flex items-center gap-1.5 mt-1.5"><span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
                       </div>
 
                       <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#18181b] border-blue-500/30' : 'bg-blue-50/50 border-blue-100'}`}>
@@ -819,7 +932,6 @@ function AssetRegistryContent() {
                         </div>
                       </div>
 
-                      {/* 🌟 NEW: ALWAYS SHOW AGREEMENT IF ASSIGNED TO SOMEONE */}
                       {viewAssetModal.staff_name !== 'Unassigned' && (
                         <div className={`p-5 rounded-2xl border mt-5 flex items-center justify-between ${
                           viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
