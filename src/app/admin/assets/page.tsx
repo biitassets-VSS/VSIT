@@ -378,7 +378,8 @@ function AssetRegistryContent() {
   const getAssetViewUrl = (asset: any) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
-    return `${baseDomain}/admin/assets?view=${targetRef}`;
+    // UPDATED: Use the public route instead of the admin route
+    return `${baseDomain}/public-asset?id=${targetRef}`;
   };
 
   // ========================================================
@@ -388,9 +389,8 @@ function AssetRegistryContent() {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
     
-    // To completely eliminate the localStorage error from image_6cb8a1.png, 
-    // routes intended for scanning should map to a public view file (e.g., /view-asset?id=...)
-    const scanUrl = `${baseDomain}/admin/assets?view=${targetRef}`;
+    // UPDATED: Use the public route to bypass the localStorage error
+    const scanUrl = `${baseDomain}/public-asset?id=${targetRef}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
     
     const printWindow = window.open('', '_blank', 'width=600,height=600');
