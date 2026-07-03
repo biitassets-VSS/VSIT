@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, MonitorCheck, ServerCrash, Maximize, Minimize, PanelLeftClose } from 'lucide-react';
+import { Loader2, MonitorCheck, Maximize, Minimize, PanelLeftClose } from 'lucide-react';
 
 interface RemoteDesktopViewerProps {
   targetId: string;
@@ -17,10 +17,8 @@ export default function RemoteDesktopViewer({ targetId, targetName, onMaximize }
   // Ref for the container we want to make fullscreen
   const viewerRef = useRef<HTMLDivElement>(null);
 
-  // 🔴 IMPORTANT: Replace this with your actual RustDesk Web Client URL later!
-  const webClientUrl = `https://vsit-teal.vercel.app?id=${targetId}`;
-  
-  const isPlaceholderUrl = webClientUrl.includes('https://vsit-teal.vercel.app');
+  // Your actual RustDesk Web Client URL
+  const webClientUrl = `https://vsit-teal.vercel.app/?id=${targetId}`;
 
   // Listen for the "Esc" key native fullscreen exit
   useEffect(() => {
@@ -105,45 +103,32 @@ export default function RemoteDesktopViewer({ targetId, targetName, onMaximize }
           </div>
         </div>
 
-        {/* Placeholder Error Screen */}
-        {isPlaceholderUrl ? (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-950 p-8 text-center">
-            <ServerCrash className="text-rose-500 mb-2" size={48} />
-            <h3 className="text-lg font-bold text-white">Server URL Not Configured</h3>
-            <p className="text-xs font-medium max-w-sm">
-              The RustDesk Web Client URL is currently set to a placeholder. Once you host your RustDesk web client, replace the <code className="bg-slate-800 px-1 rounded">webClientUrl</code> variable in the code to view live screens.
-            </p>
+        {/* Loading Spinner */}
+        {isLoading && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-950">
+            <Loader2 className="animate-spin" size={32} />
+            <p className="text-xs font-bold uppercase tracking-widest">Establishing secure tunnel...</p>
           </div>
-        ) : (
-          <>
-            {/* Loading Spinner */}
-            {isLoading && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-950">
-                <Loader2 className="animate-spin" size={32} />
-                <p className="text-xs font-bold uppercase tracking-widest">Establishing secure tunnel...</p>
-              </div>
-            )}
-            
-            {/* Native Fullscreen Exit Button (Only shows when in Fullscreen) */}
-            {isFullscreen && (
-              <button 
-                onClick={toggleFullscreen}
-                className="absolute top-4 right-4 z-50 p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md border border-white/10 text-white rounded-xl transition-colors shadow-2xl flex items-center gap-2 text-xs font-bold"
-              >
-                <Minimize size={16} /> Exit Fullscreen
-              </button>
-            )}
-
-            {/* Remote Desktop Iframe */}
-            <iframe 
-              src={webClientUrl}
-              onLoad={() => setIsLoading(false)}
-              className="w-full h-full border-none relative z-10"
-              allow="clipboard-read; clipboard-write; display-capture; fullscreen"
-              title={`Remote connection to ${targetName}`}
-            />
-          </>
         )}
+        
+        {/* Native Fullscreen Exit Button (Only shows when in Fullscreen) */}
+        {isFullscreen && (
+          <button 
+            onClick={toggleFullscreen}
+            className="absolute top-4 right-4 z-50 p-2.5 bg-black/50 hover:bg-black/80 backdrop-blur-md border border-white/10 text-white rounded-xl transition-colors shadow-2xl flex items-center gap-2 text-xs font-bold"
+          >
+            <Minimize size={16} /> Exit Fullscreen
+          </button>
+        )}
+
+        {/* Remote Desktop Iframe */}
+        <iframe 
+          src={webClientUrl}
+          onLoad={() => setIsLoading(false)}
+          className="w-full h-full border-none relative z-10"
+          allow="clipboard-read; clipboard-write; display-capture; fullscreen"
+          title={`Remote connection to ${targetName}`}
+        />
       </div>
     </div>
   );
