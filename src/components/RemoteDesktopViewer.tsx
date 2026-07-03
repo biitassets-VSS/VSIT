@@ -18,9 +18,9 @@ export default function RemoteDesktopViewer({ targetId, targetName, onMaximize }
   const viewerRef = useRef<HTMLDivElement>(null);
 
   // 🔴 IMPORTANT: Replace this with your actual RustDesk Web Client URL later!
-  const webClientUrl = `https://your-rustdesk-web-client-url.com/?id=${targetId}`;
+  const webClientUrl = `https://vsit-teal.vercel.app?id=${targetId}`;
   
-  const isPlaceholderUrl = webClientUrl.includes('your-rustdesk-web-client-url.com');
+  const isPlaceholderUrl = webClientUrl.includes('https://vsit-teal.vercel.app');
 
   // Listen for the "Esc" key native fullscreen exit
   useEffect(() => {
