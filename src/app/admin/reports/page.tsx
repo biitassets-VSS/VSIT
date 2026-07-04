@@ -19,7 +19,7 @@ interface Asset {
   assignedToName?: string;
 }
 
-// Helper to normalize category names (e.g., "laptop", "LAPTOP" -> "Laptop")
+// Helper to normalize category names
 const normalizeCategory = (cat: string) => {
   if (!cat) return 'Uncategorized';
   const trimmed = cat.trim();
@@ -111,26 +111,26 @@ export default function AdminReportsPage() {
       head: [columns],
       body: rows,
       startY: 30,
-      headStyles: { fillColor: [0, 139, 116] },
+      headStyles: { fillColor: [0, 139, 116] }, // #008b74 RGB
     });
 
     doc.save(`Asset_Report_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-gray-500 dark:text-zinc-400">Loading Report Data...</div>;
+  if (!isLoaded) return <div className="p-10 text-center font-medium text-slate-500 tracking-wide">Loading Report Data...</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 bg-slate-50 min-h-screen p-4 md:p-8">
       
       {/* Header Section */}
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors">
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <FileText className="text-[#008b74]" /> Advanced Reports
+          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <FileText className="text-brand" /> Advanced Reports
           </h1>
-          <p className="text-sm font-medium text-gray-500 dark:text-zinc-400 mt-1">Generate and export live database reports.</p>
+          <p className="text-sm font-medium text-slate-500 mt-1">Generate and export live database reports.</p>
         </div>
-        <button onClick={handleExportPDF} className="flex items-center gap-2 bg-[#008b74] hover:bg-[#00705d] text-white px-5 py-2.5 rounded-xl shadow-md transition-all font-bold text-sm">
+        <button onClick={handleExportPDF} className="flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-xl shadow-sm transition-all font-semibold text-sm">
           <Download size={18} /> Download PDF Report
         </button>
       </div>
@@ -138,8 +138,8 @@ export default function AdminReportsPage() {
       <div className="flex flex-col lg:flex-row gap-6">
         
         {/* Sidebar Navigation */}
-        <div className="lg:w-64 shrink-0 space-y-2 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 h-fit transition-colors">
-          <h3 className="text-xs font-black text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-4 px-2">Report Types</h3>
+        <div className="lg:w-64 shrink-0 space-y-2 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 h-fit">
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-4 px-2">Report Types</h3>
           {[
             { id: 'CATEGORY_SUMMARY', label: 'Category Summary', icon: <BarChart3 size={16}/> },
             { id: 'ALL', label: 'All Assets', icon: <FileText size={16}/> },
@@ -148,10 +148,10 @@ export default function AdminReportsPage() {
             { id: 'REPAIR', label: 'Under Repair', icon: <Wrench size={16}/> },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveReport(tab.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                 activeReport === tab.id 
-                  ? 'bg-[#e6f4f1] dark:bg-[#008b74]/15 text-[#008b74] border border-[#008b74]/20 dark:border-[#008b74]/30' 
-                  : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
+                  ? 'bg-brand-light text-brand border border-brand/20 shadow-sm' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}>
               {tab.icon} {tab.label}
             </button>
@@ -162,24 +162,24 @@ export default function AdminReportsPage() {
         <div className="flex-1 space-y-4">
           
           {/* Search Bar */}
-          <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 transition-colors">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
             <div className="relative w-full max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500" size={18} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
                 placeholder="Search current report..." 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-950 focus:ring-2 focus:ring-[#008b74] outline-none text-sm font-medium text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 transition-colors" 
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-brand focus:border-brand-muted outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400 transition-all" 
               />
             </div>
           </div>
 
           {/* Data Table */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden transition-colors">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             {activeReport === 'CATEGORY_SUMMARY' ? (
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 dark:bg-zinc-800/50 uppercase text-[10px] text-gray-500 dark:text-zinc-400 font-black">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 uppercase text-[11px] text-slate-500 font-bold tracking-wider border-b border-slate-200">
                   <tr>
                     <th className="p-4">Category</th>
                     <th className="p-4">Total</th>
@@ -188,37 +188,37 @@ export default function AdminReportsPage() {
                     <th className="p-4">Repair</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-slate-100">
                   {categorySummary.map((cat, i) => (
-                    <tr key={i} className="text-sm font-bold">
-                      <td className="p-4 text-gray-900 dark:text-zinc-200">{cat.category}</td>
-                      <td className="p-4 text-gray-900 dark:text-zinc-200">{cat.total}</td>
-                      <td className="p-4 text-blue-600 dark:text-blue-400">{cat.assigned}</td>
-                      <td className="p-4 text-[#008b74] dark:text-[#20c997]">{cat.inStock}</td>
-                      <td className="p-4 text-orange-600 dark:text-orange-400">{cat.repair}</td>
+                    <tr key={i} className="text-sm font-semibold hover:bg-slate-50/80 transition-colors">
+                      <td className="p-4 text-slate-900">{cat.category}</td>
+                      <td className="p-4 text-slate-600">{cat.total}</td>
+                      <td className="p-4 text-blue-600">{cat.assigned}</td>
+                      <td className="p-4 text-brand">{cat.inStock}</td>
+                      <td className="p-4 text-orange-500">{cat.repair}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 dark:bg-zinc-800/50 uppercase text-[10px] text-gray-500 dark:text-zinc-400 font-black">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 uppercase text-[11px] text-slate-500 font-bold tracking-wider border-b border-slate-200">
                   <tr>
                     <th className="p-4">Asset Name</th>
                     <th className="p-4">Category</th>
                     <th className="p-4">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-slate-100">
                   {filteredAssets.map((a) => (
-                    <tr key={a.id} className="text-sm">
-                      <td className="p-4 font-bold text-gray-900 dark:text-zinc-200">
+                    <tr key={a.id} className="text-sm hover:bg-slate-50/80 transition-colors">
+                      <td className="p-4 font-bold text-slate-900">
                         {a.name}<br/>
-                        <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-normal">{a.tagId}</span>
+                        <span className="text-[11px] text-slate-500 font-medium">{a.tagId}</span>
                       </td>
-                      <td className="p-4 font-bold text-gray-600 dark:text-zinc-400">{a.category}</td>
+                      <td className="p-4 font-semibold text-slate-600">{a.category}</td>
                       <td className="p-4">
-                        <span className="px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 font-bold text-xs text-gray-700 dark:text-zinc-300">
+                        <span className="px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 font-bold text-[11px] text-slate-700">
                           {a.status}
                         </span>
                       </td>
