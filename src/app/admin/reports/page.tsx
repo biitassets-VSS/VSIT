@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  FileText, Download, Filter, Search, 
-  AlertCircle, CheckCircle2, Clock, 
-  Package, Wrench, UserCheck, Box, BarChart3
+  FileText, Download, Search, 
+  Box, UserCheck, Wrench, BarChart3
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import jsPDF from 'jspdf';
@@ -20,6 +19,13 @@ interface Asset {
   assignedToName?: string;
 }
 
+// Helper to normalize category names (e.g., "laptop", "LAPTOP" -> "Laptop")
+const normalizeCategory = (cat: string) => {
+  if (!cat) return 'Uncategorized';
+  const trimmed = cat.trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+};
+
 export default function AdminReportsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [activeReport, setActiveReport] = useState<string>('CATEGORY_SUMMARY');
@@ -31,15 +37,17 @@ export default function AdminReportsPage() {
     const fetchAssets = async () => {
       const { data, error } = await supabase.from('assets').select('*');
       if (!error && data) {
-        const mapped: Asset[] = data.map((a: any) => ({
+        const mapped: Asset[] = data.map((a) => ({
           id: a.id,
           tagId: a.tag_id,
           name: a.name,
-          category: a.category,
+          category: normalizeCategory(a.category), // Normalizes categories on load
           status: a.status,
           assignedToName: a.assigned_to,
         }));
         setAssets(mapped);
+      } else if (error) {
+        console.error("Error fetching assets:", error.message);
       }
       setIsLoaded(true);
     };
@@ -83,7 +91,13 @@ export default function AdminReportsPage() {
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text(`Asset Report: ${activeReport.replace('_', ' ')}`, 14, 20);
+    
+    // Add title formatting based on the active tab
+    const reportTitle = activeReport === 'CATEGORY_SUMMARY' 
+      ? 'Category Summary' 
+      : activeReport.replace('_', ' ');
+      
+    doc.text(`Asset Report: ${reportTitle}`, 14, 20);
     
     const isSummary = activeReport === 'CATEGORY_SUMMARY';
     const columns = isSummary 
@@ -91,14 +105,14 @@ export default function AdminReportsPage() {
       : ["Asset Name", "Tag ID", "Category", "Status"];
 
     const rows = isSummary 
-      ? categorySummary.map(c => [c.category, c.total, c.assigned, c.inStock, c.repair])
+      ? categorySummary.map(c => [c.category, c.total.toString(), c.assigned.toString(), c.inStock.toString(), c.repair.toString()])
       : filteredAssets.map(a => [a.name, a.tagId, a.category, a.status]);
 
     autoTable(doc, {
       head: [columns],
       body: rows,
       startY: 30,
-      headStyles: { fillColor: [0, 139, 116] }, // Your brand color
+      headStyles: { fillColor: [0, 139, 116] },
     });
 
     doc.save(`Asset_Report_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -184,6 +198,5 @@ export default function AdminReportsPage() {
         </div>
       </div>
     </div>
-   
   );
 }
