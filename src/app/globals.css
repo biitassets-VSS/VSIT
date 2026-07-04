@@ -2,20 +2,35 @@
 @import "tailwindcss";
 
 :root {
+  /* Existing Variables */
   --background: #F8F9FA;
   --foreground: #111827; 
   --input-bg: #ffffff;
   --input-text: #111827;
   --input-placeholder: #9CA3AF;
+
+  /* Your New Brand Variables */
+  --brand-default: #008b74;
+  --brand-hover: #00705d;
+  --brand-light: #e6f4f1;
+  --brand-muted: #80c5ba;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  
+  /* Map Brand Colors to Tailwind Classes so you can type 'bg-brand' */
+  --color-brand: var(--brand-default);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-light: var(--brand-light);
+  --color-brand-muted: var(--brand-muted);
+
   --font-sans: 'Inter', var(--font-geist-sans), sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
+/* You've smartly locked dark mode to stay light mode here */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #F8F9FA;
