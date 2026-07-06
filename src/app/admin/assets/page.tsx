@@ -8,7 +8,7 @@ import {
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
   Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
-  Clock, AlertTriangle, FileSignature, Loader2 
+  Clock, AlertTriangle, FileSignature, Loader2, CheckSquare
 } from 'lucide-react';
 
 const ASSET_CATEGORIES = [
@@ -147,6 +147,9 @@ function AssetRegistryContent() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  
+  // Bulk Selection State
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -266,18 +269,11 @@ function AssetRegistryContent() {
     setIsSaving(true);
     try {
       const serialUpper = newAssetSerial.toUpperCase();
-
-      // 🌟 CHECK FOR DUPLICATE SERIAL NUMBER
-      const { data: existingSerial } = await supabase
-        .from('assets')
-        .select('serial_number')
-        .eq('serial_number', serialUpper)
-        .maybeSingle();
+      const { data: existingSerial } = await supabase.from('assets').select('serial_number').eq('serial_number', serialUpper).maybeSingle();
 
       if (existingSerial) {
         alert(`Error: An asset with the Serial Number "${serialUpper}" already exists in the system.`);
-        setIsSaving(false);
-        return;
+        setIsSaving(false); return;
       }
 
       const resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
@@ -293,46 +289,31 @@ function AssetRegistryContent() {
       
       if (error) throw error;
       
-      // Notify assigned staff
       if (newAssetAssignee) {
         try {
           await supabase.from('notifications').insert({
             title: 'New Hardware Assigned',
             message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-            target_role: newAssetAssignee, 
-            is_read: false
+            target_role: newAssetAssignee, is_read: false
           });
-        } catch (notifError) {
-          console.warn("Notification could not be sent:", notifError);
-        }
+        } catch (notifError) { console.warn("Notification error:", notifError); }
       }
 
       setIsAddModalOpen(false); 
       fetchRegistryData();
-    } catch (err: any) { 
-      alert(`Error: ${err.message}`); 
-    } finally { 
-      setIsSaving(false); 
-    }
+    } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
   };
 
   const handleUpdateExistingAsset = async () => {
     setIsUpdating(true);
     try {
       const serialUpper = editForm.serial.toUpperCase();
-
-      // 🌟 CHECK FOR DUPLICATE SERIAL NUMBER (Excluding current asset)
-      const { data: duplicateCheck } = await supabase
-        .from('assets')
-        .select('id, serial_number')
-        .eq('serial_number', serialUpper)
-        .neq('id', viewAssetModal.id)
-        .maybeSingle();
+      const { data: duplicateCheck } = await supabase.from('assets').select('id, serial_number')
+        .eq('serial_number', serialUpper).neq('id', viewAssetModal.id).maybeSingle();
 
       if (duplicateCheck) {
         alert(`Error: The Serial Number "${serialUpper}" is already assigned to another asset.`);
-        setIsUpdating(false);
-        return;
+        setIsUpdating(false); return;
       }
 
       let resolvedStatus = editForm.status;
@@ -358,82 +339,42 @@ function AssetRegistryContent() {
           await supabase.from('notifications').insert({
             title: 'New Hardware Assigned',
             message: `An admin has assigned ${editForm.name} (${editForm.asset_tag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-            target_role: editForm.assignee,
-            is_read: false
+            target_role: editForm.assignee, is_read: false
           });
-        } catch (notifError) {
-          console.warn("Notification could not be sent:", notifError);
-        }
+        } catch (notifError) { console.warn("Notification error:", notifError); }
       }
 
       setIsEditingAsset(false); 
       fetchRegistryData();
-    } catch (err: any) { 
-      alert(`Error updating: ${err.message}`); 
-    } finally { 
-      setIsUpdating(false); 
-    }
+    } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
   const getAssetViewUrl = (asset: any) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
-    // UPDATED: Use the public route instead of the admin route
     return `${baseDomain}/public-asset?id=${targetRef}`;
   };
 
   // ========================================================
-  // 🖨️ UPDATED: SYSTEM PRINT DESIGN WITH CUSTOM DIMENSIONS
+  // 🖨️ PHYSICAL STICKER PRINT DESIGN
   // ========================================================
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
-    
-    // UPDATED: Use the public route to bypass the localStorage error
-    const scanUrl = `${baseDomain}/public-asset?id=${targetRef}`;
+    const scanUrl = getAssetViewUrl(asset);
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
     
     const printWindow = window.open('', '_blank', 'width=600,height=600');
     if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print hardware stickers.");
 
     // Variable Setup according to specific Category Constraints
-    let width = '2.5in';
-    let height = '2.5in';
-    let qrSize = '1.2in';
-    let brandTextSize = '9pt';
-    let tagTextSize = '10pt';
-    let serialTextSize = '7pt';
-    let layoutDirection = 'column';
-    let innerGap = '4px';
+    let width = '2.5in'; let height = '2.5in'; let qrSize = '1.2in'; let brandTextSize = '9pt'; let tagTextSize = '10pt'; let serialTextSize = '7pt'; let layoutDirection = 'column'; let innerGap = '4px';
 
     const cat = safeString(asset.category).toLowerCase();
-
     if (cat.includes('laptop')) {
-      width = '4in';
-      height = '2in';
-      qrSize = '1.2in';
-      brandTextSize = '11pt';
-      tagTextSize = '12pt';
-      serialTextSize = '8pt';
-      layoutDirection = 'row'; // Rows save scaling workspace horizontally
-      innerGap = '15px';
+      width = '4in'; height = '2in'; qrSize = '1.2in'; brandTextSize = '11pt'; tagTextSize = '12pt'; serialTextSize = '8pt'; layoutDirection = 'row'; innerGap = '15px';
     } else if (cat.includes('mouse') && !cat.includes('pad')) {
-      width = '1in';
-      height = '0.5in';
-      qrSize = '0.32in';
-      brandTextSize = '4.5pt';
-      tagTextSize = '4.5pt';
-      serialTextSize = '3.5pt';
-      innerGap = '1px';
+      width = '1in'; height = '0.5in'; qrSize = '0.32in'; brandTextSize = '4.5pt'; tagTextSize = '4.5pt'; serialTextSize = '3.5pt'; innerGap = '1px';
     } else if (cat.includes('headphone')) {
-      width = '2.5in';
-      height = '1in';
-      qrSize = '0.65in';
-      brandTextSize = '7.5pt';
-      tagTextSize = '8pt';
-      serialTextSize = '6pt';
-      layoutDirection = 'row';
-      innerGap = '10px';
+      width = '2.5in'; height = '1in'; qrSize = '0.65in'; brandTextSize = '7.5pt'; tagTextSize = '8pt'; serialTextSize = '6pt'; layoutDirection = 'row'; innerGap = '10px';
     }
 
     const printableDocument = `
@@ -443,83 +384,21 @@ function AssetRegistryContent() {
           <title>Print_${cleanTag}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap');
-            body { 
-              margin: 0; 
-              padding: 0; 
-              display: flex; 
-              justify-content: center; 
-              align-items: center; 
-              font-family: 'Inter', sans-serif; 
-              background: #fff; 
-              color: #000; 
-              -webkit-font-smoothing: antialiased; 
-            }
-            @media print { 
-              @page { margin: 0mm; size: ${width} ${height}; } 
-              body { padding: 0; background: #fff; } 
-            }
-            .sticker-container {
-              width: ${width};
-              height: ${height};
-              box-sizing: border-box;
-              padding: 4px;
-              display: flex;
-              flex-direction: ${layoutDirection};
-              justify-content: center;
-              align-items: center;
-              text-align: center;
-              gap: ${innerGap};
-              overflow: hidden;
-            }
-            .content-block {
-              display: flex;
-              flex-direction: column;
-              justify-content: center;
-              align-items: ${layoutDirection === 'row' ? 'flex-start' : 'center'};
-              text-align: ${layoutDirection === 'row' ? 'left' : 'center'};
-              max-width: 100%;
-            }
-            .brand-heading {
-              font-size: ${brandTextSize};
-              font-weight: 800;
-              letter-spacing: -0.2px;
-              line-height: 1.1;
-              color: #000;
-              margin-bottom: 2px;
-              text-transform: uppercase;
-            }
-            .qr-image {
-              width: ${qrSize};
-              height: ${qrSize};
-              display: block;
-              mix-blend-mode: multiply;
-              shrink: 0;
-            }
-            .tag-id {
-              font-size: ${tagTextSize};
-              font-weight: 800;
-              letter-spacing: 0.2px;
-              line-height: 1.1;
-              margin-top: 2px;
-            }
-            .serial-string {
-              font-size: ${serialTextSize};
-              font-weight: 600;
-              color: #333;
-              line-height: 1;
-              margin-top: 1px;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              max-width: 100%;
-            }
+            body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; font-family: 'Inter', sans-serif; background: #fff; color: #000; -webkit-font-smoothing: antialiased; }
+            @media print { @page { margin: 0mm; size: ${width} ${height}; } body { padding: 0; background: #fff; } }
+            .sticker-container { width: ${width}; height: ${height}; box-sizing: border-box; padding: 4px; display: flex; flex-direction: ${layoutDirection}; justify-content: center; align-items: center; text-align: center; gap: ${innerGap}; overflow: hidden; }
+            .content-block { display: flex; flex-direction: column; justify-content: center; align-items: ${layoutDirection === 'row' ? 'flex-start' : 'center'}; text-align: ${layoutDirection === 'row' ? 'left' : 'center'}; max-width: 100%; }
+            .brand-heading { font-size: ${brandTextSize}; font-weight: 800; letter-spacing: -0.2px; line-height: 1.1; color: #000; margin-bottom: 2px; text-transform: uppercase; }
+            .qr-image { width: ${qrSize}; height: ${qrSize}; display: block; mix-blend-mode: multiply; flex-shrink: 0; }
+            .tag-id { font-size: ${tagTextSize}; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1; margin-top: 2px; }
+            .serial-string { font-size: ${serialTextSize}; font-weight: 600; color: #333; line-height: 1; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
           </style>
         </head>
-        <body onload="setTimeout(() => { window.print(); window.close(); }, 350)">
+        <body onload="setTimeout(() => { window.print(); window.close(); }, 400)">
           <div class="sticker-container">
             <img src="${qrUrl}" class="qr-image" />
             <div class="content-block">
-              <div class="brand-heading">Virtual Staffing Solution Assets</div>
+              <div class="brand-heading">VSS Assets</div>
               <div class="tag-id">${cleanTag}</div>
               <div class="serial-string">S/N: ${asset.serial_number || 'N/A'}</div>
             </div>
@@ -529,6 +408,89 @@ function AssetRegistryContent() {
     `;
     printWindow.document.open(); 
     printWindow.document.write(printableDocument); 
+    printWindow.document.close();
+  };
+
+  // ========================================================
+  // 🖨️ BULK STICKER PRINT / DOWNLOAD SYSTEM
+  // ========================================================
+  const handleBulkPrintStickers = () => {
+    const assetsToPrint = assets.filter(a => selectedAssetIds.has(a.id));
+    if (assetsToPrint.length === 0) return;
+
+    const printWindow = window.open('', '_blank', 'width=800,height=800');
+    if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print bulk hardware stickers.");
+
+    let htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bulk_Print_${assetsToPrint.length}_QRs</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap');
+            body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #fff; color: #000; -webkit-font-smoothing: antialiased; }
+            /* This ensures each sticker gets its own page or distinct block when saving as PDF */
+            @media print { 
+              body { margin: 0; padding: 0; }
+              .page-break { page-break-after: always; break-after: page; } 
+            }
+            .page-break {
+              display: flex; justify-content: center; align-items: center;
+              margin: 10px auto; border: 1px dashed #ccc; /* Border visible only on screen for preview */
+            }
+            @media print { .page-break { border: none; margin: 0; } }
+          </style>
+        </head>
+        <body>
+    `;
+
+    assetsToPrint.forEach((asset, index) => {
+      const cleanTag = asset.clean_tag || asset.asset_tag || asset.id;
+      const scanUrl = getAssetViewUrl(asset);
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(scanUrl)}`;
+
+      // Category-based dynamic dimensions
+      let width = '2.5in'; let height = '2.5in'; let qrSize = '1.2in'; let brandTextSize = '9pt'; let tagTextSize = '10pt'; let serialTextSize = '7pt'; let layoutDirection = 'column'; let innerGap = '4px';
+
+      const cat = safeString(asset.category).toLowerCase();
+      if (cat.includes('laptop')) {
+        width = '4in'; height = '2in'; qrSize = '1.2in'; brandTextSize = '11pt'; tagTextSize = '12pt'; serialTextSize = '8pt'; layoutDirection = 'row'; innerGap = '15px';
+      } else if (cat.includes('mouse') && !cat.includes('pad')) {
+        width = '1in'; height = '0.5in'; qrSize = '0.32in'; brandTextSize = '4.5pt'; tagTextSize = '4.5pt'; serialTextSize = '3.5pt'; innerGap = '1px';
+      } else if (cat.includes('headphone')) {
+        width = '2.5in'; height = '1in'; qrSize = '0.65in'; brandTextSize = '7.5pt'; tagTextSize = '8pt'; serialTextSize = '6pt'; layoutDirection = 'row'; innerGap = '10px';
+      }
+
+      htmlContent += `
+        <div class="page-break" style="width: ${width}; height: ${height};">
+          <div style="width: 100%; height: 100%; box-sizing: border-box; padding: 4px; display: flex; flex-direction: ${layoutDirection}; justify-content: center; align-items: center; text-align: center; gap: ${innerGap}; overflow: hidden;">
+            <img src="${qrUrl}" style="width: ${qrSize}; height: ${qrSize}; display: block; mix-blend-mode: multiply; flex-shrink: 0;" />
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: ${layoutDirection === 'row' ? 'flex-start' : 'center'}; text-align: ${layoutDirection === 'row' ? 'left' : 'center'}; max-width: 100%;">
+              <div style="font-size: ${brandTextSize}; font-weight: 800; letter-spacing: -0.2px; line-height: 1.1; color: #000; margin-bottom: 2px; text-transform: uppercase;">VSS Assets</div>
+              <div style="font-size: ${tagTextSize}; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1; margin-top: 2px;">${cleanTag}</div>
+              <div style="font-size: ${serialTextSize}; font-weight: 600; color: #333; line-height: 1; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">S/N: ${asset.serial_number || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    htmlContent += `
+          <script>
+            // Increase timeout based on number of tags to ensure all QR images fully load before print dialog opens
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, ${Math.max(600, assetsToPrint.length * 150)});
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open(); 
+    printWindow.document.write(htmlContent); 
     printWindow.document.close();
   };
 
@@ -635,6 +597,21 @@ function AssetRegistryContent() {
     return matchesSearch && matchesCat;
   });
 
+  const toggleSelectAsset = (id: string) => {
+    const newSet = new Set(selectedAssetIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedAssetIds(newSet);
+  };
+
+  const handleSelectAllFiltered = () => {
+    if (selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0) {
+      setSelectedAssetIds(new Set()); // Deselect all
+    } else {
+      setSelectedAssetIds(new Set(filteredAssets.map(a => a.id))); // Select all currently filtered
+    }
+  };
+
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
@@ -666,7 +643,12 @@ function AssetRegistryContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {selectedAssetIds.size > 0 && (
+              <button onClick={handleBulkPrintStickers} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
+                <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
+              </button>
+            )}
             <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-colors text-xs font-semibold uppercase tracking-wider ${theme.card} ${theme.cardHover} ${theme.textMain}`}>
               <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
             </button>
@@ -698,14 +680,26 @@ function AssetRegistryContent() {
             ))}
           </div>
 
-          <div className={`p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
-            <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
-              <input 
-                type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by Tag ID, Assets Name, S/N, Holder Name, or EMP Code..." 
-                className={`w-full pl-12 pr-4 py-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`}
-              />
+          <div className="flex gap-3 items-center">
+            <button 
+              onClick={handleSelectAllFiltered} 
+              className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700') : theme.card + ' ' + theme.textMain}`}
+            >
+              <CheckSquare size={16}/> 
+              <span className="hidden sm:inline">
+                {selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}
+              </span>
+            </button>
+
+            <div className={`flex-1 p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
+              <div className="relative w-full">
+                <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+                <input 
+                  type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search by Tag ID, Assets Name, S/N, Holder Name, or EMP Code..." 
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -718,71 +712,83 @@ function AssetRegistryContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredAssets.map(asset => (
-              <div key={asset.id} className={`${theme.card} rounded-3xl border shadow-sm flex flex-col justify-between group transition-all ${theme.cardHover} overflow-hidden`}>
-                
-                <div className={`p-5 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-50'}`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${theme.iconBgBlue}`}>
-                        <Laptop size={20}/>
-                      </div>
-                      <div className="overflow-hidden">
-                        <h3 className={`text-sm font-semibold leading-tight truncate max-w-[170px] ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
-                        <p className={`text-[11px] mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => openAssetViewModal(asset)} className={`p-2.5 rounded-xl transition-colors cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a] hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600'}`}>
-                      <QrCode size={18} />
-                    </button>
-                  </div>
+            {filteredAssets.map(asset => {
+              const isSelected = selectedAssetIds.has(asset.id);
 
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                    <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${isDarkMode ? 'bg-[#18181b] text-zinc-300 border-[#27272a]' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{asset.asset_condition || 'New'}</span>
-                  </div>
-                </div>
-
-                <div className={`p-5 space-y-3 flex-1 ${isDarkMode ? 'bg-[#0a0a0a]/50' : 'bg-slate-50/50'}`}>
-                  <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
-                    <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
-                    <span className={`font-mono font-bold text-xs ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{asset.clean_tag}</span>
-                  </div>
-                  <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
-                    <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
-                    <span className={`font-mono font-bold text-[11px] truncate max-w-[140px] ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
-                  </div>
+              return (
+                <div key={asset.id} onClick={(e) => {
+                  // Prevent toggle if they click buttons
+                  const target = e.target as HTMLElement;
+                  if (target.closest('button')) return;
+                  toggleSelectAsset(asset.id);
+                }} className={`${theme.card} rounded-3xl border shadow-sm flex flex-col justify-between group transition-all cursor-pointer ${isSelected ? (isDarkMode ? '!border-indigo-500/60 ring-1 ring-indigo-500/60 !bg-[#121212]' : '!border-indigo-400 ring-1 ring-indigo-400 !bg-indigo-50/20') : theme.cardHover} overflow-hidden`}>
                   
-                  <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-colors ${theme.card} group-hover:border-blue-500/30`}>
-                    <div className="flex flex-col">
-                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Holder</span> 
-                      <span className={`font-bold text-[11px] truncate max-w-[120px] ${theme.textMain}`} title={asset.staff_name}>{asset.staff_name}</span>
+                  <div className={`p-5 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-50'}`}>
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-indigo-500/20 text-indigo-500' : theme.iconBgBlue}`}>
+                          <Laptop size={20}/>
+                        </div>
+                        <div className="overflow-hidden">
+                          <h3 className={`text-sm font-semibold leading-tight truncate max-w-[170px] ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
+                          <p className={`text-[11px] mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 rounded-xl transition-colors cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a] hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600'}`}>
+                          <QrCode size={18} />
+                        </button>
+                        <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 rounded cursor-pointer accent-indigo-600 ml-1" />
+                      </div>
                     </div>
-                    <span className={`font-mono font-bold px-2 py-1 rounded-lg text-[9px] ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-slate-100 text-slate-500'}`}>{asset.emp_code}</span>
-                  </div>
-                </div>
 
-                <div className={`p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-100/80 border-slate-200'}`}>
-                  <div className="flex items-center gap-2">
-                    <Clock size={14} className={theme.textSub} />
-                    <div className="flex flex-col">
-                      <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
-                      <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
+                      <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${isDarkMode ? 'bg-[#18181b] text-zinc-300 border-[#27272a]' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{asset.asset_condition || 'New'}</span>
                     </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${getInspectionStatusColor(asset.live_inspection_status)}`}>
-                    {(() => {
-                      const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                      if (st === 'approved') return <CheckCircle2 size={12} />;
-                      if (st === 're-inspection') return <RefreshCw size={12} className="animate-spin" />;
-                      return <AlertTriangle size={12} />;
-                    })()}
-                    <span className="text-[9px] font-bold uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
-                  </div>
-                </div>
 
-              </div>
-            ))}
+                  <div className={`p-5 space-y-3 flex-1 ${isDarkMode ? 'bg-[#0a0a0a]/50' : 'bg-slate-50/50'}`}>
+                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
+                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
+                      <span className={`font-mono font-bold text-xs ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{asset.clean_tag}</span>
+                    </div>
+                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
+                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
+                      <span className={`font-mono font-bold text-[11px] truncate max-w-[140px] ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
+                    </div>
+                    
+                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-colors ${theme.card} group-hover:border-blue-500/30`}>
+                      <div className="flex flex-col">
+                        <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Holder</span> 
+                        <span className={`font-bold text-[11px] truncate max-w-[120px] ${theme.textMain}`} title={asset.staff_name}>{asset.staff_name}</span>
+                      </div>
+                      <span className={`font-mono font-bold px-2 py-1 rounded-lg text-[9px] ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-slate-100 text-slate-500'}`}>{asset.emp_code}</span>
+                    </div>
+                  </div>
+
+                  <div className={`p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-100/80 border-slate-200'}`}>
+                    <div className="flex items-center gap-2">
+                      <Clock size={14} className={theme.textSub} />
+                      <div className="flex flex-col">
+                        <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
+                        <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${getInspectionStatusColor(asset.live_inspection_status)}`}>
+                      {(() => {
+                        const st = (asset.live_inspection_status || '').toLowerCase().trim();
+                        if (st === 'approved') return <CheckCircle2 size={12} />;
+                        if (st === 're-inspection') return <RefreshCw size={12} className="animate-spin" />;
+                        return <AlertTriangle size={12} />;
+                      })()}
+                      <span className="text-[9px] font-bold uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
+                    </div>
+                  </div>
+
+                </div>
+              );
+            })}
           </div>
         )}
 
