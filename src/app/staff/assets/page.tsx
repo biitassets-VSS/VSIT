@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, Loader2, ShieldCheck, AlertTriangle, 
-  FileSignature, CheckCircle2, QrCode, PenTool, X, CalendarClock
+  FileSignature, CheckCircle2, QrCode, PenTool, X, CalendarClock, AlertCircle
 } from 'lucide-react';
 
 export default function StaffAssetsPage() {
@@ -36,12 +36,12 @@ export default function StaffAssetsPage() {
           { 
             id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', 
             serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', status: 'Pending Handover',
-            live_inspection_date: null
+            live_inspection_date: null, live_inspection_notes: null, live_inspection_photos: null
           },
           { 
             id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', 
             serial_number: 'SN-DEMO-2', category: 'Hardware', live_inspection_status: 'Approved', status: 'Assigned',
-            live_inspection_date: new Date().toISOString()
+            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'All good', live_inspection_photos: null
           }
         ]);
         setLoading(false);
@@ -73,9 +73,10 @@ export default function StaffAssetsPage() {
 
       if (error) throw error;
       
+      // 🌟 UPDATED: Fetch photos and notes for the agreement
       const { data: inspectionsRes } = await supabase
         .from('inspections')
-        .select('asset_id, status, created_at')
+        .select('asset_id, status, notes, photos, created_at')
         .order('created_at', { ascending: false });
 
       const compiledAssets = (assetsRes || []).map(asset => {
@@ -83,7 +84,9 @@ export default function StaffAssetsPage() {
         return {
           ...asset,
           live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
-          live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
+          live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
+          live_inspection_notes: latestInsp?.notes || null,
+          live_inspection_photos: latestInsp?.photos || null
         };
       });
 
@@ -136,7 +139,7 @@ export default function StaffAssetsPage() {
         notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
       });
 
-      // 🌟 3. NEW: SEND ALERT TO ADMIN DASHBOARD
+      // 3. SEND ALERT TO ADMIN DASHBOARD
       await supabase.from('notifications').insert({
         title: 'Agreement Signed',
         message: `${currentUser.name} has electronically signed the Handover Agreement for ${signModalAsset.name || signModalAsset.category} (${signModalAsset.asset_tag}).`,
@@ -281,11 +284,11 @@ export default function StaffAssetsPage() {
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</span>
                     {isPending ? (
                       <span className="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-wider rounded border border-rose-200 flex items-center gap-1">
-                         Signature Required
+                          Signature Required
                       </span>
                     ) : (
                       <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-wider rounded border border-emerald-200 flex items-center gap-1">
-                         Active & Assigned
+                          Active & Assigned
                       </span>
                     )}
                   </div>
@@ -314,9 +317,23 @@ export default function StaffAssetsPage() {
       {signModalAsset && (() => {
         const isModalPending = !signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover';
         
+        // Safely parse photos for evidence display
+        let safePhotos: string[] = [];
+        try {
+          if (Array.isArray(signModalAsset.live_inspection_photos)) {
+            safePhotos = signModalAsset.live_inspection_photos;
+          } else if (typeof signModalAsset.live_inspection_photos === 'string') {
+            const parsed = JSON.parse(signModalAsset.live_inspection_photos);
+            if (Array.isArray(parsed)) safePhotos = parsed;
+            else if (typeof parsed === 'object' && parsed !== null) safePhotos = Object.values(parsed);
+          } else if (typeof signModalAsset.live_inspection_photos === 'object' && signModalAsset.live_inspection_photos !== null) {
+            safePhotos = Object.values(signModalAsset.live_inspection_photos);
+          }
+        } catch(e) {}
+
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               
               <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3">
@@ -331,21 +348,60 @@ export default function StaffAssetsPage() {
                 <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"><X size={20}/></button>
               </div>
 
-              <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 gap-4">
-                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900">{signModalAsset.name || signModalAsset.category}</span></div>
-                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
+              <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium custom-scrollbar">
+                
+                {/* 🌟 WARNING BOX */}
+                <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex gap-3">
+                  <AlertCircle className="text-rose-600 shrink-0" size={20} />
+                  <div>
+                    <h4 className="text-rose-700 font-black text-xs uppercase tracking-widest mb-1">Attention Required</h4>
+                    <p className="text-xs font-semibold text-rose-800 leading-relaxed">
+                      Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.
+                    </p>
+                  </div>
+                </div>
+
+                {/* ASSET SPECS */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span></div>
+                  <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
                   <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
                   <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? new Date(signModalAsset.live_inspection_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</span></div>
                 </div>
 
+                {/* 🌟 EVIDENCE SECTION */}
+                <div className="p-5 border border-slate-200 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-slate-100 pb-2">Latest Inspection & Condition Evidence</h4>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Inspector Notes:</span>
+                    <div className="font-mono text-xs bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
+                      {signModalAsset.live_inspection_notes || 'No specific notes provided during the last audit.'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Asset Photos:</span>
+                    {safePhotos.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {safePhotos.slice(0, 4).map((src, idx) => (
+                          <img key={idx} src={src} alt="Evidence" className="w-full h-20 object-cover rounded-lg border border-slate-200 bg-slate-50" />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No inspection photos available on record.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 🌟 TERMS & POLICIES */}
                 <div className="prose prose-sm prose-slate max-w-none">
                   <p>I, <strong>{currentUser.name}</strong> (Emp ID: {currentUser.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
-                  <ul className="space-y-2 mt-4 text-xs">
+                  <ul className="space-y-2 mt-4 text-xs font-semibold text-slate-600 leading-relaxed">
                     <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
                     <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-                    <li><strong>3. Return Policy:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management.</li>
-                    <li><strong>4. Liability:</strong> I acknowledge that gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
+                    <li><strong className="text-slate-800">3. Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months. On your Dashboard, the Device Audit Button will activate 4 days before the due date.</li>
+                    <li><strong className="text-slate-800">4. Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
+                    <li><strong className="text-slate-800">5. Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
+                    <li><strong>6. Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management. Gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
                   </ul>
                 </div>
 
