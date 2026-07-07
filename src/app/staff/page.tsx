@@ -1,14 +1,13 @@
-// src/app/staff/dashboard/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // 🌟 ADDED: Router for navigation
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor // 🌟 ADDED: Monitor Icon for Team Screen
+  Camera, Lock, Monitor, Bell
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
@@ -39,7 +38,7 @@ function getAuditWindowInfo() {
 }
 
 export default function StaffDashboardPage() {
-  const router = useRouter(); // 🌟 INITIALIZED ROUTER
+  const router = useRouter(); 
   
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
@@ -48,6 +47,7 @@ export default function StaffDashboardPage() {
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   const [myTickets, setMyTickets] = useState<any[]>([]);
   const [allInspections, setAllInspections] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
@@ -65,13 +65,12 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
-  // 🌟 ANTI-TRAP SESSION WATCHER: Safely redirects the moment "Logout" is clicked
+  // 🌟 ANTI-TRAP SESSION WATCHER
   useEffect(() => {
     const watcher = setInterval(() => {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
       const activeSession = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
-      // If NO session and NOT a guest, kick them to login
       if (!activeSession && !isGuest) {
         window.location.replace('/');
       }
@@ -83,7 +82,7 @@ export default function StaffDashboardPage() {
     try {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
 
-      // 🚀 GUEST BYPASS: Load dummy data instantly without touching Supabase
+      // 🚀 GUEST BYPASS
       if (isGuest) {
         setCurrentUser({
           id: 'guest-mock-uuid',
@@ -93,17 +92,18 @@ export default function StaffDashboardPage() {
         });
         
         const demoAssets = [
-          { id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', serial_number: 'SN-DEMO-1', category: 'Laptop' },
-          { id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', serial_number: 'SN-DEMO-2', category: 'Hardware' }
+          { id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', live_inspection_date: new Date().toISOString() },
+          { id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', serial_number: 'SN-DEMO-2', category: 'Hardware', live_inspection_status: 'Pending', live_inspection_date: new Date().toISOString() }
         ];
         
         setAssignedAssets(demoAssets);
         setAllInspections([]);
         setMyTickets([]);
+        setNotifications([]);
         setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
         setIsAuthorized(true);
         setLoading(false);
-        return; // Important: Stops the function before it hits Supabase!
+        return; 
       }
 
       // 🔐 REAL USER AUTHENTICATION
@@ -143,14 +143,17 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      const [assetsRes, inspRes, ticketsRes] = await Promise.all([
+      // 🌟 FETCH LIVE DATA IN PARALLEL (Added Notifications)
+      const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
-        supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false })
+        supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false }),
+        supabase.from('notifications').select('*').eq('target_user', user.id).eq('is_read', false).order('created_at', { ascending: false })
       ]);
 
       if (assetsRes.data) {
         setAllInspections(inspRes.data || []); 
+        setNotifications(notifRes.data || []);
 
         const compiledAssets = assetsRes.data.map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
@@ -163,7 +166,7 @@ export default function StaffDashboardPage() {
         setAssignedAssets(compiledAssets);
         
         const needsInspCount = compiledAssets.filter(a => 
-          ['pending', 're-inspection', 'overdue'].includes((a.live_inspection_status || '').toLowerCase())
+          ['pending', 're-inspection', 'overdue', 'not approved', 'reject'].some(status => (a.live_inspection_status || '').toLowerCase().includes(status))
         ).length;
 
         const tix = ticketsRes.data || [];
@@ -182,18 +185,32 @@ export default function StaffDashboardPage() {
   useEffect(() => {
     loadRealDatabase();
     
-    // Prevent Guest users from opening realtime database connections
     if (localStorage.getItem('isGuestSession') === 'true') return;
 
-    const ticketSubscription = supabase
-      .channel('public:tickets')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-        loadRealDatabase();
-      })
+    // 🌟 ADDED: Realtime listeners for Tickets, Inspections, and Notifications
+    const ticketSubscription = supabase.channel('public:tickets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(); })
+      .subscribe();
+      
+    const inspSubscription = supabase.channel('public:inspections')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(); })
+      .subscribe();
+      
+    const notifSubscription = supabase.channel('public:notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => { loadRealDatabase(); })
       .subscribe();
 
-    return () => { supabase.removeChannel(ticketSubscription); };
+    return () => { 
+      supabase.removeChannel(ticketSubscription); 
+      supabase.removeChannel(inspSubscription);
+      supabase.removeChannel(notifSubscription);
+    };
   }, []);
+
+  const markNotificationAsRead = async (notifId: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== notifId));
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
+  };
 
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
@@ -203,10 +220,18 @@ export default function StaffDashboardPage() {
     return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
-  const getAssetAuditState = (assetId: string) => {
+  // 🌟 MODIFIED: Re-Inspection automatically bypasses the window lock
+  const getAssetAuditState = (asset: any) => {
+    const status = (asset.live_inspection_status || '').toLowerCase();
+    
+    // Immediate bypass if re-inspection is requested
+    if (status.includes('re-inspection') || status.includes('not approved') || status.includes('reject')) {
+      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-sm animate-pulse" };
+    }
+
     const hasAudited = allInspections.some(insp => {
       const d = new Date(insp.created_at);
-      return insp.asset_id === assetId && 
+      return insp.asset_id === asset.id && 
              d.getFullYear() === auditWindow.year && 
              d.getMonth() === auditWindow.month &&
              insp.status !== 'Re-Inspection'; 
@@ -227,6 +252,13 @@ export default function StaffDashboardPage() {
   }
 
   if (!isAuthorized) return null; 
+
+  // 🌟 Check if ANY asset requires a re-inspection to globally unlock the top card
+  const requiresGlobalReinspection = assignedAssets.some(a => {
+    const s = (a.live_inspection_status || '').toLowerCase();
+    return s.includes('re-inspection') || s.includes('not approved') || s.includes('reject');
+  });
+  const isGlobalAuditOpen = auditWindow.isOpen || requiresGlobalReinspection;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
@@ -251,44 +283,81 @@ export default function StaffDashboardPage() {
           </button>
         </div>
 
-        {/* 🌟 UPDATED: GRID COLUMNS ADJUSTED TO xl:grid-cols-5 TO FIT THE NEW CARD */}
+        {/* 🌟 ACTION ALERTS UI */}
+        {notifications.length > 0 && (
+          <div className="space-y-3 animate-in slide-in-from-top-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+              <Bell size={14} className="text-amber-500 animate-bounce" /> Action Alerts ({notifications.length})
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              {notifications.map(notif => {
+                const s = (notif.title || '').toLowerCase();
+                const isReject = s.includes('reject');
+                const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
+                const isApprove = s.includes('approve');
+                
+                const bgColor = isReject ? 'bg-rose-50 border-rose-200' : isReInspect ? 'bg-amber-50 border-amber-200' : isApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200';
+                const iconColor = isReject ? 'text-rose-600' : isReInspect ? 'text-amber-600' : isApprove ? 'text-emerald-600' : 'text-blue-600';
+
+                return (
+                  <div key={notif.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
+                    <div className="flex items-start sm:items-center gap-3">
+                      <div className={`p-2 bg-white rounded-lg shadow-xs shrink-0 ${iconColor}`}>
+                        {isApprove ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+                      </div>
+                      <div>
+                        <h4 className={`font-bold text-sm ${iconColor}`}>{notif.title || 'System Alert'}</h4>
+                        <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => markNotificationAsRead(notif.id)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
+                      Dismiss
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           {[
-            { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET' },
-            { name: 'Device Audit', desc: auditWindow.isOpen ? 'Submit asset inspection' : 'Window Currently Closed', icon: ClipboardCheck, color: auditWindow.isOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200', type: 'INSPECTION' },
-            { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST' },
-            { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT' },
-            // 🌟 NEW REMOTE SCREEN CARD
-            { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'REMOTE', path: '/staff/dashboard/remote' },
-          ].map((item) => {
-            const isActionDisabled = item.type === 'INSPECTION' && !auditWindow.isOpen;
-            
-            return (
+            { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET', isActionDisabled: false },
+            { 
+              name: 'Device Audit', 
+              desc: requiresGlobalReinspection ? 'Action Required' : (auditWindow.isOpen ? 'Submit asset inspection' : 'Window Currently Closed'), 
+              icon: ClipboardCheck, 
+              color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (auditWindow.isOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), 
+              type: 'INSPECTION', 
+              isActionDisabled: !isGlobalAuditOpen 
+            },
+            { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
+            { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT', isActionDisabled: false },
+            { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'REMOTE', path: '/staff/dashboard/remote', isActionDisabled: false },
+          ].map((item) => (
               <button 
                 key={item.name} 
                 onClick={() => {
-                  if (isActionDisabled) return;
-                  
-                  // Route handler for path-based cards, fallback to Modal for the rest
+                  if (item.isActionDisabled) return;
                   if (item.path) {
                     router.push(item.path);
                   } else {
                     setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] });
                   }
                 }} 
-                disabled={isActionDisabled}
-                className={`bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-4 group transition-all ${isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
+                disabled={item.isActionDisabled}
+                className={`bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
               >
-                <div className={`p-3.5 rounded-xl border shrink-0 transition-transform ${isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>
-                  {isActionDisabled ? <Lock size={22} /> : <item.icon size={22} />}
+                <div className={`p-3.5 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>
+                  {item.isActionDisabled ? <Lock size={22} /> : <item.icon size={22} />}
                 </div>
                 <div>
-                  <h3 className={`font-bold text-sm ${isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-blue-600'} transition-colors`}>{item.name}</h3>
+                  <h3 className={`font-bold text-sm ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-blue-600'} transition-colors`}>{item.name}</h3>
                   <p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p>
                 </div>
               </button>
             )
-          })}
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
@@ -316,13 +385,21 @@ export default function StaffDashboardPage() {
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No active machines linked to your ID.</div>
             ) : (
               assignedAssets.map(asset => {
-                const btnState = getAssetAuditState(asset.id);
+                const btnState = getAssetAuditState(asset);
+                const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
 
                 return (
-                  <div key={asset.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div key={asset.id} className={`p-4 rounded-2xl bg-slate-50 border ${isReInspect ? 'border-rose-200' : 'border-slate-200/60'} flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
                     <div>
                       <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
                       <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
+                      
+                      {/* 🌟 LIVE DATE AND STATUS ENGINE */}
+                      <div className="text-[10px] mt-1.5 font-bold uppercase tracking-widest flex items-center gap-2">
+                        Status: <span className={isReInspect ? 'text-rose-600' : 'text-slate-600'}>{asset.live_inspection_status || 'Pending'}</span>
+                        <span className="text-slate-300">•</span>
+                        Updated: <span className="text-slate-600">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString() : 'N/A'}</span>
+                      </div>
                     </div>
                     
                     <button 
@@ -334,7 +411,6 @@ export default function StaffDashboardPage() {
                       {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
                       {btnState.text}
                     </button>
-                    
                   </div>
                 );
               })
@@ -399,7 +475,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const handleAttemptUnlock = () => {
     if (!asset) { alert("No hardware assigned to test against!"); return; }
     
-    // GUEST BYPASS: Accept any input for the demo user
+    // GUEST BYPASS
     if (user.id === 'guest-mock-uuid') {
       setLockError(false); setIsUnlocked(true);
       return;
@@ -428,13 +504,13 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
     setIsTransmitting(true);
 
-    // 🚀 GUEST BYPASS: Fake a successful transmission without hitting Supabase
+    // 🚀 GUEST BYPASS
     if (user.id === 'guest-mock-uuid') {
       setTimeout(() => {
         setIsTransmitting(false);
         setSuccessDone(true);
         setTimeout(() => onClose(), 1200);
-      }, 800); // 800ms fake delay
+      }, 800); 
       return;
     }
 
