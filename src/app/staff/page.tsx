@@ -7,7 +7,7 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell, History
+  Camera, Lock, Monitor, Bell
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
@@ -290,7 +290,7 @@ export default function StaffDashboardPage() {
                 const isReject = s.includes('reject');
                 const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
                 const isApprove = s.includes('approve');
-                const isReplacement = s.includes('replace') || s.includes('new asset'); // 🌟 Added Replacement catching logic
+                const isReplacement = s.includes('replace') || s.includes('new asset'); 
                 
                 let bgColor = 'bg-blue-50 border-blue-200';
                 let iconColor = 'text-blue-600';
@@ -330,8 +330,7 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        {/* 🌟 ADDED NEW REPLACEMENTS LOG BUTTON TO GRID */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET', isActionDisabled: false },
             { 
@@ -344,7 +343,6 @@ export default function StaffDashboardPage() {
             },
             { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
             { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT', isActionDisabled: false },
-            { name: 'Replacements Log', desc: 'View replacement history', icon: History, color: 'text-orange-600 bg-orange-50 border-orange-100', type: 'ROUTE', path: '/staff/dashboard/replacements', isActionDisabled: false },
             { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
           ].map((item) => (
               <button 
@@ -556,10 +554,9 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         });
         submitError = error;
       } else if (type === 'REPLACEMENT') {
-        // 🌟 UPDATED: Store as an Asset Replacement Request ticket to build the history log
         const { error: ticketError } = await supabase.from('tickets').insert({
           title: `Replacement Request: ${asset.name}`,
-          category: 'Asset Replacement', // Used by the new page to filter history
+          category: 'Asset Replacement', 
           description: `Tag ID: ${asset.asset_tag} | S/N: ${asset.serial_number}\n\nReason: ${formText}`,
           status: 'Pending',
           created_by: cleanEmail,
@@ -594,7 +591,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><Ticket size={20}/></div>
             <div>
-              {/* 🌟 RENAMED THE TITLE IF TYPE IS REPLACEMENT */}
               <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">
                 {type === 'REPLACEMENT' ? 'Assets Replacement' : 'Portal Submission'}
               </h3>

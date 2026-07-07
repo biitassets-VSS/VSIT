@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Laptop, ClipboardCheck, 
-  LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell, Trash2
+  LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell, Trash2, History
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -161,9 +161,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             { name: 'My Assets', href: '/staff/assets', icon: Laptop },
             { name: 'My Inspections', href: '/staff/inspections', icon: ClipboardCheck },
             { name: 'IT Tickets', href: '/staff/tickets', icon: Ticket },
-            { name: 'Asset Requests', href: '/staff/requests', icon: PlusCircle }
+            { name: 'Asset Requests', href: '/staff/requests', icon: PlusCircle },
+            { name: 'Replacement Log', href: '/staff/replacements', icon: History } // 🌟 ADDED REPLACEMENT LOG
           ].map((link) => {
             const Icon = link.icon;
+            // Strict matching for root Dashboard to prevent it from always being active, partial matching for sub-pages
             const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);
             return (
               <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${isActive ? 'bg-orange-50 text-orange-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
