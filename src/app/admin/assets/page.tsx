@@ -157,18 +157,16 @@ function AssetRegistryContent() {
   const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
 
-  // 🚀 UPDATED DEFAULT CONFIG FOR A4 (210 x 297mm)
-  // Ensures 8 rows of 3.4cm height perfectly fit inside A4 limits
   const [printConfig, setPrintConfig] = useState({
     pageSize: 'A4',
     columns: 2,
     rows: 8,
     labelWidth: 8.88,      
     labelHeight: 3.4,      
-    marginTop: 1.25,       // Perfect top margin to center 8 rows on A4
-    marginLeft: 1.37,      // Perfect left margin to center 2 columns with 0.5 gap
+    marginTop: 1.25,       
+    marginLeft: 1.37,      
     gapX: 0.5,             
-    gapY: 0.0,             // Must be 0! A 0.5cm row gap x 8 rows makes it larger than A4 paper.
+    gapY: 0.0,             
     packSmallAssets: true  
   });
 
@@ -219,7 +217,8 @@ function AssetRegistryContent() {
       const [assetRes, staffRes, inspectionRes] = await Promise.all([
         supabase.from('assets').select('*').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
-        supabase.from('inspections').select('asset_id, status, notes, created_at').order('created_at', { ascending: false })
+        // 🔥 UPDATE: Added "photos" to the select query to fetch evidence
+        supabase.from('inspections').select('asset_id, status, notes, photos, created_at').order('created_at', { ascending: false })
       ]);
 
       const assetData = assetRes.data || [];
@@ -238,7 +237,8 @@ function AssetRegistryContent() {
           clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
           live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
-          live_inspection_notes: latestInspection?.notes || null
+          live_inspection_notes: latestInspection?.notes || null,
+          live_inspection_photos: latestInspection?.photos || null
         };
       });
       setAssets(compiledAssets);
@@ -546,6 +546,7 @@ function AssetRegistryContent() {
     setIsPrintConfigModalOpen(true);
   };
 
+  // 🔥 UPDATED AGREEMENT GENERATOR WITH NEW TERMS AND PHOTOS
   const handlePrintAgreement = (asset: any) => {
     const printWindow = window.open('', '_blank', 'width=800,height=900');
     if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to download the PDF.");
@@ -557,30 +558,73 @@ function AssetRegistryContent() {
         ? asset.live_inspection_notes 
         : `Digitally Signed Handover Agreement by ${asset.staff_name} on ${safeDate(asset.live_inspection_date)}`;
 
+    // Safely Parse Photos Data
+    let safePhotos: string[] = [];
+    try {
+      if (Array.isArray(asset.live_inspection_photos)) {
+        safePhotos = asset.live_inspection_photos;
+      } else if (typeof asset.live_inspection_photos === 'string') {
+        const parsed = JSON.parse(asset.live_inspection_photos);
+        if (Array.isArray(parsed)) safePhotos = parsed;
+        else if (typeof parsed === 'object' && parsed !== null) safePhotos = Object.values(parsed);
+      } else if (typeof asset.live_inspection_photos === 'object' && asset.live_inspection_photos !== null) {
+        safePhotos = Object.values(asset.live_inspection_photos);
+      }
+    } catch(e) {}
+
+    let photosHtml = '';
+    if (safePhotos.length > 0) {
+      photosHtml = `<div class="photos-grid">` + safePhotos.slice(0, 4).map(src => `<img src="${src}" class="evidence-photo" />`).join('') + `</div>`;
+    } else {
+      photosHtml = `<p style="font-size: 12px; color: #6b7280; font-style: italic;">No inspection photos available on record.</p>`;
+    }
+
     const doc = `
       <html>
         <head>
           <title>Handover_Agreement_${asset.clean_tag}</title>
           <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; line-height: 1.6; color: #111; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; }
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; }
             .title { font-size: 24px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
             .subtitle { font-size: 14px; color: #6b7280; font-weight: bold; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f9fafb; padding: 25px; border-radius: 8px; border: 1px solid #e5e7eb; }
-            .policy { margin-bottom: 40px; }
-            .policy h3 { font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
-            .policy ul { padding-left: 20px; }
-            .policy li { margin-bottom: 10px; font-size: 14px; }
-            .signature-box { border: 2px dashed ${isPending ? '#fcd34d' : '#cbd5e1'}; padding: 25px; border-radius: 8px; background: ${isPending ? '#fffbeb' : '#ecfdf5'}; margin-top: 40px; }
+            
+            .warning-box { background: #fef2f2; border: 1px solid #fecdd3; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+            .warning-box h4 { color: #e11d48; margin: 0 0 5px 0; font-size: 14px; text-transform: uppercase; }
+            .warning-box p { color: #9f1239; font-size: 12px; margin: 0; font-weight: bold; line-height: 1.5; }
+
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; }
+            
+            .evidence-section { margin-bottom: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; }
+            .evidence-section h3 { font-size: 16px; margin: 0 0 10px 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .notes-box { font-family: monospace; font-size: 12px; background: #f3f4f6; padding: 10px; border-radius: 4px; margin-bottom: 10px; white-space: pre-wrap; }
+            .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+            .evidence-photo { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #d1d5db; }
+
+            .policy { margin-bottom: 20px; }
+            .policy h3 { font-size: 16px; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+            .policy ul { padding-left: 20px; margin: 0; }
+            .policy li { margin-bottom: 8px; font-size: 12px; line-height: 1.5; }
+            
+            .signature-box { border: 2px dashed ${isPending ? '#fcd34d' : '#cbd5e1'}; padding: 20px; border-radius: 8px; background: ${isPending ? '#fffbeb' : '#ecfdf5'}; margin-top: 20px; page-break-inside: avoid; }
             .sign-header { font-size: 12px; font-weight: bold; text-transform: uppercase; color: ${isPending ? '#b45309' : '#065f46'}; margin: 0 0 10px 0; }
-            .sign-text { font-family: monospace; font-size: 15px; color: ${isPending ? '#d97706' : '#047857'}; font-weight: bold; margin: 0; }
-            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #9ca3af; }
+            .sign-text { font-family: monospace; font-size: 14px; color: ${isPending ? '#d97706' : '#047857'}; font-weight: bold; margin: 0; }
+            .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; }
+
+            @media print {
+              body { padding: 0; }
+            }
           </style>
         </head>
-        <body onload="setTimeout(() => { window.print(); window.close(); }, 500)">
+        <body onload="setTimeout(() => { window.print(); window.close(); }, 800)">
           <div class="header">
             <h1 class="title">IT Asset Handover Agreement</h1>
             <p class="subtitle">Virtual Staffing Solutions Security Policy</p>
+          </div>
+
+          <div class="warning-box">
+            <h4>⚠️ ATTENTION REQUIRED</h4>
+            <p>Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.</p>
           </div>
           
           <div class="grid">
@@ -592,14 +636,24 @@ function AssetRegistryContent() {
             <div><strong>Employee Code:</strong> <br/>${asset.emp_code}</div>
           </div>
 
+          <div class="evidence-section">
+            <h3>Latest Inspection & Condition Evidence</h3>
+            <strong>Inspector Notes:</strong>
+            <div class="notes-box">${asset.live_inspection_notes || 'No specific notes provided during the last audit.'}</div>
+            <strong>Asset Photos:</strong>
+            ${photosHtml}
+          </div>
+
           <div class="policy">
-            <h3>Terms and Conditions</h3>
-            <p>I, <strong>${asset.staff_name}</strong>, acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
+            <h3>Terms and Conditions & Audit Policies</h3>
+            <p style="font-size: 12px; margin-bottom: 10px;">I, <strong>${asset.staff_name}</strong>, acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
             <ul>
               <li><strong>Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
               <li><strong>Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-              <li><strong>Return Policy:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management.</li>
-              <li><strong>Liability:</strong> I acknowledge that gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
+              <li><strong>Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months. On your Dashboard, the Device Audit Button will activate 4 days before the due date.</li>
+              <li><strong>Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
+              <li><strong>Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
+              <li><strong>Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management. Gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
             </ul>
           </div>
 
