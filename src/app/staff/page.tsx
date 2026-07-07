@@ -7,7 +7,7 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell
+  Camera, Lock, Monitor, Bell, History
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
@@ -65,7 +65,6 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
-  // 🌟 ANTI-TRAP SESSION WATCHER
   useEffect(() => {
     const watcher = setInterval(() => {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
@@ -82,7 +81,6 @@ export default function StaffDashboardPage() {
     try {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
 
-      // 🚀 GUEST BYPASS
       if (isGuest) {
         setCurrentUser({
           id: 'guest-mock-uuid',
@@ -106,7 +104,6 @@ export default function StaffDashboardPage() {
         return; 
       }
 
-      // 🔐 REAL USER AUTHENTICATION
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
       if (!sessionStr) { 
@@ -143,7 +140,6 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      // 🌟 FETCH LIVE DATA IN PARALLEL (Added Notifications)
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
@@ -184,10 +180,8 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     loadRealDatabase();
-    
     if (localStorage.getItem('isGuestSession') === 'true') return;
 
-    // 🌟 ADDED: Realtime listeners for Tickets, Inspections, and Notifications
     const ticketSubscription = supabase.channel('public:tickets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(); })
       .subscribe();
@@ -200,10 +194,15 @@ export default function StaffDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => { loadRealDatabase(); })
       .subscribe();
 
+    const assetSubscription = supabase.channel('public:assets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => { loadRealDatabase(); })
+      .subscribe();
+
     return () => { 
       supabase.removeChannel(ticketSubscription); 
       supabase.removeChannel(inspSubscription);
       supabase.removeChannel(notifSubscription);
+      supabase.removeChannel(assetSubscription);
     };
   }, []);
 
@@ -220,11 +219,9 @@ export default function StaffDashboardPage() {
     return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
-  // 🌟 MODIFIED: Re-Inspection automatically bypasses the window lock
   const getAssetAuditState = (asset: any) => {
     const status = (asset.live_inspection_status || '').toLowerCase();
     
-    // Immediate bypass if re-inspection is requested
     if (status.includes('re-inspection') || status.includes('not approved') || status.includes('reject')) {
       return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-sm animate-pulse" };
     }
@@ -253,7 +250,6 @@ export default function StaffDashboardPage() {
 
   if (!isAuthorized) return null; 
 
-  // 🌟 Check if ANY asset requires a re-inspection to globally unlock the top card
   const requiresGlobalReinspection = assignedAssets.some(a => {
     const s = (a.live_inspection_status || '').toLowerCase();
     return s.includes('re-inspection') || s.includes('not approved') || s.includes('reject');
@@ -283,7 +279,6 @@ export default function StaffDashboardPage() {
           </button>
         </div>
 
-        {/* 🌟 ACTION ALERTS UI */}
         {notifications.length > 0 && (
           <div className="space-y-3 animate-in slide-in-from-top-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -295,15 +290,30 @@ export default function StaffDashboardPage() {
                 const isReject = s.includes('reject');
                 const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
                 const isApprove = s.includes('approve');
+                const isReplacement = s.includes('replace') || s.includes('new asset'); // 🌟 Added Replacement catching logic
                 
-                const bgColor = isReject ? 'bg-rose-50 border-rose-200' : isReInspect ? 'bg-amber-50 border-amber-200' : isApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200';
-                const iconColor = isReject ? 'text-rose-600' : isReInspect ? 'text-amber-600' : isApprove ? 'text-emerald-600' : 'text-blue-600';
+                let bgColor = 'bg-blue-50 border-blue-200';
+                let iconColor = 'text-blue-600';
+
+                if (isReplacement) {
+                  bgColor = 'bg-purple-50 border-purple-200';
+                  iconColor = 'text-purple-600';
+                } else if (isReject) {
+                  bgColor = 'bg-rose-50 border-rose-200';
+                  iconColor = 'text-rose-600';
+                } else if (isReInspect) {
+                  bgColor = 'bg-amber-50 border-amber-200';
+                  iconColor = 'text-amber-600';
+                } else if (isApprove) {
+                  bgColor = 'bg-emerald-50 border-emerald-200';
+                  iconColor = 'text-emerald-600';
+                }
 
                 return (
                   <div key={notif.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
                     <div className="flex items-start sm:items-center gap-3">
                       <div className={`p-2 bg-white rounded-lg shadow-xs shrink-0 ${iconColor}`}>
-                        {isApprove ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+                        {isApprove || isReplacement ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
                       </div>
                       <div>
                         <h4 className={`font-bold text-sm ${iconColor}`}>{notif.title || 'System Alert'}</h4>
@@ -320,7 +330,8 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* 🌟 ADDED NEW REPLACEMENTS LOG BUTTON TO GRID */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET', isActionDisabled: false },
             { 
@@ -333,7 +344,8 @@ export default function StaffDashboardPage() {
             },
             { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
             { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT', isActionDisabled: false },
-            { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'REMOTE', path: '/staff/dashboard/remote', isActionDisabled: false },
+            { name: 'Replacements Log', desc: 'View replacement history', icon: History, color: 'text-orange-600 bg-orange-50 border-orange-100', type: 'ROUTE', path: '/staff/dashboard/replacements', isActionDisabled: false },
+            { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
           ].map((item) => (
               <button 
                 key={item.name} 
@@ -346,14 +358,14 @@ export default function StaffDashboardPage() {
                   }
                 }} 
                 disabled={item.isActionDisabled}
-                className={`bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
+                className={`bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
               >
-                <div className={`p-3.5 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>
-                  {item.isActionDisabled ? <Lock size={22} /> : <item.icon size={22} />}
+                <div className={`p-3 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>
+                  {item.isActionDisabled ? <Lock size={20} /> : <item.icon size={20} />}
                 </div>
                 <div>
-                  <h3 className={`font-bold text-sm ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-blue-600'} transition-colors`}>{item.name}</h3>
-                  <p className="text-xs font-medium text-slate-500 mt-0.5">{item.desc}</p>
+                  <h3 className={`font-bold text-sm leading-tight ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-blue-600'} transition-colors`}>{item.name}</h3>
+                  <p className="text-[10px] lg:text-xs font-medium text-slate-500 mt-1 line-clamp-2">{item.desc}</p>
                 </div>
               </button>
             )
@@ -394,9 +406,8 @@ export default function StaffDashboardPage() {
                       <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
                       <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
                       
-                      {/* 🌟 LIVE DATE AND STATUS ENGINE */}
                       <div className="text-[10px] mt-1.5 font-bold uppercase tracking-widest flex items-center gap-2">
-                        Status: <span className={isReInspect ? 'text-rose-600' : 'text-slate-600'}>{asset.live_inspection_status || 'Pending'}</span>
+                        Status: <span className={isReInspect ? 'text-rose-600' : 'text-slate-600'}>{asset.status === 'Replacement Requested' ? 'Replacement Requested' : (asset.live_inspection_status || 'Pending')}</span>
                         <span className="text-slate-300">•</span>
                         Updated: <span className="text-slate-600">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString() : 'N/A'}</span>
                       </div>
@@ -475,7 +486,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const handleAttemptUnlock = () => {
     if (!asset) { alert("No hardware assigned to test against!"); return; }
     
-    // GUEST BYPASS
     if (user.id === 'guest-mock-uuid') {
       setLockError(false); setIsUnlocked(true);
       return;
@@ -504,7 +514,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
 
     setIsTransmitting(true);
 
-    // 🚀 GUEST BYPASS
     if (user.id === 'guest-mock-uuid') {
       setTimeout(() => {
         setIsTransmitting(false);
@@ -547,15 +556,21 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         });
         submitError = error;
       } else if (type === 'REPLACEMENT') {
-        const { error: inspError } = await supabase.from('inspections').insert({
-          asset_id: asset.id, inspected_by: user.id || user.emp_id, user_email: cleanEmail,
-          condition: formCondition, notes: formText || `Submitted ${type}`, status: 'Pending'
+        // 🌟 UPDATED: Store as an Asset Replacement Request ticket to build the history log
+        const { error: ticketError } = await supabase.from('tickets').insert({
+          title: `Replacement Request: ${asset.name}`,
+          category: 'Asset Replacement', // Used by the new page to filter history
+          description: `Tag ID: ${asset.asset_tag} | S/N: ${asset.serial_number}\n\nReason: ${formText}`,
+          status: 'Pending',
+          created_by: cleanEmail,
+          emp_code: finalEmp,
+          staff_name: humanName
         });
-        submitError = inspError;
+        submitError = ticketError;
         
-        if (!inspError) {
+        if (!ticketError) {
           await supabase.from('assets').update({
-            inspection_status: 'Pending', status: 'Replacement Requested'
+            status: 'Replacement Requested'
           }).eq('id', asset.id);
         }
       }
@@ -578,7 +593,13 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><Ticket size={20}/></div>
-            <div><h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">Portal Submission</h3><p className="text-xs text-slate-500 font-medium">{type}</p></div>
+            <div>
+              {/* 🌟 RENAMED THE TITLE IF TYPE IS REPLACEMENT */}
+              <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">
+                {type === 'REPLACEMENT' ? 'Assets Replacement' : 'Portal Submission'}
+              </h3>
+              {type !== 'REPLACEMENT' && <p className="text-xs text-slate-500 font-medium">{type}</p>}
+            </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors"><X size={18}/></button>
         </div>
@@ -628,10 +649,10 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
             <div className="space-y-4 text-sm font-medium">
               {needsLock && (
                 <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 space-y-3">
-                  <p className="text-xs font-bold text-blue-900">🔒 Security Verification Required</p>
+                  <p className="text-xs font-bold text-blue-900 flex items-center gap-2">🔒 Security Verification Required</p>
                   <div className="flex gap-2">
                     <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest mode...' : 'Type exact Tag ID or S/N...'} className="flex-1 p-3 bg-white rounded-xl border border-blue-200 text-xs font-bold outline-none"/>
-                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-blue-600 text-white font-bold text-xs rounded-xl cursor-pointer">Verify</button>}
+                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors">Verify</button>}
                   </div>
                   {lockError && <p className="text-[11px] text-rose-600 font-bold">Incorrect device code.</p>}
                 </div>
@@ -656,7 +677,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                 </div>
               )}
 
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : 'Detailed Explanation'}</label><textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm"/></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm resize-none"/></div>
             </div>
           )}
         </div>
@@ -667,8 +688,8 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
               <button onClick={onClose} className="w-full py-3.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm transition-colors">Close Portal (Awaiting Mobile Scan)</button>
             ) : (
               <>
-                <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer">Cancel</button>
-                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest">
+                <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer transition-colors">Cancel</button>
+                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-colors">
                   {isTransmitting && <Loader2 size={14} className="animate-spin"/>} 
                   {type === 'INSPECTION' ? 'Generate Camera QR' : 'Transmit'}
                 </button>
