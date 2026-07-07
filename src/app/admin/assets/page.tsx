@@ -157,18 +157,19 @@ function AssetRegistryContent() {
   const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
 
-  // Print Label Engine State (Defaults set to exact sheet specs: 3.5" x 1.4")
+  // 🚀 UPDATED DEFAULT CONFIG FOR A4 (210 x 297mm)
+  // Ensures 8 rows of 3.4cm height perfectly fit inside A4 limits
   const [printConfig, setPrintConfig] = useState({
     pageSize: 'A4',
     columns: 2,
     rows: 8,
-    labelWidth: 8.89,      // 3.5 inches in cm
-    labelHeight: 3.55,     // 1.4 inches in cm
-    marginTop: 1.5,        // Top margin of page
-    marginLeft: 1.5,       // Left margin of page
-    gapX: 0.6,             // 0.6 cm center column width
-    gapY: 0.0,             // Gap between rows (0 usually for sheets)
-    packSmallAssets: true  // Fit 2 small QRs inside one label
+    labelWidth: 8.88,      
+    labelHeight: 3.4,      
+    marginTop: 1.25,       // Perfect top margin to center 8 rows on A4
+    marginLeft: 1.37,      // Perfect left margin to center 2 columns with 0.5 gap
+    gapX: 0.5,             
+    gapY: 0.0,             // Must be 0! A 0.5cm row gap x 8 rows makes it larger than A4 paper.
+    packSmallAssets: true  
   });
 
   // Forms
@@ -359,7 +360,7 @@ function AssetRegistryContent() {
   };
 
   // ========================================================
-  // 🖨️ SMART SHEET GRID PRINT SYSTEM (Responsive overflow)
+  // 🖨️ STRICT FIXED-HEIGHT SHEET GRID PRINT SYSTEM
   // ========================================================
   const executeGridBulkPrint = () => {
     const assetsToPrint = assets.filter(a => selectedAssetIds.has(a.id));
@@ -409,9 +410,8 @@ function AssetRegistryContent() {
       const textSize = isHalfSize ? '5.5pt' : '7.5pt';
       const tagSize = isHalfSize ? '7.5pt' : '10pt';
 
-      // Advanced CSS handling to prevent long serials breaking out of the box
       return `
-        <div style="flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; padding: 2px 4px; box-sizing: border-box; overflow: hidden; width: 100%; height: 100%;">
+        <div style="flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; padding: 2px 4px; box-sizing: border-box; overflow: hidden; width: 100%; height: 100%; max-height: 100%;">
           <img src="${qrUrl}" style="width: ${qrSize}; height: ${qrSize}; mix-blend-mode: multiply; flex-shrink: 0;" />
           <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden; width: 100%; min-width: 0;">
             <div style="font-size: ${textSize}; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase; color: #000;">VSS Assets</div>
@@ -434,7 +434,7 @@ function AssetRegistryContent() {
         let innerHtml = '';
         if (cellAssets.length === 2) {
           innerHtml = `
-            <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-evenly; gap: 1px; padding: 2px; box-sizing: border-box;">
+            <div style="width: 100%; height: 100%; max-height: 100%; display: flex; flex-direction: column; justify-content: space-evenly; gap: 1px; padding: 2px; box-sizing: border-box; overflow: hidden;">
               ${renderAssetBlock(cellAssets[0], true)}
               <div style="height: 1px; width: 90%; background: #ddd; margin: 0 auto; flex-shrink: 0;"></div>
               ${renderAssetBlock(cellAssets[1], true)}
@@ -442,7 +442,7 @@ function AssetRegistryContent() {
           `;
         } else {
           innerHtml = `
-            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box;">
+            <div style="width: 100%; height: 100%; max-height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; overflow: hidden;">
               ${renderAssetBlock(cellAssets[0], false)}
             </div>
           `;
@@ -470,9 +470,10 @@ function AssetRegistryContent() {
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800;900&display=swap');
             
+            /* STRICT MARGIN REMOVAL TO PREVENT SCALING SHIFTS */
             @page { 
               size: ${printConfig.pageSize}; 
-              margin: 0; 
+              margin: 0 !important; 
             }
             
             body { 
@@ -499,14 +500,17 @@ function AssetRegistryContent() {
               page-break-after: always;
               margin: 20px auto;
               box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              overflow: hidden; /* Prevent grid blowout */
             }
             
             .label-cell { 
               width: ${printConfig.labelWidth}cm; 
               height: ${printConfig.labelHeight}cm; 
+              max-width: ${printConfig.labelWidth}cm; 
+              max-height: ${printConfig.labelHeight}cm; 
               outline: 1px dashed #cbd5e1; /* Visual guide */
               box-sizing: border-box;
-              overflow: hidden;
+              overflow: hidden; /* CRITICAL: Stops long text from breaking the row size */
               background: #fff;
             }
 
@@ -520,7 +524,6 @@ function AssetRegistryContent() {
         <body>
           ${pagesHtml}
           <script>
-            // Allow time for all external QR images to load before opening print dialog
             window.onload = () => {
               setTimeout(() => {
                 window.print();
@@ -539,7 +542,6 @@ function AssetRegistryContent() {
   };
 
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    // Force the config modal to open for a single label print so it matches the format
     setSelectedAssetIds(new Set([asset.id]));
     setIsPrintConfigModalOpen(true);
   };
@@ -852,7 +854,9 @@ function AssetRegistryContent() {
                 <h3 className={`text-lg font-bold tracking-tight flex items-center gap-3 ${theme.textMain}`}>
                   <Settings2 size={20} className="text-indigo-500"/> Label Print Layout
                 </h3>
-                <p className={`text-[11px] mt-1 uppercase tracking-widest font-semibold ${theme.textSub}`}>Adjust dimensions to fit your physical sticker sheets.</p>
+                <p className={`text-[11px] mt-1 uppercase tracking-widest font-semibold text-red-500 bg-red-500/10 inline-block px-2 py-1 rounded`}>
+                  Important: When printing, uncheck "Fit to Page" and set Margins to "None".
+                </p>
               </div>
               <button onClick={() => setIsPrintConfigModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
             </div>
@@ -881,11 +885,11 @@ function AssetRegistryContent() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Top Margin (cm)</label>
-                    <input type="number" step="0.1" value={printConfig.marginTop} onChange={e => setPrintConfig({...printConfig, marginTop: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
+                    <input type="number" step="0.01" value={printConfig.marginTop} onChange={e => setPrintConfig({...printConfig, marginTop: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
                   </div>
                   <div>
                     <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Left Margin (cm)</label>
-                    <input type="number" step="0.1" value={printConfig.marginLeft} onChange={e => setPrintConfig({...printConfig, marginLeft: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
+                    <input type="number" step="0.01" value={printConfig.marginLeft} onChange={e => setPrintConfig({...printConfig, marginLeft: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
                   </div>
                 </div>
               </div>
