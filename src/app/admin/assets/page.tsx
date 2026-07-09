@@ -217,7 +217,6 @@ function AssetRegistryContent() {
       const [assetRes, staffRes, inspectionRes] = await Promise.all([
         supabase.from('assets').select('*').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*'),
-        // 🔥 UPDATE: Added "photos" to the select query to fetch evidence
         supabase.from('inspections').select('asset_id, status, notes, photos, created_at').order('created_at', { ascending: false })
       ]);
 
@@ -401,23 +400,13 @@ function AssetRegistryContent() {
     }
 
     const renderAssetBlock = (asset: any, isHalfSize: boolean) => {
-      const cleanTag = asset.clean_tag || asset.asset_tag || asset.id;
       const scanUrl = getAssetViewUrl(asset);
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(scanUrl)}`;
 
-      // Responsive sizing based on half-cell or full-cell constraints
-      const qrSize = isHalfSize ? '1.5cm' : '2.4cm';
-      const textSize = isHalfSize ? '5.5pt' : '7.5pt';
-      const tagSize = isHalfSize ? '7.5pt' : '10pt';
-
+      // Pure QR Code, No Text, WITH Border
       return `
-        <div style="flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; padding: 2px 4px; box-sizing: border-box; overflow: hidden; width: 100%; height: 100%; max-height: 100%;">
-          <img src="${qrUrl}" style="width: ${qrSize}; height: ${qrSize}; mix-blend-mode: multiply; flex-shrink: 0;" />
-          <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden; width: 100%; min-width: 0;">
-            <div style="font-size: ${textSize}; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase; color: #000;">VSS Assets</div>
-            <div style="font-size: ${tagSize}; font-weight: 900; line-height: 1.1; margin-top: 1px;">${cleanTag}</div>
-            <div style="font-size: ${textSize}; font-weight: 600; color: #444; line-height: 1.1; margin-top: 2px; word-break: break-all; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">S/N: ${asset.serial_number || 'N/A'}</div>
-          </div>
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2px; box-sizing: border-box; width: 100%; height: 100%;">
+          <img src="${qrUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; border: 4px solid #000; padding: 8px; border-radius: 8px; box-sizing: border-box;" />
         </div>
       `;
     };
@@ -541,12 +530,65 @@ function AssetRegistryContent() {
     setIsPrintConfigModalOpen(false);
   };
 
+  // 🔥 UPDATED: Pure QR Code Print Engine for Individual Modal Action WITH BORDER
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    setSelectedAssetIds(new Set([asset.id]));
-    setIsPrintConfigModalOpen(true);
+    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
+    const targetRef = cleanTag || asset.asset_tag || asset.id;
+    const scanUrl = `${baseDomain}/public-asset?id=${targetRef}`;
+    
+    // Generate a high-res pure QR code from the API
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(scanUrl)}`;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=400');
+    if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to print the QR code.");
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>QR_${targetRef}</title>
+          <style>
+            body, html { 
+              margin: 0; 
+              padding: 0; 
+              width: 100%; 
+              height: 100%; 
+              display: flex; 
+              justify-content: center; 
+              align-items: center; 
+              background: #fff; 
+            }
+            img { 
+              width: 90%; 
+              max-height: 90%; 
+              object-fit: contain; 
+              border: 8px solid #000; 
+              padding: 16px; 
+              border-radius: 16px;
+              box-sizing: border-box;
+            }
+            @media print {
+              @page { margin: 0; size: auto; }
+              body { 
+                display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                margin: 0; 
+                padding: 0; 
+              }
+            }
+          </style>
+        </head>
+        <body onload="setTimeout(() => { window.print(); window.close(); }, 600)">
+          <img src="${qrUrl}" alt="QR Code" />
+        </body>
+      </html>
+    `;
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
-  // 🔥 UPDATED AGREEMENT GENERATOR WITH NEW TERMS AND PHOTOS
   const handlePrintAgreement = (asset: any) => {
     const printWindow = window.open('', '_blank', 'width=800,height=900');
     if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to download the PDF.");
@@ -1185,102 +1227,6 @@ function AssetRegistryContent() {
           </div>
         );
       })()}
-
-      {/* 🚀 ADD NEW ASSET MODAL */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border ${theme.modalBody}`}>
-            <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
-              <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-            
-            <form onSubmit={handleSaveNewAsset} className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                  <select value={newAssetCategory} onChange={e => setNewAssetCategory(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-                    <span>Asset Tag ID</span>
-                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
-                  </label>
-                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (S/N) *</label>
-                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="Scan factory S/N barcode..." className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
-                </div>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Vendor Source</label>
-                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name *</label><input type="text" required value={newAssetName} onChange={e => setNewAssetName(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-              </div>
-
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Demo Use">🧪 Demo</option></select></div>
-              </div>
-
-              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
-                <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.textSub}`}>Assign to Employee (Optional)</label>
-                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} isDarkMode={isDarkMode} />
-              </div>
-
-              <div className="flex gap-4 pt-6">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#121212] border-[#27272a] text-zinc-300 hover:bg-[#18181b]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
-                  {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Register New Asset
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 🚀 BULK UPLOAD MODAL */}
-      {isBulkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
-            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18}/> Bulk Asset Import</h3>
-              <button onClick={() => setIsBulkModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-            
-            <div className="space-y-4 text-left">
-              <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>
-                <Download size={16}/> <span>Download CSV Template</span>
-              </button>
-            </div>
-
-            <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-[#3f3f46] bg-[#0a0a0a] hover:bg-[#18181b]' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'}`}>
-              <FileSpreadsheet size={48} className="text-blue-500 animate-pulse" />
-              <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-blue-600 file:text-white hover:file:bg-blue-700' : 'text-slate-700 file:bg-slate-900 file:text-white'}`} />
-            </div>
-
-            <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all bg-slate-300 text-white cursor-not-allowed`}>
-              Execute Batch Upload
-            </button>
-          </div>
-        </div>
-      )}
 
     </div>
   );
