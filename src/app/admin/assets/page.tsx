@@ -8,7 +8,7 @@ import {
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
   Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
-  Clock, AlertTriangle, FileSignature, Loader2, CheckSquare, Settings2
+  Clock, AlertTriangle, FileSignature, Loader2, CheckSquare, Settings2, Trash2
 } from 'lucide-react';
 
 const ASSET_CATEGORIES = [
@@ -352,6 +352,23 @@ function AssetRegistryContent() {
     } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
   };
 
+  // 🔥 NEW: Delete Asset Logic
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this asset? This action cannot be undone.")) return;
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase.from('assets').delete().eq('id', assetId);
+      if (error) throw error;
+      
+      setAssets(prev => prev.filter(a => a.id !== assetId));
+      setViewAssetModal(null);
+    } catch (err: any) {
+      alert(`Error deleting asset: ${err.message}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const getAssetViewUrl = (asset: any) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
@@ -384,10 +401,8 @@ function AssetRegistryContent() {
         }
       });
 
-      // 1 Large Asset = 1 Label Cell
       largeAssets.forEach(a => printCells.push([a]));
       
-      // 2 Small Assets = 1 Label Cell
       for (let i = 0; i < smallAssets.length; i += 2) {
         if (smallAssets[i + 1]) {
           printCells.push([smallAssets[i], smallAssets[i + 1]]);
@@ -530,7 +545,6 @@ function AssetRegistryContent() {
     setIsPrintConfigModalOpen(false);
   };
 
-  // 🔥 UPDATED: Pure QR Code Print Engine for Individual Modal Action WITH BORDER
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
     const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
     const targetRef = cleanTag || asset.asset_tag || asset.id;
@@ -586,135 +600,6 @@ function AssetRegistryContent() {
     `;
     printWindow.document.open();
     printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  const handlePrintAgreement = (asset: any) => {
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
-    if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to download the PDF.");
-
-    const isPending = asset.status === 'Pending Handover' || asset.live_inspection_status === 'Pending';
-    const signatureText = isPending 
-      ? '[ PENDING ELECTRONIC SIGNATURE FROM STAFF ]'
-      : asset.live_inspection_notes?.includes('Digitally Signed') 
-        ? asset.live_inspection_notes 
-        : `Digitally Signed Handover Agreement by ${asset.staff_name} on ${safeDate(asset.live_inspection_date)}`;
-
-    // Safely Parse Photos Data
-    let safePhotos: string[] = [];
-    try {
-      if (Array.isArray(asset.live_inspection_photos)) {
-        safePhotos = asset.live_inspection_photos;
-      } else if (typeof asset.live_inspection_photos === 'string') {
-        const parsed = JSON.parse(asset.live_inspection_photos);
-        if (Array.isArray(parsed)) safePhotos = parsed;
-        else if (typeof parsed === 'object' && parsed !== null) safePhotos = Object.values(parsed);
-      } else if (typeof asset.live_inspection_photos === 'object' && asset.live_inspection_photos !== null) {
-        safePhotos = Object.values(asset.live_inspection_photos);
-      }
-    } catch(e) {}
-
-    let photosHtml = '';
-    if (safePhotos.length > 0) {
-      photosHtml = `<div class="photos-grid">` + safePhotos.slice(0, 4).map(src => `<img src="${src}" class="evidence-photo" />`).join('') + `</div>`;
-    } else {
-      photosHtml = `<p style="font-size: 12px; color: #6b7280; font-style: italic;">No inspection photos available on record.</p>`;
-    }
-
-    const doc = `
-      <html>
-        <head>
-          <title>Handover_Agreement_${asset.clean_tag}</title>
-          <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; line-height: 1.6; color: #111; max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; }
-            .title { font-size: 24px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-            .subtitle { font-size: 14px; color: #6b7280; font-weight: bold; }
-            
-            .warning-box { background: #fef2f2; border: 1px solid #fecdd3; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-            .warning-box h4 { color: #e11d48; margin: 0 0 5px 0; font-size: 14px; text-transform: uppercase; }
-            .warning-box p { color: #9f1239; font-size: 12px; margin: 0; font-weight: bold; line-height: 1.5; }
-
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; }
-            
-            .evidence-section { margin-bottom: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; }
-            .evidence-section h3 { font-size: 16px; margin: 0 0 10px 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
-            .notes-box { font-family: monospace; font-size: 12px; background: #f3f4f6; padding: 10px; border-radius: 4px; margin-bottom: 10px; white-space: pre-wrap; }
-            .photos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
-            .evidence-photo { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #d1d5db; }
-
-            .policy { margin-bottom: 20px; }
-            .policy h3 { font-size: 16px; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
-            .policy ul { padding-left: 20px; margin: 0; }
-            .policy li { margin-bottom: 8px; font-size: 12px; line-height: 1.5; }
-            
-            .signature-box { border: 2px dashed ${isPending ? '#fcd34d' : '#cbd5e1'}; padding: 20px; border-radius: 8px; background: ${isPending ? '#fffbeb' : '#ecfdf5'}; margin-top: 20px; page-break-inside: avoid; }
-            .sign-header { font-size: 12px; font-weight: bold; text-transform: uppercase; color: ${isPending ? '#b45309' : '#065f46'}; margin: 0 0 10px 0; }
-            .sign-text { font-family: monospace; font-size: 14px; color: ${isPending ? '#d97706' : '#047857'}; font-weight: bold; margin: 0; }
-            .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; }
-
-            @media print {
-              body { padding: 0; }
-            }
-          </style>
-        </head>
-        <body onload="setTimeout(() => { window.print(); window.close(); }, 800)">
-          <div class="header">
-            <h1 class="title">IT Asset Handover Agreement</h1>
-            <p class="subtitle">Virtual Staffing Solutions Security Policy</p>
-          </div>
-
-          <div class="warning-box">
-            <h4>⚠️ ATTENTION REQUIRED</h4>
-            <p>Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.</p>
-          </div>
-          
-          <div class="grid">
-            <div><strong>Asset Name:</strong> <br/>${asset.safe_display_name}</div>
-            <div><strong>Asset Category:</strong> <br/>${asset.category}</div>
-            <div><strong>Asset Tag ID:</strong> <br/>${asset.clean_tag}</div>
-            <div><strong>Factory Serial (S/N):</strong> <br/>${asset.serial_number || 'N/A'}</div>
-            <div><strong>Assigned Employee:</strong> <br/>${asset.staff_name}</div>
-            <div><strong>Employee Code:</strong> <br/>${asset.emp_code}</div>
-          </div>
-
-          <div class="evidence-section">
-            <h3>Latest Inspection & Condition Evidence</h3>
-            <strong>Inspector Notes:</strong>
-            <div class="notes-box">${asset.live_inspection_notes || 'No specific notes provided during the last audit.'}</div>
-            <strong>Asset Photos:</strong>
-            ${photosHtml}
-          </div>
-
-          <div class="policy">
-            <h3>Terms and Conditions & Audit Policies</h3>
-            <p style="font-size: 12px; margin-bottom: 10px;">I, <strong>${asset.staff_name}</strong>, acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
-            <ul>
-              <li><strong>Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
-              <li><strong>Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-              <li><strong>Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months. On your Dashboard, the Device Audit Button will activate 4 days before the due date.</li>
-              <li><strong>Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
-              <li><strong>Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
-              <li><strong>Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management. Gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
-            </ul>
-          </div>
-
-          <div class="signature-box">
-            <p class="sign-header">Logistics E-Signature Log</p>
-            <p class="sign-text">${isPending ? '⏳' : '✓'} ${signatureText}</p>
-            <p style="font-size: 12px; color: ${isPending ? '#92400e' : '#064e3b'}; margin-top: 15px; opacity: 0.8;">
-              ${isPending ? 'This document is a draft and is pending electronic signature from the assigned staff member.' : 'This document was securely logged in the VSS IT Asset Management System and serves as a legally binding electronic signature.'}
-            </p>
-          </div>
-
-          <div class="footer">
-            Document Generated on ${new Date().toLocaleString()} • Internal VSS Records
-          </div>
-        </body>
-      </html>
-    `;
-    printWindow.document.open();
-    printWindow.document.write(doc);
     printWindow.document.close();
   };
 
@@ -1045,6 +930,20 @@ function AssetRegistryContent() {
       {/* 🚀 VIEW MODAL */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
+
+        // Extract photos safely for evidence view
+        let safePhotos: string[] = [];
+        try {
+          if (Array.isArray(viewAssetModal.live_inspection_photos)) {
+            safePhotos = viewAssetModal.live_inspection_photos;
+          } else if (typeof viewAssetModal.live_inspection_photos === 'string') {
+            const parsed = JSON.parse(viewAssetModal.live_inspection_photos);
+            if (Array.isArray(parsed)) safePhotos = parsed;
+            else if (typeof parsed === 'object' && parsed !== null) safePhotos = Object.values(parsed);
+          } else if (typeof viewAssetModal.live_inspection_photos === 'object' && viewAssetModal.live_inspection_photos !== null) {
+            safePhotos = Object.values(viewAssetModal.live_inspection_photos);
+          }
+        } catch(e) {}
         
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1087,9 +986,14 @@ function AssetRegistryContent() {
                     </div>
 
                     {!isEditingAsset && (
-                      <button onClick={() => setIsEditingAsset(true)} className={`px-5 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors sm:ml-auto ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white'}`}>
-                        <Edit2 size={14} /> Edit Record
-                      </button>
+                      <div className="flex gap-2 sm:ml-auto">
+                        <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white'}`}>
+                          <Trash2 size={14} /> Delete
+                        </button>
+                        <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white'}`}>
+                          <Edit2 size={14} /> Edit
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1186,37 +1090,28 @@ function AssetRegistryContent() {
                         </div>
                       </div>
 
-                      {viewAssetModal.staff_name !== 'Unassigned' && (
-                        <div className={`p-5 rounded-2xl border mt-5 flex items-center justify-between ${
-                          viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
-                            ? isDarkMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'
-                            : isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'
-                        }`}>
-                          <div>
-                            <h4 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${
-                              viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
-                                ? isDarkMode ? 'text-amber-400' : 'text-amber-700'
-                                : isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
-                            }`}>
-                              <FileSignature size={14} /> 
-                              {viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending' ? 'Agreement Pending' : 'Signed Agreement'}
-                            </h4>
-                            <p className={`text-[11px] mt-1 ${isDarkMode ? 'opacity-70 text-amber-200' : 'opacity-80 text-emerald-800'}`}>
-                              {viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
-                                ? 'Awaiting staff electronic signature.'
-                                : `Staff accepted terms on ${safeDate(viewAssetModal.live_inspection_date)}`
-                              }
-                            </p>
+                      {/* 🌟 LATEST INSPECTION EVIDENCE SECTION */}
+                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
+                        <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${theme.textMain}`}>Latest Inspection Evidence</h4>
+                        <div className="mb-4">
+                          <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Inspector Notes</span>
+                          <div className={`text-xs font-mono p-3 rounded-lg border ${isDarkMode ? 'bg-[#121212] border-zinc-800 text-zinc-300' : 'bg-white border-slate-200 text-slate-700'} whitespace-pre-wrap`}>
+                            {viewAssetModal.live_inspection_notes || 'No specific notes provided during the last audit.'}
                           </div>
-                          <button onClick={() => handlePrintAgreement(viewAssetModal)} className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors flex items-center gap-2 cursor-pointer ${
-                            viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending'
-                              ? isDarkMode ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-100'
-                              : isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                          }`}>
-                            <Download size={14} /> {viewAssetModal.status === 'Pending Handover' || viewAssetModal.live_inspection_status === 'Pending' ? 'Draft PDF' : 'Signed PDF'}
-                          </button>
                         </div>
-                      )}
+                        <div>
+                           <span className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.textSub}`}>Attached Photos</span>
+                           {safePhotos.length > 0 ? (
+                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                               {safePhotos.slice(0,4).map((src, idx) => (
+                                  <img key={idx} src={src} alt="Evidence" className="w-full h-24 object-cover rounded-lg border border-slate-200 shadow-sm" />
+                               ))}
+                             </div>
+                           ) : (
+                             <p className={`text-xs italic ${theme.textSub}`}>No inspection photos available on record.</p>
+                           )}
+                        </div>
+                      </div>
 
                     </div>
                   )}
