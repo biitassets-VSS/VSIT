@@ -7,7 +7,7 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell
+  Camera, Lock, Monitor, Bell, LogOut
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
@@ -330,20 +330,21 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           {[
-            { name: 'Raise Ticket', desc: 'Hardware or IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET', isActionDisabled: false },
+            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET', isActionDisabled: false },
             { 
               name: 'Device Audit', 
-              desc: requiresGlobalReinspection ? 'Action Required' : (auditWindow.isOpen ? 'Submit asset inspection' : 'Window Currently Closed'), 
+              desc: requiresGlobalReinspection ? 'Action Required' : (auditWindow.isOpen ? 'Submit inspection' : 'Window Closed'), 
               icon: ClipboardCheck, 
               color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (auditWindow.isOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), 
               type: 'INSPECTION', 
               isActionDisabled: !isGlobalAuditOpen 
             },
-            { name: 'Request Gear', desc: 'Ask for new equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
-            { name: 'Replacement', desc: 'Swap faulty hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT', isActionDisabled: false },
-            { name: 'Team Screen', desc: 'Collaborate remotely', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
+            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
+            { name: 'Replacement', desc: 'Swap hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT', isActionDisabled: assignedAssets.length === 0 },
+            { name: 'Return Asset', desc: 'Handover to IT', icon: LogOut, color: 'text-orange-600 bg-orange-50 border-orange-100', type: 'RETURN', isActionDisabled: assignedAssets.length === 0 },
+            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
           ].map((item) => (
               <button 
                 key={item.name} 
@@ -356,7 +357,7 @@ export default function StaffDashboardPage() {
                   }
                 }} 
                 disabled={item.isActionDisabled}
-                className={`bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
+                className={`bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex flex-col sm:flex-row items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
               >
                 <div className={`p-3 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>
                   {item.isActionDisabled ? <Lock size={20} /> : <item.icon size={20} />}
@@ -397,29 +398,38 @@ export default function StaffDashboardPage() {
               assignedAssets.map(asset => {
                 const btnState = getAssetAuditState(asset);
                 const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
+                const isReturnRequested = (asset.status || '').toLowerCase() === 'return requested';
 
                 return (
-                  <div key={asset.id} className={`p-4 rounded-2xl bg-slate-50 border ${isReInspect ? 'border-rose-200' : 'border-slate-200/60'} flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+                  <div key={asset.id} className={`p-4 rounded-2xl bg-slate-50 border ${isReInspect ? 'border-rose-200' : 'border-slate-200/60'} flex flex-col xl:flex-row xl:items-center justify-between gap-4`}>
                     <div>
                       <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
                       <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
                       
-                      <div className="text-[10px] mt-1.5 font-bold uppercase tracking-widest flex items-center gap-2">
-                        Status: <span className={isReInspect ? 'text-rose-600' : 'text-slate-600'}>{asset.status === 'Replacement Requested' ? 'Replacement Requested' : (asset.live_inspection_status || 'Pending')}</span>
+                      <div className="text-[10px] mt-1.5 font-bold uppercase tracking-widest flex flex-wrap items-center gap-2">
+                        Status: <span className={isReInspect ? 'text-rose-600' : isReturnRequested ? 'text-orange-600' : 'text-slate-600'}>{asset.status === 'Replacement Requested' ? 'Replacement Requested' : isReturnRequested ? 'Return Pending' : (asset.live_inspection_status || 'Pending')}</span>
                         <span className="text-slate-300">•</span>
                         Updated: <span className="text-slate-600">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString() : 'N/A'}</span>
                       </div>
                     </div>
                     
-                    <button 
-                      disabled={btnState.disabled}
-                      onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                      className={`px-4 py-2 font-bold text-xs rounded-xl transition-all shrink-0 text-center flex items-center justify-center gap-1.5 ${btnState.classes}`}
-                    >
-                      {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
-                      {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
-                      {btnState.text}
-                    </button>
+                    <div className="flex gap-2 w-full xl:w-auto mt-2 xl:mt-0">
+                      <button 
+                        onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
+                        className="px-4 py-2 font-bold text-xs rounded-xl transition-all shrink-0 text-center flex-1 xl:flex-none border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 shadow-sm"
+                      >
+                        Return
+                      </button>
+                      <button 
+                        disabled={btnState.disabled}
+                        onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all shrink-0 text-center flex-1 xl:flex-none flex items-center justify-center gap-1.5 ${btnState.classes}`}
+                      >
+                        {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
+                        {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
+                        {btnState.text}
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -465,7 +475,7 @@ export default function StaffDashboardPage() {
 
 // 🌟 ARMORED TRANSACTION MODAL
 function LiveDatabaseModal({ type, asset, user, onClose }: any) {
-  const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT';
+  const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT' || type === 'RETURN';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
   const [lockError, setLockError] = useState(false);
@@ -498,14 +508,24 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const generateMobileHandoff = () => {
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
-    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}`;
+    // We pass &auditType=RETURN or &auditType=INSPECTION so the mobile page knows how to label it
+    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}`;
     
     setQrUrl(url);
     setShowQR(true);
   };
 
   const handleLivePostgresSubmit = async () => {
-    if (type === 'INSPECTION') {
+    // Both Inspections and Returns require live camera evidence via Mobile Handoff
+    if (type === 'INSPECTION' || type === 'RETURN') {
+      
+      if (type === 'RETURN') {
+        try {
+          // Optionally update the asset status early to indicate a return is in progress
+          await supabase.from('assets').update({ status: 'Return Requested' }).eq('id', asset.id);
+        } catch(e) { console.warn("Failed to mark as Return Requested", e); }
+      }
+
       generateMobileHandoff();
       return;
     }
@@ -589,12 +609,15 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold"><Ticket size={20}/></div>
+            <div className={`p-2.5 rounded-xl font-bold ${type === 'RETURN' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+              {type === 'RETURN' ? <LogOut size={20} /> : <Ticket size={20}/>}
+            </div>
             <div>
               <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">
-                {type === 'REPLACEMENT' ? 'Assets Replacement' : 'Portal Submission'}
+                {type === 'REPLACEMENT' ? 'Assets Replacement' : type === 'RETURN' ? 'Asset Return Request' : 'Portal Submission'}
               </h3>
-              {type !== 'REPLACEMENT' && <p className="text-xs text-slate-500 font-medium">{type}</p>}
+              {type !== 'REPLACEMENT' && type !== 'RETURN' && <p className="text-xs text-slate-500 font-medium">{type}</p>}
+              {type === 'RETURN' && <p className="text-xs text-slate-500 font-medium">Initiate IT Handover</p>}
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors"><X size={18}/></button>
@@ -661,9 +684,9 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                 </>
               )}
 
-              {type === 'INSPECTION' && isUnlocked && (
+              {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
                 <div className="animate-in slide-in-from-top-4 duration-300">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asset Condition</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Asset Condition</label>
                   <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-200 font-semibold mb-4 outline-none focus:border-blue-600">
                     <option>Pristine / Flawless</option>
                     <option>Good / Minor Scratches</option>
@@ -673,7 +696,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
                 </div>
               )}
 
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm resize-none"/></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning (e.g., leaving company, replacing)..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm resize-none"/></div>
             </div>
           )}
         </div>
@@ -685,9 +708,9 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
             ) : (
               <>
                 <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer transition-colors">Cancel</button>
-                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className="px-7 py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className={`px-7 py-3 rounded-xl text-xs font-bold text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-colors ${type === 'RETURN' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                   {isTransmitting && <Loader2 size={14} className="animate-spin"/>} 
-                  {type === 'INSPECTION' ? 'Generate Camera QR' : 'Transmit'}
+                  {type === 'INSPECTION' || type === 'RETURN' ? 'Generate Camera QR' : 'Transmit'}
                 </button>
               </>
             )}
