@@ -204,6 +204,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { name: 'Staff / Users', href: '/admin/staff', icon: Users },
             { name: 'Asset Inventory', href: '/admin/assets', icon: PackageSearch },
             { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck, badge: liveInspCount },
+            { name: 'Return Requests', href: '/admin/returns', icon: LogOut },
             { name: 'Tickets', href: '/admin/tickets', icon: Ticket, badge: liveTicketCount }, 
             { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
             { name: 'Settings', href: '/admin/settings', icon: Settings },
