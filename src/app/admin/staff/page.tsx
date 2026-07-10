@@ -7,7 +7,7 @@ import {
   ArrowLeft, Search, Users, Mail, Hash, UserCheck, 
   PlusCircle, Upload, Download, FileSpreadsheet, 
   X, RefreshCw, Save, Building, Power, Edit2, 
-  Package, CalendarDays, Lock, KeyRound, ShieldCheck
+  Package, CalendarDays, Lock, KeyRound, ShieldCheck, Trash2
 } from 'lucide-react';
 // 🌟 FIXED IMPORT: Points directly to your server action file
 import { setupStaffAuth } from './actions';
@@ -31,6 +31,7 @@ export default function AdminStaffDirectoryPage() {
     dob: '', joining_date: '', status: 'Active'
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Bulk Importer State
   const [bulkFile, setBulkFile] = useState<File | null>(null);
@@ -140,10 +141,33 @@ export default function AdminStaffDirectoryPage() {
       );
 
       if (error) throw error;
-      alert(`Employee profile successfully saved and activated with password: ${targetPassword}`);
+      if (!isEditing) alert(`Employee profile successfully saved and activated with password: ${targetPassword}`);
 
       setIsDossierModalOpen(false); fetchStaff();
     } catch (err: any) { alert(`Save Failed: ${err.message}`); } finally { setIsSaving(false); }
+  };
+
+  // 🔥 NEW: DELETE STAFF ACCOUNT
+  const handleDeleteStaff = async () => {
+    if (!window.confirm(`CRITICAL WARNING:\n\nAre you absolutely sure you want to permanently delete the account for ${formData.full_name}? This will remove all their system access. If they have assigned hardware, you should reassign it to 'Unassigned' first.`)) return;
+    
+    setIsDeleting(true);
+    try {
+      // Note: Because Supabase auth users are tied to the auth schema, 
+      // deleting from 'profiles' removes them from the dashboard directory.
+      // If you are using Supabase Admin API to delete the actual Auth user, you would do it via an edge function. 
+      // This securely deletes their active profile from the frontend tracking database.
+      const { error } = await supabase.from('profiles').delete().eq('id', formData.id);
+      if (error) throw error;
+      
+      alert(`Account for ${formData.full_name} has been securely purged from the directory.`);
+      setIsDossierModalOpen(false);
+      fetchStaff();
+    } catch (err: any) {
+      alert(`Deletion Failed: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleToggleStatus = async (user: any) => {
@@ -499,7 +523,20 @@ export default function AdminStaffDirectoryPage() {
                   </h3>
                   {isEditing && <p className={`text-[10px] font-mono font-medium mt-1 tracking-widest ${theme.textSub}`}>ID: {formData.id}</p>}
                 </div>
-                <button onClick={() => setIsDossierModalOpen(false)} className={`p-2 rounded-full border shadow-sm cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={16}/></button>
+                <div className="flex items-center gap-3">
+                  {/* 🌟 ADDED: Delete Button explicitly shown when editing */}
+                  {isEditing && (
+                    <button 
+                      type="button" 
+                      onClick={handleDeleteStaff} 
+                      disabled={isDeleting}
+                      className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 size={12} /> {isDeleting ? 'Deleting...' : 'Delete Staff'}
+                    </button>
+                  )}
+                  <button onClick={() => setIsDossierModalOpen(false)} className={`p-2 rounded-full border shadow-sm cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={16}/></button>
+                </div>
               </div>
 
               <form onSubmit={handleSaveDossier} className="p-6 md:p-8 space-y-8 overflow-y-auto custom-scrollbar">
@@ -604,8 +641,8 @@ export default function AdminStaffDirectoryPage() {
                             : (isDarkMode ? 'bg-[#0a0a0a] border-rose-500/50 text-rose-400' : 'bg-rose-50 border-rose-300 text-rose-700')
                         }`}
                       >
-                        <option value="Active">🟢 Account Active</option>
-                        <option value="Disabled">🔴 Account Disabled</option>
+                        <option value="Active">🟢Active</option>
+                        <option value="Disabled">🔴Disabled</option>
                       </select>
                     </div>
                   </div>
