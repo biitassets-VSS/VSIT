@@ -5,25 +5,36 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
-  Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, X, Image as ImageIcon
+  Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
+  X, Image as ImageIcon, History, FilterX, ExternalLink
 } from 'lucide-react';
 
 function AdminInspectionReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  
   const highlightedId = searchParams.get('id'); 
+  const targetAssetId = searchParams.get('asset_id'); 
 
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<any[]>([]);
   const [filterTab, setFilterTab] = useState<'pending' | 'approved' | 're-inspection' | 'rejected' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   
+  const [assetFilter, setAssetFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
   useEffect(() => {
     fetchVerificationLedger();
   }, []);
+
+  useEffect(() => {
+    if (targetAssetId) {
+      setAssetFilter(targetAssetId);
+      setFilterTab('all'); 
+    }
+  }, [targetAssetId]);
 
   useEffect(() => {
     if (highlightedId && !loading && inspections.length > 0) {
@@ -50,25 +61,56 @@ function AdminInspectionReviewContent() {
       const masterLedger: any[] = [];
       const processedAssetIds = new Set();
 
-      rawInspections.forEach(insp => {
+      rawInspections.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
-        const matchedStaff = profilesData.find(p => p.email?.toLowerCase() === insp.user_email?.toLowerCase() || p.id === matchedAsset.assigned_to || p.id === insp.inspected_by) || {};
+        
+        // 🌟 AGGRESSIVE PROFILE MATCHING
+        const matchedStaff = profilesData.find(p => 
+          (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
+          (insp.inspected_by && p.id === insp.inspected_by) ||
+          (insp.inspected_by && p.emp_code === insp.inspected_by) ||
+          (matchedAsset.assigned_to && p.id === matchedAsset.assigned_to)
+        ) || {};
 
         processedAssetIds.add(String(matchedAsset.id));
         const normalizedStatus = insp.status === 'Pending Review' || !insp.status ? 'Pending' : insp.status;
-        const itemIdentifier = insp.id || `insp-${insp.asset_id}`;
+        const itemIdentifier = insp.id || `insp-${insp.asset_id}-${idx}-${Date.now()}`;
+        
+        const isDeletedUser = !matchedStaff.id && (!!insp.user_email || !!insp.inspected_by);
+
+        // 🌟 DEEP HISTORY PARSING ENGINE (Preserves Deleted User Data precisely)
+        let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
+        
+        if (!recoveredName && insp.notes) {
+          // Extract from digital signature e.g. "Digitally Signed Handover Agreement by John Doe on..."
+          const match = insp.notes.match(/by\s+(.*?)\s+on/i);
+          if (match) recoveredName = match[1].trim();
+        }
+
+        if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
+          // Extract from email e.g. "john.doe@company.com" -> "John Doe"
+          recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+        
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(insp.inspected_by || '');
+        const fallbackEmp = (!isUuid && insp.inspected_by) ? insp.inspected_by : insp.emp_code || (isDeletedUser ? 'ARCHIVED' : 'NO-EMP-RECORD');
+
+        const finalName = matchedStaff.full_name || matchedStaff.name || recoveredName || 'Archived User';
 
         masterLedger.push({
           ...insp,
           id: itemIdentifier,
           is_submission: true,
-          staff_id: matchedStaff.id,
+          staff_id: matchedStaff.id || insp.inspected_by,
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
           category: matchedAsset.category || 'Laptop', 
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
           asset_tag: matchedAsset.asset_tag || 'NO-TAG',
-          staff_name: matchedStaff.full_name || matchedStaff.name || insp.user_email || 'Remote Employee',
-          emp_code: matchedStaff.emp_code || matchedStaff.emp_id || 'EMP-??',
+          
+          staff_name: finalName,
+          emp_code: matchedStaff.emp_code || matchedStaff.emp_id || fallbackEmp,
+          
+          is_deleted_user: isDeletedUser,
           status: normalizedStatus
         });
       });
@@ -90,6 +132,7 @@ function AdminInspectionReviewContent() {
               asset_tag: asset.asset_tag || 'NO-TAG',
               staff_name: matchedStaff.full_name || matchedStaff.name || 'Unassigned',
               emp_code: matchedStaff.emp_code || matchedStaff.emp_id || 'N/A',
+              is_deleted_user: false,
               status: 'Awaiting Staff Action',
               notes: 'Staff member has not submitted the smartphone visual inspection yet.',
               photos: []
@@ -108,7 +151,6 @@ function AdminInspectionReviewContent() {
   };
 
   const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
-    // 🌟 1. STRICT GUARD: Prevent execution if identifiers are missing
     if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
 
     let remarks = '';
@@ -121,10 +163,9 @@ function AdminInspectionReviewContent() {
 
     setUpdatingId(inspectionId);
     try {
-      const isTemporaryId = String(inspectionId).startsWith('insp-') || !inspectionId;
+      const isTemporaryId = String(inspectionId).startsWith('insp-') || String(inspectionId).startsWith('missing-');
       let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
       
-      // 🌟 2. DOUBLE-LOCK DATABASE QUERY: Target only this specific asset's specific inspection
       if (isTemporaryId) {
         query = query.eq('asset_id', assetId).eq('status', 'Pending');
       } else {
@@ -147,17 +188,16 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      if (staffId) {
+      // Ensure we don't try to notify a deleted/non-existent user
+      if (staffId && !staffId.includes('ARCHIVED') && !staffId.includes('NO-EMP-RECORD')) {
         await supabase.from('notifications').insert({
-          user_id: staffId,
+          target_user: staffId,
           title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ ${verdict} Action Required`,
           message: verdict === 'Approved' ? `Your recent hardware audit has been approved.` : `Audit returned: ${remarks}`,
           is_read: false,
-          type: verdict === 'Approved' ? 'success' : 'warning'
         });
       }
 
-      // 🌟 3. DOUBLE-LOCK REACT STATE: Ensure only the exact matching card flips to the new status
       setInspections(prev => prev.map(item => 
         (item.id === inspectionId && item.asset_id === assetId) 
           ? { ...item, status: verdict, admin_remarks: remarks || item.admin_remarks } 
@@ -173,6 +213,8 @@ function AdminInspectionReviewContent() {
   };
 
   const filteredList = inspections.filter(item => {
+    if (assetFilter && item.asset_id !== assetFilter) return false;
+
     const s = (item.status || '').toLowerCase().trim();
     const isApproved = s === 'approved' || s === 'pass';
     const isRejected = s === 'rejected' || s === 'fail';
@@ -217,6 +259,11 @@ function AdminInspectionReviewContent() {
     return lastSaturday.toLocaleDateString('en-IN'); 
   };
 
+  const clearAssetFilter = () => {
+    setAssetFilter(null);
+    router.replace('/admin/inspections'); 
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 font-sans text-slate-800 bg-slate-50/50 min-h-screen">
       
@@ -228,7 +275,7 @@ function AdminInspectionReviewContent() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Inspection Command Center</h1>
-              {pendingCount > 0 && (
+              {pendingCount > 0 && !assetFilter && (
                 <span className="px-3 py-1 bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-sm">
                   {pendingCount} Pending Reviews
                 </span>
@@ -247,6 +294,23 @@ function AdminInspectionReviewContent() {
           <span>Sync Database</span>
         </button>
       </div>
+
+      {assetFilter && (
+        <div className="bg-indigo-50 border border-indigo-200 p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4">
+           <div className="flex items-center gap-4 text-indigo-800">
+              <div className="p-3 bg-indigo-100 rounded-xl">
+                <History size={24} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-0.5">Asset Timeline Filter Active</p>
+                <p className="text-sm font-bold">Showing complete historical track record for selected hardware.</p>
+              </div>
+           </div>
+           <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-white text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm cursor-pointer transition-colors flex items-center justify-center gap-2">
+             <FilterX size={16}/> Clear Filter
+           </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
@@ -289,18 +353,18 @@ function AdminInspectionReviewContent() {
         <div className="w-full py-24 bg-white rounded-3xl border border-slate-200 text-center space-y-3 shadow-sm">
           <ClipboardCheck size={48} className="mx-auto text-slate-300" />
           <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">No Logs Found</h3>
-          <p className="text-xs text-slate-400 font-bold">Your queue is completely clear for this category.</p>
+          <p className="text-xs text-slate-400 font-bold">The tracking timeline is clear for these parameters.</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {filteredList.map((item) => {
+          {filteredList.map((item, index) => {
             const isPending = item.status === 'Pending';
             const photosArray = Array.isArray(item.photos) ? item.photos : Object.values(item.photos || {});
             const isHighlighted = highlightedId === String(item.id);
 
             return (
               <div 
-                key={item.id} 
+                key={`${item.id}-${index}`} 
                 id={`inspection-${item.id}`}
                 className={`p-6 md:p-8 bg-white rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 ${
                   isHighlighted ? 'border-blue-500 ring-4 ring-blue-500/10 scale-[1.01]' : (isPending && item.is_submission) ? 'border-blue-200 shadow-blue-500/5' : 'border-slate-200 opacity-95'
@@ -315,6 +379,11 @@ function AdminInspectionReviewContent() {
                       <h3 className="text-lg font-black text-slate-900 leading-tight truncate" title={item.staff_name}>{item.staff_name}</h3>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] font-mono font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{item.emp_code}</span>
+                        {item.is_deleted_user && (
+                          <span className="text-[9px] bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded font-black uppercase tracking-widest ml-1" title="User account has been removed from active directory">
+                            Former Staff
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -322,7 +391,17 @@ function AdminInspectionReviewContent() {
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                     <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
                       <Laptop size={14} className="text-blue-600 shrink-0" />
-                      <span className="truncate">{item.asset_name}</span>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
+                        }}
+                        className="truncate hover:text-blue-600 hover:underline cursor-pointer text-left"
+                        title="View Asset Details"
+                      >
+                        {item.asset_name}
+                      </button>
                     </div>
                     <div className="flex justify-between items-center text-[11px] border-t border-slate-200 pt-2 mt-2">
                       <span className="font-bold text-slate-400 uppercase tracking-widest">S/N:</span>
@@ -330,7 +409,17 @@ function AdminInspectionReviewContent() {
                     </div>
                     <div className="flex justify-between items-center text-[11px]">
                       <span className="font-bold text-slate-400 uppercase tracking-widest">TAG:</span>
-                      <span className="font-mono font-black text-blue-600">{item.asset_tag}</span>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
+                        }}
+                        className="font-mono font-black text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1"
+                        title="View Asset Details"
+                      >
+                        {item.asset_tag} <ExternalLink size={10} className="mb-0.5" />
+                      </button>
                     </div>
                   </div>
 
