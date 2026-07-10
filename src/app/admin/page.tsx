@@ -1,4 +1,3 @@
-// src/app/admin/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
-  Moon, Sun, LogOut, AlertTriangle, Bell, Monitor // 🌟 Added Monitor Icon
+  AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -28,28 +27,35 @@ export default function AdminDashboardPage() {
   });
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   // 🌟 GLOBAL THEME SYNC
   useEffect(() => {
     const savedTheme = localStorage.getItem('vsit_theme');
     if (savedTheme === 'dark') {
       setIsDarkMode(true);
-      document.documentElement.classList.add('dark'); // Optional: syncs global CSS if used
+      document.documentElement.classList.add('dark');
     }
     loadAdminData();
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('vsit_theme', newTheme ? 'dark' : 'light');
-    
-    if (newTheme) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
+  // 🚨 REAL-TIME ADMIN ALERTS LISTENER
+  useEffect(() => {
+    const notificationSubscription = supabase
+      .channel('admin-alerts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` },
+        (payload) => {
+          setNotifications((prev) => [payload.new, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notificationSubscription);
+    };
+  }, []);
 
   const handleSecureLogout = async () => {
     localStorage.clear();
@@ -86,32 +92,35 @@ export default function AdminDashboardPage() {
 
       setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
 
-      // 🌟 FIXED: We now select the FULL profiles data so we can map Names & Emp Codes to the logs
       const [
         { count: assets }, 
         { data: inspections }, 
         { data: tickets }, 
-        staffRes
+        staffRes,
+        notifRes
       ] = await Promise.all([
         supabase.from('assets').select('*', { count: 'exact', head: true }),
         supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
-        supabase.from('profiles').select('*') // Full fetch instead of just count
+        supabase.from('profiles').select('*'),
+        supabase.from('notifications').select('*').eq('target_role', 'admin').eq('is_read', false).order('created_at', { ascending: false })
       ]);
 
       const staffData = staffRes.data || [];
       const pendingCount = inspections?.filter(i => i.status?.toLowerCase().includes('pending')).length || 0;
       const ticketCount = tickets?.filter(t => ['open', 'in_repair', 'pending'].includes(t.status)).length || 0;
 
-      // 🌟 NEW: Map inspections to actual User Names and EMP Codes
+      if (notifRes.data) {
+        setNotifications(notifRes.data);
+      }
+
       const formattedRecentLogs = (inspections?.slice(0, 5) || []).map(log => {
-        // Try to find the profile that matches this log's email or ID
         const matchedProfile = staffData.find(p => 
           p.email?.toLowerCase() === log.user_email?.toLowerCase() || 
           p.id === log.inspected_by
         );
 
-        let displayName = log.user_email?.split('@')[0] || 'A user'; // Fallback
+        let displayName = log.user_email?.split('@')[0] || 'A user'; 
         
         if (matchedProfile) {
           const name = matchedProfile.full_name || matchedProfile.name || displayName;
@@ -126,7 +135,7 @@ export default function AdminDashboardPage() {
         totalAssets: assets || 0,
         pendingInspections: pendingCount,
         activeTickets: ticketCount,
-        totalStaff: staffData.length || 0 // Re-mapped count
+        totalStaff: staffData.length || 0
       });
       
       setRecentActivity(formattedRecentLogs);
@@ -136,6 +145,18 @@ export default function AdminDashboardPage() {
       console.error('Data load error:', e);
       setLoading(false); 
     }
+  };
+
+  const dismissNotification = async (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+  };
+
+  const getActionRoute = (title: string) => {
+    const t = (title || '').toLowerCase();
+    if (t.includes('inspection') || t.includes('agreement') || t.includes('audit')) return '/admin/inspections';
+    if (t.includes('ticket') || t.includes('request') || t.includes('replacement')) return '/admin/tickets';
+    return '/admin/assets';
   };
 
   // --- RENDERING ERROR STATE ---
@@ -166,24 +187,18 @@ export default function AdminDashboardPage() {
     );
   }
 
-  // 🌟 MASTER THEME DICTIONARY (Eye-Comfort Optimized)
   const theme = {
-    // Background: Carbon Black vs Soft Slate
     bg: isDarkMode ? 'bg-zinc-950' : 'bg-slate-50',
-    // Cards: Gray Black vs Pure White
     card: isDarkMode ? 'bg-zinc-900 border-zinc-800/80' : 'bg-white border-slate-200/60',
-    // Text: Soft Zinc vs Deep Slate (Never pure black/white)
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    // Hover States: Subtle shifts
     cardHover: isDarkMode ? 'hover:border-zinc-700 hover:bg-zinc-800/50' : 'hover:border-slate-300 hover:shadow-sm',
-    // Icon Colors
     iconBg: {
       blue: isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
       orange: isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600',
       rose: isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600',
       emerald: isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600',
-      indigo: isDarkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600', // 🌟 NEW: Added for Remote Module
+      indigo: isDarkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600',
       gray: isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-500',
     }
   };
@@ -192,7 +207,7 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* 🚀 ENTERPRISE HEADER */}
+        {/* 🚀 CLEAN ENTERPRISE HEADER */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-colors`}>
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -202,40 +217,50 @@ export default function AdminDashboardPage() {
             <p className={`text-sm ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
           </div>
           
-          {/* ACTION BUTTONS (Aligned to Right) */}
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            
-            {/* Status Indicator */}
-            <div className={`hidden md:flex px-4 py-2 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              All Systems Operational
-            </div>
-
-            {/* Dark Mode Toggle */}
-            <button onClick={toggleTheme} className={`p-2.5 rounded-xl border transition-colors ${theme.card} ${theme.cardHover}`}>
-              {isDarkMode ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-600" />}
-            </button>
-
-            {/* Notification Bell (With 1 active alert) */}
-            <button className={`p-2.5 rounded-xl border transition-colors relative ${theme.card} ${theme.cardHover} ${theme.text}`}>
-              <Bell size={18} />
-              <span className="absolute top-2 right-2 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-              </span>
-            </button>
-
-            {/* Logout Button */}
-            <button onClick={handleSecureLogout} className={`p-2.5 rounded-xl border transition-colors ${theme.card} hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-rose-500`}>
-              <LogOut size={18} />
-            </button>
-
+          {/* Status Indicator Only - Duplicate Icons Removed */}
+          <div className={`hidden md:flex px-4 py-2 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            All Systems Operational
           </div>
         </div>
 
+        {/* 🚨 ACTIONABLE ALERTS SECTION */}
+        {notifications.length > 0 && (
+          <div className="space-y-3 animate-in slide-in-from-top-4">
+            <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2`}>
+              <Bell size={14} className="text-rose-500 animate-bounce" /> Action Required ({notifications.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {notifications.map(notif => {
+                const targetRoute = getActionRoute(notif.title);
+                return (
+                  <div key={notif.id} className={`${theme.card} p-4 rounded-2xl border shadow-sm flex flex-col justify-between gap-4 transition-all hover:border-blue-500/30`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                        <AlertCircle size={18} />
+                      </div>
+                      <div>
+                        <h4 className={`text-sm font-bold ${theme.text}`}>{notif.title}</h4>
+                        <p className={`text-xs mt-1 line-clamp-2 ${theme.subText}`}>{notif.message}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                      <button onClick={() => dismissNotification(notif.id)} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors flex justify-center items-center gap-1.5 ${isDarkMode ? 'text-zinc-400 hover:bg-zinc-800' : 'text-slate-500 hover:bg-slate-100'}`}>
+                        <Trash2 size={12} /> Dismiss
+                      </button>
+                      <button onClick={() => router.push(targetRoute)} className={`flex-[2] py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors flex justify-center items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm`}>
+                        Take Action <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 📊 HIGH-LEVEL STATS GRID */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Inventory */}
           <div className={`${theme.card} p-5 rounded-3xl border shadow-sm flex flex-col justify-between transition-all ${theme.cardHover}`}>
             <div className="flex justify-between items-start mb-6">
               <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.blue}`}><Laptop size={22} /></div>
@@ -247,7 +272,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Verifications */}
           <div className={`${theme.card} p-5 rounded-3xl border shadow-sm flex flex-col justify-between transition-all relative overflow-hidden ${theme.cardHover}`}>
             {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-12 h-12 bg-orange-500/10 rounded-bl-full" />}
             <div className="flex justify-between items-start mb-6">
@@ -262,7 +286,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Helpdesk */}
           <div className={`${theme.card} p-5 rounded-3xl border shadow-sm flex flex-col justify-between transition-all ${theme.cardHover}`}>
             <div className="flex justify-between items-start mb-6">
               <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.rose}`}><Ticket size={22} /></div>
@@ -274,7 +297,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Network */}
           <div className={`${theme.card} p-5 rounded-3xl border shadow-sm flex flex-col justify-between transition-all ${theme.cardHover}`}>
             <div className="flex justify-between items-start mb-6">
               <div className={`p-3 rounded-2xl transition-colors ${theme.iconBg.emerald}`}><Users size={22} /></div>
@@ -293,13 +315,12 @@ export default function AdminDashboardPage() {
           <div className="lg:col-span-2 space-y-3">
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText}`}>System Modules</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
               {[
                 { title: 'Review Inspections', desc: 'Audit smartphone visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: 'orange' },
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'blue' },
                 { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose' },
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald' },
-                { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo' }, // 🌟 NEW MODULE ADDED
+                { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo' },
               ].map((module, i) => (
                 <button 
                   key={i}
@@ -320,7 +341,6 @@ export default function AdminDashboardPage() {
                   </div>
                 </button>
               ))}
-
             </div>
           </div>
 
@@ -342,7 +362,6 @@ export default function AdminDashboardPage() {
                         <Clock size={12} />
                       </div>
                       <div>
-                        {/* 🌟 DISPLAY THE FULL NAME AND EMP CODE IN THE LOG */}
                         <p className={`text-xs font-medium ${theme.text}`}>
                           {log.displayName} <span className={`${theme.subText}`}>submitted an inspection/action.</span>
                         </p>
