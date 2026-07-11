@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Laptop, Loader2, ShieldCheck, AlertTriangle, 
-  FileSignature, CheckCircle2, QrCode, PenTool, X, CalendarClock, AlertCircle
+  Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, // 🌟 New Asset Icons
+  Loader2, ShieldCheck, AlertTriangle, FileSignature, CheckCircle2, 
+  QrCode, PenTool, X, CalendarClock, AlertCircle
 } from 'lucide-react';
 
 // 🌟 BULLETPROOF DYNAMIC DUE DATE ENGINE
@@ -23,22 +24,32 @@ function getNextDueDate(category: string, lastDateString: string | null, created
     return date;
   };
 
-  // Base it off the last inspection date. If never inspected, use creation/assignment date or today.
   const baseDate = lastDateString ? new Date(lastDateString) : (createdAtString ? new Date(createdAtString) : new Date());
 
-  // If it has NEVER been inspected, it's due the Last Saturday of its CURRENT baseline month
   if (!lastDateString) {
     return getLastSaturday(baseDate);
   }
 
-  // Set to the 1st of the target month to strictly prevent JavaScript end-of-month overflow bugs
   const targetMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + intervalMonths, 1);
   return getLastSaturday(targetMonthDate);
 }
 
-// Format date helper for clear, unambiguous UI display (e.g., "Jul 25, 2026")
 const formatDate = (date: Date) => {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+// 🌟 DYNAMIC ASSET ICON HELPER
+const getAssetIcon = (category: string) => {
+  const cat = (category || '').toLowerCase();
+  if (cat.includes('laptop') || cat.includes('macbook')) return Laptop;
+  if (cat.includes('keyboard')) return Keyboard;
+  if (cat.includes('mouse')) return Mouse;
+  if (cat.includes('headphone') || cat.includes('headset') || cat.includes('earphone')) return Headphones;
+  if (cat.includes('monitor') || cat.includes('display') || cat.includes('screen')) return Monitor;
+  if (cat.includes('phone') || cat.includes('mobile')) return Smartphone;
+  if (cat.includes('desktop') || cat.includes('cpu')) return Cpu;
+  if (cat.includes('drive') || cat.includes('storage')) return HardDrive;
+  return Package; // Default fallback icon
 };
 
 export default function StaffAssetsPage() {
@@ -73,8 +84,13 @@ export default function StaffAssetsPage() {
           },
           { 
             id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', 
-            serial_number: 'SN-DEMO-2', category: 'Hardware', live_inspection_status: 'Approved', status: 'Assigned',
+            serial_number: 'SN-DEMO-2', category: 'Monitor', live_inspection_status: 'Approved', status: 'Assigned',
             live_inspection_date: new Date().toISOString(), live_inspection_notes: 'All good', live_inspection_photos: null, created_at: new Date().toISOString()
+          },
+          { 
+            id: 'demo-3', name: 'Logitech MX Master 3', asset_tag: 'MOU-1111', 
+            serial_number: 'SN-DEMO-3', category: 'Mouse', live_inspection_status: 'Approved', status: 'Assigned',
+            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'Working perfectly', live_inspection_photos: null, created_at: new Date().toISOString()
           }
         ]);
         setLoading(false);
@@ -149,7 +165,6 @@ export default function StaffAssetsPage() {
         return;
       }
 
-      // Mark Asset as Approved AND change status to 'Assigned'
       const { error: assetError } = await supabase
         .from('assets')
         .update({ 
@@ -161,7 +176,6 @@ export default function StaffAssetsPage() {
 
       if (assetError) throw assetError;
 
-      // Log the legally binding agreement in inspections table
       await supabase.from('inspections').insert({
         asset_id: signModalAsset.id,
         inspected_by: currentUser.id || currentUser.emp_id,
@@ -171,7 +185,6 @@ export default function StaffAssetsPage() {
         notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
       });
 
-      // Send Admin Alert
       await supabase.from('notifications').insert({
         title: 'Agreement Signed',
         message: `${currentUser.name} has electronically signed the Handover Agreement for ${signModalAsset.name || signModalAsset.category} (${signModalAsset.asset_tag}).`,
@@ -179,7 +192,6 @@ export default function StaffAssetsPage() {
         is_read: false
       });
 
-      // Update UI instantly
       setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
       setSignModalAsset(null);
       setSignatureName('');
@@ -243,20 +255,26 @@ export default function StaffAssetsPage() {
           </div>
 
           <div className="mt-5 space-y-3 relative z-10">
-            {pendingAssets.map(asset => (
-              <div key={asset.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-rose-100 shadow-sm">
-                <div>
-                  <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
-                  <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
+            {pendingAssets.map(asset => {
+              const AlertIcon = getAssetIcon(asset.category);
+              return (
+                <div key={asset.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-rose-100 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <AlertIcon size={20} className="text-rose-400 shrink-0" />
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
+                      <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSignModalAsset(asset)}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-md transition-colors"
+                  >
+                    <PenTool size={14} /> Review & Sign
+                  </button>
                 </div>
-                <button 
-                  onClick={() => setSignModalAsset(asset)}
-                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-md transition-colors"
-                >
-                  <PenTool size={14} /> Review & Sign
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -264,7 +282,7 @@ export default function StaffAssetsPage() {
       {/* ASSETS GRID */}
       {assignedAssets.length === 0 ? (
         <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
-          <Laptop size={48} className="text-slate-300 mb-4" />
+          <Package size={48} className="text-slate-300 mb-4" />
           <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
           <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID. If you recently requested equipment, please wait for IT approval.</p>
         </div>
@@ -272,16 +290,17 @@ export default function StaffAssetsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {assignedAssets.map(asset => {
             const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((asset.live_inspection_status || '').toLowerCase()) || (asset.status || '').toLowerCase() === 'pending handover';
-            
-            // 🌟 APPLIED THE DYNAMIC DUE DATE LOGIC
             const dueDate = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at);
+            
+            // 🌟 Get Dynamic Icon
+            const AssetIcon = getAssetIcon(asset.category);
 
             return (
               <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                      <Laptop size={18}/>
+                      <AssetIcon size={18}/>
                     </div>
                     <div>
                       <h4 className="font-bold text-sm text-slate-900 line-clamp-1">{asset.name || asset.category || 'Hardware Unit'}</h4>
@@ -364,6 +383,8 @@ export default function StaffAssetsPage() {
           }
         } catch(e) {}
 
+        const ModalAssetIcon = getAssetIcon(signModalAsset.category);
+
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -396,7 +417,13 @@ export default function StaffAssetsPage() {
 
                 {/* ASSET SPECS */}
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span></div>
+                  <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
+                    <ModalAssetIcon size={16} className="text-slate-400 shrink-0" />
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Asset Name</span>
+                      <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span>
+                    </div>
+                  </div>
                   <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
                   <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
                   <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? formatDate(new Date(signModalAsset.live_inspection_date)) : formatDate(new Date())}</span></div>
