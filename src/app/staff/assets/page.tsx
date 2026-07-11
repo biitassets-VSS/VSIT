@@ -7,6 +7,40 @@ import {
   FileSignature, CheckCircle2, QrCode, PenTool, X, CalendarClock, AlertCircle
 } from 'lucide-react';
 
+// 🌟 BULLETPROOF DYNAMIC DUE DATE ENGINE
+function getNextDueDate(category: string, lastDateString: string | null, createdAtString: string | null) {
+  const isLaptop = (category || '').toLowerCase().includes('laptop');
+  const intervalMonths = isLaptop ? 1 : 3;
+
+  const getLastSaturday = (targetDate: Date) => {
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const date = new Date(year, month + 1, 0); // Last day of target month
+    while (date.getDay() !== 6) {
+      date.setDate(date.getDate() - 1);
+    }
+    date.setHours(23, 59, 59, 999);
+    return date;
+  };
+
+  // Base it off the last inspection date. If never inspected, use creation/assignment date or today.
+  const baseDate = lastDateString ? new Date(lastDateString) : (createdAtString ? new Date(createdAtString) : new Date());
+
+  // If it has NEVER been inspected, it's due the Last Saturday of its CURRENT baseline month
+  if (!lastDateString) {
+    return getLastSaturday(baseDate);
+  }
+
+  // Set to the 1st of the target month to strictly prevent JavaScript end-of-month overflow bugs
+  const targetMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + intervalMonths, 1);
+  return getLastSaturday(targetMonthDate);
+}
+
+// Format date helper for clear, unambiguous UI display (e.g., "Jul 25, 2026")
+const formatDate = (date: Date) => {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
 export default function StaffAssetsPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -31,17 +65,16 @@ export default function StaffAssetsPage() {
         user = { id: 'guest-mock-uuid', email: 'guest@vsit.com', emp_id: 'DEMO-001', name: 'Demo Guest' };
         setCurrentUser(user);
         
-        // Demo Data
         setAssignedAssets([
           { 
             id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', 
             serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', status: 'Pending Handover',
-            live_inspection_date: null, live_inspection_notes: null, live_inspection_photos: null
+            live_inspection_date: null, live_inspection_notes: null, live_inspection_photos: null, created_at: new Date().toISOString()
           },
           { 
             id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', 
             serial_number: 'SN-DEMO-2', category: 'Hardware', live_inspection_status: 'Approved', status: 'Assigned',
-            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'All good', live_inspection_photos: null
+            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'All good', live_inspection_photos: null, created_at: new Date().toISOString()
           }
         ]);
         setLoading(false);
@@ -73,7 +106,6 @@ export default function StaffAssetsPage() {
 
       if (error) throw error;
       
-      // 🌟 UPDATED: Fetch photos and notes for the agreement
       const { data: inspectionsRes } = await supabase
         .from('inspections')
         .select('asset_id, status, notes, photos, created_at')
@@ -117,7 +149,7 @@ export default function StaffAssetsPage() {
         return;
       }
 
-      // 1. Mark Asset as Approved AND change status to 'Assigned'
+      // Mark Asset as Approved AND change status to 'Assigned'
       const { error: assetError } = await supabase
         .from('assets')
         .update({ 
@@ -129,7 +161,7 @@ export default function StaffAssetsPage() {
 
       if (assetError) throw assetError;
 
-      // 2. Log the legally binding agreement in inspections table
+      // Log the legally binding agreement in inspections table
       await supabase.from('inspections').insert({
         asset_id: signModalAsset.id,
         inspected_by: currentUser.id || currentUser.emp_id,
@@ -139,7 +171,7 @@ export default function StaffAssetsPage() {
         notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
       });
 
-      // 3. SEND ALERT TO ADMIN DASHBOARD
+      // Send Admin Alert
       await supabase.from('notifications').insert({
         title: 'Agreement Signed',
         message: `${currentUser.name} has electronically signed the Handover Agreement for ${signModalAsset.name || signModalAsset.category} (${signModalAsset.asset_tag}).`,
@@ -240,7 +272,9 @@ export default function StaffAssetsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {assignedAssets.map(asset => {
             const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((asset.live_inspection_status || '').toLowerCase()) || (asset.status || '').toLowerCase() === 'pending handover';
-            const dueDate = asset.live_inspection_date ? new Date(new Date(asset.live_inspection_date).setMonth(new Date(asset.live_inspection_date).getMonth() + 6)) : null;
+            
+            // 🌟 APPLIED THE DYNAMIC DUE DATE LOGIC
+            const dueDate = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at);
 
             return (
               <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
@@ -270,13 +304,13 @@ export default function StaffAssetsPage() {
                   <div className="flex justify-between items-center pb-2 border-b border-slate-50">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><CalendarClock size={10}/> Last Inspection</span>
                     <span className="font-bold text-xs text-slate-800">
-                      {asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'Pending Signature'}
+                      {asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending Signature'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center pb-3 border-b border-slate-50">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><AlertTriangle size={10}/> Next Due Date</span>
-                    <span className={`font-bold text-xs ${dueDate && dueDate < new Date() ? 'text-rose-600' : 'text-slate-800'}`}>
-                      {dueDate ? dueDate.toLocaleDateString('en-IN') : 'Immediate'}
+                    <span className={`font-bold text-xs ${dueDate < new Date() ? 'text-rose-600' : 'text-slate-800'}`}>
+                      {formatDate(dueDate)}
                     </span>
                   </div>
 
@@ -317,7 +351,6 @@ export default function StaffAssetsPage() {
       {signModalAsset && (() => {
         const isModalPending = !signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover';
         
-        // Safely parse photos for evidence display
         let safePhotos: string[] = [];
         try {
           if (Array.isArray(signModalAsset.live_inspection_photos)) {
@@ -366,7 +399,7 @@ export default function StaffAssetsPage() {
                   <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</span> <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span></div>
                   <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
                   <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
-                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? new Date(signModalAsset.live_inspection_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</span></div>
+                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? formatDate(new Date(signModalAsset.live_inspection_date)) : formatDate(new Date())}</span></div>
                 </div>
 
                 {/* 🌟 EVIDENCE SECTION */}
