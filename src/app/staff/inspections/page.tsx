@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ClipboardCheck, Loader2, AlertTriangle, Eye, X, CameraOff, Bell, CheckCircle2, RefreshCw, Calendar, Clock } from 'lucide-react';
+import { 
+  ClipboardCheck, Loader2, AlertTriangle, Eye, X, 
+  CameraOff, Bell, CheckCircle2, RefreshCw, Calendar, 
+  Clock, XOctagon, Search, ShieldCheck 
+} from 'lucide-react';
 
 // 🌟 DYNAMIC DUE DATE CALCULATOR
 const calculateNextDueDate = (lastInspectionDate: string, category: string = 'Laptop') => {
@@ -24,7 +28,7 @@ const calculateNextDueDate = (lastInspectionDate: string, category: string = 'La
     lastSaturday.setDate(lastSaturday.getDate() - 1);
   }
   
-  return lastSaturday.toLocaleDateString('en-IN'); 
+  return lastSaturday.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); 
 };
 
 export default function StaffInspectionsPage() {
@@ -33,6 +37,7 @@ export default function StaffInspectionsPage() {
   const [lastSynced, setLastSynced] = useState<string>('');
   const [inspections, setInspections] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // 🌟 SECURE LIGHTBOX STATE
   const [photoViewer, setPhotoViewer] = useState<{ isOpen: boolean; photos: string[]; title: string }>({
@@ -71,15 +76,11 @@ export default function StaffInspectionsPage() {
     }
 
     try {
-      // Get profile data
       const { data: profile } = await supabase.from('profiles').select('id, emp_code').ilike('email', cleanEmail).maybeSingle();
       const currentUserId = profile?.id;
       const dbEmpCode = profile?.emp_code;
-      
-      // Use whichever Emp Code we successfully found
       const finalEmpCode = dbEmpCode || sessionEmpCode;
 
-      // 🚨 DATABASE FIX: Catch ALL rows by checking Email OR User ID OR Employee Code
       const queryFilters = [`user_email.ilike.${cleanEmail}`];
       if (currentUserId) queryFilters.push(`inspected_by.eq.${currentUserId}`);
       if (finalEmpCode) queryFilters.push(`inspected_by.eq.${finalEmpCode}`);
@@ -91,10 +92,7 @@ export default function StaffInspectionsPage() {
         .order('created_at', { ascending: false });
 
       if (inspError) throw inspError;
-      
-      if (inspData) {
-        setInspections(inspData);
-      }
+      if (inspData) setInspections(inspData);
 
       if (currentUserId) {
         const { data: notifData } = await supabase
@@ -145,55 +143,71 @@ export default function StaffInspectionsPage() {
     await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
   };
 
-  const getBadge = (status: string) => {
+  const getStatusConfig = (status: string) => {
     const s = (status || '').toLowerCase();
-    if (s.includes('approved')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    if (s.includes('reject') || s.includes('not approved')) return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (s.includes('re-inspection')) return 'bg-orange-50 text-orange-700 border-orange-200';
-    return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (s.includes('approved')) return { bg: 'bg-emerald-50 border-emerald-200 text-emerald-700', icon: <CheckCircle2 size={14} />, label: 'Approved' };
+    if (s.includes('reject') || s.includes('not approved') || s.includes('refuse')) return { bg: 'bg-rose-50 border-rose-200 text-rose-700', icon: <XOctagon size={14} />, label: 'Refused / Rejected' };
+    if (s.includes('re-inspection')) return { bg: 'bg-orange-50 border-orange-200 text-orange-700', icon: <AlertTriangle size={14} />, label: 'Re-Audit Required' };
+    return { bg: 'bg-blue-50 border-blue-200 text-blue-700', icon: <Clock size={14} />, label: 'Pending Review' };
   };
+
+  const filteredInspections = inspections.filter(insp => {
+    const searchString = `${insp.assets?.name} ${insp.assets?.asset_tag} ${insp.status}`.toLowerCase();
+    return searchString.includes(searchQuery.toLowerCase());
+  });
 
   if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>;
 
   return (
-    <div className="space-y-6 select-none" onContextMenu={(e) => e.preventDefault()}>
+    <div className="max-w-7xl mx-auto space-y-6 select-none" onContextMenu={(e) => e.preventDefault()}>
       
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* 🌟 ADVANCED HEADER */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Audit History Ledger</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Review the complete historical log of your device compliance.</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <ClipboardCheck className="text-blue-600" /> Audit Ledger
+          </h1>
+          <p className="text-sm font-medium text-slate-500 mt-2">
+            Review the complete historical log of your device compliance and admin feedback.
+          </p>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={fetchRealtimeData} 
-              disabled={isRefreshing}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"
-            >
-              <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
-              <span className="hidden sm:inline">Sync Live Data</span>
-            </button>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><ClipboardCheck size={24}/></div>
+        
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input 
+              type="text" 
+              placeholder="Search Tag ID or Name..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-blue-500 focus:bg-white transition-all"
+            />
           </div>
-          {lastSynced && <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-2">Database Read: {lastSynced}</p>}
+          <button 
+            onClick={fetchRealtimeData} 
+            disabled={isRefreshing}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md disabled:opacity-50 shrink-0"
+          >
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            <span>Sync</span>
+          </button>
         </div>
       </div>
 
-      {/* ALERTS */}
+      {/* 🌟 ACTION ALERTS */}
       {notifications.length > 0 && (
         <div className="space-y-3 mb-8 animate-in slide-in-from-top-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
             <Bell size={14} className="text-amber-500 animate-bounce" /> Action Alerts ({notifications.length})
           </h3>
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {notifications.map(notif => {
               const s = (notif.title || '').toLowerCase();
               const isReject = s.includes('reject');
-              const isReInspect = s.includes('re-inspect');
               const isApprove = s.includes('approve');
               
-              const bgColor = isReject ? 'bg-rose-50 border-rose-200' : isReInspect ? 'bg-amber-50 border-amber-200' : isApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200';
-              const iconColor = isReject ? 'text-rose-600' : isReInspect ? 'text-amber-600' : isApprove ? 'text-emerald-600' : 'text-blue-600';
+              const bgColor = isReject ? 'bg-rose-50 border-rose-200' : isApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200';
+              const iconColor = isReject ? 'text-rose-600' : isApprove ? 'text-emerald-600' : 'text-blue-600';
 
               return (
                 <div key={notif.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
@@ -216,80 +230,94 @@ export default function StaffInspectionsPage() {
         </div>
       )}
 
-      {/* INSPECTION HISTORY GRID */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden relative">
+      {/* 🌟 ADVANCED GRID VIEW */}
+      <div className="relative min-h-[400px]">
         {isRefreshing && (
-          <div className="absolute top-0 left-0 right-0 h-1 bg-blue-100 overflow-hidden z-10">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-blue-100 overflow-hidden z-10 rounded-t-3xl">
             <div className="w-1/3 h-full bg-blue-600 animate-[pulse_1s_ease-in-out_infinite] translate-x-full" />
           </div>
         )}
         
-        {inspections.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 font-medium text-sm">No inspections found in the database.</div>
+        {filteredInspections.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-200 py-20 text-center flex flex-col items-center">
+            <ShieldCheck size={48} className="text-slate-200 mb-4" />
+            <p className="text-slate-500 font-bold">No inspection records found.</p>
+          </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {inspections.map(insp => {
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {filteredInspections.map((insp, index) => {
               const asset = insp.assets || {};
+              const statusConfig = getStatusConfig(insp.status);
+              const isApproved = statusConfig.label === 'Approved';
+              const isRejected = statusConfig.label === 'Refused / Rejected' || statusConfig.label === 'Re-Audit Required';
+              
               let safePhotos: string[] = [];
               try {
-                if (Array.isArray(insp.photos)) {
-                  safePhotos = insp.photos;
-                } else if (typeof insp.photos === 'string') {
+                if (Array.isArray(insp.photos)) safePhotos = insp.photos;
+                else if (typeof insp.photos === 'string') {
                   const parsed = JSON.parse(insp.photos);
                   if (Array.isArray(parsed)) safePhotos = parsed;
                 }
               } catch (e) {}
-              
-              const isApproved = (insp.status || '').toLowerCase().includes('approved');
 
               return (
-                <div key={insp.id} className="p-6 md:p-8 hover:bg-slate-50 transition-colors flex flex-col xl:flex-row gap-6">
+                <div key={`${insp.id}-${index}`} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:border-blue-200 hover:shadow-md transition-all">
                   
-                  {/* LEFT: Identity & Status */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="font-bold text-slate-900 text-lg">{asset.name || asset.asset_name || 'Unknown Device'}</h3>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getBadge(insp.status)}`}>
-                        {insp.status || 'Pending'}
-                      </span>
+                  {/* TOP HEADER: Identity & Tag */}
+                  <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base line-clamp-1">{asset.name || asset.asset_name || 'Hardware Device'}</h3>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="font-mono text-[10px] font-black bg-slate-200/60 text-slate-600 px-2.5 py-1 rounded-md border border-slate-200/80">
+                          TAG: {asset.asset_tag || 'N/A'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-sm text-slate-600 space-y-1">
-                      <p>Condition: <strong className="text-slate-800">{insp.condition || 'N/A'}</strong></p>
-                      <p className="text-xs italic">"{insp.notes || 'No notes provided'}"</p>
+                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border flex items-center gap-1.5 shadow-sm ${statusConfig.bg}`}>
+                      {statusConfig.icon} {statusConfig.label}
+                    </span>
+                  </div>
+
+                  {/* MIDDLE: Notes & Feedback */}
+                  <div className="p-5 flex-1 flex flex-col gap-4">
+                    {/* Admin Feedback Block */}
+                    <div className={`p-4 rounded-2xl border flex-1 ${isRejected ? 'bg-rose-50 border-rose-200' : isApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-2 opacity-60">
+                        {isRejected ? <XOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
+                        {isRejected ? 'Admin Rejection Reason' : isApproved ? 'Admin Approval Note' : 'Submitted Notes'}
+                      </span>
+                      <p className={`text-sm font-semibold whitespace-pre-wrap ${isRejected ? 'text-rose-900' : isApproved ? 'text-emerald-900' : 'text-slate-700'}`}>
+                        {insp.notes || 'No specific notes recorded for this transaction.'}
+                      </p>
+                    </div>
+
+                    {/* Meta Dates */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Submitted On</span>
+                        <span className="font-bold text-xs text-slate-800">{insp.created_at ? new Date(insp.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown'}</span>
+                      </div>
+                      <div className={`p-3 rounded-xl border ${isApproved ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
+                        <span className="block text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">Next Due Date</span>
+                        <span className={`font-bold text-xs ${isApproved ? 'text-blue-700' : 'text-slate-400'}`}>
+                          {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending Approval'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* MIDDLE: Dates */}
-                  <div className="flex-1 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <Clock size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Submission Date</span>
-                      </div>
-                      <span className="text-xs font-bold text-slate-900">{insp.created_at ? new Date(insp.created_at).toLocaleDateString('en-IN') : 'Unknown'}</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-slate-200 pt-3">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <Calendar size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Next Due Date</span>
-                      </div>
-                      <span className={`text-xs font-bold ${isApproved ? 'text-blue-600' : 'text-slate-400'}`}>
-                        {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending Approval'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* RIGHT: Evidence */}
-                  <div className="flex-1 xl:max-w-xs flex flex-col justify-center">
-                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Photographic Evidence</h4>
+                  {/* BOTTOM: Evidence Button */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0">
                     {safePhotos.length > 0 ? (
                       <button 
                         onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection' })}
-                        className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all cursor-pointer shadow-md shadow-slate-900/10"
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer shadow-md"
                       >
-                        <Eye size={16} /> View Secure Photos ({safePhotos.length})
+                        <Eye size={16} /> View Encrypted Evidence ({safePhotos.length})
                       </button>
                     ) : (
-                      <div className="w-full p-3.5 rounded-xl border border-dashed border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold flex items-center justify-center gap-2">
-                        <AlertTriangle size={14} /> No photos attached
+                      <div className="w-full p-3 rounded-xl border border-dashed border-slate-300 bg-white text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                        <CameraOff size={14} /> No Photos Attached
                       </div>
                     )}
                   </div>
