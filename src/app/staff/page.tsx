@@ -142,24 +142,35 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      // OPTIMIZED FETCH: Only pull alerts for THIS user OR global broadcasts (target_user = null)
+      // 🌟 SAFE FETCH: We pull the recent notifications without strict SQL filters 
+      // to bypass Admin Panel data formatting inconsistencies.
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
         supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false }),
-        supabase.from('notifications')
-          .select('*')
-          .or(`target_user.eq.${user.id},target_user.is.null`)
-          .order('created_at', { ascending: false })
+        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(200)
       ]);
 
       if (notifRes.data) {
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
         
+        // 🌟 UNIVERSAL JS FILTER: Catches Email, ID, Employee Code, or "ALL" tags safely
         const activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
           const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
-          return isUnread && isNotDismissedLocally;
+          
+          const target = String(n.target_user || '').trim().toLowerCase();
+          
+          const isGlobal = target === '' || 
+                           target === 'null' || 
+                           target === 'undefined' || 
+                           ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+                           
+          const isPersonal = target === String(user.id).toLowerCase() || 
+                             target === cleanEmail || 
+                             target === String(user.emp_id).toLowerCase();
+
+          return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
         });
         
         setNotifications(activeNotifications);
@@ -211,7 +222,10 @@ export default function StaffDashboardPage() {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
     
     const target = String(targetUser || '').trim().toLowerCase();
-    const isGlobalBroadcast = target === '' || target === 'null' || target === 'undefined';
+    const isGlobalBroadcast = target === '' || 
+                              target === 'null' || 
+                              target === 'undefined' || 
+                              ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
     
     if (isGlobalBroadcast) {
       const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
