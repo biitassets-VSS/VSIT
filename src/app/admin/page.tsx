@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
-  AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink
+  AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink,
+  Megaphone, Send, Loader2, ImagePlus, X
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -17,6 +18,11 @@ export default function AdminDashboardPage() {
   const [adminName, setAdminName] = useState('Admin');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [authError, setAuthError] = useState('');
+  
+  // Broadcast State
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
   
   // Dashboard Stats
   const [stats, setStats] = useState({
@@ -29,7 +35,6 @@ export default function AdminDashboardPage() {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
 
-  // 🌟 GLOBAL THEME SYNC
   useEffect(() => {
     const savedTheme = localStorage.getItem('vsit_theme');
     if (savedTheme === 'dark') {
@@ -39,7 +44,6 @@ export default function AdminDashboardPage() {
     loadAdminData();
   }, []);
 
-  // 🚨 REAL-TIME ADMIN ALERTS LISTENER
   useEffect(() => {
     const notificationSubscription = supabase
       .channel('admin-alerts')
@@ -66,7 +70,6 @@ export default function AdminDashboardPage() {
 
   const loadAdminData = async () => {
     setLoading(true);
-
     const rawSession = localStorage.getItem('vsit_admin_session') || 
                        localStorage.getItem('vsit_staff_session') || 
                        localStorage.getItem('user');
@@ -107,14 +110,17 @@ export default function AdminDashboardPage() {
       ]);
 
       const staffData = staffRes.data || [];
-      const pendingCount = inspections?.filter(i => i.status?.toLowerCase().includes('pending')).length || 0;
-      const ticketCount = tickets?.filter(t => ['open', 'in_repair', 'pending'].includes(t.status)).length || 0;
+      const inspData = inspections || [];
+      const tktData = tickets || [];
+
+      const pendingCount = inspData.filter(i => i.status?.toLowerCase().includes('pending')).length;
+      const ticketCount = tktData.filter(t => ['open', 'in_repair', 'pending'].includes((t.status || '').toLowerCase())).length;
 
       if (notifRes.data) {
         setNotifications(notifRes.data);
       }
 
-      const formattedRecentLogs = (inspections?.slice(0, 5) || []).map(log => {
+      const formattedRecentLogs = inspData.slice(0, 5).map(log => {
         const matchedProfile = staffData.find(p => 
           p.email?.toLowerCase() === log.user_email?.toLowerCase() || 
           p.id === log.inspected_by
@@ -135,7 +141,7 @@ export default function AdminDashboardPage() {
         totalAssets: assets || 0,
         pendingInspections: pendingCount,
         activeTickets: ticketCount,
-        totalStaff: staffData.length || 0
+        totalStaff: staffData.length
       });
       
       setRecentActivity(formattedRecentLogs);
@@ -157,6 +163,53 @@ export default function AdminDashboardPage() {
     if (t.includes('inspection') || t.includes('agreement') || t.includes('audit')) return '/admin/inspections';
     if (t.includes('ticket') || t.includes('request') || t.includes('replacement')) return '/admin/tickets';
     return '/admin/assets';
+  };
+
+  // 📣 ADVANCED BROADCAST HANDLER (WITH IMAGE UPLOAD)
+  const handleSendBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastMessage.trim() && !broadcastImage) return;
+    setIsBroadcasting(true);
+    
+    try {
+      let finalImageUrl = null;
+
+      // 1. Upload Image to Supabase Storage if attached
+      if (broadcastImage) {
+        const fileExt = broadcastImage.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('broadcasts')
+          .upload(filePath, broadcastImage);
+
+        if (uploadError) throw uploadError;
+
+        // Get the public URL for the uploaded image
+        const { data: publicUrlData } = supabase.storage
+          .from('broadcasts')
+          .getPublicUrl(filePath);
+
+        finalImageUrl = publicUrlData.publicUrl;
+      }
+
+      // 2. Save Broadcast to Database
+      await supabase.from('broadcasts').insert({
+        message: broadcastMessage.trim(),
+        created_by: adminName,
+        image_url: finalImageUrl
+      });
+      
+      setBroadcastMessage('');
+      setBroadcastImage(null);
+      alert("Announcement successfully broadcasted to all staff dashboards!");
+    } catch (err: any) {
+      console.error(err);
+      alert(`Failed to send broadcast: ${err.message}`);
+    } finally {
+      setIsBroadcasting(false);
+    }
   };
 
   // --- RENDERING ERROR STATE ---
@@ -181,8 +234,8 @@ export default function AdminDashboardPage() {
   if (loading) {
     return (
       <div className={`w-full h-screen flex flex-col items-center justify-center gap-4 antialiased ${isDarkMode ? 'bg-zinc-950' : 'bg-slate-50'}`}>
-        <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-400' : 'border-slate-400'}`}></div>
-        <p className={`text-xs font-medium tracking-wide ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>Loading Dashboard...</p>
+        <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-400' : 'border-blue-600'}`}></div>
+        <p className={`text-xs font-medium tracking-wide ${isDarkMode ? 'text-zinc-500' : 'text-slate-500'}`}>Loading Dashboard Data...</p>
       </div>
     );
   }
@@ -217,11 +270,55 @@ export default function AdminDashboardPage() {
             <p className={`text-sm ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
           </div>
           
-          {/* Status Indicator Only - Duplicate Icons Removed */}
           <div className={`hidden md:flex px-4 py-2 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             All Systems Operational
           </div>
+        </div>
+
+        {/* 📣 QUICK BROADCAST WIDGET WITH IMAGE UPLOAD */}
+        <div className={`${theme.card} p-5 rounded-3xl border shadow-sm transition-all`}>
+          <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2 mb-3`}>
+            <Megaphone size={14} className="text-indigo-500" /> Send Staff Announcement
+          </h3>
+          <form onSubmit={handleSendBroadcast} className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input 
+                type="text" 
+                placeholder="Type an announcement to broadcast to all staff dashboards..."
+                value={broadcastMessage}
+                onChange={e => setBroadcastMessage(e.target.value)}
+                className={`flex-1 px-4 py-3 rounded-xl border outline-none text-sm font-medium transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-200 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-indigo-500'}`}
+              />
+              
+              <div className="flex gap-2">
+                <label className={`cursor-pointer px-4 py-3 rounded-xl border flex items-center justify-center transition-colors ${isDarkMode ? 'border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'}`}>
+                  <ImagePlus size={18} className={broadcastImage ? "text-indigo-500" : ""} />
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)}
+                  />
+                </label>
+                
+                <button disabled={isBroadcasting || (!broadcastMessage.trim() && !broadcastImage)} type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-xs uppercase tracking-widest shadow-sm shrink-0 cursor-pointer">
+                  {isBroadcasting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Broadcast
+                </button>
+              </div>
+            </div>
+
+            {/* Image Attachment Preview */}
+            {broadcastImage && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-100 flex items-center gap-2">
+                  <ImagePlus size={12} /> Image Attached: {broadcastImage.name}
+                  <button type="button" onClick={() => setBroadcastImage(null)} className="hover:text-rose-600 ml-2"><X size={12}/></button>
+                </span>
+              </div>
+            )}
+          </form>
         </div>
 
         {/* 🚨 ACTIONABLE ALERTS SECTION */}
@@ -245,10 +342,10 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
-                      <button onClick={() => dismissNotification(notif.id)} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors flex justify-center items-center gap-1.5 ${isDarkMode ? 'text-zinc-400 hover:bg-zinc-800' : 'text-slate-500 hover:bg-slate-100'}`}>
+                      <button onClick={() => dismissNotification(notif.id)} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors flex justify-center items-center gap-1.5 cursor-pointer ${isDarkMode ? 'text-zinc-400 hover:bg-zinc-800' : 'text-slate-500 hover:bg-slate-100'}`}>
                         <Trash2 size={12} /> Dismiss
                       </button>
-                      <button onClick={() => router.push(targetRoute)} className={`flex-[2] py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors flex justify-center items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm`}>
+                      <button onClick={() => router.push(targetRoute)} className={`flex-[2] py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors flex justify-center items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer`}>
                         Take Action <ExternalLink size={12} />
                       </button>
                     </div>
@@ -325,7 +422,7 @@ export default function AdminDashboardPage() {
                 <button 
                   key={i}
                   onClick={() => router.push(module.path)} 
-                  className={`text-left ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover}`}
+                  className={`text-left cursor-pointer ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
@@ -372,7 +469,7 @@ export default function AdminDashboardPage() {
                 </div>
               )}
               
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 w-full py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wide transition-colors ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 w-full py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
                 View All Logs
               </button>
             </div>
