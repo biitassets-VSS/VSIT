@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
     return '/admin/assets';
   };
 
-  // 📣 ADVANCED BROADCAST HANDLER (WITH IMAGE UPLOAD)
+  // 📣 ADVANCED BROADCAST HANDLER (FIXED TO ROUTE TO STAFF DASHBOARDS)
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastMessage.trim() && !broadcastImage) return;
@@ -194,12 +194,26 @@ export default function AdminDashboardPage() {
         finalImageUrl = publicUrlData.publicUrl;
       }
 
-      // 2. Save Broadcast to Database
+      // 2. Save Broadcast to your 'broadcasts' log table (Keep original behavior)
       await supabase.from('broadcasts').insert({
         message: broadcastMessage.trim(),
         created_by: adminName,
         image_url: finalImageUrl
       });
+
+      // 3. 🚨 CRITICAL FIX: Also push it to the 'notifications' table so the Staff Dashboard sees it!
+      const { error: notifError } = await supabase.from('notifications').insert({
+        title: "System Broadcast",
+        message: finalImageUrl ? `${broadcastMessage.trim()} (Image Attached)` : broadcastMessage.trim(),
+        target_user: null, // null ensures it goes to EVERY staff member
+        is_read: false
+      });
+
+      if (notifError) {
+        console.error("🚨 DB Insert Error:", notifError);
+        alert(`Failed to push to staff dashboards. Error: ${notifError.message}`);
+        return;
+      }
       
       setBroadcastMessage('');
       setBroadcastImage(null);
