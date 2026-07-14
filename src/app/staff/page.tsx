@@ -97,7 +97,10 @@ export default function StaffDashboardPage() {
         setAssignedAssets(demoAssets);
         setAllInspections([]);
         setMyTickets([]);
-        setNotifications([]);
+        // Added demo broadcast notification for Guest Mode testing
+        setNotifications([
+          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday at 11:00 PM.', target_user: 'all', is_read: false }
+        ]);
         setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
         setIsAuthorized(true);
         setLoading(false);
@@ -140,16 +143,25 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
+      // FIXED: Modified notifications query to fetch user-specific AND broadcast messages
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
         supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false }),
-        supabase.from('notifications').select('*').eq('target_user', user.id).eq('is_read', false).order('created_at', { ascending: false })
+        supabase.from('notifications')
+          .select('*')
+          .or(`target_user.eq.${user.id},target_user.is.null,target_user.ilike.all,target_user.ilike.broadcast`)
+          .eq('is_read', false)
+          .order('created_at', { ascending: false })
       ]);
 
       if (assetsRes.data) {
         setAllInspections(inspRes.data || []); 
-        setNotifications(notifRes.data || []);
+        
+        // Filter out global broadcast alerts that the current user has already dismissed locally
+        const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+        const activeNotifications = (notifRes.data || []).filter(n => !dismissedBroadcasts.includes(n.id));
+        setNotifications(activeNotifications);
 
         const compiledAssets = assetsRes.data.map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
@@ -206,9 +218,21 @@ export default function StaffDashboardPage() {
     };
   }, []);
 
-  const markNotificationAsRead = async (notifId: string) => {
+  // FIXED: Handles local dismissal for broadcasts so one user doesn't delete them for everyone
+  const markNotificationAsRead = async (notifId: string, targetUser?: string) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
-    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
+    
+    const isGlobalBroadcast = !targetUser || targetUser.toLowerCase() === 'all' || targetUser.toLowerCase() === 'broadcast';
+    
+    if (isGlobalBroadcast) {
+      const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+      if (!dismissed.includes(notifId)) {
+        dismissed.push(notifId);
+        localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed));
+      }
+    } else {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -320,7 +344,8 @@ export default function StaffDashboardPage() {
                         <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
                       </div>
                     </div>
-                    <button onClick={() => markNotificationAsRead(notif.id)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
+                    {/* FIXED: Passes target_user to handle global vs individual dismissals */}
+                    <button onClick={() => markNotificationAsRead(notif.id, notif.target_user)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
                       Dismiss
                     </button>
                   </div>
@@ -508,7 +533,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const generateMobileHandoff = () => {
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
-    // We pass &auditType=RETURN or &auditType=INSPECTION so the mobile page knows how to label it
     const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}`;
     
     setQrUrl(url);
@@ -516,12 +540,10 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   };
 
   const handleLivePostgresSubmit = async () => {
-    // Both Inspections and Returns require live camera evidence via Mobile Handoff
     if (type === 'INSPECTION' || type === 'RETURN') {
       
       if (type === 'RETURN') {
         try {
-          // Optionally update the asset status early to indicate a return is in progress
           await supabase.from('assets').update({ status: 'Return Requested' }).eq('id', asset.id);
         } catch(e) { console.warn("Failed to mark as Return Requested", e); }
       }
