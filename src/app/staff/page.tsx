@@ -98,7 +98,7 @@ export default function StaffDashboardPage() {
         setAllInspections([]);
         setMyTickets([]);
         setNotifications([
-          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday at 11:00 PM.', target_user: null, is_read: false }
+          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday.', target_user: null, is_read: false }
         ]);
         setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
         setIsAuthorized(true);
@@ -142,7 +142,7 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      // 🌟 FIXED: Resilient query checking User ID and NULL (standard broadcast format)
+      // OPTIMIZED FETCH: Only pull alerts for THIS user OR global broadcasts (target_user = null)
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
@@ -153,21 +153,15 @@ export default function StaffDashboardPage() {
           .order('created_at', { ascending: false })
       ]);
 
-      if (notifRes.error) {
-        // eslint-disable-next-line no-console
-        console.error("🚨 Supabase Notifications Query Error:", JSON.stringify(notifRes.error, null, 2));
-      }
-
-      if (assetsRes.data) {
-        setAllInspections(inspRes.data || []); 
-        
-        // 🌟 FIXED: Javascript filtering prevents SQL from dropping rows where is_read is NULL
+      if (notifRes.data) {
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-        const activeNotifications = (notifRes.data || []).filter(n => {
+        
+        const activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
-          const isNotDismissed = !dismissedBroadcasts.includes(n.id);
-          return isUnread && isNotDismissed;
+          const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
+          return isUnread && isNotDismissedLocally;
         });
+        
         setNotifications(activeNotifications);
 
         const compiledAssets = assetsRes.data.map(asset => {
@@ -191,7 +185,6 @@ export default function StaffDashboardPage() {
         setStats({ totalAssets: compiledAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("Data sync failure:", err);
     } finally {
       setLoading(false);
@@ -202,7 +195,6 @@ export default function StaffDashboardPage() {
     loadRealDatabase();
     if (localStorage.getItem('isGuestSession') === 'true') return;
 
-    // 🌟 FIXED: Single consolidated WebSocket channel prevents connection drops
     const realtimeChannel = supabase.channel('staff-dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(); })
@@ -218,7 +210,8 @@ export default function StaffDashboardPage() {
   const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
     
-    const isGlobalBroadcast = !targetUser || targetUser === 'all' || targetUser === 'broadcast';
+    const target = String(targetUser || '').trim().toLowerCase();
+    const isGlobalBroadcast = target === '' || target === 'null' || target === 'undefined';
     
     if (isGlobalBroadcast) {
       const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
@@ -231,7 +224,6 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 🌟 TESTING UTILITY: Allows staff to un-dismiss alerts during development
   const resetLocalDismissals = () => {
     localStorage.removeItem('dismissed_broadcasts');
     loadRealDatabase();
