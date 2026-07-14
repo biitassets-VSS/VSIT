@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
     return '/admin/assets';
   };
 
-  // 📣 ADVANCED BROADCAST HANDLER (FIXED TO ROUTE TO STAFF DASHBOARDS)
+  // 📣 ADVANCED BROADCAST HANDLER (FIXED FOR NOT-NULL CONSTRAINTS)
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastMessage.trim() && !broadcastImage) return;
@@ -201,12 +201,13 @@ export default function AdminDashboardPage() {
         image_url: finalImageUrl
       });
 
-      // 3. 🚨 CRITICAL FIX: Also push it to the 'notifications' table so the Staff Dashboard sees it!
+      // 3. 🚨 CRITICAL FIX: Push to 'notifications' with the required "type" column
       const { error: notifError } = await supabase.from('notifications').insert({
         title: "System Broadcast",
         message: finalImageUrl ? `${broadcastMessage.trim()} (Image Attached)` : broadcastMessage.trim(),
         target_user: null, // null ensures it goes to EVERY staff member
-        is_read: false
+        is_read: false,
+        type: 'broadcast'  // Resolves the null-value constraint error
       });
 
       if (notifError) {
