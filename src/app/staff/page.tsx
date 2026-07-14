@@ -7,7 +7,7 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell, LogOut
+  Camera, Lock, Monitor, Bell, LogOut, RotateCcw
 } from 'lucide-react';
 
 // 🌟 THE AUDIT WINDOW ENGINE
@@ -142,7 +142,7 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      // FIXED: Queries ONLY user ID and null to prevent Postgres UUID syntax crashes
+      // 🌟 FIXED: Resilient query checking User ID and NULL (standard broadcast format)
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
@@ -155,13 +155,13 @@ export default function StaffDashboardPage() {
 
       if (notifRes.error) {
         // eslint-disable-next-line no-console
-        console.error("🚨 Supabase Notifications Error:", JSON.stringify(notifRes.error, null, 2));
+        console.error("🚨 Supabase Notifications Query Error:", JSON.stringify(notifRes.error, null, 2));
       }
 
       if (assetsRes.data) {
         setAllInspections(inspRes.data || []); 
         
-        // FIXED: Javascript filtering prevents SQL from dropping rows where is_read is NULL
+        // 🌟 FIXED: Javascript filtering prevents SQL from dropping rows where is_read is NULL
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
         const activeNotifications = (notifRes.data || []).filter(n => {
           const isUnread = n.is_read !== true; 
@@ -202,31 +202,19 @@ export default function StaffDashboardPage() {
     loadRealDatabase();
     if (localStorage.getItem('isGuestSession') === 'true') return;
 
-    const ticketSubscription = supabase.channel('public:tickets')
+    // 🌟 FIXED: Single consolidated WebSocket channel prevents connection drops
+    const realtimeChannel = supabase.channel('staff-dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(); })
-      .subscribe();
-      
-    const inspSubscription = supabase.channel('public:inspections')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(); })
-      .subscribe();
-      
-    const notifSubscription = supabase.channel('public:notifications')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => { loadRealDatabase(); })
-      .subscribe();
-
-    const assetSubscription = supabase.channel('public:assets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => { loadRealDatabase(); })
       .subscribe();
 
     return () => { 
-      supabase.removeChannel(ticketSubscription); 
-      supabase.removeChannel(inspSubscription);
-      supabase.removeChannel(notifSubscription);
-      supabase.removeChannel(assetSubscription);
+      supabase.removeChannel(realtimeChannel); 
     };
   }, []);
 
-  // FIXED: Saves global broadcast dismissals to localStorage so one staff member doesn't clear alerts for everyone
   const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
     
@@ -241,6 +229,12 @@ export default function StaffDashboardPage() {
     } else {
       await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
     }
+  };
+
+  // 🌟 TESTING UTILITY: Allows staff to un-dismiss alerts during development
+  const resetLocalDismissals = () => {
+    localStorage.removeItem('dismissed_broadcasts');
+    loadRealDatabase();
   };
 
   const getStatusBadge = (status: string) => {
@@ -306,9 +300,14 @@ export default function StaffDashboardPage() {
               <span>{currentUser.email}</span>
             </div>
           </div>
-          <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 shrink-0 cursor-pointer">
-            <RefreshCw size={14}/> Sync Feeds
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={resetLocalDismissals} title="Reset Dismissed Alerts" className="flex items-center justify-center p-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-500 rounded-xl transition-all border border-slate-200 cursor-pointer">
+              <RotateCcw size={14}/>
+            </button>
+            <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer">
+              <RefreshCw size={14}/> Sync Feeds
+            </button>
+          </div>
         </div>
 
         {notifications.length > 0 && (
