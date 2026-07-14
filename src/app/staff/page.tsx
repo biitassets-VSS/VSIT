@@ -97,9 +97,8 @@ export default function StaffDashboardPage() {
         setAssignedAssets(demoAssets);
         setAllInspections([]);
         setMyTickets([]);
-        // Added demo broadcast notification for Guest Mode testing
         setNotifications([
-          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday at 11:00 PM.', target_user: 'all', is_read: false }
+          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday at 11:00 PM.', target_user: null, is_read: false }
         ]);
         setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
         setIsAuthorized(true);
@@ -143,24 +142,32 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      // FIXED: Modified notifications query to fetch user-specific AND broadcast messages
+      // FIXED: Queries ONLY user ID and null to prevent Postgres UUID syntax crashes
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
         supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false }),
         supabase.from('notifications')
           .select('*')
-          .or(`target_user.eq.${user.id},target_user.is.null,target_user.ilike.all,target_user.ilike.broadcast`)
-          .eq('is_read', false)
+          .or(`target_user.eq.${user.id},target_user.is.null`)
           .order('created_at', { ascending: false })
       ]);
+
+      if (notifRes.error) {
+        // eslint-disable-next-line no-console
+        console.error("🚨 Supabase Notifications Error:", JSON.stringify(notifRes.error, null, 2));
+      }
 
       if (assetsRes.data) {
         setAllInspections(inspRes.data || []); 
         
-        // Filter out global broadcast alerts that the current user has already dismissed locally
+        // FIXED: Javascript filtering prevents SQL from dropping rows where is_read is NULL
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-        const activeNotifications = (notifRes.data || []).filter(n => !dismissedBroadcasts.includes(n.id));
+        const activeNotifications = (notifRes.data || []).filter(n => {
+          const isUnread = n.is_read !== true; 
+          const isNotDismissed = !dismissedBroadcasts.includes(n.id);
+          return isUnread && isNotDismissed;
+        });
         setNotifications(activeNotifications);
 
         const compiledAssets = assetsRes.data.map(asset => {
@@ -184,6 +191,7 @@ export default function StaffDashboardPage() {
         setStats({ totalAssets: compiledAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
       }
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("Data sync failure:", err);
     } finally {
       setLoading(false);
@@ -218,11 +226,11 @@ export default function StaffDashboardPage() {
     };
   }, []);
 
-  // FIXED: Handles local dismissal for broadcasts so one user doesn't delete them for everyone
-  const markNotificationAsRead = async (notifId: string, targetUser?: string) => {
+  // FIXED: Saves global broadcast dismissals to localStorage so one staff member doesn't clear alerts for everyone
+  const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
     
-    const isGlobalBroadcast = !targetUser || targetUser.toLowerCase() === 'all' || targetUser.toLowerCase() === 'broadcast';
+    const isGlobalBroadcast = !targetUser || targetUser === 'all' || targetUser === 'broadcast';
     
     if (isGlobalBroadcast) {
       const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
@@ -344,7 +352,6 @@ export default function StaffDashboardPage() {
                         <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
                       </div>
                     </div>
-                    {/* FIXED: Passes target_user to handle global vs individual dismissals */}
                     <button onClick={() => markNotificationAsRead(notif.id, notif.target_user)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
                       Dismiss
                     </button>
@@ -619,6 +626,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       setSuccessDone(true);
       setTimeout(() => onClose(), 1200);
     } catch (e: any) {
+      // eslint-disable-next-line no-console
       console.error("FULL POSTGRES ERROR:", e);
       alert(`Database Error: ${e.message || JSON.stringify(e)}`);
     } finally {
