@@ -207,7 +207,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         {/* Navigation Menu */}
         <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto custom-scrollbar">
-          <div className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-3 px-3">Menu</div>
           {[
             { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
             { name: 'My Assets', href: '/staff/assets', icon: Laptop },
@@ -277,7 +276,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               <Menu size={20} />
             </button>
             <h2 className="text-sm lg:text-base font-bold text-slate-800 tracking-tight hidden sm:block">
-              VSS Staff Portal
+              Virtual Staffing Solutions | Staff Dasboard
             </h2>
           </div>
 
