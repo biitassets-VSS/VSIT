@@ -142,8 +142,6 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
-      // 🌟 SAFE FETCH: We pull the recent notifications without strict SQL filters 
-      // to bypass Admin Panel data formatting inconsistencies.
       const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
         supabase.from('assets').select('*').eq('assigned_to', user.id),
         supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
@@ -154,7 +152,6 @@ export default function StaffDashboardPage() {
       if (notifRes.data) {
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
         
-        // 🌟 UNIVERSAL JS FILTER: Catches Email, ID, Employee Code, or "ALL" tags safely
         const activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
           const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
@@ -175,7 +172,8 @@ export default function StaffDashboardPage() {
         
         setNotifications(activeNotifications);
 
-        const compiledAssets = assetsRes.data.map(asset => {
+        // ✅ TYPESCRIPT FIX: Added (assetsRes.data || []) to prevent 'possibly null' compiler errors
+        const compiledAssets = (assetsRes.data || []).map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
           return {
             ...asset,
@@ -631,7 +629,6 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
       setSuccessDone(true);
       setTimeout(() => onClose(), 1200);
     } catch (e: any) {
-      // eslint-disable-next-line no-console
       console.error("FULL POSTGRES ERROR:", e);
       alert(`Database Error: ${e.message || JSON.stringify(e)}`);
     } finally {
