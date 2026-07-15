@@ -37,7 +37,7 @@ export default function NotificationManager({ userId, userRole = 'staff' }: { us
         icon: '/logo.png', // Uses your PWA icon
         badge: '/logo.png',
         vibrate: [200, 100, 200] // Vibrates on Android
-      });
+      } as any); // <-- TypeScript bypass added here
     }
   };
 
