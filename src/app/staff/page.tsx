@@ -8,9 +8,9 @@ import {
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut, RotateCcw, 
-  Megaphone, ThumbsUp, Heart, ThumbsDown // Newly added icons
+  Megaphone, ThumbsUp, Heart, ThumbsDown
 } from 'lucide-react';
-import NotificationManager from '@/components/NotificationManager'; // Newly added import
+import NotificationManager from '@/components/NotificationManager';
 
 // 🌟 THE AUDIT WINDOW ENGINE
 function getAuditWindowInfo() {
@@ -39,7 +39,7 @@ function getAuditWindowInfo() {
   };
 }
 
-// 🌟 STAFF BROADCAST WIDGET COMPONENT
+// 🌟 FIXED STAFF BROADCAST WIDGET
 function StaffBroadcastWidget({ userId }: { userId: string }) {
   const [broadcast, setBroadcast] = useState<any>(null);
   const [myReaction, setMyReaction] = useState<string | null>(null);
@@ -60,8 +60,15 @@ function StaffBroadcastWidget({ userId }: { userId: string }) {
         .maybeSingle();
 
       if (bData) {
+        // 1. Check Local Browser Storage First (Fixes the refresh bug instantly)
+        const localReacted = JSON.parse(localStorage.getItem('reacted_broadcasts') || '[]');
+        if (localReacted.includes(bData.id)) {
+          setBroadcast(null); // Keep it hidden forever
+          return;
+        }
+
         if (userId && userId !== 'guest-mock-uuid') {
-          // Check if this specific user has ALREADY reacted to this broadcast
+          // 2. Check Database as a backup
           const { data: rData } = await supabase
             .from('broadcast_reactions')
             .select('reaction')
@@ -70,14 +77,14 @@ function StaffBroadcastWidget({ userId }: { userId: string }) {
             .maybeSingle();
           
           if (rData) {
-            // If they already reacted in the past, keep it hidden forever
+            // Also save locally so we don't have to wait for the DB next time
+            localReacted.push(bData.id);
+            localStorage.setItem('reacted_broadcasts', JSON.stringify(localReacted));
             setBroadcast(null);
           } else {
-            // Otherwise, show the new broadcast
             setBroadcast(bData);
           }
         } else {
-          // Guest mode logic
           setBroadcast(bData);
         }
       }
@@ -89,10 +96,17 @@ function StaffBroadcastWidget({ userId }: { userId: string }) {
   const handleReact = async (reactionType: string) => {
     if (!userId || !broadcast) return;
     
-    // 1. Instantly lock in their reaction on the UI
+    // Instantly lock in UI reaction
     setMyReaction(reactionType);
     
-    // 2. Save the reaction to the database
+    // Save permanently to local storage so it NEVER comes back on refresh
+    const localReacted = JSON.parse(localStorage.getItem('reacted_broadcasts') || '[]');
+    if (!localReacted.includes(broadcast.id)) {
+      localReacted.push(broadcast.id);
+      localStorage.setItem('reacted_broadcasts', JSON.stringify(localReacted));
+    }
+    
+    // Save to Database
     if (userId !== 'guest-mock-uuid') {
       try {
         await supabase.from('broadcast_reactions').upsert(
@@ -104,10 +118,9 @@ function StaffBroadcastWidget({ userId }: { userId: string }) {
       }
     }
 
-    // 3. Wait half a second so they see their click, then trigger fade-out animation
+    // Trigger smooth fade-out
     setTimeout(() => {
       setIsFadingOut(true);
-      // Remove it completely from the DOM after the animation finishes
       setTimeout(() => {
         setBroadcast(null);
       }, 400); 
@@ -126,7 +139,6 @@ function StaffBroadcastWidget({ userId }: { userId: string }) {
           <h3 className="text-xs font-black uppercase tracking-widest text-indigo-800 mb-1">Company Announcement</h3>
           <p className="text-sm font-semibold text-indigo-900 leading-relaxed whitespace-pre-wrap mb-3">{broadcast.message}</p>
           
-          {/* 🖼️ RENDER THE IMAGE IF IT EXISTS */}
           {broadcast.image_url && (
             <div className="mt-2 rounded-xl overflow-hidden border border-indigo-200 shadow-sm max-w-sm">
               <img src={broadcast.image_url} alt="Broadcast Attachment" className="w-full h-auto object-cover" />
@@ -210,9 +222,9 @@ export default function StaffDashboardPage() {
         setAssignedAssets(demoAssets);
         setAllInspections([]);
         setMyTickets([]);
-        setNotifications([
-          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday.', target_user: null, is_read: false }
-        ]);
+        
+        // Removed global broadcast from here so it doesn't duplicate!
+        setNotifications([]);
         setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
         setIsAuthorized(true);
         setLoading(false);
@@ -263,24 +275,17 @@ export default function StaffDashboardPage() {
       ]);
 
       if (notifRes.data) {
-        const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-        
+        // FIXED: Only show PERSONAL action alerts in this list now. 
+        // Global broadcasts are handled exclusively by the StaffBroadcastWidget.
         const activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
-          const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
-          
           const target = String(n.target_user || '').trim().toLowerCase();
           
-          const isGlobal = target === '' || 
-                           target === 'null' || 
-                           target === 'undefined' || 
-                           ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
-                           
           const isPersonal = target === String(user.id).toLowerCase() || 
                              target === cleanEmail || 
                              target === String(user.emp_id).toLowerCase();
 
-          return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
+          return isUnread && isPersonal;
         });
         
         setNotifications(activeNotifications);
@@ -328,28 +333,13 @@ export default function StaffDashboardPage() {
     };
   }, []);
 
-  const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
+  const markNotificationAsRead = async (notifId: string) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
-    
-    const target = String(targetUser || '').trim().toLowerCase();
-    const isGlobalBroadcast = target === '' || 
-                              target === 'null' || 
-                              target === 'undefined' || 
-                              ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
-    
-    if (isGlobalBroadcast) {
-      const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-      if (!dismissed.includes(notifId)) {
-        dismissed.push(notifId);
-        localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed));
-      }
-    } else {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
-    }
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
   };
 
   const resetLocalDismissals = () => {
-    localStorage.removeItem('dismissed_broadcasts');
+    localStorage.removeItem('reacted_broadcasts');
     loadRealDatabase();
   };
 
@@ -426,16 +416,12 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* 🚨 NOTIFICATION ENABLER (NEW) */}
-        {currentUser && (
-          <NotificationManager userId={currentUser.id} />
-        )}
+        {currentUser && <NotificationManager userId={currentUser.id} />}
 
-        {/* 🌟 NEW BROADCAST WIDGET */}
-        {currentUser && (
-          <StaffBroadcastWidget userId={currentUser.id} />
-        )}
+        {/* 🌟 REACTION WIDGET FOR ANNOUNCEMENTS */}
+        {currentUser && <StaffBroadcastWidget userId={currentUser.id} />}
 
+        {/* 🚨 DISMISS WIDGET ONLY FOR PERSONAL ALERTS (e.g., Audit Rejections) */}
         {notifications.length > 0 && (
           <div className="space-y-3 animate-in slide-in-from-top-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -477,7 +463,7 @@ export default function StaffDashboardPage() {
                         <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
                       </div>
                     </div>
-                    <button onClick={() => markNotificationAsRead(notif.id, notif.target_user)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
+                    <button onClick={() => markNotificationAsRead(notif.id)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
                       Dismiss
                     </button>
                   </div>
