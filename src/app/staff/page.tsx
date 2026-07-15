@@ -7,8 +7,10 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell, LogOut, RotateCcw
+  Camera, Lock, Monitor, Bell, LogOut, RotateCcw, 
+  Megaphone, ThumbsUp, Heart, ThumbsDown // Newly added icons
 } from 'lucide-react';
+import NotificationManager from '@/components/NotificationManager'; // Newly added import
 
 // 🌟 THE AUDIT WINDOW ENGINE
 function getAuditWindowInfo() {
@@ -35,6 +37,117 @@ function getAuditWindowInfo() {
     year,
     month
   };
+}
+
+// 🌟 STAFF BROADCAST WIDGET COMPONENT
+function StaffBroadcastWidget({ userId }: { userId: string }) {
+  const [broadcast, setBroadcast] = useState<any>(null);
+  const [myReaction, setMyReaction] = useState<string | null>(null);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  useEffect(() => {
+    if (userId) fetchLatestBroadcast();
+  }, [userId]);
+
+  const fetchLatestBroadcast = async () => {
+    try {
+      const { data: bData } = await supabase
+        .from('broadcasts')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (bData) {
+        if (userId && userId !== 'guest-mock-uuid') {
+          // Check if this specific user has ALREADY reacted to this broadcast
+          const { data: rData } = await supabase
+            .from('broadcast_reactions')
+            .select('reaction')
+            .eq('broadcast_id', bData.id)
+            .eq('user_id', userId)
+            .maybeSingle();
+          
+          if (rData) {
+            // If they already reacted in the past, keep it hidden forever
+            setBroadcast(null);
+          } else {
+            // Otherwise, show the new broadcast
+            setBroadcast(bData);
+          }
+        } else {
+          // Guest mode logic
+          setBroadcast(bData);
+        }
+      }
+    } catch (e) {
+      console.error("Broadcast load error", e);
+    }
+  };
+
+  const handleReact = async (reactionType: string) => {
+    if (!userId || !broadcast) return;
+    
+    // 1. Instantly lock in their reaction on the UI
+    setMyReaction(reactionType);
+    
+    // 2. Save the reaction to the database
+    if (userId !== 'guest-mock-uuid') {
+      try {
+        await supabase.from('broadcast_reactions').upsert(
+          { broadcast_id: broadcast.id, user_id: userId, reaction: reactionType },
+          { onConflict: 'broadcast_id, user_id' }
+        );
+      } catch (e) {
+        console.error("Reaction error", e);
+      }
+    }
+
+    // 3. Wait half a second so they see their click, then trigger fade-out animation
+    setTimeout(() => {
+      setIsFadingOut(true);
+      // Remove it completely from the DOM after the animation finishes
+      setTimeout(() => {
+        setBroadcast(null);
+      }, 400); 
+    }, 500); 
+  };
+
+  if (!broadcast) return null;
+
+  return (
+    <div className={`bg-indigo-50 border border-indigo-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row gap-5 items-start md:items-center justify-between mb-6 overflow-hidden relative transition-all duration-500 ease-in-out ${isFadingOut ? 'opacity-0 scale-95 h-0 py-0 my-0 border-0 mb-0' : 'animate-in slide-in-from-top-4'}`}>
+      <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+        <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-md shrink-0 animate-bounce">
+          <Megaphone size={24} />
+        </div>
+        <div className="w-full">
+          <h3 className="text-xs font-black uppercase tracking-widest text-indigo-800 mb-1">Company Announcement</h3>
+          <p className="text-sm font-semibold text-indigo-900 leading-relaxed whitespace-pre-wrap mb-3">{broadcast.message}</p>
+          
+          {/* 🖼️ RENDER THE IMAGE IF IT EXISTS */}
+          {broadcast.image_url && (
+            <div className="mt-2 rounded-xl overflow-hidden border border-indigo-200 shadow-sm max-w-sm">
+              <img src={broadcast.image_url} alt="Broadcast Attachment" className="w-full h-auto object-cover" />
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-indigo-100 shadow-sm shrink-0 w-full md:w-auto justify-center z-10">
+        <button onClick={() => handleReact('like')} disabled={myReaction !== null} className={`p-2 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed ${myReaction === 'like' ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-400'}`}>
+          <ThumbsUp size={18} className={myReaction === 'like' ? 'fill-blue-600' : ''}/>
+        </button>
+        <button onClick={() => handleReact('love')} disabled={myReaction !== null} className={`p-2 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed ${myReaction === 'love' ? 'bg-rose-100 text-rose-600' : 'hover:bg-slate-100 text-slate-400'}`}>
+          <Heart size={18} className={myReaction === 'love' ? 'fill-rose-600' : ''}/>
+        </button>
+        <button onClick={() => handleReact('dislike')} disabled={myReaction !== null} className={`p-2 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed ${myReaction === 'dislike' ? 'bg-slate-200 text-slate-700' : 'hover:bg-slate-100 text-slate-400'}`}>
+          <ThumbsDown size={18} className={myReaction === 'dislike' ? 'fill-slate-700' : ''}/>
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function StaffDashboardPage() {
@@ -172,7 +285,6 @@ export default function StaffDashboardPage() {
         
         setNotifications(activeNotifications);
 
-        // ✅ TYPESCRIPT FIX: Added (assetsRes.data || []) to prevent 'possibly null' compiler errors
         const compiledAssets = (assetsRes.data || []).map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
           return {
@@ -313,6 +425,16 @@ export default function StaffDashboardPage() {
             </button>
           </div>
         </div>
+
+        {/* 🚨 NOTIFICATION ENABLER (NEW) */}
+        {currentUser && (
+          <NotificationManager userId={currentUser.id} />
+        )}
+
+        {/* 🌟 NEW BROADCAST WIDGET */}
+        {currentUser && (
+          <StaffBroadcastWidget userId={currentUser.id} />
+        )}
 
         {notifications.length > 0 && (
           <div className="space-y-3 animate-in slide-in-from-top-4">
