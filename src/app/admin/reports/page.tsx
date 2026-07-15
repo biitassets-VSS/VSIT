@@ -31,10 +31,15 @@ type ReportGroup =
   | 'HEADPHONES'
   | 'RETIRED_DISCARD';
 
-// Helper to normalize category names
+// Helper to normalize category names and map "CKM" to the full requested string
 const normalizeCategory = (cat: string) => {
   if (!cat) return 'Uncategorized';
   const trimmed = cat.trim();
+  
+  if (trimmed.toUpperCase() === 'CKM') {
+    return 'Combo Kit Keyboard with Mouse USB Wired';
+  }
+  
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 };
 
@@ -42,7 +47,8 @@ const normalizeCategory = (cat: string) => {
 const detectBrand = (name: string) => {
   if (!name) return 'Generic';
   const upperName = name.toUpperCase();
-  const brands = ['DELL', 'HP', 'LENOVO', 'APPLE', 'MACBOOK', 'LOGITECH', 'ASUS', 'ACER', 'ZEBRONICS', 'BOAT', 'JBL', 'SONY'];
+  // Specified laptop brands: Lenovo, HP, Asus, Dell (plus a few other majors for safety)
+  const brands = ['DELL', 'HP', 'LENOVO', 'ASUS', 'APPLE', 'MACBOOK', 'LOGITECH', 'ACER', 'ZEBRONICS', 'BOAT', 'JBL', 'SONY'];
   for (const brand of brands) {
     if (upperName.includes(brand)) {
       return brand === 'MACBOOK' ? 'APPLE' : brand;
@@ -88,18 +94,34 @@ export default function AdminReportsPage() {
     switch (group) {
       case 'LAPTOPS':
         return cat.includes('laptop') || name.includes('laptop') || name.includes('macbook');
+      
       case 'WIRELESS_KEYBOARDS':
+        // Bundles "wireless keyboard", "wireless keyboard kit" and variations
         return name.includes('wireless keyboard') || (name.includes('keyboard') && name.includes('wireless'));
+      
       case 'COMBO_KITS':
-        return name.includes('combo') || name.includes('kit') || (name.includes('keyboard') && name.includes('mouse'));
+        // Matches "CKM", "Combo Kit Keyboard with Mouse USB Wired", and basic combo kits
+        return cat.includes('combo kit') || name.includes('ckm') || name.includes('combo') || (name.includes('keyboard') && name.includes('mouse'));
+      
       case 'WIRED_KEYBOARDS':
-        return (name.includes('keyboard') || cat.includes('keyboard')) && !name.includes('wireless') && !name.includes('combo');
+        // Specifically isolates "Keyboard", "USB Keyboard", "Wired Keyboard" (exludes wireless/combos)
+        return (name.includes('keyboard') || cat.includes('keyboard')) 
+               && !name.includes('wireless') 
+               && !name.includes('combo')
+               && !cat.includes('combo');
+      
       case 'WIRED_MICE':
-        return (name.includes('mouse') || cat.includes('mouse')) && !name.includes('wireless') && !name.includes('combo');
+        return (name.includes('mouse') || cat.includes('mouse')) 
+               && !name.includes('wireless') 
+               && !name.includes('combo')
+               && !cat.includes('combo');
+      
       case 'HEADPHONES':
         return cat.includes('headphone') || name.includes('headphone') || name.includes('headset') || name.includes('earphone');
+      
       case 'RETIRED_DISCARD':
         return status.includes('retired') || status.includes('discard') || status.includes('scrap');
+      
       default:
         return true;
     }
@@ -169,7 +191,7 @@ export default function AdminReportsPage() {
       .replace('CATEGORY_SUMMARY', 'Category Global Summary')
       .replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)')
       .replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory')
-      .replace('COMBO_KITS', 'Keyboard & Mouse Combo Kits')
+      .replace('COMBO_KITS', 'Keyboard & Mouse Combo Kits (CKM)')
       .replace('WIRED_KEYBOARDS', 'Wired USB Keyboards')
       .replace('WIRED_MICE', 'Wired USB Mice')
       .replace('HEADPHONES', 'Headphones & Audio Gear')
