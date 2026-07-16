@@ -12,9 +12,19 @@ import {
   Keyboard, RectangleHorizontal, Monitor, Sparkles
 } from 'lucide-react';
 
+// ==========================================
+// 🌟 EXACT ASSET CATEGORIES FROM ADMIN
+// ==========================================
 const ASSET_CATEGORIES = [
-  'Laptop', 'Stand', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 
-  'Wireless Keyboard kit', 'Mouse', 'Headphone', 'Cleaning kit', 'Mouse PAD', 'Others'
+  'Laptop', 
+  'Stand', 
+  'USB Wired Keyboard', 
+  'USB Keyboard Mouse Kit', 
+  'Wireless Keyboard kit', 
+  'USB Wired Mouse', 
+  'Headphone', 
+  'Cleaning Kit', 
+  'Others'
 ];
 
 // ==========================================
@@ -25,7 +35,7 @@ function getCategoryIcon(category: string, size = 20) {
   if (cat.includes('laptop')) return <Laptop size={size} />;
   if (cat.includes('stand')) return <Monitor size={size} />;
   if (cat.includes('keyboard') || cat.includes('combo')) return <Keyboard size={size} />;
-  if (cat.includes('mouse pad')) return <RectangleHorizontal size={size} />;
+  if (cat.includes('mouse pad') || cat.includes('pad')) return <RectangleHorizontal size={size} />;
   if (cat.includes('mouse')) return <Mouse size={size} />;
   if (cat.includes('headphone')) return <Headphones size={size} />;
   if (cat.includes('cleaning')) return <Sparkles size={size} />;
@@ -53,22 +63,31 @@ function generateSafeUuid() {
   });
 }
 
+// ==========================================
+// 🌟 EXACT ASSET TAG GENERATOR LOGIC
+// ==========================================
 function generateCategoryPrefix(category: string, existingUuid?: string) {
-  let prefix = 'VS-OTH';
+  let prefix = 'VSS-OTH';
   const cat = safeString(category).toLowerCase();
-  if (cat.includes('laptop')) prefix = 'VS-LAP';
-  else if (cat.includes('mouse pad') || cat === 'mouse pad') prefix = 'VS-PAD';
-  else if (cat.includes('mouse')) prefix = 'VSS-MOU'; 
-  else if (cat.includes('combo') || cat.includes('keyboard')) prefix = 'VS-KBD';
-  else if (cat.includes('headphone')) prefix = 'VS-HDP';
-  else if (cat.includes('cleaning')) prefix = 'VS-CLN';
-  else if (cat.includes('stand')) prefix = 'VS-STN';
+  
+  if (cat.includes('laptop')) prefix = 'VSS-LAP';
+  else if (cat.includes('wireless keyboard')) prefix = 'VSS-WKM';
+  else if (cat.includes('mouse kit') || cat.includes('combo')) prefix = 'VSS-CKM';
+  else if (cat.includes('wired keyboard')) prefix = 'VSS-KMU';
+  else if (cat.includes('wired mouse')) prefix = 'VSS-MOU';
+  else if (cat.includes('headphone')) prefix = 'VSS-HDP';
+  else if (cat.includes('stand')) prefix = 'VSS-STD';
+  else if (cat.includes('cleaning')) prefix = 'VSS-CKT';
+  else prefix = 'VSS-OTH';
 
+  // Extract stable ending numbers if the asset already exists
   if (existingUuid && String(existingUuid).length > 20) {
     const numsOnly = String(existingUuid).replace(/[^0-9]/g, '');
     const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
     return `${prefix}-${stableDigits}`;
   }
+  
+  // Otherwise, generate 4 random digits for new assets
   return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
@@ -187,7 +206,7 @@ function AssetRegistryContent() {
   });
 
   // Forms
-  const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
+  const [newAssetCategory, setNewAssetCategory] = useState('For Laptop');
   const [newAssetTag, setNewAssetTag] = useState(''); 
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetBrand, setNewAssetBrand] = useState('');
@@ -284,7 +303,7 @@ function AssetRegistryContent() {
     setViewAssetModal({ ...asset, clean_tag: stableTag });
     setIsEditingAsset(false);
     setEditForm({
-      category: asset.category || 'Laptop', asset_tag: stableTag, serial: asset.serial_number || '',
+      category: asset.category || 'For Laptop', asset_tag: stableTag, serial: asset.serial_number || '',
       name: asset.safe_display_name, brand: asset.brand || '', price: asset.price || '', 
       vendor: asset.vendor || '', purchase_date: asset.purchase_date || '', warranty_expiry: asset.warranty_expiry || '',
       condition: asset.asset_condition || 'New', status: asset.status || 'In Stock (Unassigned)', 
@@ -610,30 +629,57 @@ function AssetRegistryContent() {
     printWindow.document.close();
   };
 
+  // ==========================================
+  // 🌟 FILTRATION & SEARCH ENGINE LOGIC
+  // ==========================================
   const getCatCount = (filterName: string) => {
     if (filterName === 'All') return assets.length;
-    if (filterName === 'Accessories') return assets.filter(a => ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category)).length;
-    if (filterName === 'Other') return assets.filter(a => ['Cleaning kit', 'Others'].includes(a.category)).length;
+    if (filterName === 'Laptop') return assets.filter(a => safeString(a.category).toLowerCase().includes('laptop')).length;
+    if (filterName === 'Accessories') return assets.filter(a => {
+       const c = safeString(a.category).toLowerCase();
+       return c.includes('mouse') || c.includes('keyboard') || c.includes('stand') || c.includes('combo') || c.includes('pad');
+    }).length;
+    if (filterName === 'Headphone') return assets.filter(a => safeString(a.category).toLowerCase().includes('headphone')).length;
+    if (filterName === 'Other') return assets.filter(a => {
+       const c = safeString(a.category).toLowerCase();
+       return c.includes('cleaning') || c.includes('other') || (!c.includes('laptop') && !c.includes('mouse') && !c.includes('keyboard') && !c.includes('stand') && !c.includes('headphone') && !c.includes('pad') && !c.includes('combo'));
+    }).length;
+    
     return assets.filter(a => safeString(a.category).toLowerCase() === filterName.toLowerCase()).length;
   };
 
   const filteredAssets = assets.filter(a => {
     const q = safeString(searchQuery).toLowerCase();
     const cleanTag = safeString(a.clean_tag).toLowerCase();
+    const cat = safeString(a.category).toLowerCase();
+    
+    // 🌟 THE FIX: Now safely checks the brand and category columns as well!
     const matchesSearch = !q || (
       safeString(a.id).toLowerCase().includes(q) || 
       cleanTag.includes(q) ||
       safeString(a.safe_display_name).toLowerCase().includes(q) || 
+      safeString(a.brand).toLowerCase().includes(q) || 
+      cat.includes(q) || 
       safeString(a.serial_number).toLowerCase().includes(q) ||
       safeString(a.staff_name).toLowerCase().includes(q) || 
       safeString(a.emp_code).toLowerCase().includes(q)
     );
+    
     let matchesCat = true;
     if (selectedCategory !== 'All') {
-      if (selectedCategory === 'Accessories') matchesCat = ['Mouse', 'Keyboard USB', 'Combo Keyboard with Mouse kit USB', 'Wireless Keyboard kit', 'Mouse PAD', 'Stand'].includes(a.category);
-      else if (selectedCategory === 'Other') matchesCat = ['Cleaning kit', 'Others'].includes(a.category);
-      else matchesCat = a.category === selectedCategory;
+      if (selectedCategory === 'Laptop') {
+          matchesCat = cat.includes('laptop');
+      } else if (selectedCategory === 'Accessories') {
+          matchesCat = cat.includes('mouse') || cat.includes('keyboard') || cat.includes('stand') || cat.includes('pad') || cat.includes('combo');
+      } else if (selectedCategory === 'Headphone') {
+          matchesCat = cat.includes('headphone') || cat.includes('headset');
+      } else if (selectedCategory === 'Other') {
+          matchesCat = cat.includes('cleaning') || cat.includes('other') || (!cat.includes('laptop') && !cat.includes('mouse') && !cat.includes('keyboard') && !cat.includes('stand') && !cat.includes('headphone') && !cat.includes('pad') && !cat.includes('combo'));
+      } else {
+          matchesCat = cat === selectedCategory.toLowerCase();
+      }
     }
+    
     return matchesSearch && matchesCat;
   });
 
@@ -702,8 +748,10 @@ function AssetRegistryContent() {
         <div className="space-y-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {[
-              { name: 'All', icon: <Package size={14}/> }, { name: 'Laptop', icon: <Laptop size={14}/> },
-              { name: 'Accessories', icon: <Mouse size={14}/> }, { name: 'Headphone', icon: <Headphones size={14}/> },
+              { name: 'All', icon: <Package size={14}/> }, 
+              { name: 'Laptop', icon: <Laptop size={14}/> },
+              { name: 'Accessories', icon: <Mouse size={14}/> }, 
+              { name: 'Headphone', icon: <Headphones size={14}/> },
               { name: 'Other', icon: <SlidersHorizontal size={14}/> }
             ].map(cat => (
               <button
@@ -736,7 +784,7 @@ function AssetRegistryContent() {
                 <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
                 <input 
                   type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search by Tag ID, Assets Name, S/N, Holder Name, or EMP Code..." 
+                  placeholder="Search by Brand, Tag ID, Category, Assets Name, S/N, or Staff Name..." 
                   className={`w-full pl-12 pr-4 py-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`}
                 />
               </div>
@@ -765,7 +813,6 @@ function AssetRegistryContent() {
                   <div className={`p-5 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-50'}`}>
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-4">
-                        {/* 🚀 Dynamic Icon Injection logic wrapped securely here */}
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-indigo-500/20 text-indigo-500' : theme.iconBgBlue}`}>
                           {getCategoryIcon(asset.category, 20)}
                         </div>
@@ -1068,7 +1115,7 @@ function AssetRegistryContent() {
                   ) : (
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'For Laptop'}</p></div>
                         <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
                       </div>
 

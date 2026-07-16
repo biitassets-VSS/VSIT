@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, Download, Search, 
   Box, UserCheck, Wrench, BarChart3,
-  Laptop, Keyboard, MousePointer, Headphones, ShieldAlert
+  Laptop, Keyboard, MousePointer, Headphones, ShieldAlert, X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import jsPDF from 'jspdf';
@@ -18,6 +18,7 @@ interface Asset {
   category: string;
   status: 'In Stock (Available)' | 'Assigned' | 'Maintenance' | 'Retired';
   assignedToName?: string;
+  brand?: string;
 }
 
 // Normalized report groups requested by the admin
@@ -31,27 +32,39 @@ type ReportGroup =
   | 'HEADPHONES'
   | 'RETIRED_DISCARD';
 
-// Helper to normalize category names and map "CKM" to the full requested string
-const normalizeCategory = (cat: string) => {
-  if (!cat) return 'Uncategorized';
-  const trimmed = cat.trim();
+// 🌟 DEEP NORMALIZATION ENGINE FOR CATEGORIES
+const normalizeCategory = (cat: string, name: string) => {
+  const c = (cat || '').toLowerCase();
+  const n = (name || '').toLowerCase();
   
-  if (trimmed.toUpperCase() === 'CKM') {
-    return 'Combo Kit Keyboard with Mouse USB Wired';
+  // 1. Combo Kits (Catches CKM, Combo, Keyboard+Mouse)
+  if (c.includes('combo') || n.includes('ckm') || n.includes('combo') || (n.includes('keyboard') && n.includes('mouse'))) {
+    return 'Combo USB Keyboards Mouse Kits';
   }
   
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  // 2. Wireless Keyboards
+  if (n.includes('wireless keyboard') || c.includes('wireless keyboard') || ((c.includes('keyboard') || n.includes('keyboard')) && (c.includes('wireless') || n.includes('wireless')))) {
+    return 'Wireless Keyboards Kit';
+  }
+
+  // 3. Wired/USB Keyboards (Anything keyboard that wasn't caught by combo/wireless)
+  if (c.includes('keyboard') || n.includes('keyboard')) {
+    return 'Keyboard USB';
+  }
+
+  if (!cat) return 'Uncategorized';
+  return cat.trim().charAt(0).toUpperCase() + cat.trim().slice(1).toLowerCase();
 };
 
-// Helper function to dynamically guess the brand from the asset name
+// 🌟 STRICT BRAND DETECTION
 const detectBrand = (name: string) => {
-  if (!name) return 'Generic';
+  if (!name) return 'Other';
   const upperName = name.toUpperCase();
-  // Specified laptop brands: Lenovo, HP, Asus, Dell (plus a few other majors for safety)
-  const brands = ['DELL', 'HP', 'LENOVO', 'ASUS', 'APPLE', 'MACBOOK', 'LOGITECH', 'ACER', 'ZEBRONICS', 'BOAT', 'JBL', 'SONY'];
+  // ONLY explicitly allowed brands for the report
+  const brands = ['DELL', 'HP', 'LENOVO', 'ASUS']; 
   for (const brand of brands) {
     if (upperName.includes(brand)) {
-      return brand === 'MACBOOK' ? 'APPLE' : brand;
+      return brand;
     }
   }
   return 'Other';
@@ -62,20 +75,38 @@ export default function AdminReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportGroup>('CATEGORY_SUMMARY');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  
+  // 🌟 MODAL STATE
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
   // 1. FETCH LIVE DATA FROM SUPABASE
   useEffect(() => {
     const fetchAssets = async () => {
-      const { data, error } = await supabase.from('assets').select('*');
-      if (!error && data) {
-        const mapped: Asset[] = data.map((a) => ({
-          id: a.id,
-          tagId: a.asset_tag || a.tag_id || 'NO-TAG',
-          name: a.name || 'Unnamed Asset',
-          category: normalizeCategory(a.category),
-          status: a.status || 'In Stock (Available)',
-          assignedToName: a.assigned_to,
-        }));
+      // Fetch both profiles (to get assigned staff names) and assets
+      const [{ data: profilesData }, { data: assetsData, error }] = await Promise.all([
+        supabase.from('profiles').select('id, name, full_name, emp_code, email'),
+        supabase.from('assets').select('*')
+      ]);
+
+      if (!error && assetsData) {
+        const mapped: Asset[] = assetsData.map((a) => {
+          // Resolve assigned staff name if assigned_to is a UUID
+          let assignedName = a.assigned_to || 'Not Assigned';
+          if (profilesData && a.assigned_to) {
+            const profile = profilesData.find(p => p.id === a.assigned_to);
+            if (profile) assignedName = `${profile.full_name || profile.name} (${profile.emp_code || profile.email})`;
+          }
+
+          return {
+            id: a.id,
+            tagId: a.asset_tag || a.tag_id || 'NO-TAG',
+            name: a.name || 'Unnamed Asset',
+            category: normalizeCategory(a.category, a.name),
+            status: a.status || 'In Stock (Available)',
+            assignedToName: assignedName,
+            brand: detectBrand(a.name)
+          };
+        });
         setAssets(mapped);
       } else if (error) {
         console.error("Error fetching assets:", error.message);
@@ -87,41 +118,24 @@ export default function AdminReportsPage() {
 
   // --- REPORT GROUP FILTERING DICTIONARY ---
   const matchesReportGroup = (asset: Asset, group: ReportGroup): boolean => {
-    const name = asset.name.toLowerCase();
-    const cat = asset.category.toLowerCase();
+    const cat = asset.category;
     const status = asset.status.toLowerCase();
 
     switch (group) {
       case 'LAPTOPS':
-        return cat.includes('laptop') || name.includes('laptop') || name.includes('macbook');
-      
+        return cat.toLowerCase().includes('laptop');
       case 'WIRELESS_KEYBOARDS':
-        // Bundles "wireless keyboard", "wireless keyboard kit" and variations
-        return name.includes('wireless keyboard') || (name.includes('keyboard') && name.includes('wireless'));
-      
+        return cat === 'Wireless Keyboards Kit';
       case 'COMBO_KITS':
-        // Matches "CKM", "Combo Kit Keyboard with Mouse USB Wired", and basic combo kits
-        return cat.includes('combo kit') || name.includes('ckm') || name.includes('combo') || (name.includes('keyboard') && name.includes('mouse'));
-      
+        return cat === 'Combo USB Keyboards Mouse Kits';
       case 'WIRED_KEYBOARDS':
-        // Specifically isolates "Keyboard", "USB Keyboard", "Wired Keyboard" (exludes wireless/combos)
-        return (name.includes('keyboard') || cat.includes('keyboard')) 
-               && !name.includes('wireless') 
-               && !name.includes('combo')
-               && !cat.includes('combo');
-      
+        return cat === 'Keyboard USB';
       case 'WIRED_MICE':
-        return (name.includes('mouse') || cat.includes('mouse')) 
-               && !name.includes('wireless') 
-               && !name.includes('combo')
-               && !cat.includes('combo');
-      
+        return cat.toLowerCase().includes('mouse') && !cat.toLowerCase().includes('combo');
       case 'HEADPHONES':
-        return cat.includes('headphone') || name.includes('headphone') || name.includes('headset') || name.includes('earphone');
-      
+        return cat.toLowerCase().includes('headphone') || cat.toLowerCase().includes('headset') || cat.toLowerCase().includes('earphone');
       case 'RETIRED_DISCARD':
         return status.includes('retired') || status.includes('discard') || status.includes('scrap');
-      
       default:
         return true;
     }
@@ -141,7 +155,7 @@ export default function AdminReportsPage() {
         a.name.toLowerCase().includes(q) || 
         a.tagId.toLowerCase().includes(q) ||
         a.category.toLowerCase().includes(q) ||
-        detectBrand(a.name).toLowerCase().includes(q)
+        (a.brand && a.brand.toLowerCase().includes(q))
       );
     }
     return result;
@@ -149,15 +163,14 @@ export default function AdminReportsPage() {
 
   // --- DYNAMIC BRAND BREAKDOWN SUMMARY ---
   const brandSummary = useMemo(() => {
-    // Isolate targeting set based on report selection
     const targetAssets = activeReport === 'CATEGORY_SUMMARY' 
       ? assets 
       : assets.filter(a => matchesReportGroup(a, activeReport));
 
-    const brands = Array.from(new Set(targetAssets.map(a => detectBrand(a.name))));
+    const brands = Array.from(new Set(targetAssets.map(a => a.brand || 'Other')));
     
     return brands.map(brand => {
-      const bAssets = targetAssets.filter(a => detectBrand(a.name) === brand);
+      const bAssets = targetAssets.filter(a => a.brand === brand);
       return {
         brand: brand,
         total: bAssets.length,
@@ -190,9 +203,9 @@ export default function AdminReportsPage() {
     return group
       .replace('CATEGORY_SUMMARY', 'Category Global Summary')
       .replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)')
-      .replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory')
-      .replace('COMBO_KITS', 'Keyboard & Mouse Combo Kits (CKM)')
-      .replace('WIRED_KEYBOARDS', 'Wired USB Keyboards')
+      .replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Kits Inventory')
+      .replace('COMBO_KITS', 'Combo USB Keyboards Mouse Kits')
+      .replace('WIRED_KEYBOARDS', 'Keyboard USB Inventory')
       .replace('WIRED_MICE', 'Wired USB Mice')
       .replace('HEADPHONES', 'Headphones & Audio Gear')
       .replace('RETIRED_DISCARD', 'Discarded & Retired Hardware Assets');
@@ -223,7 +236,6 @@ export default function AdminReportsPage() {
         c.retired.toString()
       ]);
     } else {
-      // Append secondary metrics table displaying the Brand matrix first
       doc.setFontSize(14);
       doc.text("Operational Brand Summary Matrix", 14, 43);
       
@@ -231,26 +243,26 @@ export default function AdminReportsPage() {
         head: [["Brand Profile", "Total Profile", "Available (In Stock)", "Assigned Out", "Maintenance", "Retired"]],
         body: brandSummary.map(b => [b.brand, b.total.toString(), b.inStock.toString(), b.assigned.toString(), b.maintenance.toString(), b.retired.toString()]),
         startY: 48,
-        headStyles: { fillColor: [79, 70, 229] }, // Slate Purple Accent
+        headStyles: { fillColor: [79, 70, 229] }, 
       });
 
-      // Break off lower data down into the serialized asset registers list
       const nextY = (doc as any).lastAutoTable.finalY + 12;
       doc.text("Individual Asset Serialization Register Logs", 14, nextY);
 
-      columns = ["Asset Identification Name", "Hardware Tag ID", "Calculated Brand", "Operational Status Status"];
+      columns = ["Asset Name", "Tag ID", "Brand", "Status", "Assigned To"];
       rows = filteredAssets.map(a => [
         a.name, 
         a.tagId, 
-        detectBrand(a.name), 
-        a.status
+        a.brand || 'Other', 
+        a.status,
+        a.assignedToName && a.status === 'Assigned' ? a.assignedToName : 'N/A'
       ]);
 
       autoTable(doc, {
         head: [columns],
         body: rows,
         startY: nextY + 5,
-        headStyles: { fillColor: [0, 139, 116] }, // Teal Accent
+        headStyles: { fillColor: [0, 139, 116] }, 
       });
       
       doc.save(`VSIT_${activeReport}_Report_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -270,8 +282,68 @@ export default function AdminReportsPage() {
   if (!isLoaded) return <div className="p-10 text-center font-bold text-xs tracking-widest text-indigo-600 animate-pulse uppercase">Syncing Real-time Asset Logs...</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10 bg-[#F8FAFC] min-h-screen p-4 md:p-8 font-sans antialiased text-slate-900">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10 bg-[#F8FAFC] min-h-screen p-4 md:p-8 font-sans antialiased text-slate-900 relative">
       
+      {/* 🌟 ASSET DETAILS MODAL 🌟 */}
+      {selectedAsset && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                <Laptop className="text-indigo-600"/> Asset Details
+              </h3>
+              <button onClick={() => setSelectedAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer">
+                <X size={18}/>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Hardware Name</span>
+                <p className="font-black text-slate-900 text-lg leading-tight mt-0.5">{selectedAsset.name}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Tag ID</span>
+                  <p className="font-mono text-sm font-bold text-indigo-600">{selectedAsset.tagId}</p>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Brand</span>
+                  <p className="font-bold text-sm text-slate-800">{selectedAsset.brand}</p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">System Category</span>
+                <p className="font-semibold text-sm text-slate-700">{selectedAsset.category}</p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <div>
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Current Status</span>
+                  <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black tracking-wide uppercase border ${
+                    selectedAsset.status === 'In Stock (Available)' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                    selectedAsset.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                    selectedAsset.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-200/60' :
+                    'bg-rose-50 text-rose-700 border-rose-200/60'
+                  }`}>
+                    {selectedAsset.status}
+                  </span>
+                </div>
+                
+                <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100">
+                  <span className="text-[10px] uppercase tracking-widest font-black text-blue-400 block mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Details</span>
+                  <p className="font-bold text-sm text-blue-900 mt-1">
+                    {selectedAsset.status === 'Assigned' ? selectedAsset.assignedToName : 'Not currently assigned to staff.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Widget */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -304,9 +376,9 @@ export default function AdminReportsPage() {
           
           {[
             { id: 'LAPTOPS', label: 'Laptops Registers', icon: <Laptop size={16}/> },
-            { id: 'WIRELESS_KEYBOARDS', label: 'Wireless Keyboards', icon: <Keyboard size={16}/> },
+            { id: 'WIRELESS_KEYBOARDS', label: 'Wireless Keyboards Kits', icon: <Keyboard size={16}/> },
             { id: 'COMBO_KITS', label: 'Combo Desktop Kits', icon: <Box size={16}/> },
-            { id: 'WIRED_KEYBOARDS', label: 'Wired USB Keyboards', icon: <Keyboard size={16}/> },
+            { id: 'WIRED_KEYBOARDS', label: 'Keyboard USB', icon: <Keyboard size={16}/> },
             { id: 'WIRED_MICE', label: 'Wired USB Mice', icon: <MousePointer size={16}/> },
             { id: 'HEADPHONES', label: 'Headphones & Audio', icon: <Headphones size={16}/> },
             { id: 'RETIRED_DISCARD', label: 'Retired / Scraped Ledger', icon: <ShieldAlert size={16}/> },
@@ -447,10 +519,16 @@ export default function AdminReportsPage() {
                         filteredAssets.map((a) => (
                           <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="p-4">
-                              <span className="text-slate-900 font-extrabold text-sm">{a.name}</span><br/>
-                              <span className="text-[10px] text-slate-400 font-mono tracking-wider mt-0.5 inline-block">Tag: {a.tagId}</span>
+                              {/* 🌟 HYPERLINK BUTTON FOR ASSET MODAL 🌟 */}
+                              <button 
+                                onClick={() => setSelectedAsset(a)}
+                                className="text-indigo-600 hover:text-indigo-800 text-left group flex flex-col cursor-pointer transition-colors"
+                              >
+                                <span className="font-extrabold text-sm group-hover:underline">{a.name}</span>
+                                <span className="text-[10px] text-slate-400 font-mono tracking-wider mt-0.5 no-underline">Tag: {a.tagId}</span>
+                              </button>
                             </td>
-                            <td className="p-4 font-black text-slate-600 uppercase tracking-wide">{detectBrand(a.name)}</td>
+                            <td className="p-4 font-black text-slate-600 uppercase tracking-wide">{a.brand}</td>
                             <td className="p-4">
                               <span className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-wide uppercase border ${
                                 a.status === 'In Stock (Available)' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
