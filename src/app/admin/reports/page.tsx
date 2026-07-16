@@ -16,12 +16,11 @@ interface Asset {
   tagId: string;
   name: string;
   category: string;
-  status: 'In Stock (Available)' | 'Assigned' | 'Maintenance' | 'Retired';
+  status: 'In Use' | 'Available' | 'Pending Return' | 'Discarded';
   assignedToName?: string;
   brand?: string;
 }
 
-// Normalized report groups requested by the admin
 type ReportGroup = 
   | 'CATEGORY_SUMMARY'
   | 'LAPTOPS'
@@ -37,36 +36,52 @@ const normalizeCategory = (cat: string, name: string) => {
   const c = (cat || '').toLowerCase();
   const n = (name || '').toLowerCase();
   
-  // 1. Combo Kits (Catches CKM, Combo, Keyboard+Mouse)
-  if (c.includes('combo') || n.includes('ckm') || n.includes('combo') || (n.includes('keyboard') && n.includes('mouse'))) {
-    return 'Combo USB Keyboards Mouse Kits';
-  }
+  if (c.includes('laptop') || n.includes('laptop')) return 'Laptop';
+  if (c.includes('headphone') || n.includes('headphone') || c.includes('headset') || n.includes('earphone')) return 'Headphone';
+  if (c.includes('combo') || n.includes('ckm') || (n.includes('keyboard') && n.includes('mouse'))) return 'Combo Kit (Keyboard + Mouse)';
+  if (c.includes('wireless') && (c.includes('keyboard') || n.includes('keyboard'))) return 'Wireless Keyboard';
+  if (c.includes('keyboard') || n.includes('keyboard')) return 'USB Wired Keyboard';
+  if (c.includes('mouse') || n.includes('mouse')) return 'USB Wired Mouse';
+  if (c.includes('monitor') || n.includes('monitor') || n.includes('display')) return 'Monitor';
   
-  // 2. Wireless Keyboards
-  if (n.includes('wireless keyboard') || c.includes('wireless keyboard') || ((c.includes('keyboard') || n.includes('keyboard')) && (c.includes('wireless') || n.includes('wireless')))) {
-    return 'Wireless Keyboards Kit';
-  }
-
-  // 3. Wired/USB Keyboards (Anything keyboard that wasn't caught by combo/wireless)
-  if (c.includes('keyboard') || n.includes('keyboard')) {
-    return 'Keyboard USB';
-  }
-
-  if (!cat) return 'Uncategorized';
+  if (!cat) return 'Other / Uncategorized';
   return cat.trim().charAt(0).toUpperCase() + cat.trim().slice(1).toLowerCase();
 };
 
-// 🌟 STRICT BRAND DETECTION
-const detectBrand = (name: string) => {
-  if (!name) return 'Other';
-  const upperName = name.toUpperCase();
-  // ONLY explicitly allowed brands for the report
-  const brands = ['DELL', 'HP', 'LENOVO', 'ASUS']; 
-  for (const brand of brands) {
-    if (upperName.includes(brand)) {
-      return brand;
-    }
+// 🌟 EXACT STATUS BUCKET ENFORCEMENT
+const normalizeStatus = (status: string): Asset['status'] => {
+  const s = (status || '').toLowerCase().trim();
+  
+  if (s === 'discarded' || s.includes('discard') || s.includes('scrap') || s.includes('retire')) return 'Discarded';
+  if (s === 'pending return' || s.includes('return requested') || s.includes('pending')) return 'Pending Return';
+  if (s === 'in use' || s.includes('assign') || s.includes('deployed')) return 'In Use';
+  
+  // Fallback for Available, In Stock, etc.
+  return 'Available'; 
+};
+
+// 🌟 ADVANCED BRAND RECOGNITION ENGINE (FIXED BUG)
+// This catches model lines (like TUF, ThinkPad, ProBook) even if the user forgot to type the brand name.
+const extractBrand = (dbBrand: string | undefined, name: string) => {
+  const textToSearch = `${dbBrand || ''} ${name || ''}`.toUpperCase();
+
+  if (/(ASUS|TUF|ROG|ZENBOOK|VIVOBOOK|EXPERTBOOK)/.test(textToSearch)) return 'ASUS';
+  if (/(DELL|LATITUDE|INSPIRON|OPTIPLEX|VOSTRO|XPS|ALIENWARE|PRECISION)/.test(textToSearch)) return 'DELL';
+  if (/(LENOVO|THINKPAD|IDEAPAD|YOGA|THINKBOOK|LEGION|THINKCENTRE)/.test(textToSearch)) return 'LENOVO';
+  if (/(HP|HEWLETT|PROBOOK|ELITEBOOK|PAVILION|ZBOOK|SPECTRE|ENVY|OMEN)/.test(textToSearch)) return 'HP';
+  if (/(APPLE|MACBOOK|IMAC|MAC MINI|MAC STUDIO|IPAD)/.test(textToSearch)) return 'APPLE';
+  if (/(ACER|PREDATOR|NITRO|SWIFT|ASPIRE|SPIN)/.test(textToSearch)) return 'ACER';
+  if (/(MICROSOFT|SURFACE)/.test(textToSearch)) return 'MICROSOFT';
+  if (/(LOGITECH|LOGI)/.test(textToSearch)) return 'LOGITECH';
+  if (/(ZEBRONICS|ZEB-)/.test(textToSearch)) return 'ZEBRONICS';
+  if (/(SAMSUNG)/.test(textToSearch)) return 'SAMSUNG';
+  if (/(LG)/.test(textToSearch)) return 'LG';
+
+  // If we can't find a known brand mapping, but the database explicitly has a brand written, use that
+  if (dbBrand && dbBrand.trim().length > 1) {
+    return dbBrand.trim().toUpperCase();
   }
+
   return 'Other';
 };
 
@@ -76,13 +91,11 @@ export default function AdminReportsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // 🌟 MODAL STATE
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
-  // 1. FETCH LIVE DATA FROM SUPABASE
+  // 1. FETCH AND COMPILING DATA
   useEffect(() => {
     const fetchAssets = async () => {
-      // Fetch both profiles (to get assigned staff names) and assets
       const [{ data: profilesData }, { data: assetsData, error }] = await Promise.all([
         supabase.from('profiles').select('id, name, full_name, emp_code, email'),
         supabase.from('assets').select('*')
@@ -90,7 +103,6 @@ export default function AdminReportsPage() {
 
       if (!error && assetsData) {
         const mapped: Asset[] = assetsData.map((a) => {
-          // Resolve assigned staff name if assigned_to is a UUID
           let assignedName = a.assigned_to || 'Not Assigned';
           if (profilesData && a.assigned_to) {
             const profile = profilesData.find(p => p.id === a.assigned_to);
@@ -102,9 +114,9 @@ export default function AdminReportsPage() {
             tagId: a.asset_tag || a.tag_id || 'NO-TAG',
             name: a.name || 'Unnamed Asset',
             category: normalizeCategory(a.category, a.name),
-            status: a.status || 'In Stock (Available)',
+            status: normalizeStatus(a.status), 
             assignedToName: assignedName,
-            brand: detectBrand(a.name)
+            brand: extractBrand(a.brand, a.name) // Using the new deep search engine
           };
         });
         setAssets(mapped);
@@ -116,32 +128,22 @@ export default function AdminReportsPage() {
     fetchAssets();
   }, []);
 
-  // --- REPORT GROUP FILTERING DICTIONARY ---
   const matchesReportGroup = (asset: Asset, group: ReportGroup): boolean => {
     const cat = asset.category;
-    const status = asset.status.toLowerCase();
+    const status = asset.status;
 
     switch (group) {
-      case 'LAPTOPS':
-        return cat.toLowerCase().includes('laptop');
-      case 'WIRELESS_KEYBOARDS':
-        return cat === 'Wireless Keyboards Kit';
-      case 'COMBO_KITS':
-        return cat === 'Combo USB Keyboards Mouse Kits';
-      case 'WIRED_KEYBOARDS':
-        return cat === 'Keyboard USB';
-      case 'WIRED_MICE':
-        return cat.toLowerCase().includes('mouse') && !cat.toLowerCase().includes('combo');
-      case 'HEADPHONES':
-        return cat.toLowerCase().includes('headphone') || cat.toLowerCase().includes('headset') || cat.toLowerCase().includes('earphone');
-      case 'RETIRED_DISCARD':
-        return status.includes('retired') || status.includes('discard') || status.includes('scrap');
-      default:
-        return true;
+      case 'LAPTOPS': return cat === 'Laptop';
+      case 'WIRELESS_KEYBOARDS': return cat === 'Wireless Keyboard';
+      case 'COMBO_KITS': return cat === 'Combo Kit (Keyboard + Mouse)';
+      case 'WIRED_KEYBOARDS': return cat === 'USB Wired Keyboard';
+      case 'WIRED_MICE': return cat === 'USB Wired Mouse';
+      case 'HEADPHONES': return cat === 'Headphone';
+      case 'RETIRED_DISCARD': return status === 'Discarded';
+      default: return true;
     }
   };
 
-  // --- FILTERING ASSETS VIEW ---
   const filteredAssets = useMemo(() => {
     let result = assets;
 
@@ -161,7 +163,7 @@ export default function AdminReportsPage() {
     return result;
   }, [activeReport, searchQuery, assets]);
 
-  // --- DYNAMIC BRAND BREAKDOWN SUMMARY ---
+  // 🌟 BRAND BREAKDOWN SUMMARY CALCULATOR
   const brandSummary = useMemo(() => {
     const targetAssets = activeReport === 'CATEGORY_SUMMARY' 
       ? assets 
@@ -174,15 +176,15 @@ export default function AdminReportsPage() {
       return {
         brand: brand,
         total: bAssets.length,
-        inStock: bAssets.filter(a => a.status === 'In Stock (Available)').length,
-        assigned: bAssets.filter(a => a.status === 'Assigned').length,
-        maintenance: bAssets.filter(a => a.status === 'Maintenance').length,
-        retired: bAssets.filter(a => a.status === 'Retired').length,
+        inUse: bAssets.filter(a => a.status === 'In Use').length,
+        available: bAssets.filter(a => a.status === 'Available').length,
+        pendingReturn: bAssets.filter(a => a.status === 'Pending Return').length,
+        discarded: bAssets.filter(a => a.status === 'Discarded').length,
       };
-    });
+    }).sort((a, b) => b.total - a.total); 
   }, [activeReport, assets]);
 
-  // --- ADVANCED CATEGORY CONFIGURATION ENGINE ---
+  // --- CATEGORY SUMMARY BREAKDOWN ---
   const categorySummary = useMemo(() => {
     const categories = Array.from(new Set(assets.map(a => a.category)));
     return categories.map(cat => {
@@ -190,28 +192,27 @@ export default function AdminReportsPage() {
       return {
         category: cat,
         total: catAssets.length,
-        inStock: catAssets.filter(a => a.status === 'In Stock (Available)').length,
-        assigned: catAssets.filter(a => a.status === 'Assigned').length,
-        repair: catAssets.filter(a => a.status === 'Maintenance').length,
-        retired: catAssets.filter(a => a.status === 'Retired').length,
+        inUse: catAssets.filter(a => a.status === 'In Use').length,
+        available: catAssets.filter(a => a.status === 'Available').length,
+        pendingReturn: catAssets.filter(a => a.status === 'Pending Return').length,
+        discarded: catAssets.filter(a => a.status === 'Discarded').length,
       };
-    });
+    }).sort((a, b) => b.total - a.total);
   }, [assets]);
 
-  // --- AUTOMATED REPORT FORMATTER FOR TITLE IN PDF ---
   const getGroupTitle = (group: ReportGroup) => {
     return group
       .replace('CATEGORY_SUMMARY', 'Category Global Summary')
       .replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)')
-      .replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Kits Inventory')
-      .replace('COMBO_KITS', 'Combo USB Keyboards Mouse Kits')
-      .replace('WIRED_KEYBOARDS', 'Keyboard USB Inventory')
-      .replace('WIRED_MICE', 'Wired USB Mice')
+      .replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory')
+      .replace('COMBO_KITS', 'Combo Kits (Keyboard + Mouse)')
+      .replace('WIRED_KEYBOARDS', 'USB Wired Keyboards Inventory')
+      .replace('WIRED_MICE', 'USB Wired Mice Inventory')
       .replace('HEADPHONES', 'Headphones & Audio Gear')
-      .replace('RETIRED_DISCARD', 'Discarded & Retired Hardware Assets');
+      .replace('RETIRED_DISCARD', 'Discarded Ledger Records');
   };
 
-  // --- PDF EXPORT FUNCTION ENGINE ---
+  // --- PDF EXPORT FUNCTION ---
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
@@ -226,36 +227,36 @@ export default function AdminReportsPage() {
     let rows: string[][] = [];
 
     if (activeReport === 'CATEGORY_SUMMARY') {
-      columns = ["Category Profile", "Total Count", "Assigned Out", "In Stock", "Under Maintenance", "Retired / Scrap"];
+      columns = ["Category Profile Name", "Total Inventory", "In Use", "Available", "Pending Return", "Discarded"];
       rows = categorySummary.map(c => [
         c.category, 
         c.total.toString(), 
-        c.assigned.toString(), 
-        c.inStock.toString(), 
-        c.repair.toString(),
-        c.retired.toString()
+        c.inUse.toString(), 
+        c.available.toString(), 
+        c.pendingReturn.toString(),
+        c.discarded.toString()
       ]);
     } else {
       doc.setFontSize(14);
-      doc.text("Operational Brand Summary Matrix", 14, 43);
+      doc.text("Brand-Wise Matrix Configuration Summary", 14, 43);
       
       autoTable(doc, {
-        head: [["Brand Profile", "Total Profile", "Available (In Stock)", "Assigned Out", "Maintenance", "Retired"]],
-        body: brandSummary.map(b => [b.brand, b.total.toString(), b.inStock.toString(), b.assigned.toString(), b.maintenance.toString(), b.retired.toString()]),
+        head: [["Brand Profile", "Total Count", "In Use", "Available", "Pending Return", "Discarded"]],
+        body: brandSummary.map(b => [b.brand, b.total.toString(), b.inUse.toString(), b.available.toString(), b.pendingReturn.toString(), b.discarded.toString()]),
         startY: 48,
         headStyles: { fillColor: [79, 70, 229] }, 
       });
 
       const nextY = (doc as any).lastAutoTable.finalY + 12;
-      doc.text("Individual Asset Serialization Register Logs", 14, nextY);
+      doc.text("Individual Serialized Register Tracking Logs", 14, nextY);
 
-      columns = ["Asset Name", "Tag ID", "Brand", "Status", "Assigned To"];
+      columns = ["Asset Name", "Tag ID", "Brand", "Status Mapping", "Assigned Holder Details"];
       rows = filteredAssets.map(a => [
         a.name, 
         a.tagId, 
         a.brand || 'Other', 
         a.status,
-        a.assignedToName && a.status === 'Assigned' ? a.assignedToName : 'N/A'
+        a.status === 'In Use' ? (a.assignedToName || 'N/A') : 'N/A'
       ]);
 
       autoTable(doc, {
@@ -299,7 +300,7 @@ export default function AdminReportsPage() {
             
             <div className="p-6 space-y-5">
               <div>
-                <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Hardware Name</span>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Hardware Specifications</span>
                 <p className="font-black text-slate-900 text-lg leading-tight mt-0.5">{selectedAsset.name}</p>
               </div>
               
@@ -309,23 +310,18 @@ export default function AdminReportsPage() {
                   <p className="font-mono text-sm font-bold text-indigo-600">{selectedAsset.tagId}</p>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Brand</span>
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Detected Brand</span>
                   <p className="font-bold text-sm text-slate-800">{selectedAsset.brand}</p>
                 </div>
               </div>
 
-              <div>
-                <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">System Category</span>
-                <p className="font-semibold text-sm text-slate-700">{selectedAsset.category}</p>
-              </div>
-
               <div className="pt-4 border-t border-slate-100 space-y-4">
                 <div>
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Current Status</span>
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Current Real Status</span>
                   <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black tracking-wide uppercase border ${
-                    selectedAsset.status === 'In Stock (Available)' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                    selectedAsset.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
-                    selectedAsset.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-200/60' :
+                    selectedAsset.status === 'Available' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                    selectedAsset.status === 'In Use' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                    selectedAsset.status === 'Pending Return' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
                     'bg-rose-50 text-rose-700 border-rose-200/60'
                   }`}>
                     {selectedAsset.status}
@@ -333,9 +329,9 @@ export default function AdminReportsPage() {
                 </div>
                 
                 <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100">
-                  <span className="text-[10px] uppercase tracking-widest font-black text-blue-400 block mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Details</span>
+                  <span className="text-[10px] uppercase tracking-widest font-black text-blue-400 block mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Information</span>
                   <p className="font-bold text-sm text-blue-900 mt-1">
-                    {selectedAsset.status === 'Assigned' ? selectedAsset.assignedToName : 'Not currently assigned to staff.'}
+                    {selectedAsset.status === 'In Use' ? selectedAsset.assignedToName : 'Not currently assigned out.'}
                   </p>
                 </div>
               </div>
@@ -350,7 +346,7 @@ export default function AdminReportsPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <FileText className="text-indigo-600" size={26} /> VSIT Advanced Metrics Engine
           </h1>
-          <p className="text-xs font-semibold text-slate-500 mt-1">Extract high-fidelity brand profiles, deployment summaries, and scraps configurations records.</p>
+          <p className="text-xs font-semibold text-slate-500 mt-1">Extract high-fidelity brand profiles, deployment summaries, and configurations records matrix logs.</p>
         </div>
         <button onClick={handleExportPDF} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl shadow-xs transition-colors font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer">
           <Download size={16} /> Compile PDF Blueprint
@@ -359,7 +355,7 @@ export default function AdminReportsPage() {
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         
-        {/* Extended Sidebar Navigation Filter Panel */}
+        {/* Sidebar Navigation Filter Panel */}
         <div className="w-full lg:w-72 shrink-0 space-y-1 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Global Summary Matrix</h3>
           <button onClick={() => setActiveReport('CATEGORY_SUMMARY')}
@@ -378,10 +374,10 @@ export default function AdminReportsPage() {
             { id: 'LAPTOPS', label: 'Laptops Registers', icon: <Laptop size={16}/> },
             { id: 'WIRELESS_KEYBOARDS', label: 'Wireless Keyboards Kits', icon: <Keyboard size={16}/> },
             { id: 'COMBO_KITS', label: 'Combo Desktop Kits', icon: <Box size={16}/> },
-            { id: 'WIRED_KEYBOARDS', label: 'Keyboard USB', icon: <Keyboard size={16}/> },
-            { id: 'WIRED_MICE', label: 'Wired USB Mice', icon: <MousePointer size={16}/> },
+            { id: 'WIRED_KEYBOARDS', label: 'USB Wired Keyboards', icon: <Keyboard size={16}/> },
+            { id: 'WIRED_MICE', label: 'USB Wired Mice', icon: <MousePointer size={16}/> },
             { id: 'HEADPHONES', label: 'Headphones & Audio', icon: <Headphones size={16}/> },
-            { id: 'RETIRED_DISCARD', label: 'Retired / Scraped Ledger', icon: <ShieldAlert size={16}/> },
+            { id: 'RETIRED_DISCARD', label: 'Discarded Asset Ledger', icon: <ShieldAlert size={16}/> },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveReport(tab.id as ReportGroup)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
@@ -394,16 +390,16 @@ export default function AdminReportsPage() {
           ))}
         </div>
 
-        {/* Core Processing Canvas Panel */}
+        {/* Core Processing Panel */}
         <div className="flex-1 w-full space-y-5">
           
-          {/* Real-time Textual Search Filter Widget */}
+          {/* Textual Search Filter Widget */}
           <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text" 
-                placeholder={`Query metrics inside ${activeReport.replace('_',' ')}...`} 
+                placeholder={`Search inside ${activeReport.replace('_',' ')}...`} 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none text-xs font-bold text-slate-900 placeholder:text-slate-400 transition-all" 
@@ -411,29 +407,31 @@ export default function AdminReportsPage() {
             </div>
           </div>
 
-          {/* DYNAMIC CARD-SUMMARY GRID MATRIX PANEL FOR SPECIFIC GROUPS */}
-          {activeReport !== 'CATEGORY_SUMMARY' && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-                <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Total Profiled</p>
-                <h3 className="text-2xl font-black text-slate-900 mt-1">{filteredAssets.length}</h3>
-              </div>
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-                <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">In Stock (Available)</p>
-                <h3 className="text-2xl font-black text-emerald-600 mt-1">{filteredAssets.filter(a => a.status === 'In Stock (Available)').length}</h3>
-              </div>
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-                <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Assigned Out</p>
-                <h3 className="text-2xl font-black text-blue-600 mt-1">{filteredAssets.filter(a => a.status === 'Assigned').length}</h3>
-              </div>
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-                <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Under Repair / Scrap</p>
-                <h3 className="text-2xl font-black text-orange-500 mt-1">{filteredAssets.filter(a => a.status === 'Maintenance' || a.status === 'Retired').length}</h3>
-              </div>
+          {/* DYNAMIC METRIC CARDS */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-in fade-in duration-300">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Total Count</p>
+              <h3 className="text-xl font-black text-slate-900 mt-1">{filteredAssets.length}</h3>
             </div>
-          )}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">In Use</p>
+              <h3 className="text-xl font-black text-blue-600 mt-1">{filteredAssets.filter(a => a.status === 'In Use').length}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Available</p>
+              <h3 className="text-xl font-black text-emerald-600 mt-1">{filteredAssets.filter(a => a.status === 'Available').length}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Pending Return</p>
+              <h3 className="text-xl font-black text-amber-500 mt-1">{filteredAssets.filter(a => a.status === 'Pending Return').length}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+              <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Discarded</p>
+              <h3 className="text-xl font-black text-rose-600 mt-1">{filteredAssets.filter(a => a.status === 'Discarded').length}</h3>
+            </div>
+          </div>
 
-          {/* Core Visualized Spreadsheet Data Matrix Elements */}
+          {/* Visualized Table Grid */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{getGroupTitle(activeReport)}</h3>
@@ -446,10 +444,10 @@ export default function AdminReportsPage() {
                     <tr>
                       <th className="p-4">Category System Profile</th>
                       <th className="p-4">Total Inventory</th>
-                      <th className="p-4">Assigned Out</th>
-                      <th className="p-4">In Stock Available</th>
-                      <th className="p-4">Under Repair</th>
-                      <th className="p-4">Retired / Scrap</th>
+                      <th className="p-4">In Use</th>
+                      <th className="p-4">Available</th>
+                      <th className="p-4">Pending Return</th>
+                      <th className="p-4">Discarded</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-bold">
@@ -457,10 +455,10 @@ export default function AdminReportsPage() {
                       <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-4 text-slate-900">{cat.category}</td>
                         <td className="p-4 text-slate-600">{cat.total}</td>
-                        <td className="p-4 text-blue-600">{cat.assigned}</td>
-                        <td className="p-4 text-indigo-600">{cat.inStock}</td>
-                        <td className="p-4 text-orange-500">{cat.repair}</td>
-                        <td className="p-4 text-rose-500">{cat.retired}</td>
+                        <td className="p-4 text-blue-600">{cat.inUse}</td>
+                        <td className="p-4 text-emerald-600">{cat.available}</td>
+                        <td className="p-4 text-amber-500">{cat.pendingReturn}</td>
+                        <td className="p-4 text-rose-500">{cat.discarded}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -469,19 +467,19 @@ export default function AdminReportsPage() {
             ) : (
               <div className="space-y-6">
                 
-                {/* Brand Summary Nested Table Matrix View inside specific target groups */}
+                {/* 🌟 BRAND-WISE LIVE SUMMARY MATRIX LOG VIEW */}
                 <div className="p-4 bg-slate-50/40 rounded-2xl border border-slate-100 mx-5 mt-4">
-                  <h4 className="text-[10px] font-black uppercase text-indigo-800 tracking-wider mb-2">Dynamic Brand Configuration Summary</h4>
+                  <h4 className="text-[10px] font-black uppercase text-indigo-800 tracking-wider mb-2">Dynamic Brand Configuration Summary Matrix</h4>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[500px]">
                       <thead className="text-[9px] uppercase font-black text-slate-400 tracking-wider border-b border-slate-200/60">
                         <tr>
                           <th className="pb-2">Brand Profile</th>
                           <th className="pb-2">Total Pack</th>
-                          <th className="pb-2">Available In Stock</th>
-                          <th className="pb-2">Active Assignment</th>
-                          <th className="pb-2">Maintenance</th>
-                          <th className="pb-2">Retired</th>
+                          <th className="pb-2">In Use</th>
+                          <th className="pb-2">Available</th>
+                          <th className="pb-2">Pending Return</th>
+                          <th className="pb-2">Discarded</th>
                         </tr>
                       </thead>
                       <tbody className="text-xs font-bold text-slate-700 divide-y divide-slate-200/40">
@@ -489,10 +487,10 @@ export default function AdminReportsPage() {
                           <tr key={idx} className="hover:bg-white/50">
                             <td className="py-2.5 font-black text-slate-900">{b.brand}</td>
                             <td className="py-2.5">{b.total}</td>
-                            <td className="py-2.5 text-indigo-600">{b.inStock}</td>
-                            <td className="py-2.5 text-blue-600">{b.assigned}</td>
-                            <td className="py-2.5 text-orange-500">{b.maintenance}</td>
-                            <td className="py-2.5 text-rose-500">{b.retired}</td>
+                            <td className="py-2.5 text-blue-600">{b.inUse}</td>
+                            <td className="py-2.5 text-emerald-600">{b.available}</td>
+                            <td className="py-2.5 text-amber-500">{b.pendingReturn}</td>
+                            <td className="py-2.5 text-rose-500">{b.discarded}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -500,26 +498,25 @@ export default function AdminReportsPage() {
                   </div>
                 </div>
 
-                {/* Main Individual Registry Log Entries Output */}
+                {/* Serial Logs output */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-black tracking-widest border-b border-slate-200">
                       <tr>
-                        <th className="p-4">Asset Specifications Name</th>
-                        <th className="p-4">Calculated Brand</th>
-                        <th className="p-4">Operational Status Badge</th>
+                        <th className="p-4">Asset Identification Name</th>
+                        <th className="p-4">Brand Profile</th>
+                        <th className="p-4">Current Verified Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs font-bold">
                       {filteredAssets.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="p-10 text-center text-slate-400 font-medium">No serialized assets matched the selected report criteria matrix logs.</td>
+                          <td colSpan={3} className="p-10 text-center text-slate-400 font-medium">No serialized assets matched the selected matrix criteria.</td>
                         </tr>
                       ) : (
                         filteredAssets.map((a) => (
                           <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="p-4">
-                              {/* 🌟 HYPERLINK BUTTON FOR ASSET MODAL 🌟 */}
                               <button 
                                 onClick={() => setSelectedAsset(a)}
                                 className="text-indigo-600 hover:text-indigo-800 text-left group flex flex-col cursor-pointer transition-colors"
@@ -531,9 +528,9 @@ export default function AdminReportsPage() {
                             <td className="p-4 font-black text-slate-600 uppercase tracking-wide">{a.brand}</td>
                             <td className="p-4">
                               <span className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-wide uppercase border ${
-                                a.status === 'In Stock (Available)' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                                a.status === 'Assigned' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
-                                a.status === 'Maintenance' ? 'bg-orange-50 text-orange-700 border-orange-200/60' :
+                                a.status === 'Available' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                                a.status === 'In Use' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                                a.status === 'Pending Return' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
                                 'bg-rose-50 text-rose-700 border-rose-200/60'
                               }`}>
                                 {a.status}
