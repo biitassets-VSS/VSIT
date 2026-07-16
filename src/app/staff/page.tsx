@@ -1,16 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell, LogOut, RotateCcw, 
-  Megaphone, ThumbsUp, Heart, ThumbsDown
+  Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
+  ThumbsUp, ThumbsDown
 } from 'lucide-react';
-import NotificationManager from '@/components/NotificationManager';
 
 // 🌟 THE AUDIT WINDOW ENGINE
 function getAuditWindowInfo() {
@@ -39,128 +38,18 @@ function getAuditWindowInfo() {
   };
 }
 
-// 🌟 FIXED STAFF BROADCAST WIDGET
-function StaffBroadcastWidget({ userId }: { userId: string }) {
-  const [broadcast, setBroadcast] = useState<any>(null);
-  const [myReaction, setMyReaction] = useState<string | null>(null);
-  const [isFadingOut, setIsFadingOut] = useState(false);
-
-  useEffect(() => {
-    if (userId) fetchLatestBroadcast();
-  }, [userId]);
-
-  const fetchLatestBroadcast = async () => {
-    try {
-      const { data: bData } = await supabase
-        .from('broadcasts')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (bData) {
-        // 1. Check Local Browser Storage First (Fixes the refresh bug instantly)
-        const localReacted = JSON.parse(localStorage.getItem('reacted_broadcasts') || '[]');
-        if (localReacted.includes(bData.id)) {
-          setBroadcast(null); // Keep it hidden forever
-          return;
-        }
-
-        if (userId && userId !== 'guest-mock-uuid') {
-          // 2. Check Database as a backup
-          const { data: rData } = await supabase
-            .from('broadcast_reactions')
-            .select('reaction')
-            .eq('broadcast_id', bData.id)
-            .eq('user_id', userId)
-            .maybeSingle();
-          
-          if (rData) {
-            // Also save locally so we don't have to wait for the DB next time
-            localReacted.push(bData.id);
-            localStorage.setItem('reacted_broadcasts', JSON.stringify(localReacted));
-            setBroadcast(null);
-          } else {
-            setBroadcast(bData);
-          }
-        } else {
-          setBroadcast(bData);
-        }
-      }
-    } catch (e) {
-      console.error("Broadcast load error", e);
+// 🔊 SOUND PLAYER CONTROLLER
+const playAlertSound = () => {
+  try {
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        console.warn("Browser requires user interaction before playing sound automatically.");
+      });
     }
-  };
-
-  const handleReact = async (reactionType: string) => {
-    if (!userId || !broadcast) return;
-    
-    // Instantly lock in UI reaction
-    setMyReaction(reactionType);
-    
-    // Save permanently to local storage so it NEVER comes back on refresh
-    const localReacted = JSON.parse(localStorage.getItem('reacted_broadcasts') || '[]');
-    if (!localReacted.includes(broadcast.id)) {
-      localReacted.push(broadcast.id);
-      localStorage.setItem('reacted_broadcasts', JSON.stringify(localReacted));
-    }
-    
-    // Save to Database
-    if (userId !== 'guest-mock-uuid') {
-      try {
-        await supabase.from('broadcast_reactions').upsert(
-          { broadcast_id: broadcast.id, user_id: userId, reaction: reactionType },
-          { onConflict: 'broadcast_id, user_id' }
-        );
-      } catch (e) {
-        console.error("Reaction error", e);
-      }
-    }
-
-    // Trigger smooth fade-out
-    setTimeout(() => {
-      setIsFadingOut(true);
-      setTimeout(() => {
-        setBroadcast(null);
-      }, 400); 
-    }, 500); 
-  };
-
-  if (!broadcast) return null;
-
-  return (
-    <div className={`bg-indigo-50 border border-indigo-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row gap-5 items-start md:items-center justify-between mb-6 overflow-hidden relative transition-all duration-500 ease-in-out ${isFadingOut ? 'opacity-0 scale-95 h-0 py-0 my-0 border-0 mb-0' : 'animate-in slide-in-from-top-4'}`}>
-      <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
-        <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-md shrink-0 animate-bounce">
-          <Megaphone size={24} />
-        </div>
-        <div className="w-full">
-          <h3 className="text-xs font-black uppercase tracking-widest text-indigo-800 mb-1">Company Announcement</h3>
-          <p className="text-sm font-semibold text-indigo-900 leading-relaxed whitespace-pre-wrap mb-3">{broadcast.message}</p>
-          
-          {broadcast.image_url && (
-            <div className="mt-2 rounded-xl overflow-hidden border border-indigo-200 shadow-sm max-w-sm">
-              <img src={broadcast.image_url} alt="Broadcast Attachment" className="w-full h-auto object-cover" />
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-indigo-100 shadow-sm shrink-0 w-full md:w-auto justify-center z-10">
-        <button onClick={() => handleReact('like')} disabled={myReaction !== null} className={`p-2 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed ${myReaction === 'like' ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-400'}`}>
-          <ThumbsUp size={18} className={myReaction === 'like' ? 'fill-blue-600' : ''}/>
-        </button>
-        <button onClick={() => handleReact('love')} disabled={myReaction !== null} className={`p-2 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed ${myReaction === 'love' ? 'bg-rose-100 text-rose-600' : 'hover:bg-slate-100 text-slate-400'}`}>
-          <Heart size={18} className={myReaction === 'love' ? 'fill-rose-600' : ''}/>
-        </button>
-        <button onClick={() => handleReact('dislike')} disabled={myReaction !== null} className={`p-2 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed ${myReaction === 'dislike' ? 'bg-slate-200 text-slate-700' : 'hover:bg-slate-100 text-slate-400'}`}>
-          <ThumbsDown size={18} className={myReaction === 'dislike' ? 'fill-slate-700' : ''}/>
-        </button>
-      </div>
-    </div>
-  );
-}
+  } catch (e) {}
+};
 
 export default function StaffDashboardPage() {
   const router = useRouter(); 
@@ -174,6 +63,12 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
+
+  // 🌟 LIKE/DISLIKE STATE
+  const [reactions, setReactions] = useState<Record<string, 'like' | 'dislike'>>({});
+  
+  // 🔔 FLOATING RIGHT-SIDE TOAST NOTIFICATION STATE
+  const [toasts, setToasts] = useState<{ id: number, title: string, message: string }[]>([]);
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
@@ -190,6 +85,27 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
+  // 🔔 POPUP TOAST TRIGGER FUNCTION
+  const showToast = (title: string, message: string) => {
+    playAlertSound();
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, title, message }]);
+    
+    // Auto-dismiss after 7 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 7000); 
+  };
+
+  // ASK FOR DESKTOP NOTIFICATION PERMISSIONS ON LOAD
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    const savedReactions = JSON.parse(localStorage.getItem('vsit_reactions') || '{}');
+    setReactions(savedReactions);
+  }, []);
+
   useEffect(() => {
     const watcher = setInterval(() => {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
@@ -203,10 +119,16 @@ export default function StaffDashboardPage() {
   }, []);
 
   const loadRealDatabase = async () => {
+    // 🌟 ARMORED BREAKOUT TIMEOUT: Force clears the spinner after 4 seconds under any network lock
+    const safetyTimeoutId = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+
     try {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
 
       if (isGuest) {
+        clearTimeout(safetyTimeoutId);
         setCurrentUser({
           id: 'guest-mock-uuid',
           email: 'demo_user@virtualstaffing.com',
@@ -222,9 +144,9 @@ export default function StaffDashboardPage() {
         setAssignedAssets(demoAssets);
         setAllInspections([]);
         setMyTickets([]);
-        
-        // Removed global broadcast from here so it doesn't duplicate!
-        setNotifications([]);
+        setNotifications([
+          { id: 'demo-broadcast-1', title: 'System Broadcast', message: 'Welcome to the portal! IT Scheduled Maintenance is planned for this Saturday.', target_user: null, is_read: false }
+        ]);
         setStats({ totalAssets: 2, needsInspection: 2, openTickets: 0 });
         setIsAuthorized(true);
         setLoading(false);
@@ -234,6 +156,7 @@ export default function StaffDashboardPage() {
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
       if (!sessionStr) { 
+        clearTimeout(safetyTimeoutId);
         window.location.replace('/'); 
         return; 
       }
@@ -245,6 +168,7 @@ export default function StaffDashboardPage() {
       const cleanEmail = user.email?.toLowerCase().trim();
 
       if (cleanEmail === 'lakhwinder.bi@outlook.com') {
+        clearTimeout(safetyTimeoutId);
         window.location.replace('/admin');
         return;
       }
@@ -253,6 +177,7 @@ export default function StaffDashboardPage() {
       
       if (profile) {
         if (profile.status === 'Disabled') {
+          clearTimeout(safetyTimeoutId);
           window.location.replace('/');
           return;
         }
@@ -260,6 +185,7 @@ export default function StaffDashboardPage() {
         user.name = profile.full_name || profile.name || user.name;
         user.id = profile.id;
       } else {
+        clearTimeout(safetyTimeoutId);
         window.location.replace('/');
         return;
       }
@@ -275,19 +201,20 @@ export default function StaffDashboardPage() {
       ]);
 
       if (notifRes.data) {
-        // FIXED: Only show PERSONAL action alerts in this list now. 
-        // Global broadcasts are handled exclusively by the StaffBroadcastWidget.
-        const activeNotifications = notifRes.data.filter(n => {
-          const isUnread = n.is_read !== true; 
-          const target = String(n.target_user || '').trim().toLowerCase();
-          
-          const isPersonal = target === String(user.id).toLowerCase() || 
-                             target === cleanEmail || 
-                             target === String(user.emp_id).toLowerCase();
-
-          return isUnread && isPersonal;
-        });
+        const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
         
+        let activeNotifications = notifRes.data.filter(n => {
+          const isUnread = n.is_read !== true; 
+          const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
+          
+          const target = String(n.target_user || '').trim().toLowerCase();
+          const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+          const isPersonal = target === String(user.id).toLowerCase() || target === cleanEmail || target === String(user.emp_id).toLowerCase();
+
+          return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
+        });
+
+        activeNotifications = activeNotifications.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
         setNotifications(activeNotifications);
 
         const compiledAssets = (assetsRes.data || []).map(asset => {
@@ -313,33 +240,85 @@ export default function StaffDashboardPage() {
     } catch (err) {
       console.error("Data sync failure:", err);
     } finally {
+      clearTimeout(safetyTimeoutId);
       setLoading(false);
     }
   };
 
+  // REAL-TIME WEBSOCKET LISTENERS
   useEffect(() => {
     loadRealDatabase();
-    if (localStorage.getItem('isGuestSession') === 'true') return;
+    if (!currentUser || currentUser.id === 'guest-mock-uuid' || !currentUser.id) return;
 
     const realtimeChannel = supabase.channel('staff-dashboard-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => { loadRealDatabase(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => { loadRealDatabase(); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tickets' }, (payload) => { 
+        if (payload.new.created_by?.toLowerCase() === currentUser.email?.toLowerCase()) {
+          showToast("Ticket Updated", `Your ticket status was changed to: ${payload.new.status}`);
+        }
+        loadRealDatabase(); 
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => { 
+        if (payload.new.assigned_to === currentUser.id) {
+          showToast("Hardware Update", `IT has updated your device details.`);
+        }
+        loadRealDatabase(); 
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => { 
+        const target = String(payload.new.target_user || '').trim().toLowerCase();
+        const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+        const isPersonal = target === String(currentUser.id).toLowerCase() || target === currentUser.email?.toLowerCase() || target === String(currentUser.emp_id).toLowerCase();
+
+        if (isGlobal || isPersonal) {
+            showToast(payload.new.title || "New System Alert", payload.new.message || "You have a new message from Admin.");
+            
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification(payload.new.title || "New System Alert", {
+                body: payload.new.message || "Check your dashboard for updates.",
+                icon: "/favicon.ico"
+              });
+            }
+        }
+        loadRealDatabase(); 
+      })
       .subscribe();
 
     return () => { 
       supabase.removeChannel(realtimeChannel); 
     };
-  }, []);
+  }, [currentUser.id, currentUser.email, currentUser.emp_id]);
 
-  const markNotificationAsRead = async (notifId: string) => {
+  const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
-    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
+    
+    const target = String(targetUser || '').trim().toLowerCase();
+    const isGlobalBroadcast = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+    
+    if (isGlobalBroadcast) {
+      const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+      if (!dismissed.includes(notifId)) {
+        dismissed.push(notifId);
+        localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed));
+      }
+    } else {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
+    }
+  };
+
+  const toggleReaction = (notifId: string, type: 'like' | 'dislike') => {
+    setReactions(prev => {
+      const newReactions = { ...prev };
+      if (newReactions[notifId] === type) {
+        delete newReactions[notifId];
+      } else {
+        newReactions[notifId] = type;
+      }
+      localStorage.setItem('vsit_reactions', JSON.stringify(newReactions));
+      return newReactions;
+    });
   };
 
   const resetLocalDismissals = () => {
-    localStorage.removeItem('reacted_broadcasts');
+    localStorage.removeItem('dismissed_broadcasts');
     loadRealDatabase();
   };
 
@@ -389,7 +368,26 @@ export default function StaffDashboardPage() {
   const isGlobalAuditOpen = auditWindow.isOpen || requiresGlobalReinspection;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative">
+      
+      {/* 🔔 FLOATING RIGHT-SIDE POPUP NOTIFICATIONS (TOASTS) */}
+      <div className="fixed top-24 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 find-in duration-300 flex items-start gap-3 pointer-events-auto">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+              <Bell size={18} className="animate-pulse" />
+            </div>
+            <div className="flex-1 pt-0.5">
+              <h4 className="font-bold text-sm text-slate-900 leading-tight">{t.title}</h4>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{t.message}</p>
+            </div>
+            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:text-slate-600 shrink-0 p-1">
+              <X size={16}/>
+            </button>
+          </div>
+        ))}
+      </div>
+
       <div className="max-w-7xl mx-auto space-y-8">
         
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
@@ -406,9 +404,10 @@ export default function StaffDashboardPage() {
               <span>{currentUser.email}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
+            {/* ✅ FIXED: Double inner bell completely removed as requested */}
             <button onClick={resetLocalDismissals} title="Reset Dismissed Alerts" className="flex items-center justify-center p-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-500 rounded-xl transition-all border border-slate-200 cursor-pointer">
-              <RotateCcw size={14}/>
+              <RotateCcw size={16}/>
             </button>
             <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer">
               <RefreshCw size={14}/> Sync Feeds
@@ -416,12 +415,6 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {currentUser && <NotificationManager userId={currentUser.id} />}
-
-        {/* 🌟 REACTION WIDGET FOR ANNOUNCEMENTS */}
-        {currentUser && <StaffBroadcastWidget userId={currentUser.id} />}
-
-        {/* 🚨 DISMISS WIDGET ONLY FOR PERSONAL ALERTS (e.g., Audit Rejections) */}
         {notifications.length > 0 && (
           <div className="space-y-3 animate-in slide-in-from-top-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -434,6 +427,7 @@ export default function StaffDashboardPage() {
                 const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
                 const isApprove = s.includes('approve');
                 const isReplacement = s.includes('replace') || s.includes('new asset'); 
+                const isBroadcast = s.includes('broadcast') || s.includes('announcement');
                 
                 let bgColor = 'bg-blue-50 border-blue-200';
                 let iconColor = 'text-blue-600';
@@ -463,9 +457,31 @@ export default function StaffDashboardPage() {
                         <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
                       </div>
                     </div>
-                    <button onClick={() => markNotificationAsRead(notif.id)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer">
-                      Dismiss
-                    </button>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      {isBroadcast && (
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
+                          <button 
+                            onClick={() => toggleReaction(notif.id, 'like')} 
+                            className={`p-1.5 rounded-md transition-colors ${reactions[notif.id] === 'like' ? 'bg-blue-100 text-blue-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+                            title="Acknowledge / Like"
+                          >
+                            <ThumbsUp size={14} className={reactions[notif.id] === 'like' ? "fill-blue-600 text-blue-600" : ""} />
+                          </button>
+                          <button 
+                            onClick={() => toggleReaction(notif.id, 'dislike')} 
+                            className={`p-1.5 rounded-md transition-colors ${reactions[notif.id] === 'dislike' ? 'bg-rose-100 text-rose-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+                            title="Dislike"
+                          >
+                            <ThumbsDown size={14} className={reactions[notif.id] === 'dislike' ? "fill-rose-600 text-rose-600" : ""} />
+                          </button>
+                        </div>
+                      )}
+
+                      <button onClick={() => markNotificationAsRead(notif.id, notif.target_user)} className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-xs">
+                        Dismiss
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -623,7 +639,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const [serialInput, setSerialInput] = useState('');
   const [lockError, setLockError] = useState(false);
 
-  const [formTitle, setFormTitle] = useState('');
+  const {formTitle, setFormTitle} = useState('');
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
   
