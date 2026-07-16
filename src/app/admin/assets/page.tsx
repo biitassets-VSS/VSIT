@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -80,14 +80,12 @@ function generateCategoryPrefix(category: string, existingUuid?: string) {
   else if (cat.includes('cleaning')) prefix = 'VSS-CKT';
   else prefix = 'VSS-OTH';
 
-  // Extract stable ending numbers if the asset already exists
   if (existingUuid && String(existingUuid).length > 20) {
     const numsOnly = String(existingUuid).replace(/[^0-9]/g, '');
     const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
     return `${prefix}-${stableDigits}`;
   }
   
-  // Otherwise, generate 4 random digits for new assets
   return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
@@ -183,8 +181,9 @@ function AssetRegistryContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
-  // Bulk Selection State
+  // Bulk Selection & Duplicate State
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -224,7 +223,6 @@ function AssetRegistryContent() {
   const [editForm, setEditForm] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // 🌟 GLOBAL THEME SYNC
   useEffect(() => {
     const savedTheme = localStorage.getItem('vsit_theme');
     if (savedTheme === 'dark') {
@@ -400,6 +398,25 @@ function AssetRegistryContent() {
       alert(`Error deleting asset: ${err.message}`);
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  // 🌟 BULK DELETE ACTION FOR DUPLICATES
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete ${selectedAssetIds.size} selected assets? This action cannot be undone.`)) return;
+    setLoading(true);
+    try {
+      const idsToDelete = Array.from(selectedAssetIds);
+      const { error } = await supabase.from('assets').delete().in('id', idsToDelete);
+      if (error) throw error;
+
+      setAssets(prev => prev.filter(a => !selectedAssetIds.has(a.id)));
+      setSelectedAssetIds(new Set());
+      alert(`Successfully deleted ${idsToDelete.length} assets.`);
+    } catch (err: any) {
+      alert(`Error deleting assets: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -630,8 +647,21 @@ function AssetRegistryContent() {
   };
 
   // ==========================================
-  // 🌟 FILTRATION & SEARCH ENGINE LOGIC
+  // 🌟 FILTRATION, DUPLICATE CHECK & SEARCH ENGINE LOGIC
   // ==========================================
+  
+  // Create a map to find identical Serial Numbers
+  const duplicatesMap = useMemo(() => {
+    const counts: Record<string, number> = {};
+    assets.forEach(a => {
+      const sn = safeString(a.serial_number).toUpperCase().trim();
+      if (sn && sn !== 'N/A') {
+        counts[sn] = (counts[sn] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [assets]);
+
   const getCatCount = (filterName: string) => {
     if (filterName === 'All') return assets.length;
     if (filterName === 'Laptop') return assets.filter(a => safeString(a.category).toLowerCase().includes('laptop')).length;
@@ -649,11 +679,16 @@ function AssetRegistryContent() {
   };
 
   const filteredAssets = assets.filter(a => {
+    // 🌟 DUPLICATE FILTER CHECK
+    if (showDuplicates) {
+      const sn = safeString(a.serial_number).toUpperCase().trim();
+      if (!sn || sn === 'N/A' || duplicatesMap[sn] <= 1) return false;
+    }
+
     const q = safeString(searchQuery).toLowerCase();
     const cleanTag = safeString(a.clean_tag).toLowerCase();
     const cat = safeString(a.category).toLowerCase();
     
-    // 🌟 THE FIX: Now safely checks the brand and category columns as well!
     const matchesSearch = !q || (
       safeString(a.id).toLowerCase().includes(q) || 
       cleanTag.includes(q) ||
@@ -731,9 +766,14 @@ function AssetRegistryContent() {
 
           <div className="flex flex-wrap items-center gap-3">
             {selectedAssetIds.size > 0 && (
-              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
-                <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
-              </button>
+              <>
+                <button onClick={handleBulkDelete} className="flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-rose-600/20 transition-all animate-in zoom-in-95 duration-200">
+                  <Trash2 size={16} /> <span>Delete {selectedAssetIds.size}</span>
+                </button>
+                <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
+                  <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
+                </button>
+              </>
             )}
             <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-colors text-xs font-semibold uppercase tracking-wider ${theme.card} ${theme.cardHover} ${theme.textMain}`}>
               <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
@@ -777,6 +817,16 @@ function AssetRegistryContent() {
               <span className="hidden sm:inline">
                 {selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}
               </span>
+            </button>
+            
+            {/* 🌟 NEW SHOW DUPLICATES TOGGLE BUTTON */}
+            <button 
+              onClick={() => setShowDuplicates(!showDuplicates)} 
+              className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${showDuplicates ? (isDarkMode ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700') : theme.card + ' ' + theme.textMain}`}
+              title="Show assets with identical Serial Numbers"
+            >
+              <AlertTriangle size={16}/> 
+              <span className="hidden sm:inline">Duplicates</span>
             </button>
 
             <div className={`flex-1 p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
