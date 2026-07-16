@@ -178,7 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* 🚀 LIVE POPUP TOAST */}
       {activeAlert && (
-        <div className={`fixed top-24 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
+        <div className={`fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse ring-4 ring-blue-500/20"></span>
@@ -192,9 +192,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       {/* SIDEBAR */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-72 border-r shadow-sm z-50 flex flex-col transition-transform duration-300 ${theme.bgSidebar} ${theme.border} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className={`h-20 flex items-center justify-between px-6 border-b shrink-0 ${theme.border}`}>
-          <img src="/logo.png" alt="Logo" className={`h-9 w-auto object-contain ${isDarkMode ? 'brightness-200 grayscale-[20%]' : ''}`} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 border-r shadow-sm z-50 flex flex-col transition-transform duration-300 ${theme.bgSidebar} ${theme.border} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className={`h-16 flex items-center justify-between px-6 border-b shrink-0 ${theme.border}`}>
+          <img src="/logo.png" alt="Logo" className={`h-8 w-auto object-contain ${isDarkMode ? 'brightness-200 grayscale-[20%]' : ''}`} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <button onClick={() => setIsMobileMenuOpen(false)} className={`lg:hidden p-2 rounded-full ${theme.textMuted} ${theme.hoverBg}`}><X size={20} /></button>
         </div>
 
@@ -248,7 +248,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         
         {/* TOP HEADER */}
-        <header className={`h-20 backdrop-blur-md border-b flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40 transition-colors duration-500 ${theme.bgHeader} ${theme.border}`}>
+        <header className={`h-16 backdrop-blur-md border-b flex items-center justify-between lg:justify-end px-6 shadow-sm shrink-0 relative z-40 transition-colors duration-500 ${theme.bgHeader} ${theme.border}`}>
           <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 rounded-lg lg:hidden cursor-pointer transition-colors ${theme.textMuted} ${theme.hoverBg}`}><Menu size={24} /></button>
 
           <div className="flex items-center gap-4 ml-auto relative">

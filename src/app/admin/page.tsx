@@ -510,7 +510,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center justify-between mt-4">
                     <p className={`text-[11px] leading-relaxed max-w-[180px] ${theme.subText}`}>{module.desc}</p>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${theme.iconBg.gray} group-hover:bg-${module.color}-500 group-hover:text-white`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${theme.iconBg[module.color as keyof typeof theme.iconBg]} group-hover:bg-${module.color}-500 group-hover:text-white`}>
                       <ArrowRight size={14} />
                     </div>
                   </div>
