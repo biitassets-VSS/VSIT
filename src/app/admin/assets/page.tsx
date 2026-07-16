@@ -765,16 +765,20 @@ function AssetRegistryContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {selectedAssetIds.size > 0 && (
-              <>
-                <button onClick={handleBulkDelete} className="flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-rose-600/20 transition-all animate-in zoom-in-95 duration-200">
-                  <Trash2 size={16} /> <span>Delete {selectedAssetIds.size}</span>
-                </button>
-                <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
-                  <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
-                </button>
-              </>
+            {/* 🌟 SAFETY FIX: Only show Bulk Delete if the 'Duplicates' mode is active AND items are selected */}
+            {selectedAssetIds.size > 0 && showDuplicates && (
+              <button onClick={handleBulkDelete} className="flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-rose-600/20 transition-all animate-in zoom-in-95 duration-200">
+                <Trash2 size={16} /> <span>Delete {selectedAssetIds.size}</span>
+              </button>
             )}
+
+            {/* Print button still appears normally whenever you select anything */}
+            {selectedAssetIds.size > 0 && (
+              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
+                <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
+              </button>
+            )}
+
             <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-colors text-xs font-semibold uppercase tracking-wider ${theme.card} ${theme.cardHover} ${theme.textMain}`}>
               <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
             </button>
@@ -819,7 +823,7 @@ function AssetRegistryContent() {
               </span>
             </button>
             
-            {/* 🌟 NEW SHOW DUPLICATES TOGGLE BUTTON */}
+            {/* 🌟 SHOW DUPLICATES TOGGLE BUTTON */}
             <button 
               onClick={() => setShowDuplicates(!showDuplicates)} 
               className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${showDuplicates ? (isDarkMode ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700') : theme.card + ' ' + theme.textMain}`}
