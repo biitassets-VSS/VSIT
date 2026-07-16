@@ -42,22 +42,81 @@ export default function AdminDashboardPage() {
       document.documentElement.classList.add('dark');
     }
     loadAdminData();
+    
+    // Request Desktop Notification Permission on Load
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, []);
 
+  // 🔔 THE UPGRADED NOTIFICATION TRIGGER ENGINE (Kept for Popups)
+  const triggerDesktopAlert = (title: string, body: string) => {
+    // 1. Play Sound
+    try {
+      const audio = new Audio('/alert.mp3');
+      audio.play().catch(e => console.log("Audio play blocked by browser:", e));
+    } catch (err) {}
+
+    // 2. Show Native OS Notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body: body,
+        icon: '/logo.png', 
+        badge: '/logo.png',
+        vibrate: [200, 100, 200]
+      } as any);
+    }
+  };
+
+  // ⚡ UPGRADED OMNI-CHANNEL REALTIME LISTENER
   useEffect(() => {
-    const notificationSubscription = supabase
-      .channel('admin-alerts')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` },
-        (payload) => {
-          setNotifications((prev) => [payload.new, ...prev]);
-        }
-      )
+    const adminChannel = supabase
+      .channel('admin-live-feed')
+      // 1. Listen for standard notifications
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
+        setNotifications((prev) => [payload.new, ...prev]);
+        triggerDesktopAlert(payload.new.title || 'Admin Alert', payload.new.message || 'New alert received.');
+      })
+      // 2. Listen for NEW TICKETS directly from Staff
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
+        const tix = payload.new;
+        const title = 'New IT Ticket Raised';
+        const msg = `${tix.staff_name || 'A staff member'} submitted a ticket: ${tix.title}`;
+        
+        triggerDesktopAlert(title, msg);
+        
+        // Inject a mock actionable alert directly into the UI list
+        setNotifications(prev => [{
+          id: `local-${Date.now()}`,
+          title: title,
+          message: msg,
+          target_role: 'admin',
+          is_read: false
+        }, ...prev]);
+        
+        loadAdminData(); // Refresh the active stats
+      })
+      // 3. Listen for NEW ASSET INSPECTIONS directly from Staff
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, (payload) => {
+        const title = 'New Asset Inspection';
+        const msg = 'A device inspection was just submitted and requires your review.';
+        
+        triggerDesktopAlert(title, msg);
+        
+        setNotifications(prev => [{
+          id: `local-${Date.now()}`,
+          title: title,
+          message: msg,
+          target_role: 'admin',
+          is_read: false
+        }, ...prev]);
+        
+        loadAdminData();
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(notificationSubscription);
+      supabase.removeChannel(adminChannel);
     };
   }, []);
 
@@ -117,7 +176,11 @@ export default function AdminDashboardPage() {
       const ticketCount = tktData.filter(t => ['open', 'in_repair', 'pending'].includes((t.status || '').toLowerCase())).length;
 
       if (notifRes.data) {
-        setNotifications(notifRes.data);
+        setNotifications(prev => {
+          // Merge database notifications with any local "live" ones that haven't been dismissed yet
+          const localOnly = prev.filter(n => String(n.id).startsWith('local-'));
+          return [...localOnly, ...notifRes.data];
+        });
       }
 
       const formattedRecentLogs = inspData.slice(0, 5).map(log => {
@@ -155,7 +218,12 @@ export default function AdminDashboardPage() {
 
   const dismissNotification = async (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    // Only attempt to update the database if it's a real DB UUID, not a locally injected one
+    if (!String(id).startsWith('local-')) {
+      try {
+        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      } catch (err) { console.error(err); }
+    }
   };
 
   const getActionRoute = (title: string) => {
@@ -165,7 +233,7 @@ export default function AdminDashboardPage() {
     return '/admin/assets';
   };
 
-  // 📣 ADVANCED BROADCAST HANDLER (FIXED FOR NOT-NULL CONSTRAINTS)
+  // 📣 ADVANCED BROADCAST HANDLER
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastMessage.trim() && !broadcastImage) return;
@@ -186,7 +254,6 @@ export default function AdminDashboardPage() {
 
         if (uploadError) throw uploadError;
 
-        // Get the public URL for the uploaded image
         const { data: publicUrlData } = supabase.storage
           .from('broadcasts')
           .getPublicUrl(filePath);
@@ -194,27 +261,23 @@ export default function AdminDashboardPage() {
         finalImageUrl = publicUrlData.publicUrl;
       }
 
-      // 2. Save Broadcast to your 'broadcasts' log table (Keep original behavior)
+      // 2. Save Broadcast to your 'broadcasts' log table
       await supabase.from('broadcasts').insert({
         message: broadcastMessage.trim(),
         created_by: adminName,
         image_url: finalImageUrl
       });
 
-      // 3. 🚨 CRITICAL FIX: Push to 'notifications' with the required "type" column
+      // 3. Push to 'notifications'
       const { error: notifError } = await supabase.from('notifications').insert({
         title: "System Broadcast",
         message: finalImageUrl ? `${broadcastMessage.trim()} (Image Attached)` : broadcastMessage.trim(),
-        target_user: null, // null ensures it goes to EVERY staff member
+        target_user: null, 
         is_read: false,
-        type: 'broadcast'  // Resolves the null-value constraint error
+        type: 'broadcast' 
       });
 
-      if (notifError) {
-        console.error("🚨 DB Insert Error:", notifError);
-        alert(`Failed to push to staff dashboards. Error: ${notifError.message}`);
-        return;
-      }
+      if (notifError) throw notifError;
       
       setBroadcastMessage('');
       setBroadcastImage(null);
@@ -275,7 +338,7 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* 🚀 CLEAN ENTERPRISE HEADER */}
+        {/* 🚀 CLEAN ENTERPRISE HEADER (REMOVED EXTRA BELL ICON) */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-colors`}>
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -329,7 +392,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-100 flex items-center gap-2">
                   <ImagePlus size={12} /> Image Attached: {broadcastImage.name}
-                  <button type="button" onClick={() => setBroadcastImage(null)} className="hover:text-rose-600 ml-2"><X size={12}/></button>
+                  <button type="button" onClick={() => setBroadcastImage(null)} className="hover:text-rose-600 ml-2 cursor-pointer"><X size={12}/></button>
                 </span>
               </div>
             )}
@@ -338,7 +401,7 @@ export default function AdminDashboardPage() {
 
         {/* 🚨 ACTIONABLE ALERTS SECTION */}
         {notifications.length > 0 && (
-          <div className="space-y-3 animate-in slide-in-from-top-4">
+          <div id="actionable-alerts" className="space-y-3 animate-in slide-in-from-top-4 scroll-m-6">
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2`}>
               <Bell size={14} className="text-rose-500 animate-bounce" /> Action Required ({notifications.length})
             </h3>
@@ -468,8 +531,8 @@ export default function AdminDashboardPage() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-                  {recentActivity.map((log: any) => (
-                    <div key={log.id} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+                  {recentActivity.map((log: any, index: number) => (
+                    <div key={log.id || `activity-log-${index}`} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                       <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border ${theme.iconBg.blue} ${isDarkMode ? 'border-blue-900/30' : 'border-blue-100'}`}>
                         <Clock size={12} />
                       </div>
