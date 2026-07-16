@@ -48,20 +48,24 @@ const normalizeCategory = (cat: string, name: string) => {
   return cat.trim().charAt(0).toUpperCase() + cat.trim().slice(1).toLowerCase();
 };
 
-// 🌟 EXACT STATUS BUCKET ENFORCEMENT
+// 🌟 EXACT STATUS BUCKET ENFORCEMENT (FIXED UNASSIGNED BUG)
 const normalizeStatus = (status: string): Asset['status'] => {
   const s = (status || '').toLowerCase().trim();
   
   if (s === 'discarded' || s.includes('discard') || s.includes('scrap') || s.includes('retire')) return 'Discarded';
-  if (s === 'pending return' || s.includes('return requested') || s.includes('pending')) return 'Pending Return';
-  if (s === 'in use' || s.includes('assign') || s.includes('deployed')) return 'In Use';
+  if (s.includes('pending return') || s.includes('return requested')) return 'Pending Return';
   
-  // Fallback for Available, In Stock, etc.
+  // CRITICAL FIX: Explicitly catch "unassigned" and "in stock" first, because "unassigned" contains "assign"!
+  if (s.includes('in stock') || s.includes('unassigned') || s === 'available') return 'Available';
+  
+  // Now it is safe to check for "assign"
+  if (s === 'in use' || s.includes('assign') || s.includes('deployed') || s.includes('pending handover')) return 'In Use';
+  
+  // Fallback
   return 'Available'; 
 };
 
-// 🌟 ADVANCED BRAND RECOGNITION ENGINE (FIXED BUG)
-// This catches model lines (like TUF, ThinkPad, ProBook) even if the user forgot to type the brand name.
+// 🌟 ADVANCED BRAND RECOGNITION ENGINE
 const extractBrand = (dbBrand: string | undefined, name: string) => {
   const textToSearch = `${dbBrand || ''} ${name || ''}`.toUpperCase();
 
@@ -77,7 +81,6 @@ const extractBrand = (dbBrand: string | undefined, name: string) => {
   if (/(SAMSUNG)/.test(textToSearch)) return 'SAMSUNG';
   if (/(LG)/.test(textToSearch)) return 'LG';
 
-  // If we can't find a known brand mapping, but the database explicitly has a brand written, use that
   if (dbBrand && dbBrand.trim().length > 1) {
     return dbBrand.trim().toUpperCase();
   }
@@ -116,7 +119,7 @@ export default function AdminReportsPage() {
             category: normalizeCategory(a.category, a.name),
             status: normalizeStatus(a.status), 
             assignedToName: assignedName,
-            brand: extractBrand(a.brand, a.name) // Using the new deep search engine
+            brand: extractBrand(a.brand, a.name)
           };
         });
         setAssets(mapped);
