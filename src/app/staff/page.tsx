@@ -639,7 +639,7 @@ function LiveDatabaseModal({ type, asset, user, onClose }: any) {
   const [serialInput, setSerialInput] = useState('');
   const [lockError, setLockError] = useState(false);
 
-  const {formTitle, setFormTitle} = useState('');
+  const [formTitle, setFormTitle] = useState('');
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
   
