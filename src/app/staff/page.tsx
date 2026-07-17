@@ -8,10 +8,10 @@ import {
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
-  ThumbsUp, ThumbsDown
+  ThumbsUp, ThumbsDown, Star
 } from 'lucide-react';
 
-// 🌟 SMART AUDIT WINDOW ENGINE (Monthly for Laptops, Quarterly for Others)
+// 🌟 SMART AUDIT WINDOW ENGINE
 function getAuditWindowInfo(category: string = 'Laptop') {
   const today = new Date();
   const year = today.getFullYear();
@@ -53,6 +53,21 @@ const playAlertSound = () => {
       playPromise.catch(() => console.warn("Browser requires user interaction before playing sound automatically."));
     }
   } catch (e) {}
+};
+
+// HELPER: Calculate resolution time
+const formatDuration = (start: string, end: string) => {
+  if (!start || !end) return '';
+  const d1 = new Date(start).getTime();
+  const d2 = new Date(end).getTime();
+  const diffHrs = Math.max(0, (d2 - d1) / (1000 * 60 * 60));
+  
+  if (diffHrs < 1) {
+    const mins = Math.max(0, (d2 - d1) / (1000 * 60));
+    return `${Math.floor(mins)} mins`;
+  }
+  if (diffHrs > 24) return `${Math.floor(diffHrs / 24)} days`;
+  return `${Math.floor(diffHrs)} hrs`;
 };
 
 export default function StaffDashboardPage() {
@@ -246,7 +261,15 @@ export default function StaffDashboardPage() {
     });
   };
 
-  const resetLocalDismissals = () => { localStorage.removeItem('dismissed_broadcasts'); loadRealDatabase(); };
+  const handleRateTicket = async (ticketId: string, rating: number) => {
+    try {
+      await supabase.from('tickets').update({ rating }).eq('id', ticketId);
+      setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, rating } : t));
+      showToast("Rating Submitted", "Thank you for rating our IT support!");
+    } catch (e) {
+      console.error(e);
+    }
+  };
   
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
@@ -328,7 +351,7 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button onClick={resetLocalDismissals} title="Reset Dismissed Alerts" className="flex items-center justify-center p-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-500 rounded-xl transition-all border border-slate-200 cursor-pointer"><RotateCcw size={16}/></button>
+            {/* 🛑 DELETED THE "Reset Dismissed Alerts" BUTTON ENTIRELY AS REQUESTED */}
             <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer"><RefreshCw size={14}/> Sync Feeds</button>
           </div>
         </div>
@@ -430,7 +453,6 @@ export default function StaffDashboardPage() {
                   return (
                     <div key={asset.id} className={`bg-white p-5 rounded-2xl border ${isReInspect || isReturnRejected ? 'border-rose-200/80 shadow-sm' : 'border-slate-200/80 shadow-sm'} hover:border-slate-300 hover:shadow-md transition-all flex flex-col gap-4`}>
                       
-                      {/* Asset Header & Status */}
                       <div className="flex justify-between items-start gap-3">
                         <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
                           {asset.name || asset.asset_name || asset.model || 'Generic Device'}
@@ -445,7 +467,6 @@ export default function StaffDashboardPage() {
                         </span>
                       </div>
 
-                      {/* Clean Grid Metadata */}
                       <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
                         <div>
                           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Tag ID</span>
@@ -453,7 +474,6 @@ export default function StaffDashboardPage() {
                         </div>
                         <div>
                           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Serial S/N</span>
-                          {/* break-all ensures long serials cleanly wrap instead of blowing up the layout */}
                           <span className="font-mono text-xs font-semibold text-slate-700 break-all">{asset.serial_number || asset.serial || 'N/A'}</span>
                         </div>
                         <div>
@@ -466,14 +486,13 @@ export default function StaffDashboardPage() {
                         </div>
                       </div>
                       
-                      {/* Action Buttons Block */}
                       <div className="flex flex-wrap items-center gap-2 pt-1 justify-end">
                         <button 
                           disabled={isReturnPending && !isReturnRejected}
                           onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
                           className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
                             (isReturnPending && !isReturnRejected)
-                              ? 'bg-orange-50 text-orange-400 border-orange-100 cursor-not-allowed opacity-60'
+                              ? 'bg-orange-100 text-orange-400 border-orange-100 cursor-not-allowed opacity-60'
                               : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50 cursor-pointer'
                           }`}
                         >
@@ -510,29 +529,69 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* SERVICE TICKETS COLUMN */}
+          {/* 🌟 ENHANCED SERVICE TICKETS COLUMN 🌟 */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
               <span className="text-xs font-bold text-slate-400">{myTickets.length} Raised</span>
             </div>
+            
             {myTickets.length === 0 ? (
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-                {myTickets.map(tix => (
-                  <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-bold text-sm text-slate-900 leading-snug">{tix.title || tix.subject}</span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
+                {myTickets.map(tix => {
+                  const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
+                  
+                  return (
+                    <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-bold text-sm text-slate-900 leading-snug">{tix.title || tix.subject}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
+                      </div>
+                      
+                      <p className="text-xs text-slate-600 font-normal">{tix.description || tix.note}</p>
+
+                      {/* Notes Added by Admin/Staff */}
+                      {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-700">
+                          <strong className="text-slate-900 block mb-1">Admin Response:</strong>
+                          {tix.admin_remarks || tix.admin_notes || tix.resolution_notes}
+                        </div>
+                      )}
+
+                      {/* Resolution Meta & Rating System */}
+                      {isResolved && (
+                        <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                          {tix.updated_at && (
+                             <div className="text-[10px] font-semibold text-slate-500 uppercase flex items-center gap-1">
+                               <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
+                             </div>
+                          )}
+
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Rate Support:</span>
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button
+                                key={star}
+                                disabled={!!tix.rating}
+                                onClick={() => handleRateTicket(tix.id, star)}
+                                className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
+                              >
+                                <Star size={14} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-slate-300"} />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-medium border-t border-slate-50 mt-2">
+                        <span>Category: <strong className="text-slate-600 font-semibold">{tix.category || 'General'}</strong></span>
+                        <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-600 line-clamp-2 font-normal">{tix.description || tix.note}</p>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-medium">
-                      <span>Category: <strong className="text-slate-600 font-semibold">{tix.category || 'General'}</strong></span>
-                      <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
