@@ -49,7 +49,8 @@ function AdminInspectionReviewContent() {
     setLoading(true);
     try {
       const [inspRes, assetsRes, profilesRes] = await Promise.all([
-        supabase.from('inspections').select('*').order('created_at', { ascending: false }),
+        // 🌟 CRITICAL FIX: Ignore any inspection logged as a "[RETURN REQUEST]" so it doesn't clutter this page
+        supabase.from('inspections').select('*').not('notes', 'ilike', '%[RETURN REQUEST]%').order('created_at', { ascending: false }),
         supabase.from('assets').select('*'),
         supabase.from('profiles').select('*')
       ]);
@@ -117,7 +118,8 @@ function AdminInspectionReviewContent() {
 
       assetsData.forEach(asset => {
         const s = (asset.inspection_status || '').toLowerCase();
-        if (s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) {
+        // Skip adding missing inspections for assets pending return
+        if ((s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) && !asset.status?.toLowerCase().includes('return')) {
           if (!processedAssetIds.has(String(asset.id))) {
             const matchedStaff = profilesData.find(p => p.id === asset.assigned_to) || {};
             masterLedger.push({

@@ -26,34 +26,44 @@ export default function AdminReturnsPage() {
     setLoading(true);
     try {
       // ==========================================
-      // 1. FETCH PENDING RETURNS (Bulletproof Match)
+      // 1. BULLETPROOF PENDING RETURNS FETCH
       // ==========================================
-      const { data: pendingAssets } = await supabase
+      
+      // Step A: Grab all inspections that were generated from the "Return" QR Code
+      const { data: returnInspections } = await supabase
+        .from('inspections')
+        .select('*')
+        .ilike('notes', '%[RETURN REQUEST]%')
+        .not('status', 'in', '("Return Approved","Return Rejected")'); // Exclude already processed ones
+
+      // Step B: Grab any asset explicitly marked as Pending Return
+      const { data: returnAssets } = await supabase
         .from('assets')
         .select('*')
-        .ilike('status', '%Return%'); 
+        .ilike('status', '%Return%');
 
-      const pendAssetIds = pendingAssets?.map(a => String(a.id)) || [];
-      const pendUserIds = [...new Set(pendingAssets?.map(a => a.assigned_to).filter(Boolean))];
-      
-      let pendInspections: any[] = [];
-      let pendProfiles: any[] = [];
+      // Combine asset IDs from both sources
+      const combinedAssetIds = Array.from(new Set([
+        ...(returnAssets?.map(a => String(a.id)) || []),
+        ...(returnInspections?.map(i => String(i.asset_id)) || [])
+      ]));
 
-      if (pendAssetIds.length > 0) {
-        const { data: insps } = await supabase
-          .from('inspections')
-          .select('*')
-          .in('asset_id', pendAssetIds)
-          .order('created_at', { ascending: false });
-        pendInspections = insps || [];
+      // Now fetch the clean data
+      let pendInspections = returnInspections || [];
+      if (combinedAssetIds.length > 0) {
+        const { data: moreInsps } = await supabase.from('inspections').select('*').in('asset_id', combinedAssetIds).order('created_at', { ascending: false });
+        pendInspections = moreInsps || [];
       }
-      
+
+      const { data: finalPendingAssets } = await supabase.from('assets').select('*').in('id', combinedAssetIds);
+      const pendUserIds = [...new Set(finalPendingAssets?.map(a => a.assigned_to).filter(Boolean))];
+      let pendProfiles: any[] = [];
       if (pendUserIds.length > 0) {
         const { data: profs } = await supabase.from('profiles').select('*').in('id', pendUserIds);
         pendProfiles = profs || [];
       }
 
-      const compiledPending = (pendingAssets || []).map(asset => ({
+      const compiledPending = (finalPendingAssets || []).map(asset => ({
         ...asset,
         return_details: pendInspections.find(i => String(i.asset_id) === String(asset.id)) || null,
         user_profile: pendProfiles.find(p => p.id === asset.assigned_to) || null
@@ -109,13 +119,11 @@ export default function AdminReturnsPage() {
     
     setProcessingId(request.id);
     try {
-      // 🌟 STRICT FIX: Removes from Staff Dashboard (assigned_to: null) and puts back in stock
       await supabase.from('assets').update({ 
         assigned_to: null, 
         status: 'In Stock (Available)' 
       }).eq('id', request.id);
 
-      // Mark inspection as "Return Approved"
       if (request.return_details?.id) {
         await supabase.from('inspections').update({ 
           status: 'Return Approved', 
@@ -145,8 +153,7 @@ export default function AdminReturnsPage() {
 
     setProcessingId(request.id);
     try {
-      // 🌟 Rejecting means it goes back to 'Assigned' and stays with the user
-      await supabase.from('assets').update({ status: 'Assigned' }).eq('id', request.id);
+      await supabase.from('assets').update({ status: 'In Use' }).eq('id', request.id);
 
       if (request.return_details?.id) {
         await supabase.from('inspections').update({ 
