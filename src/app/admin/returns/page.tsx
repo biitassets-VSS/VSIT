@@ -40,9 +40,14 @@ export default function AdminReturnsPage() {
       let pendProfiles: any[] = [];
 
       if (pendAssetIds.length > 0) {
-        const { data: insps } = await supabase.from('inspections').select('*').in('asset_id', pendAssetIds).eq('status', 'Pending').order('created_at', { ascending: false });
+        const { data: insps } = await supabase
+          .from('inspections')
+          .select('*')
+          .in('asset_id', pendAssetIds)
+          .order('created_at', { ascending: false });
         pendInspections = insps || [];
       }
+      
       if (pendUserIds.length > 0) {
         const { data: profs } = await supabase.from('profiles').select('*').in('id', pendUserIds);
         pendProfiles = profs || [];
@@ -62,7 +67,7 @@ export default function AdminReturnsPage() {
       const { data: historyInsps } = await supabase
         .from('inspections')
         .select('*')
-        .in('status', ['Return Approved', 'Return Rejected']) // Distinct statuses just for returns
+        .in('status', ['Return Approved', 'Return Rejected']) 
         .order('created_at', { ascending: false });
 
       const histAssetIds = [...new Set(historyInsps?.map(i => i.asset_id).filter(Boolean))];
@@ -107,18 +112,17 @@ export default function AdminReturnsPage() {
       // 1. Unassign the asset & reset status
       await supabase.from('assets').update({ assigned_to: null, status: 'In Stock' }).eq('id', request.id);
 
-      // 2. Mark inspection as "Return Approved" (so it moves to history tab)
+      // 2. Mark inspection as "Return Approved"
       if (request.return_details?.id) {
         await supabase.from('inspections').update({ status: 'Return Approved', notes: `${request.return_details.notes || ''}\n[ADMIN APPROVED]` }).eq('id', request.return_details.id);
       } else {
-        // If they bypassed the mobile camera, create a dummy history row anyway
         await supabase.from('inspections').insert({
           asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Approved', notes: 'Approved via Admin Dashboard (No mobile photos provided)'
         });
       }
 
       setModal({ isOpen: false, data: null, isHistory: false });
-      fetchData(); // Refresh UI
+      fetchData(); 
     } catch (error: any) {
       alert(`Error approving return: ${error.message}`);
     } finally {
@@ -132,10 +136,8 @@ export default function AdminReturnsPage() {
 
     setProcessingId(request.id);
     try {
-      // Revert status back to Active so the staff keeps it
       await supabase.from('assets').update({ status: 'Active' }).eq('id', request.id);
 
-      // Mark inspection as "Return Rejected" 
       if (request.return_details?.id) {
         await supabase.from('inspections').update({ status: 'Return Rejected', notes: `${request.return_details.notes || ''}\n[ADMIN REJECTED: ${reason}]` }).eq('id', request.return_details.id);
       } else {
@@ -209,12 +211,13 @@ export default function AdminReturnsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {pendingRequests.map((request) => {
+                {/* FIX: 100% Guaranteed Unique Key */}
+                {pendingRequests.map((request, index) => {
                   const staffName = request.user_profile?.full_name || request.user_profile?.name || 'Unknown User';
                   const staffEmpCode = request.user_profile?.emp_code || request.user_profile?.emp_id || 'NO-ID';
 
                   return (
-                    <div key={request.id} className="bg-white p-6 rounded-2xl border border-orange-200/50 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-orange-300 transition-colors">
+                    <div key={`pending-${request.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-orange-200/50 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-orange-300 transition-colors">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
                           <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded-md">Action Required</span>
@@ -258,13 +261,14 @@ export default function AdminReturnsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {historyRequests.map((record) => {
+                {/* FIX: 100% Guaranteed Unique Key */}
+                {historyRequests.map((record, index) => {
                   const staffName = record.user_profile?.full_name || record.user_profile?.name || 'Unknown User';
                   const isApproved = record.status === 'Return Approved';
                   const processDate = record.created_at ? new Date(record.created_at).toLocaleString() : 'Unknown Date';
 
                   return (
-                    <div key={record.id} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-slate-300 transition-colors opacity-90">
+                    <div key={`history-${record.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-slate-300 transition-colors opacity-90">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
                           <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md flex items-center gap-1 ${isApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
@@ -321,18 +325,34 @@ export default function AdminReturnsPage() {
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Mobile Handoff Photos</p>
                 {(() => {
-                  // Safely extract photos depending on which tab we are viewing
-                  const photos = modal.isHistory ? modal.data.photo_urls : modal.data.return_details?.photo_urls;
+                  let rawPhotos = modal.isHistory ? modal.data.photos : modal.data.return_details?.photos;
+                  let photosArray: string[] = [];
+
+                  try {
+                    if (Array.isArray(rawPhotos)) {
+                      photosArray = rawPhotos;
+                    } else if (typeof rawPhotos === 'string') {
+                      const parsed = JSON.parse(rawPhotos);
+                      if (Array.isArray(parsed)) photosArray = parsed;
+                      else if (typeof parsed === 'object' && parsed !== null) photosArray = Object.values(parsed);
+                    } else if (typeof rawPhotos === 'object' && rawPhotos !== null) {
+                      photosArray = Object.values(rawPhotos);
+                    }
+                  } catch (e) {
+                    console.error("Failed to parse photo array", e);
+                  }
                   
-                  if (photos && photos.length > 0) {
+                  if (photosArray.length > 0) {
                     return (
                       <div className="grid grid-cols-2 gap-3">
-                        {photos.map((url: string, i: number) => (
-                          <img key={i} src={url} alt={`Evidence ${i}`} className="w-full h-48 object-cover rounded-xl border border-slate-200" />
+                        {/* FIX: 100% Guaranteed Unique Key */}
+                        {photosArray.map((url: string, i: number) => (
+                          <img key={`photo-${i}`} src={url} alt={`Evidence ${i}`} className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm" />
                         ))}
                       </div>
                     );
                   }
+                  
                   return (
                      <div className="p-8 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
                        <AlertTriangle size={32} className="mb-2 opacity-50" />
