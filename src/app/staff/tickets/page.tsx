@@ -165,15 +165,18 @@ export default function StaffTicketsPage() {
   // Form State
   const [formData, setFormData] = useState({ assetId: '', issue: '' });
 
+  // 🌟 FIX: Separated the initial fetch from the timer interval to prevent infinite loops
   useEffect(() => {
     fetchData();
-    
-    // Refresh waiting times every minute
+  }, []); // Run only ONCE on mount
+
+  useEffect(() => {
+    // Refresh waiting times every minute without re-fetching everything
     const interval = setInterval(() => {
-      setTickets([...tickets]); 
+      setTickets(prevTickets => [...prevTickets]); 
     }, 60000);
     return () => clearInterval(interval);
-  }, [tickets]);
+  }, []); // Set up timer only ONCE
 
   const fetchData = async () => {
     setLoading(true);
@@ -296,7 +299,7 @@ export default function StaffTicketsPage() {
   };
 
   if (loading) {
-    return <div className="min-h-[60vh] flex justify-center items-center"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>;
+    return <div className="min-h-[60vh] flex flex-col justify-center items-center gap-3"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /><p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Loading Tickets</p></div>;
   }
 
   const filteredTickets = tickets.filter(t => activeTab === 'All' ? true : t.status === activeTab);
@@ -405,7 +408,7 @@ export default function StaffTicketsPage() {
               {/* Card Footer Button */}
               <button 
                 onClick={() => setViewTicket(ticket)} 
-                className={`w-full p-3.5 text-xs font-bold uppercase tracking-widest transition-colors ${ticket.status === 'Closed' && ticket.rating === 0 ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`w-full p-3.5 text-xs font-bold uppercase tracking-widest transition-colors ${ticket.status === 'Closed' && ticket.rating === 0 ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'}`}
               >
                 {ticket.status === 'Closed' && ticket.rating === 0 ? 'Rate Solution' : 'View Full Details'}
               </button>
