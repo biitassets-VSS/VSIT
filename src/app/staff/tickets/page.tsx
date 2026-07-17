@@ -23,15 +23,35 @@ const calculateResolutionTime = (raisedAt: string, closedAt: string | null) => {
   const minutes = diffMins % 60;
 
   const parts = [];
-  if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
-  if (hours > 0) parts.push(`${hours} hr${hours > 1 ? 's' : ''}`);
-  if (minutes > 0) parts.push(`${minutes} min${minutes > 1 ? 's' : ''}`);
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
 
-  if (parts.length === 0) return "Under 1 minute";
-  return parts.join(', ');
+  if (parts.length === 0) return "< 1m";
+  return parts.join(' ');
 };
 
-// 🌟 TICKET RATING COMPONENT
+const calculateWaitingTime = (raisedAt: string) => {
+  if (!raisedAt) return null;
+  const start = new Date(raisedAt).getTime();
+  const end = new Date().getTime(); // Current Time
+  const diffMs = end - start;
+
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const days = Math.floor(diffMins / (60 * 24));
+  const hours = Math.floor((diffMins % (60 * 24)) / 60);
+  const minutes = diffMins % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+
+  if (parts.length === 0) return "Just now";
+  return parts.join(' ');
+};
+
+// 🌟 TICKET RATING COMPONENT (For Modal)
 function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRatingSubmitted: (rating: number, feedback: string) => void }) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -147,7 +167,13 @@ export default function StaffTicketsPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    
+    // Refresh waiting times every minute
+    const interval = setInterval(() => {
+      setTickets([...tickets]); 
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [tickets]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -156,11 +182,18 @@ export default function StaffTicketsPage() {
       if (isGuest) {
         setCurrentUser({ id: 'guest-mock-uuid', email: 'guest@vsit.com', name: 'Demo Guest' });
         setMyAssignedAssets([{ id: 'demo-asset-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999' }]);
-        setTickets([{
-          id: 'demo-tkt-1', token: 'TKT-8492', assetName: 'Demo MacBook Pro 16"', tagId: 'MAC-9999', 
-          issue: 'Battery is swelling.', status: 'Closed', rating: 0,
-          raisedAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(), closedAt: new Date().toISOString(), adminNotes: 'Battery replaced.'
-        }]);
+        setTickets([
+          {
+            id: 'demo-tkt-1', token: 'TKT-8492', assetName: 'Demo MacBook Pro 16"', tagId: 'MAC-9999', 
+            issue: 'Battery is swelling.', status: 'Closed', rating: 5,
+            raisedAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(), closedAt: new Date().toISOString(), adminNotes: 'Battery replaced successfully.'
+          },
+          {
+            id: 'demo-tkt-2', token: 'TKT-3321', assetName: 'Dell Monitor', tagId: 'MON-1234', 
+            issue: 'Screen flickering intermittently.', status: 'Open', rating: 0,
+            raisedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), closedAt: null, adminNotes: null
+          }
+        ]);
         setLoading(false);
         return;
       }
@@ -185,7 +218,6 @@ export default function StaffTicketsPage() {
       
       if (tkts) {
         const compiled = tkts.map(t => {
-          // Robust Case-Insensitive Status Checking
           const rawStatus = (t.status || '').toLowerCase();
           const isTicketClosed = rawStatus === 'resolved' || rawStatus === 'closed';
 
@@ -195,10 +227,10 @@ export default function StaffTicketsPage() {
             assetName: t.title || t.category || 'General Support',
             tagId: t.asset_tag || 'N/A',
             issue: t.description || 'No description provided.',
-            status: isTicketClosed ? 'Closed' : 'Open', // Force standard terminology
+            status: isTicketClosed ? 'Closed' : 'Open', 
             raisedAt: t.created_at,
             closedAt: t.resolved_at || t.updated_at || null, 
-            adminNotes: t.admin_notes || 'No notes provided by admin.',
+            adminNotes: t.admin_notes || 'No notes provided.',
             rating: t.rating || 0,
             rating_feedback: t.rating_feedback || ''
           };
@@ -299,47 +331,88 @@ export default function StaffTicketsPage() {
         ))}
       </div>
 
-      {/* TICKETS LIST */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="divide-y divide-slate-100">
-          {filteredTickets.length === 0 ? (
-            <div className="p-12 text-center flex flex-col items-center">
-              <CheckCircle2 size={40} className="text-slate-300 mb-3" />
-              <p className="text-slate-500 font-bold">You have no {activeTab === 'All' ? '' : activeTab.toLowerCase()} tickets.</p>
-            </div>
-          ) : (
-            filteredTickets.map((ticket) => (
-              <div key={ticket.id} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50 transition-all">
-                
-                <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-xl shrink-0 ${ticket.status === 'Open' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
-                    <Ticket size={24} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-black text-slate-900">{ticket.token}</span>
-                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md border flex items-center gap-1 ${ticket.status === 'Open' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                        {ticket.status === 'Open' ? <Clock size={12}/> : <CheckCircle2 size={12}/>} 
-                        {ticket.status}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-slate-800 text-sm">{ticket.assetName}</h4>
-                    <p className="text-slate-500 text-sm mt-1 line-clamp-1">{ticket.issue}</p>
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={() => setViewTicket(ticket)} 
-                  className="w-full md:w-auto px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
-                >
-                  View Updates
-                </button>
-
-              </div>
-            ))
-          )}
+      {/* 🌟 NEW CARD GRID LAYOUT */}
+      {filteredTickets.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center flex flex-col items-center">
+          <CheckCircle2 size={40} className="text-slate-300 mb-3" />
+          <p className="text-slate-500 font-bold">You have no {activeTab === 'All' ? '' : activeTab.toLowerCase()} tickets.</p>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTickets.map((ticket) => (
+            <div key={ticket.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col hover:shadow-md hover:border-slate-300 transition-all overflow-hidden">
+              
+              {/* Card Header */}
+              <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
+                <div>
+                  <span className="font-black text-slate-900 text-lg">{ticket.token}</span>
+                  <p className="text-xs font-mono text-slate-500 mt-1">Tag: {ticket.tagId}</p>
+                </div>
+                <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg border flex items-center gap-1 ${ticket.status === 'Open' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                  {ticket.status === 'Open' ? <Clock size={12}/> : <CheckCircle2 size={12}/>} 
+                  {ticket.status}
+                </span>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-5 flex-1 flex flex-col gap-4">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm line-clamp-1" title={ticket.assetName}>{ticket.assetName}</h4>
+                  <p className="text-slate-500 text-xs mt-1.5 line-clamp-2" title={ticket.issue}>{ticket.issue}</p>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 mt-auto">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-slate-500">Raised On:</span>
+                    <span className="font-bold text-slate-800">{formatDate(ticket.raisedAt)}</span>
+                  </div>
+                  
+                  {ticket.status === 'Closed' ? (
+                    <>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-semibold text-slate-500">Resolution Time:</span>
+                        <span className="font-bold text-emerald-600 flex items-center gap-1"><Timer size={12}/> {calculateResolutionTime(ticket.raisedAt, ticket.closedAt)}</span>
+                      </div>
+                      {/* Rating Preview */}
+                      <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
+                        <span className="font-semibold text-slate-500">Your Rating:</span>
+                        {ticket.rating > 0 ? (
+                          <div className="flex gap-0.5">
+                            {[1,2,3,4,5].map(star => <Star key={star} size={12} className={star <= ticket.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}/>)}
+                          </div>
+                        ) : (
+                          <span className="text-amber-500 font-bold text-[10px] uppercase">Pending Rating</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
+                      <span className="font-semibold text-slate-500 flex items-center gap-1"><AlertCircle size={12}/> Waiting Time:</span>
+                      <span className="font-bold text-amber-600 animate-pulse">{calculateWaitingTime(ticket.raisedAt)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Admin Note Preview (If Closed) */}
+                {ticket.status === 'Closed' && (
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-700 block mb-1">Admin Note:</span>
+                    <p className="text-slate-500 italic line-clamp-1 border-l-2 border-slate-200 pl-2">"{ticket.adminNotes}"</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Card Footer Button */}
+              <button 
+                onClick={() => setViewTicket(ticket)} 
+                className={`w-full p-3.5 text-xs font-bold uppercase tracking-widest transition-colors ${ticket.status === 'Closed' && ticket.rating === 0 ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                {ticket.status === 'Closed' && ticket.rating === 0 ? 'Rate Solution' : 'View Full Details'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* MODALS */}
       <AnimatePresence>
@@ -449,7 +522,10 @@ export default function StaffTicketsPage() {
                 ) : (
                   <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3">
                     <Clock size={20} className="text-blue-500 shrink-0" />
-                    <p className="text-sm font-bold text-blue-800">This ticket is currently open. An admin will review it shortly.</p>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-blue-800">This ticket is currently open. An admin will review it shortly.</p>
+                      <p className="text-[10px] font-bold text-blue-600 mt-1 flex items-center gap-1"><AlertCircle size={10}/> Wait Time: {calculateWaitingTime(viewTicket.raisedAt)}</p>
+                    </div>
                   </div>
                 )}
                 
