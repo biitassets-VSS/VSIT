@@ -15,12 +15,11 @@ import {
 function getAuditWindowInfo(category: string = 'Laptop') {
   const today = new Date();
   const year = today.getFullYear();
-  const currentMonth = today.getMonth(); // 0-11
+  const currentMonth = today.getMonth(); 
   
   let targetMonth = currentMonth;
   const isLaptop = (category || '').toLowerCase().includes('laptop');
   
-  // If it's NOT a laptop, force the target month to the end of the current quarter (Mar, Jun, Sep, Dec)
   if (!isLaptop) {
     const quarter = Math.floor(currentMonth / 3);
     targetMonth = (quarter * 3) + 2; 
@@ -46,7 +45,6 @@ function getAuditWindowInfo(category: string = 'Laptop') {
   };
 }
 
-// 🔊 SOUND PLAYER CONTROLLER
 const playAlertSound = () => {
   try {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
@@ -78,10 +76,11 @@ export default function StaffDashboardPage() {
     type: '',
   });
 
+  const auditWindow = getAuditWindowInfo();
+
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
-    let s = raw.split('@')[0];       
-    s = s.split('.')[0];             
+    let s = raw.split('@')[0].split('.')[0];             
     s = s.replace(/[_-]/g, ' ');     
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
@@ -257,21 +256,17 @@ export default function StaffDashboardPage() {
     return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
-  // 🌟 EXACT AUDIT BUTTON LOGIC
   const getAssetAuditState = (asset: any) => {
     const status = (asset.live_inspection_status || '').toLowerCase();
     const auditWindow = getAuditWindowInfo(asset.category);
     
-    // Disable auditing entirely if they requested a return
     if (asset.status?.toLowerCase().includes('return') || status.includes('return pending')) {
-      return { disabled: true, text: "Return Pending", classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none" };
+      return { disabled: true, text: "Return Pending", classes: "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" };
     }
 
-    // Explicit Rule: If inspection was Rejected -> Re-Audit Required
     if (status === 'rejected' || status === 'fail') {
       return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-sm animate-pulse" };
     }
-    // Explicit Rule: If admin sent Re-Inspection -> Re-Inspection Required
     if (status === 're-inspection') {
       return { disabled: false, text: "Re-Inspection Required", classes: "bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm animate-pulse" };
     }
@@ -287,8 +282,7 @@ export default function StaffDashboardPage() {
     });
 
     if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none" };
-    
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none" };
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200" };
     
     return { disabled: false, text: "Audit Device", classes: "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm" };
   };
@@ -306,12 +300,10 @@ export default function StaffDashboardPage() {
 
   const requiresGlobalReinspection = assignedAssets.some(a => {
     const s = (a.live_inspection_status || '').toLowerCase();
-    // Do not count Return Rejected as a global reinspection block
     if (s.includes('return')) return false;
     return ['re-inspection', 'not approved', 'reject'].some(val => s.includes(val));
   });
 
-  // Check if there is an open window for ANY assigned asset
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
   return (
@@ -413,79 +405,112 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
+        {/* 🌟 2-COLUMN LAYOUT RESTORED: HARDWARE ON LEFT, TICKETS ON RIGHT 🌟 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+          
+          {/* HARDWARE UNITS */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 md:p-8 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units</div>
+              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800">
+                <Laptop className="text-blue-600 shrink-0" size={18}/> My Hardware Units
+              </div>
               <span className="text-xs font-bold text-slate-400">{assignedAssets.length} Total</span>
             </div>
+            
             {assignedAssets.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 font-medium text-xs">No active machines linked to your ID.</div>
+              <div className="py-10 text-center text-slate-400 font-medium text-xs">No active assets linked to your account.</div>
             ) : (
-              assignedAssets.map(asset => {
-                const btnState = getAssetAuditState(asset);
-                const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
-                
-                const isReturnPending = (asset.status || '').toLowerCase().includes('return');
-                const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
+              <div className="space-y-4">
+                {assignedAssets.map(asset => {
+                  const btnState = getAssetAuditState(asset);
+                  const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
+                  const isReturnPending = (asset.status || '').toLowerCase().includes('return');
+                  const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
 
-                return (
-                  <div key={asset.id} className={`p-4 rounded-2xl bg-slate-50 border ${isReInspect || isReturnRejected ? 'border-rose-200' : 'border-slate-200/60'} flex flex-col xl:flex-row xl:items-center justify-between gap-4`}>
-                    <div className="flex-1 w-full truncate">
-                      <h4 className="font-bold text-sm text-slate-900 truncate">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5 truncate">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
+                  return (
+                    <div key={asset.id} className={`bg-white p-5 rounded-2xl border ${isReInspect || isReturnRejected ? 'border-rose-200/80 shadow-sm' : 'border-slate-200/80 shadow-sm'} hover:border-slate-300 hover:shadow-md transition-all flex flex-col gap-4`}>
                       
-                      <div className="text-[10px] mt-1.5 font-bold uppercase tracking-widest flex flex-wrap items-center gap-2">
-                        Status: <span className={isReturnRejected ? 'text-rose-600' : isReturnPending ? 'text-orange-600' : isReInspect ? 'text-amber-600' : 'text-slate-600'}>
-                          {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Return Pending Approval' : (asset.live_inspection_status || 'Pending')}
+                      {/* Asset Header & Status */}
+                      <div className="flex justify-between items-start gap-3">
+                        <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
+                          {asset.name || asset.asset_name || asset.model || 'Generic Device'}
+                        </h4>
+                        <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border shrink-0 ${
+                          isReturnRejected ? 'bg-rose-50 text-rose-600 border-rose-200' :
+                          isReturnPending ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                          isReInspect ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                          'bg-emerald-50 text-emerald-600 border-emerald-200'
+                        }`}>
+                          {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : (asset.live_inspection_status || 'Pending')}
                         </span>
-                        <span className="text-slate-300">•</span>
-                        Updated: <span className="text-slate-600">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString() : 'N/A'}</span>
                       </div>
-                    </div>
-                    
-                    {/* 🌟 LAYOUT FIX: Flex wrapping ensures buttons stay neat on all screen sizes */}
-                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto mt-3 xl:mt-0 shrink-0 justify-start xl:justify-end">
-                      <button 
-                        disabled={isReturnPending && !isReturnRejected}
-                        onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                        className={`px-3 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                          (isReturnPending && !isReturnRejected)
-                            ? 'bg-orange-100 text-orange-400 border-orange-200 cursor-not-allowed opacity-60'
-                            : 'border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 cursor-pointer'
-                        }`}
-                      >
-                        {(isReturnPending && !isReturnRejected) ? 'Return Pending' : 'Return'}
-                      </button>
 
-                      <button 
-                        disabled={isReturnPending && !isReturnRejected}
-                        onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
-                        className={`px-3 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                          (isReturnPending && !isReturnRejected)
-                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                            : 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 cursor-pointer'
-                        }`}
-                      >
-                        Replace
-                      </button>
+                      {/* Clean Grid Metadata */}
+                      <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Tag ID</span>
+                          <span className="font-mono text-xs font-semibold text-slate-700">{asset.asset_tag || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Serial S/N</span>
+                          {/* break-all ensures long serials cleanly wrap instead of blowing up the layout */}
+                          <span className="font-mono text-xs font-semibold text-slate-700 break-all">{asset.serial_number || asset.serial || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Updated</span>
+                          <span className="text-xs font-semibold text-slate-700">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Category</span>
+                          <span className="text-xs font-semibold text-slate-700">{asset.category || 'N/A'}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Action Buttons Block */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 justify-end">
+                        <button 
+                          disabled={isReturnPending && !isReturnRejected}
+                          onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
+                          className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
+                            (isReturnPending && !isReturnRejected)
+                              ? 'bg-orange-50 text-orange-400 border-orange-100 cursor-not-allowed opacity-60'
+                              : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50 cursor-pointer'
+                          }`}
+                        >
+                          Return
+                        </button>
 
-                      <button 
-                        disabled={btnState.disabled}
-                        onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 ${btnState.classes}`}
-                      >
-                        {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
-                        {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
-                        {btnState.text}
-                      </button>
+                        <button 
+                          disabled={isReturnPending && !isReturnRejected}
+                          onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
+                          className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
+                            (isReturnPending && !isReturnRejected)
+                              ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                              : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50 cursor-pointer'
+                          }`}
+                        >
+                          Replace
+                        </button>
+
+                        <button 
+                          disabled={btnState.disabled}
+                          onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                          className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm ${btnState.classes}`}
+                        >
+                          {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
+                          {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
+                          <span>{btnState.text}</span>
+                        </button>
+                      </div>
+
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
 
+          {/* SERVICE TICKETS COLUMN */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-indigo-600 shrink-0" size={18}/> My Service Tickets</div>
@@ -494,7 +519,7 @@ export default function StaffDashboardPage() {
             {myTickets.length === 0 ? (
               <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
             ) : (
-              <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
                 {myTickets.map(tix => (
                   <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -512,6 +537,7 @@ export default function StaffDashboardPage() {
             )}
           </div>
         </div>
+
       </div>
 
       {modal.isOpen && (
@@ -521,6 +547,7 @@ export default function StaffDashboardPage() {
   );
 }
 
+// 🌟 TRANSACTIONAL MODAL
 function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT' || type === 'RETURN';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -663,7 +690,7 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
                 </div>
               )}
 
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning (e.g., leaving company, replacing)..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm resize-none"/></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-blue-600 text-sm resize-none"/></div>
             </div>
           )}
         </div>
