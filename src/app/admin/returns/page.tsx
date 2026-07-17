@@ -10,7 +10,7 @@ import {
 
 export default function AdminReturnsPage() {
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [historyRequests, setHistoryRequests] = useState<any[]>([]);
@@ -25,30 +25,22 @@ export default function AdminReturnsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // ==========================================
-      // 1. BULLETPROOF PENDING RETURNS FETCH
-      // ==========================================
-      
-      // Step A: Grab all inspections that were generated from the "Return" QR Code
       const { data: returnInspections } = await supabase
         .from('inspections')
         .select('*')
         .ilike('notes', '%[RETURN REQUEST]%')
-        .not('status', 'in', '("Return Approved","Return Rejected")'); // Exclude already processed ones
+        .not('status', 'in', '("Return Approved","Return Rejected")');
 
-      // Step B: Grab any asset explicitly marked as Pending Return
       const { data: returnAssets } = await supabase
         .from('assets')
         .select('*')
         .ilike('status', '%Return%');
 
-      // Combine asset IDs from both sources
       const combinedAssetIds = Array.from(new Set([
         ...(returnAssets?.map(a => String(a.id)) || []),
         ...(returnInspections?.map(i => String(i.asset_id)) || [])
       ]));
 
-      // Now fetch the clean data
       let pendInspections = returnInspections || [];
       if (combinedAssetIds.length > 0) {
         const { data: moreInsps } = await supabase.from('inspections').select('*').in('asset_id', combinedAssetIds).order('created_at', { ascending: false });
@@ -71,9 +63,6 @@ export default function AdminReturnsPage() {
 
       setPendingRequests(compiledPending);
 
-      // ==========================================
-      // 2. FETCH HISTORY (Inspections focused)
-      // ==========================================
       const { data: historyInsps } = await supabase
         .from('inspections')
         .select('*')
@@ -178,6 +167,9 @@ export default function AdminReturnsPage() {
     }
   };
 
+  const approvedRequests = historyRequests.filter(r => r.status === 'Return Approved');
+  const rejectedRequests = historyRequests.filter(r => r.status === 'Return Rejected');
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3">
@@ -191,7 +183,6 @@ export default function AdminReturnsPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900">
       <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* Header & Tabs */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -204,8 +195,7 @@ export default function AdminReturnsPage() {
             </div>
           </div>
 
-          {/* TAB BAR */}
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-2">
             <button 
               onClick={() => setActiveTab('pending')}
               className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'pending' ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'text-slate-500 hover:bg-slate-50'}`}
@@ -214,17 +204,22 @@ export default function AdminReturnsPage() {
               {pendingRequests.length > 0 && <span className="bg-orange-600 text-white px-2 py-0.5 rounded-full text-[10px]">{pendingRequests.length}</span>}
             </button>
             <button 
-              onClick={() => setActiveTab('history')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'history' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
+              onClick={() => setActiveTab('approved')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-              <History size={16} /> Processed History
+              <CheckCircle size={16} /> Approved History
+            </button>
+            {/* 🌟 NEW TAB FOR REJECTED RETURNS */}
+            <button 
+              onClick={() => setActiveTab('rejected')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <XOctagon size={16} /> Rejected Requests
             </button>
           </div>
         </div>
 
-        {/* ========================================== */}
-        {/* PENDING TAB CONTENT */}
-        {/* ========================================== */}
+        {/* PENDING TAB */}
         {activeTab === 'pending' && (
           <div className="animate-in fade-in duration-300">
             {pendingRequests.length === 0 ? (
@@ -271,29 +266,70 @@ export default function AdminReturnsPage() {
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* HISTORY TAB CONTENT */}
-        {/* ========================================== */}
-        {activeTab === 'history' && (
+        {/* APPROVED HISTORY TAB */}
+        {activeTab === 'approved' && (
           <div className="animate-in fade-in duration-300">
-            {historyRequests.length === 0 ? (
+            {approvedRequests.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-3">
                 <History size={48} className="mx-auto text-slate-300" />
-                <p className="text-slate-500 font-bold">No historical records found.</p>
+                <p className="text-slate-500 font-bold">No approved historical records found.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {historyRequests.map((record, index) => {
+                {approvedRequests.map((record, index) => {
                   const staffName = record.user_profile?.full_name || record.user_profile?.name || 'Unknown User';
-                  const isApproved = record.status === 'Return Approved';
                   const processDate = record.created_at ? new Date(record.created_at).toLocaleString() : 'Unknown Date';
 
                   return (
-                    <div key={`history-${record.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-slate-300 transition-colors opacity-90">
+                    <div key={`history-app-${record.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-emerald-300 transition-colors opacity-90">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md flex items-center gap-1 ${isApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                            {isApproved ? <CheckCircle size={12}/> : <XOctagon size={12}/>} {isApproved ? 'Handover Approved' : 'Return Rejected'}
+                          <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-md flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle size={12}/> Handover Approved
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-400">{processDate}</span>
+                        </div>
+                        <h3 className="font-bold text-base text-slate-900 mt-2">{record.asset?.name || record.asset?.model || 'Hardware Device'}</h3>
+                        <p className="text-xs font-mono text-slate-500 mt-0.5">Asset Tag: {record.asset?.asset_tag || 'N/A'}</p>
+                        
+                        <p className="text-sm font-semibold text-slate-600 mt-2">
+                          Returned by: <strong className="text-slate-900">{staffName}</strong> 
+                        </p>
+                      </div>
+
+                      <div className="w-full md:w-auto">
+                        <button onClick={() => setModal({ isOpen: true, data: record, isHistory: true })} className="w-full md:w-auto px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                          <Search size={16} /> View Log Details
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* REJECTED REQUESTS TAB */}
+        {activeTab === 'rejected' && (
+          <div className="animate-in fade-in duration-300">
+            {rejectedRequests.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-3">
+                <History size={48} className="mx-auto text-slate-300" />
+                <p className="text-slate-500 font-bold">No rejected historical records found.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {rejectedRequests.map((record, index) => {
+                  const staffName = record.user_profile?.full_name || record.user_profile?.name || 'Unknown User';
+                  const processDate = record.created_at ? new Date(record.created_at).toLocaleString() : 'Unknown Date';
+
+                  return (
+                    <div key={`history-rej-${record.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-rose-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-rose-300 transition-colors opacity-90">
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-md flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200">
+                            <XOctagon size={12}/> Return Rejected
                           </span>
                           <span className="text-[11px] font-bold text-slate-400">{processDate}</span>
                         </div>
@@ -319,9 +355,6 @@ export default function AdminReturnsPage() {
         )}
       </div>
 
-      {/* ========================================== */}
-      {/* UNIVERSAL REVIEW MODAL (WITH DEEP PHOTO EXTRACTION) */}
-      {/* ========================================== */}
       {modal.isOpen && modal.data && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
@@ -347,7 +380,6 @@ export default function AdminReturnsPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Mobile Handoff Photos</p>
                 {(() => {
                   const inspectionTarget = modal.isHistory ? modal.data : modal.data.return_details;
-                  
                   let rawPhotos = inspectionTarget?.photos 
                                || inspectionTarget?.photo_urls 
                                || inspectionTarget?.photo_url 
@@ -365,7 +397,6 @@ export default function AdminReturnsPage() {
                       photosArray = rawPhotos;
                     } else if (typeof rawPhotos === 'string') {
                       const trimmed = rawPhotos.trim();
-                      
                       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
                         const parsed = JSON.parse(trimmed);
                         if (Array.isArray(parsed)) photosArray = parsed;
@@ -377,7 +408,6 @@ export default function AdminReturnsPage() {
                       photosArray = Object.values(rawPhotos);
                     }
                   } catch (e) {
-                    console.error("Failed to parse photo array", e);
                     if (typeof rawPhotos === 'string' && rawPhotos.startsWith('http')) {
                       photosArray = [rawPhotos.trim()];
                     }

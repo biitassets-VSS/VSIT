@@ -11,14 +11,22 @@ import {
   ThumbsUp, ThumbsDown
 } from 'lucide-react';
 
-// 🌟 THE AUDIT WINDOW ENGINE
-function getAuditWindowInfo() {
+// 🌟 SMART AUDIT WINDOW ENGINE (Monthly for Laptops, Quarterly for Others)
+function getAuditWindowInfo(category: string = 'Laptop') {
   const today = new Date();
   const year = today.getFullYear();
-  const month = today.getMonth();
-
-  const lastDayOfMonth = new Date(year, month + 1, 0);
+  const currentMonth = today.getMonth(); // 0-11
   
+  let targetMonth = currentMonth;
+  const isLaptop = (category || '').toLowerCase().includes('laptop');
+  
+  // If it's NOT a laptop, force the target month to the end of the current quarter (Mar, Jun, Sep, Dec)
+  if (!isLaptop) {
+    const quarter = Math.floor(currentMonth / 3);
+    targetMonth = (quarter * 3) + 2; 
+  }
+
+  const lastDayOfMonth = new Date(year, targetMonth + 1, 0);
   const lastSaturday = new Date(lastDayOfMonth);
   while (lastSaturday.getDay() !== 6) {
     lastSaturday.setDate(lastSaturday.getDate() - 1);
@@ -34,7 +42,7 @@ function getAuditWindowInfo() {
     windowStart,
     lastSaturday,
     year,
-    month
+    month: targetMonth
   };
 }
 
@@ -44,9 +52,7 @@ const playAlertSound = () => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
     const playPromise = audio.play();
     if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        console.warn("Browser requires user interaction before playing sound automatically.");
-      });
+      playPromise.catch(() => console.warn("Browser requires user interaction before playing sound automatically."));
     }
   } catch (e) {}
 };
@@ -64,18 +70,13 @@ export default function StaffDashboardPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
-  // 🌟 LIKE/DISLIKE STATE
   const [reactions, setReactions] = useState<Record<string, 'like' | 'dislike'>>({});
-  
-  // 🔔 FLOATING RIGHT-SIDE TOAST NOTIFICATION STATE
   const [toasts, setToasts] = useState<{ id: number, title: string, message: string }[]>([]);
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
     type: '',
   });
-
-  const auditWindow = getAuditWindowInfo();
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
@@ -85,15 +86,11 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
-  // 🔔 POPUP TOAST TRIGGER FUNCTION
   const showToast = (title: string, message: string) => {
     playAlertSound();
     const id = Date.now();
     setToasts(prev => [...prev, { id, title, message }]);
-    
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 7000); 
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 7000); 
   };
 
   useEffect(() => {
@@ -114,9 +111,7 @@ export default function StaffDashboardPage() {
   }, []);
 
   const loadRealDatabase = async () => {
-    const safetyTimeoutId = setTimeout(() => {
-      setLoading(false);
-    }, 4000);
+    const safetyTimeoutId = setTimeout(() => setLoading(false), 4000);
 
     try {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
@@ -156,9 +151,10 @@ export default function StaffDashboardPage() {
         supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(200)
       ]);
 
+      if (inspRes.data) setAllInspections(inspRes.data);
+
       if (notifRes.data) {
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-        
         let activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
           const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
@@ -194,7 +190,6 @@ export default function StaffDashboardPage() {
     } catch (err) { console.error("Data sync failure:", err); } finally { clearTimeout(safetyTimeoutId); setLoading(false); }
   };
 
-  // REAL-TIME WEBSOCKET LISTENERS
   useEffect(() => {
     loadRealDatabase();
     if (!currentUser || currentUser.id === 'guest-mock-uuid' || !currentUser.id) return;
@@ -208,7 +203,6 @@ export default function StaffDashboardPage() {
         if (payload.new.assigned_to === currentUser.id) showToast("Hardware Update", `IT has updated your device details.`);
         loadRealDatabase(); 
       })
-      // 🌟 LISTEN FOR ADMIN RETURN APPROVAL/REJECTION 🌟
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inspections' }, (payload) => { 
         if (payload.new.inspected_by === currentUser.id) {
           if (payload.new.status === 'Return Approved') showToast("Handover Approved", "IT has successfully received and unassigned your device.");
@@ -254,6 +248,7 @@ export default function StaffDashboardPage() {
   };
 
   const resetLocalDismissals = () => { localStorage.removeItem('dismissed_broadcasts'); loadRealDatabase(); };
+  
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s === 'open' || s === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
@@ -262,12 +257,39 @@ export default function StaffDashboardPage() {
     return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
+  // 🌟 EXACT AUDIT BUTTON LOGIC
   const getAssetAuditState = (asset: any) => {
     const status = (asset.live_inspection_status || '').toLowerCase();
-    if (status.includes('re-inspection') || status.includes('not approved') || status.includes('reject')) return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-sm animate-pulse" };
-    const hasAudited = allInspections.some(insp => { const d = new Date(insp.created_at); return insp.asset_id === asset.id && d.getFullYear() === auditWindow.year && d.getMonth() === auditWindow.month && insp.status !== 'Re-Inspection'; });
-    if (hasAudited) return { disabled: true, text: "Audited This Month", classes: "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none" };
+    const auditWindow = getAuditWindowInfo(asset.category);
+    
+    // Disable auditing entirely if they requested a return
+    if (asset.status?.toLowerCase().includes('return') || status.includes('return pending')) {
+      return { disabled: true, text: "Return Pending", classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none" };
+    }
+
+    // Explicit Rule: If inspection was Rejected -> Re-Audit Required
+    if (status === 'rejected' || status === 'fail') {
+      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-sm animate-pulse" };
+    }
+    // Explicit Rule: If admin sent Re-Inspection -> Re-Inspection Required
+    if (status === 're-inspection') {
+      return { disabled: false, text: "Re-Inspection Required", classes: "bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm animate-pulse" };
+    }
+
+    const hasAudited = allInspections.some(insp => {
+       const d = new Date(insp.created_at);
+       return insp.asset_id === asset.id && 
+              d.getFullYear() === auditWindow.year && 
+              d.getMonth() === auditWindow.month &&
+              !insp.notes?.includes('[RETURN REQUEST]') &&
+              !insp.status?.toLowerCase().includes('return') &&
+              (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
+    });
+
+    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none" };
+    
     if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none" };
+    
     return { disabled: false, text: "Audit Device", classes: "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm" };
   };
 
@@ -282,8 +304,15 @@ export default function StaffDashboardPage() {
 
   if (!isAuthorized) return null; 
 
-  const requiresGlobalReinspection = assignedAssets.some(a => ['re-inspection', 'not approved', 'reject'].some(s => (a.live_inspection_status || '').toLowerCase().includes(s)));
-  const isGlobalAuditOpen = auditWindow.isOpen || requiresGlobalReinspection;
+  const requiresGlobalReinspection = assignedAssets.some(a => {
+    const s = (a.live_inspection_status || '').toLowerCase();
+    // Do not count Return Rejected as a global reinspection block
+    if (s.includes('return')) return false;
+    return ['re-inspection', 'not approved', 'reject'].some(val => s.includes(val));
+  });
+
+  // Check if there is an open window for ANY assigned asset
+  const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative">
@@ -349,13 +378,11 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-blue-600 bg-blue-50 border-blue-100', type: 'TICKET', isActionDisabled: false },
-            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (auditWindow.isOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (auditWindow.isOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen },
+            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen },
             { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
-            { name: 'Replacement', desc: 'Swap hardware', icon: RefreshCw, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'REPLACEMENT', isActionDisabled: assignedAssets.length === 0 },
-            { name: 'Return Asset', desc: 'Handover to IT', icon: LogOut, color: 'text-orange-600 bg-orange-50 border-orange-100', type: 'RETURN', isActionDisabled: assignedAssets.length === 0 },
             { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-indigo-600 bg-indigo-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
           ].map((item) => (
               <button 
@@ -371,6 +398,21 @@ export default function StaffDashboardPage() {
           )}
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Hardware</p><h2 className="text-3xl sm:text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
+            <div className="p-4 rounded-2xl bg-blue-50 text-blue-600 font-bold"><Laptop size={28} /></div>
+          </div>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Action Required</p><h2 className="text-3xl sm:text-4xl font-black text-amber-600 mt-1">{stats.needsInspection}</h2></div>
+            <div className="p-4 rounded-2xl bg-amber-50 text-amber-600"><AlertCircle size={28} /></div>
+          </div>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Open Tickets</p><h2 className="text-3xl sm:text-4xl font-black text-indigo-600 mt-1">{stats.openTickets}</h2></div>
+            <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600"><Ticket size={28} /></div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -384,18 +426,17 @@ export default function StaffDashboardPage() {
                 const btnState = getAssetAuditState(asset);
                 const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
                 
-                // 🌟 FIX: Return Dashboard UI States 🌟
                 const isReturnPending = (asset.status || '').toLowerCase().includes('return');
                 const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
 
                 return (
                   <div key={asset.id} className={`p-4 rounded-2xl bg-slate-50 border ${isReInspect || isReturnRejected ? 'border-rose-200' : 'border-slate-200/60'} flex flex-col xl:flex-row xl:items-center justify-between gap-4`}>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
+                    <div className="flex-1 w-full truncate">
+                      <h4 className="font-bold text-sm text-slate-900 truncate">{asset.name || asset.asset_name || asset.model || 'Generic Device'}</h4>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5 truncate">Tag: {asset.asset_tag || 'NO-TAG'} • S/N: {asset.serial_number || asset.serial || 'N/A'}</p>
                       
                       <div className="text-[10px] mt-1.5 font-bold uppercase tracking-widest flex flex-wrap items-center gap-2">
-                        Status: <span className={isReInspect ? 'text-rose-600' : isReturnRejected ? 'text-rose-600' : isReturnPending ? 'text-orange-600' : 'text-slate-600'}>
+                        Status: <span className={isReturnRejected ? 'text-rose-600' : isReturnPending ? 'text-orange-600' : isReInspect ? 'text-amber-600' : 'text-slate-600'}>
                           {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Return Pending Approval' : (asset.live_inspection_status || 'Pending')}
                         </span>
                         <span className="text-slate-300">•</span>
@@ -403,11 +444,12 @@ export default function StaffDashboardPage() {
                       </div>
                     </div>
                     
-                    <div className="flex gap-2 w-full xl:w-auto mt-2 xl:mt-0">
+                    {/* 🌟 LAYOUT FIX: Flex wrapping ensures buttons stay neat on all screen sizes */}
+                    <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto mt-3 xl:mt-0 shrink-0 justify-start xl:justify-end">
                       <button 
                         disabled={isReturnPending && !isReturnRejected}
                         onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all shrink-0 text-center flex-1 xl:flex-none border shadow-sm ${
+                        className={`px-3 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
                           (isReturnPending && !isReturnRejected)
                             ? 'bg-orange-100 text-orange-400 border-orange-200 cursor-not-allowed opacity-60'
                             : 'border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 cursor-pointer'
@@ -415,7 +457,24 @@ export default function StaffDashboardPage() {
                       >
                         {(isReturnPending && !isReturnRejected) ? 'Return Pending' : 'Return'}
                       </button>
-                      <button disabled={btnState.disabled} onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} className={`px-4 py-2 font-bold text-xs rounded-xl transition-all shrink-0 text-center flex-1 xl:flex-none flex items-center justify-center gap-1.5 ${btnState.classes}`}>
+
+                      <button 
+                        disabled={isReturnPending && !isReturnRejected}
+                        onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
+                        className={`px-3 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
+                          (isReturnPending && !isReturnRejected)
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                            : 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 cursor-pointer'
+                        }`}
+                      >
+                        Replace
+                      </button>
+
+                      <button 
+                        disabled={btnState.disabled}
+                        onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 ${btnState.classes}`}
+                      >
                         {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
                         {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
                         {btnState.text}
@@ -462,7 +521,6 @@ export default function StaffDashboardPage() {
   );
 }
 
-// 🌟 ARMORED TRANSACTION MODAL
 function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT' || type === 'RETURN';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
@@ -472,11 +530,9 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   const [formTitle, setFormTitle] = useState('');
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
-  
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
-
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
 
@@ -490,29 +546,22 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   const generateMobileHandoff = () => {
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
-    
-    // 🚀 CRITICAL FIX: Inject a hidden tag into the notes so the mobile app carries the "Return" signal to the database
     const finalNotes = type === 'RETURN' ? `[RETURN REQUEST] ${formText}` : formText;
-    
     const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
-    
     setQrUrl(url);
     setShowQR(true);
   };
 
   const handleLivePostgresSubmit = async () => {
     if (type === 'INSPECTION' || type === 'RETURN') {
-      
       if (type === 'RETURN') {
         try {
           await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', asset.id);
-          // 🚀 INSTANT UI UPDATE: Forces the dashboard to disable the button without waiting for websocket
           if (setAssignedAssets) {
             setAssignedAssets((prev: any[]) => prev.map(a => a.id === asset.id ? { ...a, status: 'Pending Return' } : a));
           }
         } catch(e) { console.warn("Failed to mark as Pending Return", e); }
       }
-
       generateMobileHandoff();
       return;
     }

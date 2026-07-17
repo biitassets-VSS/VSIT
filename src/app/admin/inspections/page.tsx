@@ -49,8 +49,11 @@ function AdminInspectionReviewContent() {
     setLoading(true);
     try {
       const [inspRes, assetsRes, profilesRes] = await Promise.all([
-        // 🌟 CRITICAL FIX: Ignore any inspection logged as a "[RETURN REQUEST]" so it doesn't clutter this page
-        supabase.from('inspections').select('*').not('notes', 'ilike', '%[RETURN REQUEST]%').order('created_at', { ascending: false }),
+        // 🌟 CRITICAL FIX: Hide Return records completely from the standard Inspections module
+        supabase.from('inspections').select('*')
+          .not('notes', 'ilike', '%[RETURN REQUEST]%')
+          .not('status', 'ilike', '%Return%')
+          .order('created_at', { ascending: false }),
         supabase.from('assets').select('*'),
         supabase.from('profiles').select('*')
       ]);
@@ -65,7 +68,6 @@ function AdminInspectionReviewContent() {
       rawInspections.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
         
-        // 🌟 AGGRESSIVE PROFILE MATCHING
         const matchedStaff = profilesData.find(p => 
           (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
           (insp.inspected_by && p.id === insp.inspected_by) ||
@@ -79,17 +81,14 @@ function AdminInspectionReviewContent() {
         
         const isDeletedUser = !matchedStaff.id && (!!insp.user_email || !!insp.inspected_by);
 
-        // 🌟 DEEP HISTORY PARSING ENGINE (Preserves Deleted User Data precisely)
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
         
         if (!recoveredName && insp.notes) {
-          // Extract from digital signature e.g. "Digitally Signed Handover Agreement by John Doe on..."
           const match = insp.notes.match(/by\s+(.*?)\s+on/i);
           if (match) recoveredName = match[1].trim();
         }
 
         if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
-          // Extract from email e.g. "john.doe@company.com" -> "John Doe"
           recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
         
@@ -107,10 +106,8 @@ function AdminInspectionReviewContent() {
           category: matchedAsset.category || 'Laptop', 
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
           asset_tag: matchedAsset.asset_tag || 'NO-TAG',
-          
           staff_name: finalName,
           emp_code: matchedStaff.emp_code || matchedStaff.emp_id || fallbackEmp,
-          
           is_deleted_user: isDeletedUser,
           status: normalizedStatus
         });
@@ -190,7 +187,6 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      // Ensure we don't try to notify a deleted/non-existent user
       if (staffId && !staffId.includes('ARCHIVED') && !staffId.includes('NO-EMP-RECORD')) {
         await supabase.from('notifications').insert({
           target_user: staffId,
