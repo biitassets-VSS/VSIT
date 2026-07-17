@@ -26,14 +26,14 @@ export default function AdminReturnsPage() {
     setLoading(true);
     try {
       // ==========================================
-      // 1. FETCH PENDING RETURNS (Assets focused)
+      // 1. FETCH PENDING RETURNS (Bulletproof Match)
       // ==========================================
       const { data: pendingAssets } = await supabase
         .from('assets')
         .select('*')
-        .eq('status', 'Return Requested');
+        .ilike('status', '%Return%'); 
 
-      const pendAssetIds = pendingAssets?.map(a => a.id) || [];
+      const pendAssetIds = pendingAssets?.map(a => String(a.id)) || [];
       const pendUserIds = [...new Set(pendingAssets?.map(a => a.assigned_to).filter(Boolean))];
       
       let pendInspections: any[] = [];
@@ -55,7 +55,7 @@ export default function AdminReturnsPage() {
 
       const compiledPending = (pendingAssets || []).map(asset => ({
         ...asset,
-        return_details: pendInspections.find(i => i.asset_id === asset.id) || null,
+        return_details: pendInspections.find(i => String(i.asset_id) === String(asset.id)) || null,
         user_profile: pendProfiles.find(p => p.id === asset.assigned_to) || null
       }));
 
@@ -70,7 +70,7 @@ export default function AdminReturnsPage() {
         .in('status', ['Return Approved', 'Return Rejected']) 
         .order('created_at', { ascending: false });
 
-      const histAssetIds = [...new Set(historyInsps?.map(i => i.asset_id).filter(Boolean))];
+      const histAssetIds = [...new Set(historyInsps?.map(i => String(i.asset_id)).filter(Boolean))];
       const histUserIds = [...new Set(historyInsps?.map(i => i.inspected_by).filter(Boolean))];
 
       let histAssets: any[] = [];
@@ -87,7 +87,7 @@ export default function AdminReturnsPage() {
 
       const compiledHistory = (historyInsps || []).map(insp => ({
         ...insp, 
-        asset: histAssets.find(a => a.id === insp.asset_id) || { name: 'Unknown Asset', asset_tag: 'N/A' },
+        asset: histAssets.find(a => String(a.id) === String(insp.asset_id)) || { name: 'Unknown Asset', asset_tag: 'N/A' },
         user_profile: histProfiles.find(p => p.id === insp.inspected_by) || null
       }));
 
@@ -105,19 +105,28 @@ export default function AdminReturnsPage() {
   }, []);
 
   const handleApproveReturn = async (request: any) => {
-    if (!window.confirm("Confirm physical asset received? This will log the return and unassign the device.")) return;
+    if (!window.confirm("Confirm physical asset received? This will log the return, unassign the device from the staff member, and return it to stock.")) return;
     
     setProcessingId(request.id);
     try {
-      // 1. Unassign the asset & reset status
-      await supabase.from('assets').update({ assigned_to: null, status: 'In Stock' }).eq('id', request.id);
+      // 🌟 STRICT FIX: Removes from Staff Dashboard (assigned_to: null) and puts back in stock
+      await supabase.from('assets').update({ 
+        assigned_to: null, 
+        status: 'In Stock (Available)' 
+      }).eq('id', request.id);
 
-      // 2. Mark inspection as "Return Approved"
+      // Mark inspection as "Return Approved"
       if (request.return_details?.id) {
-        await supabase.from('inspections').update({ status: 'Return Approved', notes: `${request.return_details.notes || ''}\n[ADMIN APPROVED]` }).eq('id', request.return_details.id);
+        await supabase.from('inspections').update({ 
+          status: 'Return Approved', 
+          notes: `${request.return_details.notes || ''}\n[ADMIN APPROVED: Asset returned to Stock]` 
+        }).eq('id', request.return_details.id);
       } else {
         await supabase.from('inspections').insert({
-          asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Approved', notes: 'Approved via Admin Dashboard (No mobile photos provided)'
+          asset_id: request.id, 
+          inspected_by: request.assigned_to, 
+          status: 'Return Approved', 
+          notes: 'Approved via Admin Dashboard. Asset returned to Stock.'
         });
       }
 
@@ -136,13 +145,20 @@ export default function AdminReturnsPage() {
 
     setProcessingId(request.id);
     try {
-      await supabase.from('assets').update({ status: 'Active' }).eq('id', request.id);
+      // 🌟 Rejecting means it goes back to 'Assigned' and stays with the user
+      await supabase.from('assets').update({ status: 'Assigned' }).eq('id', request.id);
 
       if (request.return_details?.id) {
-        await supabase.from('inspections').update({ status: 'Return Rejected', notes: `${request.return_details.notes || ''}\n[ADMIN REJECTED: ${reason}]` }).eq('id', request.return_details.id);
+        await supabase.from('inspections').update({ 
+          status: 'Return Rejected', 
+          notes: `${request.return_details.notes || ''}\n[ADMIN REJECTED: ${reason}]` 
+        }).eq('id', request.return_details.id);
       } else {
         await supabase.from('inspections').insert({
-          asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Rejected', notes: `Admin Rejected: ${reason}`
+          asset_id: request.id, 
+          inspected_by: request.assigned_to, 
+          status: 'Return Rejected', 
+          notes: `Admin Rejected: ${reason}`
         });
       }
 
@@ -234,7 +250,7 @@ export default function AdminReturnsPage() {
 
                       <div className="flex items-center gap-3 w-full md:w-auto">
                         <button onClick={() => setModal({ isOpen: true, data: request, isHistory: false })} className="flex-1 md:flex-none px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
-                          <ImageIcon size={16} /> Review
+                          <ImageIcon size={16} /> Review Evidence
                         </button>
                         <button disabled={processingId === request.id} onClick={() => handleApproveReturn(request)} className="flex-1 md:flex-none px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50">
                           {processingId === request.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Approve Handover
@@ -297,7 +313,7 @@ export default function AdminReturnsPage() {
       </div>
 
       {/* ========================================== */}
-      {/* UNIVERSAL REVIEW MODAL */}
+      {/* UNIVERSAL REVIEW MODAL (WITH DEEP PHOTO EXTRACTION) */}
       {/* ========================================== */}
       {modal.isOpen && modal.data && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
@@ -323,11 +339,15 @@ export default function AdminReturnsPage() {
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Mobile Handoff Photos</p>
                 {(() => {
-                  // Safely determine which inspection row we are looking at
                   const inspectionTarget = modal.isHistory ? modal.data : modal.data.return_details;
                   
-                  // Check EVERY possible column name where you might be saving the URL
-                  let rawPhotos = inspectionTarget?.photos || inspectionTarget?.photo_urls || inspectionTarget?.photo_url || inspectionTarget?.image_url;
+                  let rawPhotos = inspectionTarget?.photos 
+                               || inspectionTarget?.photo_urls 
+                               || inspectionTarget?.photo_url 
+                               || inspectionTarget?.image_url
+                               || inspectionTarget?.images
+                               || inspectionTarget?.photo
+                               || inspectionTarget?.image;
                   
                   let photosArray: string[] = [];
 
@@ -335,26 +355,22 @@ export default function AdminReturnsPage() {
                     if (!rawPhotos) {
                       photosArray = [];
                     } else if (Array.isArray(rawPhotos)) {
-                      // Already an array
                       photosArray = rawPhotos;
                     } else if (typeof rawPhotos === 'string') {
                       const trimmed = rawPhotos.trim();
                       
                       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-                        // It is a JSON string (e.g. '["http://..."]')
                         const parsed = JSON.parse(trimmed);
                         if (Array.isArray(parsed)) photosArray = parsed;
                         else if (typeof parsed === 'object' && parsed !== null) photosArray = Object.values(parsed);
                       } else if (trimmed !== '') {
-                        // FIX: It is a plain string URL (e.g. "https://...")
-                        photosArray = [trimmed];
+                        photosArray = [trimmed]; 
                       }
                     } else if (typeof rawPhotos === 'object' && rawPhotos !== null) {
                       photosArray = Object.values(rawPhotos);
                     }
                   } catch (e) {
                     console.error("Failed to parse photo array", e);
-                    // Ultimate Fallback: if JSON.parse crashed, but it's a URL string
                     if (typeof rawPhotos === 'string' && rawPhotos.startsWith('http')) {
                       photosArray = [rawPhotos.trim()];
                     }
@@ -380,7 +396,6 @@ export default function AdminReturnsPage() {
               </div>
             </div>
 
-            {/* Action footer only shows if it's a Pending Request */}
             {!modal.isHistory && (
               <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-between gap-3 shrink-0">
                 <button onClick={() => handleRejectReturn(modal.data)} className="px-6 py-3 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors">
