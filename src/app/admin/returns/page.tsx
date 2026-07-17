@@ -211,7 +211,6 @@ export default function AdminReturnsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {/* FIX: 100% Guaranteed Unique Key */}
                 {pendingRequests.map((request, index) => {
                   const staffName = request.user_profile?.full_name || request.user_profile?.name || 'Unknown User';
                   const staffEmpCode = request.user_profile?.emp_code || request.user_profile?.emp_id || 'NO-ID';
@@ -261,7 +260,6 @@ export default function AdminReturnsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {/* FIX: 100% Guaranteed Unique Key */}
                 {historyRequests.map((record, index) => {
                   const staffName = record.user_profile?.full_name || record.user_profile?.name || 'Unknown User';
                   const isApproved = record.status === 'Return Approved';
@@ -325,27 +323,46 @@ export default function AdminReturnsPage() {
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Mobile Handoff Photos</p>
                 {(() => {
-                  let rawPhotos = modal.isHistory ? modal.data.photos : modal.data.return_details?.photos;
+                  // Safely determine which inspection row we are looking at
+                  const inspectionTarget = modal.isHistory ? modal.data : modal.data.return_details;
+                  
+                  // Check EVERY possible column name where you might be saving the URL
+                  let rawPhotos = inspectionTarget?.photos || inspectionTarget?.photo_urls || inspectionTarget?.photo_url || inspectionTarget?.image_url;
+                  
                   let photosArray: string[] = [];
 
                   try {
-                    if (Array.isArray(rawPhotos)) {
+                    if (!rawPhotos) {
+                      photosArray = [];
+                    } else if (Array.isArray(rawPhotos)) {
+                      // Already an array
                       photosArray = rawPhotos;
                     } else if (typeof rawPhotos === 'string') {
-                      const parsed = JSON.parse(rawPhotos);
-                      if (Array.isArray(parsed)) photosArray = parsed;
-                      else if (typeof parsed === 'object' && parsed !== null) photosArray = Object.values(parsed);
+                      const trimmed = rawPhotos.trim();
+                      
+                      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+                        // It is a JSON string (e.g. '["http://..."]')
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) photosArray = parsed;
+                        else if (typeof parsed === 'object' && parsed !== null) photosArray = Object.values(parsed);
+                      } else if (trimmed !== '') {
+                        // FIX: It is a plain string URL (e.g. "https://...")
+                        photosArray = [trimmed];
+                      }
                     } else if (typeof rawPhotos === 'object' && rawPhotos !== null) {
                       photosArray = Object.values(rawPhotos);
                     }
                   } catch (e) {
                     console.error("Failed to parse photo array", e);
+                    // Ultimate Fallback: if JSON.parse crashed, but it's a URL string
+                    if (typeof rawPhotos === 'string' && rawPhotos.startsWith('http')) {
+                      photosArray = [rawPhotos.trim()];
+                    }
                   }
                   
                   if (photosArray.length > 0) {
                     return (
                       <div className="grid grid-cols-2 gap-3">
-                        {/* FIX: 100% Guaranteed Unique Key */}
                         {photosArray.map((url: string, i: number) => (
                           <img key={`photo-${i}`} src={url} alt={`Evidence ${i}`} className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm" />
                         ))}
