@@ -1,1271 +1,554 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
-  User, X, Save, RefreshCw, Download, Printer, Edit2, 
-  Upload, FileSpreadsheet, Package, Mouse, 
-  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
-  Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
-  Keyboard, RectangleHorizontal, Monitor, Sparkles
+  Ticket, Plus, X, Clock, CheckCircle2, 
+  MessageSquare, Laptop, AlertCircle, Send, Star, Loader2, Timer
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// ==========================================
-// 🌟 EXACT ASSET CATEGORIES FROM ADMIN
-// ==========================================
-const ASSET_CATEGORIES = [
-  'For Laptop', 
-  'Stand', 
-  'USB Wired Keyboard', 
-  'USB Keyboard Mouse Kit', 
-  'Wireless Keyboard kit', 
-  'USB Wired Mouse', 
-  'Headphone', 
-  'Cleaning Kit', 
-  'Others'
-];
+// 🌟 TIME CALCULATION ENGINE
+const calculateResolutionTime = (raisedAt: string, closedAt: string | null) => {
+  if (!raisedAt || !closedAt) return null;
+  const start = new Date(raisedAt).getTime();
+  const end = new Date(closedAt).getTime();
+  const diffMs = end - start;
 
-// ==========================================
-// 🎨 DYNAMIC ICON MAPPER HELPER
-// ==========================================
-function getCategoryIcon(category: string, size = 20) {
-  const cat = String(category || '').toLowerCase();
-  if (cat.includes('laptop')) return <Laptop size={size} />;
-  if (cat.includes('stand')) return <Monitor size={size} />;
-  if (cat.includes('keyboard') || cat.includes('combo')) return <Keyboard size={size} />;
-  if (cat.includes('mouse pad') || cat.includes('pad')) return <RectangleHorizontal size={size} />;
-  if (cat.includes('mouse')) return <Mouse size={size} />;
-  if (cat.includes('headphone')) return <Headphones size={size} />;
-  if (cat.includes('cleaning')) return <Sparkles size={size} />;
-  return <Package size={size} />;
-}
+  if (diffMs <= 0) return "Instant resolution";
 
-// ==========================================
-// 🛡️ SAFE HELPERS & PARSERS
-// ==========================================
-function safeDate(dateStr: any) {
-  if (!dateStr) return 'N/A';
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString('en-IN', {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
-}
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const days = Math.floor(diffMins / (60 * 24));
+  const hours = Math.floor((diffMins % (60 * 24)) / 60);
+  const minutes = diffMins % 60;
 
-function safeString(val: any) {
-  if (val === null || val === undefined) return '';
-  return String(val);
-}
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
 
-function generateSafeUuid() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+  if (parts.length === 0) return "< 1m";
+  return parts.join(' ');
+};
 
-// ==========================================
-// 🌟 SMART TAG GENERATOR (LOCKS SUFFIX)
-// ==========================================
-function generateCategoryPrefix(category: string, existingTagId?: string) {
-  let middle = 'OTH';
-  const cat = safeString(category).toLowerCase();
-  
-  if (cat === 'for laptop') middle = 'LAP';
-  else if (cat === 'wireless keyboard kit') middle = 'WKM';
-  else if (cat === 'usb keyboard mouse kit') middle = 'CKM';
-  else if (cat === 'usb wired keyboard') middle = 'KMU';
-  else if (cat === 'usb wired mouse') middle = 'MOU';
-  else if (cat === 'headphone') middle = 'HDP';
-  else if (cat === 'stand') middle = 'STD';
-  else if (cat === 'cleaning kit') middle = 'CKT';
-  else if (cat === 'others') middle = 'OTH';
+const calculateWaitingTime = (raisedAt: string) => {
+  if (!raisedAt) return null;
+  const start = new Date(raisedAt).getTime();
+  const end = new Date().getTime(); // Current Time
+  const diffMs = end - start;
 
-  let suffix = Math.floor(1000 + Math.random() * 9000).toString();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const days = Math.floor(diffMins / (60 * 24));
+  const hours = Math.floor((diffMins % (60 * 24)) / 60);
+  const minutes = diffMins % 60;
 
-  // 🚀 Extracts and locks the exact numbers from the previous tag
-  if (existingTagId) {
-    const match = existingTagId.match(/\d+$/);
-    if (match) {
-      suffix = match[0];
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+
+  if (parts.length === 0) return "Just now";
+  return parts.join(' ');
+};
+
+// 🌟 TICKET RATING COMPONENT (For Modal)
+function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRatingSubmitted: (rating: number, feedback: string) => void }) {
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getFeedbackHint = (r: number) => {
+    switch(r) {
+      case 1: return "Poor - Solution didn't help";
+      case 2: return "Fair - Took too long";
+      case 3: return "Good - Issue resolved";
+      case 4: return "Very Good - Quick and helpful";
+      case 5: return "Excellent - Exceptional support!";
+      default: return "Select a star rating";
     }
-  }
-  
-  return `VSS-${middle}-${suffix}`;
-}
-
-// ==========================================
-// SEARCHABLE STAFF DROPDOWN COMPONENT 
-// ==========================================
-const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Search name or emp code..." }: any) => {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  const t = {
-    bg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-white border-slate-200',
-    text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    menu: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
-    hover: isDarkMode ? 'hover:bg-[#18181b]' : 'hover:bg-blue-50',
-    header: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-500' : 'bg-slate-50 border-slate-100 text-slate-500',
   };
 
-  useEffect(() => {
-    if (value) {
-      const s = staffList.find((st: any) => st.id === value);
-      if (s) setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`);
-    } else {
-      setQuery('');
-    }
-  }, [value, staffList]);
+  const submitRating = async () => {
+    if (rating === 0) return;
+    setIsSubmitting(true);
+    try {
+      if (ticket.id.toString().includes('demo')) {
+        setTimeout(() => onRatingSubmitted(rating, feedback), 500);
+        return;
+      }
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
+      await supabase
+        .from('tickets')
+        .update({ rating: rating, rating_feedback: feedback })
+        .eq('id', ticket.id);
+      
+      onRatingSubmitted(rating, feedback);
+    } catch (err) {
+      alert("Failed to submit rating.");
+    } finally {
+      setIsSubmitting(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  };
 
-  const filtered = staffList.filter((s: any) => {
-    const str = `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase();
-    return str.includes(query.toLowerCase());
-  });
+  if (ticket.rating && ticket.rating > 0) {
+    return (
+      <div className="mt-5 p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="text-emerald-500" size={18} />
+          <span className="text-sm font-bold text-emerald-800">You rated this solution {ticket.rating} Stars.</span>
+        </div>
+        {ticket.rating_feedback && (
+          <p className="text-xs text-emerald-700 italic border-l-2 border-emerald-300 pl-2 ml-1">"{ticket.rating_feedback}"</p>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="relative" ref={wrapperRef}>
-      <div className={`flex items-center w-full p-3.5 border rounded-xl focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all ${t.bg}`}>
-        <Search size={14} className={`${t.textSub} mr-2 shrink-0`} />
-        <input 
-          type="text" value={open ? query : query || ''} 
-          onChange={e => { setQuery(e.target.value); setOpen(true); onChange(''); }}
-          onFocus={() => setOpen(true)} placeholder={placeholder}
-          className={`w-full text-xs font-semibold outline-none bg-transparent ${t.text}`}
-        />
-        <ChevronDown size={14} className={`${t.textSub} ml-2 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
+    <div className="mt-5 p-5 bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in">
+      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-1">Rate this solution</h4>
+      <p className="text-[11px] font-semibold text-slate-500 mb-4">{getFeedbackHint(hoverRating || rating)}</p>
+      
+      <div className="flex gap-1 mb-4">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(0)}
+            onClick={() => setRating(star)}
+            className="focus:outline-none transition-transform hover:scale-110 p-1 cursor-pointer"
+          >
+            <Star 
+              size={28} 
+              className={`${(hoverRating || rating) >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} 
+            />
+          </button>
+        ))}
       </div>
 
-      {open && (
-        <div className={`absolute z-50 w-full mt-2 border rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar ${t.menu}`}>
-          <div className={`p-3 text-[11px] font-bold tracking-widest uppercase cursor-pointer border-b ${t.header}`} onClick={() => { onChange(''); setQuery(''); setOpen(false); }}>
-            -- Warehouse Inventory (Unassigned) --
-          </div>
-          {filtered.length === 0 ? (
-            <div className={`p-4 text-center text-xs font-semibold ${t.textSub}`}>No staff found matching query.</div>
-          ) : (
-            filtered.map((s: any) => (
-              <div 
-                key={s.id} className={`p-3.5 text-xs cursor-pointer border-b ${isDarkMode ? 'border-[#27272a]/50' : 'border-slate-50'} flex justify-between items-center transition-colors group ${t.hover}`}
-                onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}
-              >
-                <span className={`font-semibold group-hover:text-blue-500 ${t.text}`}>{s.full_name || s.name}</span>
-                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md transition-colors ${isDarkMode ? 'bg-[#18181b] text-zinc-400 group-hover:bg-blue-500/20 group-hover:text-blue-400' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
-                  {s.emp_code || s.email}
-                </span>
-              </div>
-            ))
-          )}
+      {rating > 0 && (
+        <div className="space-y-3 animate-in slide-in-from-top-2">
+          <textarea
+            placeholder="Any additional feedback? (Optional)"
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            className="w-full p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-amber-400 resize-none h-20 bg-slate-50 focus:bg-white transition-colors"
+          />
+          <button 
+            onClick={submitRating}
+            disabled={isSubmitting}
+            className="px-6 py-2.5 bg-slate-900 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            {isSubmitting ? 'Submitting...' : 'Submit Rating'}
+          </button>
         </div>
       )}
     </div>
   );
-};
+}
 
-// ==========================================
-// CORE CONTENT COMPONENT
-// ==========================================
-function AssetRegistryContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+export default function StaffTicketsPage() {
   const [loading, setLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
-  const [assets, setAssets] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [myAssignedAssets, setMyAssignedAssets] = useState<any[]>([]);
   
-  // Bulk Selection State
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-
-  // Modals & History State
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
-  const [viewAssetModal, setViewAssetModal] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'All' | 'Open' | 'Closed'>('All');
   
-  const [assetHistory, setAssetHistory] = useState<any[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  // Modal State
+  const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
+  const [viewTicket, setViewTicket] = useState<any>(null);
 
-  const [printConfig, setPrintConfig] = useState({
-    pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,      
-    marginTop: 1.25, marginLeft: 1.37, gapX: 0.5, gapY: 0.0, packSmallAssets: true  
-  });
+  // Form State
+  const [formData, setFormData] = useState({ assetId: '', issue: '' });
 
-  // Forms
-  const [newAssetCategory, setNewAssetCategory] = useState('For Laptop');
-  const [newAssetTag, setNewAssetTag] = useState(''); 
-  const [newAssetName, setNewAssetName] = useState('');
-  const [newAssetBrand, setNewAssetBrand] = useState('');
-  const [newAssetSerial, setNewAssetSerial] = useState('');
-  const [newAssetPrice, setNewAssetPrice] = useState('');
-  const [newAssetVendor, setNewAssetVendor] = useState('');
-  const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState('');
-  const [newAssetWarranty, setNewAssetWarranty] = useState('');
-  const [newAssetCondition, setNewAssetCondition] = useState('New');
-  const [newAssetStatus, setNewAssetStatus] = useState('In Stock (Unassigned)');
-  const [newAssetAssignee, setNewAssetAssignee] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [isEditingAsset, setIsEditingAsset] = useState(false);
-  const [editForm, setEditForm] = useState<any>({});
-  const [isUpdating, setIsUpdating] = useState(false);
+  // 🌟 FIX: Separated the initial fetch from the timer interval to prevent infinite loops
+  useEffect(() => {
+    fetchData();
+  }, []); // Run only ONCE on mount
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('vsit_theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
-    fetchRegistryData();
-  }, []);
+    // Refresh waiting times every minute without re-fetching everything
+    const interval = setInterval(() => {
+      setTickets(prevTickets => [...prevTickets]); 
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []); // Set up timer only ONCE
 
-  useEffect(() => {
-    if (isAddModalOpen) {
-      setNewAssetTag(generateCategoryPrefix(newAssetCategory));
-    }
-  }, [isAddModalOpen]); // Removed newAssetCategory from dependency so it preserves the digits when category changes!
-
-  // 🌟 ASSET HISTORY ENGINE
-  useEffect(() => {
-    if (viewAssetModal && !isEditingAsset) {
-      loadAssetHistory(viewAssetModal.id);
-    }
-  }, [viewAssetModal, isEditingAsset]);
-
-  const loadAssetHistory = async (assetId: string) => {
-    setIsLoadingHistory(true);
-    try {
-      const { data: historyData } = await supabase
-        .from('inspections')
-        .select('*')
-        .eq('asset_id', assetId)
-        .order('created_at', { ascending: false });
-
-      const compiled = (historyData || []).map(log => {
-         const staff = staffList.find(s => s.id === log.inspected_by);
-         return {
-           ...log,
-           staff_name: staff ? (staff.full_name || staff.name) : 'Admin / System Execution',
-           emp_code: staff ? (staff.emp_code || staff.email) : 'N/A'
-         };
-      });
-      setAssetHistory(compiled);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  const fetchRegistryData = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const [assetRes, staffRes, inspectionRes] = await Promise.all([
-        supabase.from('assets').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*'),
-        supabase.from('inspections').select('asset_id, status, notes, photos, created_at').order('created_at', { ascending: false })
-      ]);
+      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+      if (isGuest) {
+        setCurrentUser({ id: 'guest-mock-uuid', email: 'guest@vsit.com', name: 'Demo Guest' });
+        setMyAssignedAssets([{ id: 'demo-asset-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999' }]);
+        setTickets([
+          {
+            id: 'demo-tkt-1', token: 'TKT-8492', assetName: 'Demo MacBook Pro 16"', tagId: 'MAC-9999', 
+            issue: 'Battery is swelling.', status: 'Closed', rating: 5,
+            raisedAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(), closedAt: new Date().toISOString(), adminNotes: 'Battery replaced successfully.'
+          },
+          {
+            id: 'demo-tkt-2', token: 'TKT-3321', assetName: 'Dell Monitor', tagId: 'MON-1234', 
+            issue: 'Screen flickering intermittently.', status: 'Open', rating: 0,
+            raisedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), closedAt: null, adminNotes: null
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
 
-      const assetData = assetRes.data || [];
-      const staffData = staffRes.data || [];
-      const inspectionData = inspectionRes.data || [];
-      setStaffList(staffData);
+      const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+      if (!sessionStr) { window.location.replace('/'); return; }
       
-      const compiledAssets = assetData.map(asset => {
-        const assignee = staffData.find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
-        const latestInspection = inspectionData.find(i => i.asset_id === asset.id);
-        return {
-          ...asset,
-          safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
-          staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
-          emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
-          clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
-          live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
-          live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
-          live_inspection_notes: latestInspection?.notes || null,
-          live_inspection_photos: latestInspection?.photos || null
-        };
-      });
-      setAssets(compiledAssets);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+      let user: any = {};
+      try { user = JSON.parse(sessionStr); } catch (e) { user = { email: sessionStr }; }
+      const cleanEmail = user.email?.toLowerCase().trim();
+
+      const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
+      const userId = profile?.id || user.id;
+      setCurrentUser({ ...user, id: userId, email: cleanEmail, emp_code: profile?.emp_code || 'STAFF', name: profile?.full_name || cleanEmail.split('@')[0] });
+
+      // Fetch Assets
+      const { data: assets } = await supabase.from('assets').select('*').or(`assigned_to.eq.${userId},assigned_to.ilike.${cleanEmail}`);
+      if (assets) setMyAssignedAssets(assets);
+
+      // Fetch Tickets
+      const { data: tkts } = await supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false });
+      
+      if (tkts) {
+        const compiled = tkts.map(t => {
+          const rawStatus = (t.status || '').toLowerCase();
+          const isTicketClosed = rawStatus === 'resolved' || rawStatus === 'closed';
+
+          return {
+            ...t,
+            token: t.id.substring(0, 8).toUpperCase(),
+            assetName: t.title || t.category || 'General Support',
+            tagId: t.asset_tag || 'N/A',
+            issue: t.description || 'No description provided.',
+            status: isTicketClosed ? 'Closed' : 'Open', 
+            raisedAt: t.created_at,
+            closedAt: t.resolved_at || t.updated_at || null, 
+            adminNotes: t.admin_notes || 'No notes provided.',
+            rating: t.rating || 0,
+            rating_feedback: t.rating_feedback || ''
+          };
+        });
+        setTickets(compiled);
+      }
+    } catch (e) {
+      console.error("Error loading tickets", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getStockStatusBadge = (status: string) => {
-    const s = safeString(status);
-    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-5 text-emerald-700 border-emerald-200';
-    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-5 text-orange-700 border-orange-200 animate-pulse';
-    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-5 text-purple-700 border-purple-200';
-    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-5 text-rose-700 border-rose-200 line-through';
-    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-5 text-amber-700 border-amber-200';
-    return isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-5 text-blue-700 border-blue-200';
-  };
-
-  const getInspectionStatusColor = (status: string) => {
-    const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    if (s.includes('return')) return isDarkMode ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-blue-700 bg-blue-50 border-blue-200';
-    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
-    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
-  };
-
-  const openAssetViewModal = (asset: any) => {
-    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.id);
-    setViewAssetModal({ ...asset, clean_tag: stableTag });
-    setIsEditingAsset(false);
-    setEditForm({
-      category: asset.category || 'For Laptop', asset_tag: stableTag, serial: asset.serial_number || '',
-      name: asset.safe_display_name, brand: asset.brand || '', price: asset.price || '', 
-      vendor: asset.vendor || '', purchase_date: asset.purchase_date || '', warranty_expiry: asset.warranty_expiry || '',
-      condition: asset.asset_condition || 'New', status: asset.status || 'In Stock (Unassigned)', 
-      inspection_status: asset.live_inspection_status || 'Approved', assignee: asset.assigned_to || ''
-    });
-  };
-
-  const handleSaveNewAsset = async (e: React.FormEvent) => {
+  const handleRaiseTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAssetName || !newAssetSerial) return alert("Assets Name and Serial Number are required.");
-    setIsSaving(true);
+    
+    const selectedAsset = myAssignedAssets.find(a => a.id === formData.assetId);
+    const assetName = selectedAsset ? (selectedAsset.name || selectedAsset.category) : 'General Issue';
+    const tagId = selectedAsset ? selectedAsset.asset_tag : 'N/A';
+
+    if (currentUser.id === 'guest-mock-uuid') {
+      const newTkt = { id: `demo-${Date.now()}`, token: `TKT-${Math.floor(Math.random() * 9000) + 1000}`, assetName, tagId, issue: formData.issue, status: 'Open', raisedAt: new Date().toISOString(), rating: 0 };
+      setTickets([newTkt, ...tickets]);
+      setIsRaiseModalOpen(false);
+      setFormData({ assetId: '', issue: '' });
+      return;
+    }
+
     try {
-      const serialUpper = newAssetSerial.toUpperCase();
-      const { data: existingSerial } = await supabase.from('assets').select('serial_number').eq('serial_number', serialUpper).maybeSingle();
-
-      if (existingSerial) {
-        alert(`Error: An asset with the Serial Number "${serialUpper}" already exists in the system.`);
-        setIsSaving(false); return;
-      }
-
-      const resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
-      const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
-      const newAssetId = generateSafeUuid();
-      
-      const { error } = await supabase.from('assets').insert([{
-        id: newAssetId, asset_tag: finalTag.toUpperCase(), name: newAssetName, 
-        brand: newAssetBrand || 'Standard', serial_number: serialUpper, 
-        category: newAssetCategory, price: newAssetPrice ? parseFloat(newAssetPrice) : null, 
-        vendor: newAssetVendor || 'Direct', purchase_date: newAssetPurchaseDate || null, 
-        warranty_expiry: newAssetWarranty || null, asset_condition: newAssetCondition,
-        status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Approved'
-      }]);
-      
-      if (error) throw error;
-      
-      // Auto-Log History Event
-      await supabase.from('inspections').insert({
-        asset_id: newAssetId, inspected_by: newAssetAssignee || null, 
-        status: newAssetAssignee ? 'Pending Handover' : 'Stock Intake', 
-        notes: `Asset initially registered into the system as ${newAssetCondition}.`
-      });
-
-      if (newAssetAssignee) {
-        try {
-          await supabase.from('notifications').insert({
-            title: 'New Hardware Assigned',
-            message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-            target_role: newAssetAssignee, is_read: false
-          });
-        } catch (notifError) { console.warn("Notification error:", notifError); }
-      }
-
-      setIsAddModalOpen(false); 
-      fetchRegistryData();
-    } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
-  };
-
-  const handleUpdateExistingAsset = async () => {
-    setIsUpdating(true);
-    try {
-      const serialUpper = editForm.serial.toUpperCase();
-      const { data: duplicateCheck } = await supabase.from('assets').select('id, serial_number')
-        .eq('serial_number', serialUpper).neq('id', viewAssetModal.id).maybeSingle();
-
-      if (duplicateCheck) {
-        alert(`Error: The Serial Number "${serialUpper}" is already assigned to another asset.`);
-        setIsUpdating(false); return;
-      }
-
-      let resolvedStatus = editForm.status;
-      let actionNote = "Asset configuration updated by administrator.";
-
-      if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) {
-        resolvedStatus = 'Pending Handover';
-        actionNote = `Asset re-assigned to new holder. Awaiting agreement.`;
-      } else if (!editForm.assignee && viewAssetModal.assigned_to) {
-        resolvedStatus = 'In Stock (Unassigned)';
-        actionNote = `Asset forcefully unassigned and returned to stock.`;
-      }
-
-      const updatePayload = {
-        category: editForm.category, serial_number: serialUpper, asset_tag: editForm.asset_tag.toUpperCase(),
-        name: editForm.name, brand: editForm.brand, price: editForm.price ? parseFloat(editForm.price) : null,
-        vendor: editForm.vendor, purchase_date: editForm.purchase_date || null, warranty_expiry: editForm.warranty_expiry || null, 
-        asset_condition: editForm.condition, status: resolvedStatus, inspection_status: editForm.inspection_status || 'Approved',
-        assigned_to: editForm.assignee || null
+      const newTicket = {
+        title: `Issue with ${assetName}`,
+        category: 'Hardware',
+        description: formData.issue,
+        status: 'Open',
+        created_by: currentUser.email,
+        emp_code: currentUser.emp_code,
+        staff_name: currentUser.name,
+        asset_id: selectedAsset?.id || null,
+        asset_tag: tagId
       };
 
-      const { error } = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
+      const { data, error } = await supabase.from('tickets').insert(newTicket).select().single();
       if (error) throw error;
 
-      // Log the update
-      await supabase.from('inspections').insert({
-        asset_id: viewAssetModal.id, inspected_by: editForm.assignee || null, 
-        status: resolvedStatus, notes: actionNote
-      });
-
-      setIsEditingAsset(false); 
-      fetchRegistryData();
-    } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
-  };
-
-  const handleDeleteAsset = async (assetId: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this asset? This action cannot be undone.")) return;
-    setIsUpdating(true);
-    try {
-      const { error } = await supabase.from('assets').delete().eq('id', assetId);
-      if (error) throw error;
-      
-      setAssets(prev => prev.filter(a => a.id !== assetId));
-      setViewAssetModal(null);
-    } catch (err: any) {
-      alert(`Error deleting asset: ${err.message}`);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const getAssetViewUrl = (asset: any) => {
-    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
-    return `${baseDomain}/public-asset?id=${targetRef}`;
-  };
-
-  const executeGridBulkPrint = () => {
-    const assetsToPrint = assets.filter(a => selectedAssetIds.has(a.id));
-    if (assetsToPrint.length === 0) return;
-
-    const printWindow = window.open('', '_blank', 'width=1000,height=800');
-    if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print bulk hardware stickers.");
-
-    let printCells: any[] = [];
-    
-    if (printConfig.packSmallAssets) {
-      const smallAssets: any[] = [];
-      const largeAssets: any[] = [];
-      
-      assetsToPrint.forEach(a => {
-        const cat = String(a.category).toLowerCase();
-        if (cat.includes('mouse') || cat.includes('headphone') || cat.includes('cleaning') || cat.includes('others') || cat.includes('pad')) {
-          smallAssets.push(a);
-        } else {
-          largeAssets.push(a);
-        }
-      });
-
-      largeAssets.forEach(a => printCells.push([a]));
-      
-      for (let i = 0; i < smallAssets.length; i += 2) {
-        if (smallAssets[i + 1]) {
-          printCells.push([smallAssets[i], smallAssets[i + 1]]);
-        } else {
-          printCells.push([smallAssets[i]]);
-        }
+      if (data) {
+        const compiled = {
+          ...data, token: data.id.substring(0, 8).toUpperCase(), assetName: data.title, tagId: data.asset_tag, issue: data.description, status: 'Open', raisedAt: data.created_at, rating: 0
+        };
+        setTickets([compiled, ...tickets]);
       }
-    } else {
-      assetsToPrint.forEach(a => printCells.push([a]));
-    }
-
-    const renderAssetBlock = (asset: any, isHalfSize: boolean) => {
-      const scanUrl = getAssetViewUrl(asset);
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(scanUrl)}`;
-
-      return `
-        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2px; box-sizing: border-box; width: 100%; height: 100%;">
-          <img src="${qrUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; border: 4px solid #000; padding: 8px; border-radius: 8px; box-sizing: border-box;" />
-        </div>
-      `;
-    };
-
-    const cellsPerPage = printConfig.columns * printConfig.rows;
-    let pagesHtml = '';
-
-    for (let i = 0; i < printCells.length; i += cellsPerPage) {
-      const pageCells = printCells.slice(i, i + cellsPerPage);
       
-      let gridCellsHtml = '';
-      pageCells.forEach(cellAssets => {
-        let innerHtml = '';
-        if (cellAssets.length === 2) {
-          innerHtml = `
-            <div style="width: 100%; height: 100%; max-height: 100%; display: flex; flex-direction: column; justify-content: space-evenly; gap: 1px; padding: 2px; box-sizing: border-box; overflow: hidden;">
-              ${renderAssetBlock(cellAssets[0], true)}
-              <div style="height: 1px; width: 90%; background: #ddd; margin: 0 auto; flex-shrink: 0;"></div>
-              ${renderAssetBlock(cellAssets[1], true)}
-            </div>
-          `;
-        } else {
-          innerHtml = `
-            <div style="width: 100%; height: 100%; max-height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; overflow: hidden;">
-              ${renderAssetBlock(cellAssets[0], false)}
-            </div>
-          `;
-        }
-        
-        gridCellsHtml += `
-          <div class="label-cell">
-            ${innerHtml}
-          </div>
-        `;
-      });
-
-      pagesHtml += `
-        <div class="page">
-          ${gridCellsHtml}
-        </div>
-      `;
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Bulk_Print_Label_Sheet</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800;900&display=swap');
-            @page { size: ${printConfig.pageSize}; margin: 0 !important; }
-            body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #e2e8f0; color: #000; -webkit-font-smoothing: antialiased; }
-            .page { background: #fff; width: ${printConfig.pageSize === 'A4' ? '210mm' : '215.9mm'}; height: ${printConfig.pageSize === 'A4' ? '297mm' : '279.4mm'}; box-sizing: border-box; padding-top: ${printConfig.marginTop}cm; padding-left: ${printConfig.marginLeft}cm; display: grid; grid-template-columns: repeat(${printConfig.columns}, ${printConfig.labelWidth}cm); grid-template-rows: repeat(${printConfig.rows}, ${printConfig.labelHeight}cm); column-gap: ${printConfig.gapX}cm; row-gap: ${printConfig.gapY}cm; page-break-after: always; margin: 20px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
-            .label-cell { width: ${printConfig.labelWidth}cm; height: ${printConfig.labelHeight}cm; max-width: ${printConfig.labelWidth}cm; max-height: ${printConfig.labelHeight}cm; outline: 1px dashed #cbd5e1; box-sizing: border-box; overflow: hidden; background: #fff; }
-            @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; } .label-cell { outline: none; } }
-          </style>
-        </head>
-        <body>
-          ${pagesHtml}
-          <script>
-            window.onload = () => { setTimeout(() => { window.print(); }, ${Math.max(800, assetsToPrint.length * 100)}); };
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open(); 
-    printWindow.document.write(htmlContent); 
-    printWindow.document.close();
-    setIsPrintConfigModalOpen(false);
-  };
-
-  const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    const targetRef = cleanTag || asset.asset_tag || asset.id;
-    const scanUrl = `${baseDomain}/public-asset?id=${targetRef}`;
-    
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(scanUrl)}`;
-
-    const printWindow = window.open('', '_blank', 'width=400,height=400');
-    if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to print the QR code.");
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR_${targetRef}</title>
-          <style>
-            body, html { margin: 0; padding: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fff; }
-            img { width: 90%; max-height: 90%; object-fit: contain; border: 8px solid #000; padding: 16px; border-radius: 16px; box-sizing: border-box; }
-            @media print { @page { margin: 0; size: auto; } body { display: flex; justify-content: center; align-items: center; margin: 0; padding: 0; } }
-          </style>
-        </head>
-        <body onload="setTimeout(() => { window.print(); window.close(); }, 600)">
-          <img src="${qrUrl}" alt="QR Code" />
-        </body>
-      </html>
-    `;
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  const getCatCount = (filterName: string) => {
-    if (filterName === 'All') return assets.length;
-    if (filterName === 'Laptop') return assets.filter(a => safeString(a.category).toLowerCase().includes('laptop')).length;
-    if (filterName === 'Accessories') return assets.filter(a => {
-       const c = safeString(a.category).toLowerCase();
-       return c.includes('mouse') || c.includes('keyboard') || c.includes('stand') || c.includes('combo') || c.includes('pad');
-    }).length;
-    if (filterName === 'Headphone') return assets.filter(a => safeString(a.category).toLowerCase().includes('headphone')).length;
-    if (filterName === 'Other') return assets.filter(a => {
-       const c = safeString(a.category).toLowerCase();
-       return c.includes('cleaning') || c.includes('other') || (!c.includes('laptop') && !c.includes('mouse') && !c.includes('keyboard') && !c.includes('stand') && !c.includes('headphone') && !c.includes('pad') && !c.includes('combo'));
-    }).length;
-    
-    return assets.filter(a => safeString(a.category).toLowerCase() === filterName.toLowerCase()).length;
-  };
-
-  const filteredAssets = assets.filter(a => {
-    const q = safeString(searchQuery).toLowerCase();
-    const cleanTag = safeString(a.clean_tag).toLowerCase();
-    const cat = safeString(a.category).toLowerCase();
-    
-    const matchesSearch = !q || (
-      safeString(a.id).toLowerCase().includes(q) || 
-      cleanTag.includes(q) ||
-      safeString(a.safe_display_name).toLowerCase().includes(q) || 
-      safeString(a.brand).toLowerCase().includes(q) || 
-      cat.includes(q) || 
-      safeString(a.serial_number).toLowerCase().includes(q) ||
-      safeString(a.staff_name).toLowerCase().includes(q) || 
-      safeString(a.emp_code).toLowerCase().includes(q)
-    );
-    
-    let matchesCat = true;
-    if (selectedCategory !== 'All') {
-      if (selectedCategory === 'Laptop') {
-          matchesCat = cat.includes('laptop');
-      } else if (selectedCategory === 'Accessories') {
-          matchesCat = cat.includes('mouse') || cat.includes('keyboard') || cat.includes('stand') || cat.includes('pad') || cat.includes('combo');
-      } else if (selectedCategory === 'Headphone') {
-          matchesCat = cat.includes('headphone') || cat.includes('headset');
-      } else if (selectedCategory === 'Other') {
-          matchesCat = cat.includes('cleaning') || cat.includes('other') || (!cat.includes('laptop') && !cat.includes('mouse') && !cat.includes('keyboard') && !cat.includes('stand') && !cat.includes('headphone') && !cat.includes('pad') && !cat.includes('combo'));
-      } else {
-          matchesCat = cat === selectedCategory.toLowerCase();
-      }
-    }
-    
-    return matchesSearch && matchesCat;
-  });
-
-  const toggleSelectAsset = (id: string) => {
-    const newSet = new Set(selectedAssetIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedAssetIds(newSet);
-  };
-
-  const handleSelectAllFiltered = () => {
-    if (selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0) {
-      setSelectedAssetIds(new Set()); 
-    } else {
-      setSelectedAssetIds(new Set(filteredAssets.map(a => a.id))); 
+      setIsRaiseModalOpen(false);
+      setFormData({ assetId: '', issue: '' });
+    } catch (e) {
+      alert("Failed to raise ticket.");
     }
   };
 
-  const theme = {
-    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
-    card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
-    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
-    cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
-    modalBody: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
-    modalHeader: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-100',
-    iconBgBlue: isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '---';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
+
+  if (loading) {
+    return <div className="min-h-[60vh] flex flex-col justify-center items-center gap-3"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /><p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Loading Tickets</p></div>;
+  }
+
+  const filteredTickets = tickets.filter(t => activeTab === 'All' ? true : t.status === activeTab);
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
-      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-        
-        {/* HEADER */}
-        <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors`}>
-          <div className="flex items-center gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 rounded-xl border transition-colors ${theme.card} ${theme.cardHover} ${theme.textSub}`}>
-              <ArrowLeft size={18} />
-            </button>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className={`text-2xl font-semibold tracking-tight ${theme.textMain}`}>Hardware Registry</h1>
-                <span className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest ${isDarkMode ? 'bg-[#27272a] text-zinc-300' : 'bg-slate-100 text-slate-700'}`}>{assets.length} Units</span>
-              </div>
-              <p className={`text-sm ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {selectedAssetIds.size > 0 && (
-              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
-                <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
-              </button>
-            )}
-            <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-colors text-xs font-semibold uppercase tracking-wider ${theme.card} ${theme.cardHover} ${theme.textMain}`}>
-              <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
-            </button>
-            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-blue-600/20 transition-all">
-              <PlusCircle size={16} /> <span>Register Asset</span>
-            </button>
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      
+      {/* HEADER SECTION */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2"><Ticket className="text-blue-600"/> My IT Tickets</h1>
+          <p className="text-sm font-medium text-slate-500 mt-1">Report broken assets or request repairs from the Admin team.</p>
         </div>
-
-        {/* TABS & SEARCH */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
-            {[
-              { name: 'All', icon: <Package size={14}/> }, 
-              { name: 'Laptop', icon: <Laptop size={14}/> },
-              { name: 'Accessories', icon: <Mouse size={14}/> }, 
-              { name: 'Headphone', icon: <Headphones size={14}/> },
-              { name: 'Other', icon: <SlidersHorizontal size={14}/> }
-            ].map(cat => (
-              <button
-                key={cat.name} onClick={() => setSelectedCategory(cat.name)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wider shrink-0 transition-all ${
-                  selectedCategory === cat.name 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : `${theme.card} ${theme.textSub} hover:text-blue-500`
-                }`}
-              >
-                {cat.icon} <span>{cat.name}</span>
-                <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] ${selectedCategory === cat.name ? 'bg-white/20 text-white' : isDarkMode ? 'bg-[#27272a] text-zinc-400' : 'bg-slate-100 text-slate-500'}`}>{getCatCount(cat.name)}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-3 items-center">
-            <button 
-              onClick={handleSelectAllFiltered} 
-              className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700') : theme.card + ' ' + theme.textMain}`}
-            >
-              <CheckSquare size={16}/> 
-              <span className="hidden sm:inline">
-                {selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}
-              </span>
-            </button>
-
-            <div className={`flex-1 p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
-              <div className="relative w-full">
-                <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
-                <input 
-                  type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search by Brand, Tag ID, Category, Assets Name, S/N, or Staff Name..." 
-                  className={`w-full pl-12 pr-4 py-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ASSET GRID */}
-        {loading ? (
-          <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-500' : 'border-blue-600'}`}></div>
-            <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.textSub}`}>Loading Database</span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredAssets.map(asset => {
-              const isSelected = selectedAssetIds.has(asset.id);
-
-              return (
-                <div key={asset.id} onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('button')) return;
-                  toggleSelectAsset(asset.id);
-                }} className={`${theme.card} rounded-3xl border shadow-sm flex flex-col justify-between group transition-all cursor-pointer ${isSelected ? (isDarkMode ? '!border-indigo-500/60 ring-1 ring-indigo-500/60 !bg-[#121212]' : '!border-indigo-400 ring-1 ring-indigo-400 !bg-indigo-50/20') : theme.cardHover} overflow-hidden`}>
-                  
-                  <div className={`p-5 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-50'}`}>
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-indigo-500/20 text-indigo-500' : theme.iconBgBlue}`}>
-                          {getCategoryIcon(asset.category, 20)}
-                        </div>
-                        <div className="overflow-hidden">
-                          <h3 className={`text-sm font-semibold leading-tight truncate max-w-[170px] ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
-                          <p className={`text-[11px] mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 rounded-xl transition-colors cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a] hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600'}`}>
-                          <QrCode size={18} />
-                        </button>
-                        <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 rounded cursor-pointer accent-indigo-600 ml-1" />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                      <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${isDarkMode ? 'bg-[#18181b] text-zinc-300 border-[#27272a]' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{asset.asset_condition || 'New'}</span>
-                    </div>
-                  </div>
-
-                  <div className={`p-5 space-y-3 flex-1 ${isDarkMode ? 'bg-[#0a0a0a]/50' : 'bg-slate-50/50'}`}>
-                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
-                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
-                      <span className={`font-mono font-bold text-xs ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{asset.clean_tag}</span>
-                    </div>
-                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
-                      <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
-                      <span className={`font-mono font-bold text-[11px] truncate max-w-[140px] ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
-                    </div>
-                    
-                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-colors ${theme.card} group-hover:border-blue-500/30`}>
-                      <div className="flex flex-col">
-                        <span className={`font-semibold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Holder</span> 
-                        <span className={`font-bold text-[11px] truncate max-w-[120px] ${theme.textMain}`} title={asset.staff_name}>{asset.staff_name}</span>
-                      </div>
-                      <span className={`font-mono font-bold px-2 py-1 rounded-lg text-[9px] ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-slate-100 text-slate-500'}`}>{asset.emp_code}</span>
-                    </div>
-                  </div>
-
-                  <div className={`p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-100/80 border-slate-200'}`}>
-                    <div className="flex items-center gap-2">
-                      <Clock size={14} className={theme.textSub} />
-                      <div className="flex flex-col">
-                        <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
-                        <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
-                      </div>
-                    </div>
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${getInspectionStatusColor(asset.live_inspection_status)}`}>
-                      {(() => {
-                        const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st.includes('approved')) return <CheckCircle2 size={12} />;
-                        if (st.includes('return')) return <RefreshCw size={12} className="animate-spin" />;
-                        return <AlertTriangle size={12} />;
-                      })()}
-                      <span className="text-[9px] font-bold uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
-                    </div>
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-        )}
-
+        <button 
+          onClick={() => setIsRaiseModalOpen(true)} 
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
+        >
+          <Plus size={18} /> Raise Ticket
+        </button>
       </div>
 
-      {/* 🚀 PRINT SETTINGS UI MODAL */}
-      {isPrintConfigModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-2xl w-full p-8 shadow-2xl border space-y-8 animate-in fade-in zoom-in-95 duration-200 ${theme.modalBody}`}>
-            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-              <div>
-                <h3 className={`text-lg font-bold tracking-tight flex items-center gap-3 ${theme.textMain}`}>
-                  <Settings2 size={20} className="text-indigo-500"/> Label Print Layout
-                </h3>
-                <p className={`text-[11px] mt-1 uppercase tracking-widest font-semibold text-red-500 bg-red-500/10 inline-block px-2 py-1 rounded`}>
-                  Important: When printing, uncheck "Fit to Page" and set Margins to "None".
-                </p>
-              </div>
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
+      {/* TABS */}
+      <div className="flex bg-white p-2 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+        {['All', 'Open', 'Closed'].map((tab) => (
+          <button 
+            key={tab} 
+            onClick={() => setActiveTab(tab as any)} 
+            className={`flex-1 sm:flex-none sm:w-32 py-2 px-4 text-sm font-bold rounded-xl transition-all cursor-pointer ${activeTab === tab ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              
-              <div className="space-y-4">
-                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>Sheet Formatting</h4>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Paper Size</label>
-                  <select value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none border ${theme.inputBg}`}>
-                    <option value="A4">A4 (210 x 297mm)</option>
-                    <option value="Letter">US Letter (8.5 x 11in)</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label>
-                    <input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label>
-                    <input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Top Margin (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.marginTop} onChange={e => setPrintConfig({...printConfig, marginTop: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Left Margin (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.marginLeft} onChange={e => setPrintConfig({...printConfig, marginLeft: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>Label Dimensions</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Width (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Height (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Col Gap (cm)</label>
-                    <input type="number" step="0.1" value={printConfig.gapX} onChange={e => setPrintConfig({...printConfig, gapX: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Row Gap (cm)</label>
-                    <input type="number" step="0.1" value={printConfig.gapY} onChange={e => setPrintConfig({...printConfig, gapY: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${theme.inputBg}`} />
-                  </div>
-                </div>
-
-                <div className={`mt-4 p-4 rounded-xl border ${isDarkMode ? 'bg-[#18181b] border-indigo-500/30' : 'bg-indigo-50/50 border-indigo-100'}`}>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={printConfig.packSmallAssets}
-                      onChange={e => setPrintConfig({...printConfig, packSmallAssets: e.target.checked})}
-                      className="w-5 h-5 accent-indigo-600 rounded cursor-pointer" 
-                    />
-                    <div>
-                      <span className={`text-sm font-bold block ${theme.textMain}`}>Smart Packing</span>
-                      <span className={`text-[10px] font-semibold uppercase mt-0.5 block ${theme.textSub}`}>Fit 2 accessories in 1 physical sticker</span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-4 pt-4 border-t border-slate-200 dark:border-[#27272a]">
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-colors ${theme.card} ${theme.textSub} hover:text-slate-800 dark:hover:text-white`}>
-                Cancel
-              </button>
-              <button onClick={executeGridBulkPrint} className="flex-[2] py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white flex justify-center items-center gap-2 cursor-pointer transition-all">
-                <Printer size={16}/> Generate Print Page
-              </button>
-            </div>
-          </div>
+      {/* 🌟 NEW CARD GRID LAYOUT */}
+      {filteredTickets.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center flex flex-col items-center">
+          <CheckCircle2 size={40} className="text-slate-300 mb-3" />
+          <p className="text-slate-500 font-bold">You have no {activeTab === 'All' ? '' : activeTab.toLowerCase()} tickets.</p>
         </div>
-      )}
-
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE */}
-      {viewAssetModal && (() => {
-        const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTickets.map((ticket) => (
+            <div key={ticket.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col hover:shadow-md hover:border-slate-300 transition-all overflow-hidden">
               
-              {/* Left Column: CLEAN QR Matrix Design */}
-              <div className={`w-full md:w-[35%] p-8 flex flex-col items-center border-b md:border-b-0 md:border-r ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'} relative shrink-0`}>
-                <button onClick={() => setViewAssetModal(null)} className={`absolute md:hidden top-4 right-4 p-2 rounded-full shadow-sm ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-white text-slate-400'}`}><X size={14}/></button>
-                
-                <h3 className={`text-2xl font-bold tracking-widest uppercase mb-8 mt-4 ${theme.textMain}`}>VSS</h3>
-                
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200 mb-8 relative group">
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
+              {/* Card Header */}
+              <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
+                <div>
+                  <span className="font-black text-slate-900 text-lg">{ticket.token}</span>
+                  <p className="text-xs font-mono text-slate-500 mt-1">Tag: {ticket.tagId}</p>
                 </div>
-
-                <div className={`text-2xl font-bold tracking-widest mb-3 ${theme.textMain}`}>
-                  {liveModalTag}
-                </div>
-                
-                <p className={`text-sm font-semibold tracking-wide ${theme.textSub} mb-8 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
-                  S/N: {editForm.serial || viewAssetModal.serial_number}
-                </p>
-
-                <div className="flex w-full gap-2 mt-auto">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 py-4 rounded-xl text-[11px] font-semibold uppercase tracking-widest flex justify-center items-center gap-2 transition-colors cursor-pointer ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
-                    <Printer size={16} /> Print Sticker
-                  </button>
-                </div>
+                <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg border flex items-center gap-1 ${ticket.status === 'Open' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                  {ticket.status === 'Open' ? <Clock size={12}/> : <CheckCircle2 size={12}/>} 
+                  {ticket.status}
+                </span>
               </div>
 
-              {/* Right Column: Editor Workspace & History Log */}
-              <div className={`w-full md:w-[65%] flex flex-col overflow-y-auto custom-scrollbar relative ${theme.modalBody}`}>
-                <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex absolute top-6 right-6 p-2.5 rounded-full cursor-pointer z-10 transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={18}/></button>
+              {/* Card Body */}
+              <div className="p-5 flex-1 flex flex-col gap-4">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm line-clamp-1" title={ticket.assetName}>{ticket.assetName}</h4>
+                  <p className="text-slate-500 text-xs mt-1.5 line-clamp-2" title={ticket.issue}>{ticket.issue}</p>
+                </div>
 
-                <div className="p-8 md:p-10 space-y-8">
-                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b gap-4 ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Logistics State:</span>
-                      <span className={`px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                    </div>
-
-                    {!isEditingAsset && (
-                      <div className="flex gap-2 sm:ml-auto">
-                        <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white' : 'bg-rose-5 text-rose-700 hover:bg-rose-600 hover:text-white'}`}>
-                          <Trash2 size={14} /> Delete
-                        </button>
-                        <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-5 text-blue-700 hover:bg-blue-600 hover:text-white'}`}>
-                          <Edit2 size={14} /> Edit
-                        </button>
-                      </div>
-                    )}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 mt-auto">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-slate-500">Raised On:</span>
+                    <span className="font-bold text-slate-800">{formatDate(ticket.raisedAt)}</span>
                   </div>
-
-                  {isEditingAsset ? (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                      <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-blue-100'}`}>
-                        <span className={`text-sm font-semibold uppercase tracking-widest ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>Editing Hardware Record</span>
+                  
+                  {ticket.status === 'Closed' ? (
+                    <>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-semibold text-slate-500">Resolution Time:</span>
+                        <span className="font-bold text-emerald-600 flex items-center gap-1"><Timer size={12}/> {calculateResolutionTime(ticket.raisedAt, ticket.closedAt)}</span>
                       </div>
-
-                      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
-                        <div>
-                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                          <select value={editForm.category} onChange={e => { 
-                            const newCat = e.target.value; 
-                            setEditForm({ 
-                              ...editForm, 
-                              category: newCat, 
-                              asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) // 🚀 This preserves the suffix digits!
-                            }); 
-                          }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
-                            {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-                            <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
-                          </label>
-                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (S/N) *</label>
-                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="Scan factory S/N barcode..." className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                      </div>
-
-                      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                        <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
-                        <div>
-                          <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Inspection State</label>
-                          <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}>
-                            <option value="Approved">✅ Approved</option><option value="Re-Inspection">🔄 Re-Inspection</option><option value="Not Approved">⚠️ Not Approved</option><option value="Rejected">❌ Rejected</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
-                        <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
-                        <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
-                      </div>
-
-                      <div className="flex gap-4 pt-6">
-                        <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#121212] border-[#27272a] text-zinc-300 hover:bg-[#18181b]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                        <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
-                          {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'For Laptop'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-sm font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.safe_display_name}</p></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Purchase Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Warranty Date</p><p className={`text-xs font-semibold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
-                        <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/60'}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Inspection Status</p><div className="flex items-center gap-1.5 mt-1.5"><span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
-                      </div>
-
-                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#18181b] border-blue-500/30' : 'bg-blue-50/50 border-blue-100'}`}>
-                        <div>
-                          <span className={`text-[10px] font-semibold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${theme.iconBgBlue}`}><User size={16}/></div>
-                            <span className={`text-base font-semibold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
+                      {/* Rating Preview */}
+                      <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
+                        <span className="font-semibold text-slate-500">Your Rating:</span>
+                        {ticket.rating > 0 ? (
+                          <div className="flex gap-0.5">
+                            {[1,2,3,4,5].map(star => <Star key={star} size={12} className={star <= ticket.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}/>)}
                           </div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                           <span className={`text-[9px] font-semibold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
-                           <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/30 text-blue-400' : 'bg-white border-blue-100 text-blue-800'}`}>{viewAssetModal.emp_code}</span>
-                        </div>
-                      </div>
-
-                      {/* 🌟 LIFECYCLE & ACTIVITY HISTORY */}
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
-                        <h4 className={`text-xs font-black uppercase tracking-widest mb-4 ${theme.textMain}`}>Lifecycle & Activity History</h4>
-                        
-                        {isLoadingHistory ? (
-                          <div className="flex justify-center p-4"><Loader2 className="animate-spin text-blue-500"/></div>
-                        ) : assetHistory.length === 0 ? (
-                          <p className={`text-xs italic ${theme.textSub}`}>No history logs found for this asset.</p>
                         ) : (
-                          <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                            {assetHistory.map((log, idx) => {
-                              let photosArray: string[] = [];
-                              try {
-                                if (Array.isArray(log.photos)) photosArray = log.photos;
-                                else if (typeof log.photos === 'string') {
-                                  const parsed = JSON.parse(log.photos);
-                                  if (Array.isArray(parsed)) photosArray = parsed;
-                                }
-                              } catch(e){}
-
-                              return (
-                                <div key={idx} className={`p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#121212] border-zinc-800' : 'bg-white border-slate-200'}`}>
-                                  <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
-                                      <p className={`text-xs font-bold mt-2 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-400 font-mono">({log.emp_code})</span></p>
-                                    </div>
-                                    <span className={`text-[10px] font-bold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
-                                  </div>
-                                  {log.notes && (
-                                    <div className={`mt-2 text-xs font-mono p-3 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0a0a0a] border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                                      {log.notes}
-                                    </div>
-                                  )}
-                                  {photosArray.length > 0 && (
-                                    <div className="flex gap-2 mt-3 overflow-x-auto custom-scrollbar pb-2">
-                                      {photosArray.map((url, i) => (
-                                        <img key={`hist-photo-${i}`} src={url} alt="Log" className="h-16 w-16 rounded-lg object-cover border border-slate-200 shadow-sm" />
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <span className="text-amber-500 font-bold text-[10px] uppercase">Pending Rating</span>
                         )}
                       </div>
-
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
+                      <span className="font-semibold text-slate-500 flex items-center gap-1"><AlertCircle size={12}/> Waiting Time:</span>
+                      <span className="font-bold text-amber-600 animate-pulse">{calculateWaitingTime(ticket.raisedAt)}</span>
                     </div>
                   )}
                 </div>
+
+                {/* Admin Note Preview (If Closed) */}
+                {ticket.status === 'Closed' && (
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-700 block mb-1">Admin Note:</span>
+                    <p className="text-slate-500 italic line-clamp-1 border-l-2 border-slate-200 pl-2">"{ticket.adminNotes}"</p>
+                  </div>
+                )}
               </div>
 
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 🚀 ADD NEW ASSET MODAL */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border ${theme.modalBody}`}>
-            <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
-              <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-            
-            <form onSubmit={handleSaveNewAsset} className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                  <select value={newAssetCategory} onChange={e => {
-                    const newCat = e.target.value;
-                    setNewAssetCategory(newCat);
-                    setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
-                  }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-                    <span>Asset Tag ID</span>
-                  </label>
-                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (S/N) *</label>
-                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="Scan factory S/N barcode..." className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
-                </div>
-                <div>
-                  <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Vendor Source</label>
-                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name *</label><input type="text" required value={newAssetName} onChange={e => setNewAssetName(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-              </div>
-
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Demo Use">🧪 Demo</option></select></div>
-              </div>
-
-              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
-                <label className={`text-[10px] font-semibold uppercase block mb-2 ${theme.textSub}`}>Assign to Employee (Optional)</label>
-                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} isDarkMode={isDarkMode} />
-              </div>
-
-              <div className="flex gap-4 pt-6">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#121212] border-[#27272a] text-zinc-300 hover:bg-[#18181b]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
-                  {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Register New Asset
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 🚀 BULK UPLOAD MODAL */}
-      {isBulkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
-            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18}/> Bulk Asset Import</h3>
-              <button onClick={() => setIsBulkModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-            
-            <div className="space-y-4 text-left">
-              <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>
-                <Download size={16}/> <span>Download CSV Template</span>
+              {/* Card Footer Button */}
+              <button 
+                onClick={() => setViewTicket(ticket)} 
+                className={`w-full p-3.5 text-xs font-bold uppercase tracking-widest transition-colors ${ticket.status === 'Closed' && ticket.rating === 0 ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'}`}
+              >
+                {ticket.status === 'Closed' && ticket.rating === 0 ? 'Rate Solution' : 'View Full Details'}
               </button>
             </div>
-
-            <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-[#3f3f46] bg-[#0a0a0a] hover:bg-[#18181b]' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'}`}>
-              <FileSpreadsheet size={48} className="text-blue-500 animate-pulse" />
-              <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-blue-600 file:text-white hover:file:bg-blue-700' : 'text-slate-700 file:bg-slate-900 file:text-white'}`} />
-            </div>
-
-            <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all bg-slate-300 text-white cursor-not-allowed`}>
-              Execute Batch Upload
-            </button>
-          </div>
+          ))}
         </div>
       )}
 
-    </div>
-  );
-}
+      {/* MODALS */}
+      <AnimatePresence>
+        
+        {/* RAISE TICKET MODAL */}
+        {isRaiseModalOpen && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+              
+              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h2 className="text-xl font-black text-slate-900">Raise Support Ticket</h2>
+                <button onClick={() => setIsRaiseModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full cursor-pointer"><X size={20}/></button>
+              </div>
 
-export default function AssetRegistryPageWrapper() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0a0a0a]"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>}>
-      <AssetRegistryContent />
-    </Suspense>
+              <form onSubmit={handleRaiseTicket} className="p-6 space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Laptop size={16} className="text-blue-500"/> Which Asset has an issue?</label>
+                  <select 
+                    required 
+                    value={formData.assetId} 
+                    onChange={(e) => setFormData({...formData, assetId: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
+                  >
+                    <option value="" disabled>Select an assigned asset...</option>
+                    {myAssignedAssets.map(asset => (
+                      <option key={asset.id} value={asset.id}>{asset.name || asset.category} ({asset.asset_tag || 'N/A'})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Describe the problem</label>
+                  <textarea 
+                    required 
+                    value={formData.issue}
+                    onChange={(e) => setFormData({...formData, issue: e.target.value})}
+                    placeholder="e.g. The screen flickers every 10 minutes..." 
+                    rows={4} 
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-medium text-sm"
+                  ></textarea>
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer">Cancel</button>
+                  <button type="submit" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-sm cursor-pointer">
+                    <Send size={18} /> Submit Ticket
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* VIEW TICKET DETAILS MODAL WITH RATING SYSTEM */}
+        {viewTicket && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewTicket(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+              
+              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-black text-slate-900">Ticket Record</h2>
+                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs font-black border border-blue-200">{viewTicket.token}</span>
+                </div>
+                <button onClick={() => setViewTicket(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full cursor-pointer"><X size={20}/></button>
+              </div>
+
+              <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh]">
+                <div>
+                  <h3 className="font-black text-lg text-slate-900">{viewTicket.assetName}</h3>
+                  <p className="text-sm font-medium text-slate-500">Asset Tag: {viewTicket.tagId}</p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                  <p className="text-xs text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={12}/> Reported On</p>
+                  <p className="text-sm font-bold text-slate-900">{formatDate(viewTicket.raisedAt)}</p>
+                  
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <p className="text-xs text-slate-500 font-bold mb-1">Your Issue Description:</p>
+                    <p className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">{viewTicket.issue}</p>
+                  </div>
+                </div>
+
+                {viewTicket.status === 'Closed' ? (
+                  <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle2 size={18} className="text-emerald-600" />
+                      <p className="text-sm font-bold text-emerald-900">Resolved by Admin</p>
+                    </div>
+                    <p className="text-sm font-medium text-emerald-800 whitespace-pre-wrap">{viewTicket.adminNotes}</p>
+                    
+                    {/* 🌟 INCORPORATED RESOLUTION TIME METRIC */}
+                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-emerald-200/50">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 mb-0.5">Closed On</p>
+                        <p className="text-xs font-bold text-emerald-700">{formatDate(viewTicket.closedAt)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 mb-0.5">Time to Resolve</p>
+                        <p className="text-xs font-bold text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded-md flex items-center justify-end gap-1 border border-emerald-200/50">
+                          <Timer size={12} /> {calculateResolutionTime(viewTicket.raisedAt, viewTicket.closedAt)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3">
+                    <Clock size={20} className="text-blue-500 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-blue-800">This ticket is currently open. An admin will review it shortly.</p>
+                      <p className="text-[10px] font-bold text-blue-600 mt-1 flex items-center gap-1"><AlertCircle size={10}/> Wait Time: {calculateWaitingTime(viewTicket.raisedAt)}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 🌟 RATING FORM COMPONENT */}
+                {viewTicket.status === 'Closed' && (
+                  <TicketRatingForm 
+                    ticket={viewTicket} 
+                    onRatingSubmitted={(newRating, newFeedback) => {
+                      const updated = { ...viewTicket, rating: newRating, rating_feedback: newFeedback };
+                      setViewTicket(updated);
+                      setTickets(tickets.map(t => t.id === updated.id ? updated : t));
+                    }} 
+                  />
+                )}
+                
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
