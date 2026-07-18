@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -9,7 +9,7 @@ import {
   Upload, FileSpreadsheet, Package, Mouse, 
   Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
   Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
-  Keyboard, RectangleHorizontal, Monitor, Sparkles
+  Keyboard, RectangleHorizontal, Monitor, Sparkles, History
 } from 'lucide-react';
 
 // ==========================================
@@ -48,7 +48,9 @@ function getCategoryIcon(category: string, size = 20) {
 function safeDate(dateStr: any) {
   if (!dateStr) return 'N/A';
   const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString('en-IN');
+  return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString('en-IN', {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
 }
 
 function safeString(val: any) {
@@ -64,29 +66,34 @@ function generateSafeUuid() {
 }
 
 // ==========================================
-// 🌟 EXACT ASSET TAG GENERATOR LOGIC
+// 🌟 SMART TAG GENERATOR (LOCKS SUFFIX)
 // ==========================================
-function generateCategoryPrefix(category: string, existingUuid?: string) {
-  let prefix = 'VSS-OTH';
+function generateCategoryPrefix(category: string, existingTagId?: string) {
+  let middle = 'OTH';
   const cat = safeString(category).toLowerCase();
   
-  if (cat.includes('laptop')) prefix = 'VSS-LAP';
-  else if (cat.includes('wireless keyboard')) prefix = 'VSS-WKM';
-  else if (cat.includes('mouse kit') || cat.includes('combo')) prefix = 'VSS-CKM';
-  else if (cat.includes('wired keyboard')) prefix = 'VSS-KMU';
-  else if (cat.includes('wired mouse')) prefix = 'VSS-MOU';
-  else if (cat.includes('headphone')) prefix = 'VSS-HDP';
-  else if (cat.includes('stand')) prefix = 'VSS-STD';
-  else if (cat.includes('cleaning')) prefix = 'VSS-CKT';
-  else prefix = 'VSS-OTH';
+  // Fuzzy matching allows it to handle old legacy category names safely
+  if (cat.includes('laptop')) middle = 'LAP';
+  else if (cat.includes('wireless keyboard')) middle = 'WKM';
+  else if (cat.includes('combo') || cat.includes('mouse kit')) middle = 'CKM';
+  else if (cat.includes('wired keyboard') || cat === 'keyboard usb') middle = 'KMU';
+  else if (cat.includes('mouse')) middle = 'MOU';
+  else if (cat.includes('headphone')) middle = 'HDP';
+  else if (cat.includes('stand')) middle = 'STD';
+  else if (cat.includes('cleaning')) middle = 'CKT';
+  else middle = 'OTH';
 
-  if (existingUuid && String(existingUuid).length > 20) {
-    const numsOnly = String(existingUuid).replace(/[^0-9]/g, '');
-    const stableDigits = numsOnly.length >= 4 ? numsOnly.slice(-4) : '4082';
-    return `${prefix}-${stableDigits}`;
+  let suffix = Math.floor(1000 + Math.random() * 9000).toString();
+
+  // 🚀 Extracts and locks the exact numbers from the previous tag
+  if (existingTagId) {
+    const match = existingTagId.match(/\d{4}$/); // Grabs the last 4 digits specifically
+    if (match) {
+      suffix = match[0];
+    }
   }
   
-  return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  return `VSS-${middle}-${suffix}`;
 }
 
 // ==========================================
@@ -181,31 +188,25 @@ function AssetRegistryContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
-  // Bulk Selection & Duplicate State
+  // Bulk Selection State
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-  const [showDuplicates, setShowDuplicates] = useState(false);
 
-  // Modals
+  // Modals & History State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
+  
+  const [assetHistory, setAssetHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [printConfig, setPrintConfig] = useState({
-    pageSize: 'A4',
-    columns: 2,
-    rows: 8,
-    labelWidth: 8.88,      
-    labelHeight: 3.4,      
-    marginTop: 1.25,       
-    marginLeft: 1.37,      
-    gapX: 0.5,             
-    gapY: 0.0,             
-    packSmallAssets: true  
+    pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,      
+    marginTop: 1.25, marginLeft: 1.37, gapX: 0.5, gapY: 0.0, packSmallAssets: true  
   });
 
   // Forms
-  const [newAssetCategory, setNewAssetCategory] = useState('For Laptop');
+  const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
   const [newAssetTag, setNewAssetTag] = useState(''); 
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetBrand, setNewAssetBrand] = useState('');
@@ -233,16 +234,42 @@ function AssetRegistryContent() {
   }, []);
 
   useEffect(() => {
-    if (isAddModalOpen) setNewAssetTag(generateCategoryPrefix(newAssetCategory));
-  }, [newAssetCategory, isAddModalOpen]);
-
-  useEffect(() => {
-    const scanId = searchParams.get('view');
-    if (scanId && assets.length > 0) {
-      const foundAsset = assets.find(a => safeString(a.id) === scanId || safeString(a.asset_tag) === scanId || safeString(a.clean_tag) === scanId);
-      if (foundAsset) openAssetViewModal(foundAsset);
+    if (isAddModalOpen) {
+      setNewAssetTag(generateCategoryPrefix(newAssetCategory));
     }
-  }, [searchParams, assets]);
+  }, [isAddModalOpen]);
+
+  // 🌟 ASSET HISTORY ENGINE
+  useEffect(() => {
+    if (viewAssetModal && !isEditingAsset) {
+      loadAssetHistory(viewAssetModal.id);
+    }
+  }, [viewAssetModal, isEditingAsset]);
+
+  const loadAssetHistory = async (assetId: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const { data: historyData } = await supabase
+        .from('inspections')
+        .select('*')
+        .eq('asset_id', assetId)
+        .order('created_at', { ascending: false });
+
+      const compiled = (historyData || []).map(log => {
+         const staff = staffList.find(s => s.id === log.inspected_by);
+         return {
+           ...log,
+           staff_name: staff ? (staff.full_name || staff.name) : 'Admin / System Execution',
+           emp_code: staff ? (staff.emp_code || staff.email) : 'N/A'
+         };
+      });
+      setAssetHistory(compiled);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   const fetchRegistryData = async () => {
     setLoading(true);
@@ -289,11 +316,10 @@ function AssetRegistryContent() {
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s === 'approved') return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    if (s === 're-inspection') return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
-    if (s === 'not approved') return isDarkMode ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-orange-700 bg-orange-50 border-orange-200';
-    if (s === 'rejected') return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
-    return isDarkMode ? 'text-zinc-400 bg-[#18181b] border-[#27272a]' : 'text-slate-600 bg-slate-50 border-slate-200';
+    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    if (s.includes('return')) return isDarkMode ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-blue-700 bg-blue-50 border-blue-200';
+    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
+    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -301,7 +327,7 @@ function AssetRegistryContent() {
     setViewAssetModal({ ...asset, clean_tag: stableTag });
     setIsEditingAsset(false);
     setEditForm({
-      category: asset.category || 'For Laptop', asset_tag: stableTag, serial: asset.serial_number || '',
+      category: asset.category || 'Laptop', asset_tag: stableTag, serial: asset.serial_number || '',
       name: asset.safe_display_name, brand: asset.brand || '', price: asset.price || '', 
       vendor: asset.vendor || '', purchase_date: asset.purchase_date || '', warranty_expiry: asset.warranty_expiry || '',
       condition: asset.asset_condition || 'New', status: asset.status || 'In Stock (Unassigned)', 
@@ -324,8 +350,10 @@ function AssetRegistryContent() {
 
       const resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
       const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
+      const newAssetId = generateSafeUuid();
+      
       const { error } = await supabase.from('assets').insert([{
-        id: generateSafeUuid(), asset_tag: finalTag.toUpperCase(), name: newAssetName, 
+        id: newAssetId, asset_tag: finalTag.toUpperCase(), name: newAssetName, 
         brand: newAssetBrand || 'Standard', serial_number: serialUpper, 
         category: newAssetCategory, price: newAssetPrice ? parseFloat(newAssetPrice) : null, 
         vendor: newAssetVendor || 'Direct', purchase_date: newAssetPurchaseDate || null, 
@@ -335,6 +363,13 @@ function AssetRegistryContent() {
       
       if (error) throw error;
       
+      // Auto-Log History Event
+      await supabase.from('inspections').insert({
+        asset_id: newAssetId, inspected_by: newAssetAssignee || null, 
+        status: newAssetAssignee ? 'Pending Handover' : 'Stock Intake', 
+        notes: `Asset initially registered into the system as ${newAssetCondition}.`
+      });
+
       if (newAssetAssignee) {
         try {
           await supabase.from('notifications').insert({
@@ -363,10 +398,14 @@ function AssetRegistryContent() {
       }
 
       let resolvedStatus = editForm.status;
+      let actionNote = "Asset configuration updated by administrator.";
+
       if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) {
         resolvedStatus = 'Pending Handover';
-      } else if (!editForm.assignee && resolvedStatus === 'Assigned') {
+        actionNote = `Asset re-assigned to new holder. Awaiting agreement.`;
+      } else if (!editForm.assignee && viewAssetModal.assigned_to) {
         resolvedStatus = 'In Stock (Unassigned)';
+        actionNote = `Asset forcefully unassigned and returned to stock.`;
       }
 
       const updatePayload = {
@@ -379,6 +418,12 @@ function AssetRegistryContent() {
 
       const { error } = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
       if (error) throw error;
+
+      // Log the update
+      await supabase.from('inspections').insert({
+        asset_id: viewAssetModal.id, inspected_by: editForm.assignee || null, 
+        status: resolvedStatus, notes: actionNote
+      });
 
       setIsEditingAsset(false); 
       fetchRegistryData();
@@ -398,25 +443,6 @@ function AssetRegistryContent() {
       alert(`Error deleting asset: ${err.message}`);
     } finally {
       setIsUpdating(false);
-    }
-  };
-
-  // 🌟 BULK DELETE ACTION FOR DUPLICATES
-  const handleBulkDelete = async () => {
-    if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete ${selectedAssetIds.size} selected assets? This action cannot be undone.`)) return;
-    setLoading(true);
-    try {
-      const idsToDelete = Array.from(selectedAssetIds);
-      const { error } = await supabase.from('assets').delete().in('id', idsToDelete);
-      if (error) throw error;
-
-      setAssets(prev => prev.filter(a => !selectedAssetIds.has(a.id)));
-      setSelectedAssetIds(new Set());
-      alert(`Successfully deleted ${idsToDelete.length} assets.`);
-    } catch (err: any) {
-      alert(`Error deleting assets: ${err.message}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -518,65 +544,17 @@ function AssetRegistryContent() {
           <title>Bulk_Print_Label_Sheet</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800;900&display=swap');
-            
-            @page { 
-              size: ${printConfig.pageSize}; 
-              margin: 0 !important; 
-            }
-            
-            body { 
-              margin: 0; 
-              padding: 0; 
-              font-family: 'Inter', sans-serif; 
-              background: #e2e8f0; 
-              color: #000; 
-              -webkit-font-smoothing: antialiased; 
-            }
-            
-            .page { 
-              background: #fff;
-              width: ${printConfig.pageSize === 'A4' ? '210mm' : '215.9mm'}; 
-              height: ${printConfig.pageSize === 'A4' ? '297mm' : '279.4mm'}; 
-              box-sizing: border-box;
-              padding-top: ${printConfig.marginTop}cm;
-              padding-left: ${printConfig.marginLeft}cm;
-              display: grid;
-              grid-template-columns: repeat(${printConfig.columns}, ${printConfig.labelWidth}cm);
-              grid-template-rows: repeat(${printConfig.rows}, ${printConfig.labelHeight}cm);
-              column-gap: ${printConfig.gapX}cm;
-              row-gap: ${printConfig.gapY}cm;
-              page-break-after: always;
-              margin: 20px auto;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-              overflow: hidden;
-            }
-            
-            .label-cell { 
-              width: ${printConfig.labelWidth}cm; 
-              height: ${printConfig.labelHeight}cm; 
-              max-width: ${printConfig.labelWidth}cm; 
-              max-height: ${printConfig.labelHeight}cm; 
-              outline: 1px dashed #cbd5e1; 
-              box-sizing: border-box;
-              overflow: hidden; 
-              background: #fff;
-            }
-
-            @media print { 
-              body { background: #fff; }
-              .page { margin: 0; box-shadow: none; }
-              .label-cell { outline: none; } 
-            }
+            @page { size: ${printConfig.pageSize}; margin: 0 !important; }
+            body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #e2e8f0; color: #000; -webkit-font-smoothing: antialiased; }
+            .page { background: #fff; width: ${printConfig.pageSize === 'A4' ? '210mm' : '215.9mm'}; height: ${printConfig.pageSize === 'A4' ? '297mm' : '279.4mm'}; box-sizing: border-box; padding-top: ${printConfig.marginTop}cm; padding-left: ${printConfig.marginLeft}cm; display: grid; grid-template-columns: repeat(${printConfig.columns}, ${printConfig.labelWidth}cm); grid-template-rows: repeat(${printConfig.rows}, ${printConfig.labelHeight}cm); column-gap: ${printConfig.gapX}cm; row-gap: ${printConfig.gapY}cm; page-break-after: always; margin: 20px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
+            .label-cell { width: ${printConfig.labelWidth}cm; height: ${printConfig.labelHeight}cm; max-width: ${printConfig.labelWidth}cm; max-height: ${printConfig.labelHeight}cm; outline: 1px dashed #cbd5e1; box-sizing: border-box; overflow: hidden; background: #fff; }
+            @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; } .label-cell { outline: none; } }
           </style>
         </head>
         <body>
           ${pagesHtml}
           <script>
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-              }, ${Math.max(800, assetsToPrint.length * 100)});
-            };
+            window.onload = () => { setTimeout(() => { window.print(); }, ${Math.max(800, assetsToPrint.length * 100)}); };
           </script>
         </body>
       </html>
@@ -585,7 +563,6 @@ function AssetRegistryContent() {
     printWindow.document.open(); 
     printWindow.document.write(htmlContent); 
     printWindow.document.close();
-    
     setIsPrintConfigModalOpen(false);
   };
 
@@ -605,35 +582,9 @@ function AssetRegistryContent() {
         <head>
           <title>QR_${targetRef}</title>
           <style>
-            body, html { 
-              margin: 0; 
-              padding: 0; 
-              width: 100%; 
-              height: 100%; 
-              display: flex; 
-              justify-content: center; 
-              align-items: center; 
-              background: #fff; 
-            }
-            img { 
-              width: 90%; 
-              max-height: 90%; 
-              object-fit: contain; 
-              border: 8px solid #000; 
-              padding: 16px; 
-              border-radius: 16px;
-              box-sizing: border-box;
-            }
-            @media print {
-              @page { margin: 0; size: auto; }
-              body { 
-                display: flex; 
-                justify-content: center; 
-                align-items: center; 
-                margin: 0; 
-                padding: 0; 
-              }
-            }
+            body, html { margin: 0; padding: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fff; }
+            img { width: 90%; max-height: 90%; object-fit: contain; border: 8px solid #000; padding: 16px; border-radius: 16px; box-sizing: border-box; }
+            @media print { @page { margin: 0; size: auto; } body { display: flex; justify-content: center; align-items: center; margin: 0; padding: 0; } }
           </style>
         </head>
         <body onload="setTimeout(() => { window.print(); window.close(); }, 600)">
@@ -645,22 +596,6 @@ function AssetRegistryContent() {
     printWindow.document.write(htmlContent);
     printWindow.document.close();
   };
-
-  // ==========================================
-  // 🌟 FILTRATION, DUPLICATE CHECK & SEARCH ENGINE LOGIC
-  // ==========================================
-  
-  // Create a map to find identical Serial Numbers
-  const duplicatesMap = useMemo(() => {
-    const counts: Record<string, number> = {};
-    assets.forEach(a => {
-      const sn = safeString(a.serial_number).toUpperCase().trim();
-      if (sn && sn !== 'N/A') {
-        counts[sn] = (counts[sn] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [assets]);
 
   const getCatCount = (filterName: string) => {
     if (filterName === 'All') return assets.length;
@@ -679,12 +614,6 @@ function AssetRegistryContent() {
   };
 
   const filteredAssets = assets.filter(a => {
-    // 🌟 DUPLICATE FILTER CHECK
-    if (showDuplicates) {
-      const sn = safeString(a.serial_number).toUpperCase().trim();
-      if (!sn || sn === 'N/A' || duplicatesMap[sn] <= 1) return false;
-    }
-
     const q = safeString(searchQuery).toLowerCase();
     const cleanTag = safeString(a.clean_tag).toLowerCase();
     const cat = safeString(a.category).toLowerCase();
@@ -757,7 +686,7 @@ function AssetRegistryContent() {
             </button>
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className={`text-2xl font-semibold tracking-tight ${theme.textMain}`}>Hardware Registry</h1>
+                <h1 className={`text-2xl font-semibold tracking-tight ${theme.textMain}`}>Hardware Registry <span className="text-indigo-500 text-sm ml-2 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">(v2.1)</span></h1>
                 <span className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest ${isDarkMode ? 'bg-[#27272a] text-zinc-300' : 'bg-slate-100 text-slate-700'}`}>{assets.length} Units</span>
               </div>
               <p className={`text-sm ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
@@ -765,20 +694,11 @@ function AssetRegistryContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* 🌟 SAFETY FIX: Only show Bulk Delete if the 'Duplicates' mode is active AND items are selected */}
-            {selectedAssetIds.size > 0 && showDuplicates && (
-              <button onClick={handleBulkDelete} className="flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-rose-600/20 transition-all animate-in zoom-in-95 duration-200">
-                <Trash2 size={16} /> <span>Delete {selectedAssetIds.size}</span>
-              </button>
-            )}
-
-            {/* Print button still appears normally whenever you select anything */}
             {selectedAssetIds.size > 0 && (
               <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all animate-in zoom-in-95 duration-200">
                 <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
               </button>
             )}
-
             <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-colors text-xs font-semibold uppercase tracking-wider ${theme.card} ${theme.cardHover} ${theme.textMain}`}>
               <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
             </button>
@@ -821,16 +741,6 @@ function AssetRegistryContent() {
               <span className="hidden sm:inline">
                 {selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}
               </span>
-            </button>
-            
-            {/* 🌟 SHOW DUPLICATES TOGGLE BUTTON */}
-            <button 
-              onClick={() => setShowDuplicates(!showDuplicates)} 
-              className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${showDuplicates ? (isDarkMode ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700') : theme.card + ' ' + theme.textMain}`}
-              title="Show assets with identical Serial Numbers"
-            >
-              <AlertTriangle size={16}/> 
-              <span className="hidden sm:inline">Duplicates</span>
             </button>
 
             <div className={`flex-1 p-2.5 rounded-2xl border shadow-sm flex items-center transition-colors ${theme.card}`}>
@@ -919,8 +829,8 @@ function AssetRegistryContent() {
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${getInspectionStatusColor(asset.live_inspection_status)}`}>
                       {(() => {
                         const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st === 'approved') return <CheckCircle2 size={12} />;
-                        if (st === 're-inspection') return <RefreshCw size={12} className="animate-spin" />;
+                        if (st.includes('approved')) return <CheckCircle2 size={12} />;
+                        if (st.includes('return')) return <RefreshCw size={12} className="animate-spin" />;
                         return <AlertTriangle size={12} />;
                       })()}
                       <span className="text-[9px] font-bold uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
@@ -1036,23 +946,10 @@ function AssetRegistryContent() {
         </div>
       )}
 
-      {/* 🚀 VIEW MODAL */}
+      {/* 🚀 VIEW MODAL & HISTORY ENGINE */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
 
-        let safePhotos: string[] = [];
-        try {
-          if (Array.isArray(viewAssetModal.live_inspection_photos)) {
-            safePhotos = viewAssetModal.live_inspection_photos;
-          } else if (typeof viewAssetModal.live_inspection_photos === 'string') {
-            const parsed = JSON.parse(viewAssetModal.live_inspection_photos);
-            if (Array.isArray(parsed)) safePhotos = parsed;
-            else if (typeof parsed === 'object' && parsed !== null) safePhotos = Object.values(parsed);
-          } else if (typeof viewAssetModal.live_inspection_photos === 'object' && viewAssetModal.live_inspection_photos !== null) {
-            safePhotos = Object.values(viewAssetModal.live_inspection_photos);
-          }
-        } catch(e) {}
-        
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
             <div className={`rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
@@ -1082,7 +979,7 @@ function AssetRegistryContent() {
                 </div>
               </div>
 
-              {/* Right Column: Editor Workspace */}
+              {/* Right Column: Editor Workspace & History Log */}
               <div className={`w-full md:w-[65%] flex flex-col overflow-y-auto custom-scrollbar relative ${theme.modalBody}`}>
                 <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex absolute top-6 right-6 p-2.5 rounded-full cursor-pointer z-10 transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={18}/></button>
 
@@ -1114,14 +1011,21 @@ function AssetRegistryContent() {
                       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
                         <div>
                           <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                          <select value={editForm.category} onChange={e => { const newCat = e.target.value; setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat) }); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
+                          <select value={editForm.category} onChange={e => { 
+                            const newCat = e.target.value; 
+                            setEditForm({ 
+                              ...editForm, 
+                              category: newCat, 
+                              asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) // 🚀 This preserves the suffix digits!
+                            }); 
+                          }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
                             {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
                             <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
+                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
                           </label>
                           <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
                         </div>
@@ -1169,7 +1073,7 @@ function AssetRegistryContent() {
                   ) : (
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'For Laptop'}</p></div>
+                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-semibold mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{viewAssetModal.category || 'Laptop'}</p></div>
                         <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-semibold uppercase tracking-widest ${theme.textSub}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-semibold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
                       </div>
 
@@ -1198,26 +1102,55 @@ function AssetRegistryContent() {
                         </div>
                       </div>
 
+                      {/* 🌟 LIFECYCLE & ACTIVITY HISTORY */}
                       <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-200'}`}>
-                        <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${theme.textMain}`}>Latest Inspection Evidence</h4>
-                        <div className="mb-4">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Inspector Notes</span>
-                          <div className={`text-xs font-mono p-3 rounded-lg border ${isDarkMode ? 'bg-[#121212] border-zinc-800 text-zinc-300' : 'bg-white border-slate-200 text-slate-700'} whitespace-pre-wrap`}>
-                            {viewAssetModal.live_inspection_notes || 'No specific notes provided during the last audit.'}
+                        <div className="flex items-center gap-2 mb-4">
+                          <History size={16} className={theme.textMain} />
+                          <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
+                        </div>
+                        
+                        {isLoadingHistory ? (
+                          <div className="flex justify-center p-4"><Loader2 className="animate-spin text-blue-500"/></div>
+                        ) : assetHistory.length === 0 ? (
+                          <p className={`text-xs italic ${theme.textSub}`}>No history logs found for this asset.</p>
+                        ) : (
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                            {assetHistory.map((log, idx) => {
+                              let photosArray: string[] = [];
+                              try {
+                                if (Array.isArray(log.photos)) photosArray = log.photos;
+                                else if (typeof log.photos === 'string') {
+                                  const parsed = JSON.parse(log.photos);
+                                  if (Array.isArray(parsed)) photosArray = parsed;
+                                }
+                              } catch(e){}
+
+                              return (
+                                <div key={idx} className={`p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#121212] border-zinc-800' : 'bg-white border-slate-200'}`}>
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
+                                      <p className={`text-xs font-bold mt-2 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-400 font-mono">({log.emp_code})</span></p>
+                                    </div>
+                                    <span className={`text-[10px] font-bold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
+                                  </div>
+                                  {log.notes && (
+                                    <div className={`mt-2 text-xs font-mono p-3 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0a0a0a] border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                                      {log.notes}
+                                    </div>
+                                  )}
+                                  {photosArray.length > 0 && (
+                                    <div className="flex gap-2 mt-3 overflow-x-auto custom-scrollbar pb-2">
+                                      {photosArray.map((url, i) => (
+                                        <img key={`hist-photo-${i}`} src={url} alt="Log" className="h-16 w-16 rounded-lg object-cover border border-slate-200 shadow-sm" />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        </div>
-                        <div>
-                           <span className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.textSub}`}>Attached Photos</span>
-                           {safePhotos.length > 0 ? (
-                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                               {safePhotos.slice(0,4).map((src, idx) => (
-                                  <img key={idx} src={src} alt="Evidence" className="w-full h-24 object-cover rounded-lg border border-slate-200 shadow-sm" />
-                               ))}
-                             </div>
-                           ) : (
-                             <p className={`text-xs italic ${theme.textSub}`}>No inspection photos available on record.</p>
-                           )}
-                        </div>
+                        )}
                       </div>
 
                     </div>
@@ -1243,14 +1176,18 @@ function AssetRegistryContent() {
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-blue-50/30 border-blue-100'}`}>
                 <div>
                   <label className={`text-[10px] font-semibold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                  <select value={newAssetCategory} onChange={e => setNewAssetCategory(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
+                  <select value={newAssetCategory} onChange={e => {
+                    const newCat = e.target.value;
+                    setNewAssetCategory(newCat);
+                    setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
+                  }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-colors border ${theme.inputBg}`}>
                     {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={`text-[10px] font-semibold uppercase flex justify-between mb-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
                     <span>Asset Tag ID</span>
-                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(auto-generate)</button>
+                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(generate new)</button>
                   </label>
                   <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0a0a0a] border-blue-500/50 text-blue-400 focus:border-blue-400' : 'bg-white border-blue-300 text-blue-900 focus:border-blue-500'}`} />
                 </div>
