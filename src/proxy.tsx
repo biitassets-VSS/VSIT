@@ -1,10 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-// 1. Required for Cloudflare Workers / Pages Edge Runtime
 export const runtime = 'edge';
 
-// 2. Exporting as 'default' named 'middleware' satisfies Turbopack, OpenNext, and ESBuild
 export default async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -12,7 +10,6 @@ export default async function middleware(request: NextRequest) {
     },
   })
 
-  // 3. Use process.env first, falling back to your hardcoded strings for build-time safety
   const supabaseUrl = 
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ghsiojfheepygzhkrymv.supabase.co";
   const supabaseKey = 
@@ -39,13 +36,11 @@ export default async function middleware(request: NextRequest) {
     }
   )
 
-  // 4. Refreshes the Supabase Auth session if expired
   await supabase.auth.getUser()
 
   return response
 }
 
-// Alias export to satisfy Next.js 16's proxy convention simultaneously
 export { middleware as proxy };
 
 export const config = {
