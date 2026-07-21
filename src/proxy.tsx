@@ -1,8 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-export const runtime = 'edge';
-
 export default async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
