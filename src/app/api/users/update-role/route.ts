@@ -1,26 +1,45 @@
-// src/app/api/users/update-role/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Need service key to bypass Row Level Security
-);
+// 1. Required for Cloudflare Pages & Vercel Edge Runtime
+export const runtime = 'edge';
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const { userId, newRole } = await request.json();
+    // 2. Initialize inside the handler with fallback strings
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+    const supabaseServiceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      'placeholder-key';
 
-    // Change 'profiles' to your actual table name
-    const { error } = await supabase
-      .from('profiles')
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    const body = await req.json();
+    const { userId, newRole } = body;
+
+    if (!userId || !newRole) {
+      return NextResponse.json(
+        { error: 'Missing userId or newRole' },
+        { status: 400 }
+      );
+    }
+
+    // 3. Execute your database update (adjust table/column names if yours differ)
+    const { data, error } = await supabaseAdmin
+      .from('staff') // or 'profiles' / 'users'
       .update({ role: newRole })
-      .eq('id', userId);
+      .eq('profile_id', userId) // or 'id': userId
+      .select()
+      .single();
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, data });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
