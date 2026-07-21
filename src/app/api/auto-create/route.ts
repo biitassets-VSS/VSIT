@@ -6,7 +6,7 @@ export const runtime = 'edge';
 
 export async function POST() {
   try {
-    // 1. Safe initialization inside the handler prevents build-time static evaluation crashes
+    // Safe initialization inside the handler prevents build-time static evaluation crashes
     const supabaseUrl =
       process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
     const supabaseServiceKey =
@@ -16,7 +16,7 @@ export async function POST() {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 2. Fetch all emails from your custom 'staff' table
+    // 1. Fetch all emails from your custom 'staff' table
     const { data: staffList, error: fetchError } = await supabaseAdmin
       .from('staff')
       .select('email');
@@ -28,13 +28,13 @@ export async function POST() {
 
     let successCount = 0;
     let errorCount = 0;
-    const errorsList = [];
+    const errorsList: { email: string; error: string }[] = [];
 
-    // 3. Loop through every staff member and create an Auth account
+    // 2. Loop through every staff member and create an Auth account
     for (const staff of staffList) {
       if (!staff.email) continue;
 
-      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      const { error } = await supabaseAdmin.auth.admin.createUser({
         email: staff.email,
         password: 'TemporaryPassword123!', // Default password for everyone
         email_confirm: true, // Auto-confirms email for instant login
@@ -57,9 +57,13 @@ export async function POST() {
       message: `Successfully created ${successCount} new accounts.`,
       errors: errorsList,
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    // Type guard for TypeScript safety
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unknown error occurred';
+
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
