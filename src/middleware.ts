@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-// REQUIRED: Cloudflare OpenNext strictly requires global interception to run on the Edge
-export const runtime = 'edge';
+// REQUIRED: Use 'experimental-edge' to satisfy Next.js 16 Turbopack AND OpenNext simultaneously
+export const runtime = 'experimental-edge';
 
 export default async function middleware(request: NextRequest) {
   let response = NextResponse.next({
