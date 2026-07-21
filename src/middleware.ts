@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
+// REQUIRED: Cloudflare OpenNext strictly requires global interception to run on the Edge
+export const runtime = 'edge';
+
 export default async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -38,8 +41,6 @@ export default async function middleware(request: NextRequest) {
 
   return response
 }
-
-export { middleware as proxy };
 
 export const config = {
   matcher: [
