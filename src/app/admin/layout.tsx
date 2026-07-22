@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, PackageSearch, Settings, 
   LogOut, Menu, X, ClipboardCheck, BarChart3, Ticket, 
   Loader2, Bell, ChevronDown, AlertTriangle, CheckCircle2,
-  Moon, Sun
+  Moon, Sun, ArrowRightLeft // Added ArrowRightLeft here
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -150,7 +150,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.replace('/');
   };
 
-  // 🖤 CARBON BLACK & CRISP WHITE THEME PALETTE
   const theme = {
     bgApp: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50', 
     bgSidebar: isDarkMode ? 'bg-[#121212]' : 'bg-white',
@@ -176,7 +175,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className={`min-h-screen flex font-sans antialiased transition-colors duration-500 ${theme.bgApp} ${theme.textMain} relative`}>
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" />}
 
-      {/* 🚀 LIVE POPUP TOAST */}
       {activeAlert && (
         <div className={`fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
           <div className="flex justify-between items-start mb-2">
@@ -205,6 +203,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { name: 'Asset Inventory', href: '/admin/assets', icon: PackageSearch },
             { name: 'Inspections', href: '/admin/inspections', icon: ClipboardCheck, badge: liveInspCount },
             { name: 'Return Requests', href: '/admin/returns', icon: LogOut },
+            // 👇 Added Replacements to the navigation menu here
+            { name: 'Replacements', href: '/admin/replacements', icon: ArrowRightLeft },
             { name: 'Tickets', href: '/admin/tickets', icon: Ticket, badge: liveTicketCount }, 
             { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
             { name: 'Settings', href: '/admin/settings', icon: Settings },
@@ -253,12 +253,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="flex items-center gap-4 ml-auto relative">
             
-            {/* 🌙 Theme Toggle Button */}
             <button onClick={toggleTheme} className={`p-2 rounded-xl border shadow-sm transition-all duration-300 cursor-pointer ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-amber-400 hover:bg-[#27272a]' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`} title="Toggle Dark Mode">
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
             
-            {/* 🔔 THE BELL DROPDOWN TRAY */}
             <div className="relative">
               <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-colors cursor-pointer ${isNotifOpen ? 'bg-blue-500/10 border-blue-500/30 text-blue-500' : `${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a]' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500'}`}`}>
                 <Bell size={20} className={unreadTotal > 0 ? 'animate-[wiggle_1s_ease-in-out_infinite]' : ''} />
