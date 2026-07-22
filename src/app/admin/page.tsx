@@ -49,7 +49,6 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  // 🔔 THE UPGRADED NOTIFICATION TRIGGER ENGINE (Kept for Popups)
   const triggerDesktopAlert = (title: string, body: string) => {
     // 1. Play Sound
     try {
@@ -77,7 +76,7 @@ export default function AdminDashboardPage() {
         setNotifications((prev) => [payload.new, ...prev]);
         triggerDesktopAlert(payload.new.title || 'Admin Alert', payload.new.message || 'New alert received.');
       })
-      // 2. Listen for NEW TICKETS directly from Staff
+      // 2. Listen for NEW TICKETS
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
         const tix = payload.new;
         const title = 'New IT Ticket Raised';
@@ -85,18 +84,17 @@ export default function AdminDashboardPage() {
         
         triggerDesktopAlert(title, msg);
         
-        // Inject a mock actionable alert directly into the UI list
         setNotifications(prev => [{
-          id: `local-${Date.now()}`,
+          id: `local-ticket-${Date.now()}`,
           title: title,
           message: msg,
           target_role: 'admin',
           is_read: false
         }, ...prev]);
         
-        loadAdminData(); // Refresh the active stats
+        loadAdminData(); 
       })
-      // 3. Listen for NEW ASSET INSPECTIONS directly from Staff
+      // 3. Listen for NEW ASSET INSPECTIONS
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, (payload) => {
         const title = 'New Asset Inspection';
         const msg = 'A device inspection was just submitted and requires your review.';
@@ -104,7 +102,7 @@ export default function AdminDashboardPage() {
         triggerDesktopAlert(title, msg);
         
         setNotifications(prev => [{
-          id: `local-${Date.now()}`,
+          id: `local-insp-${Date.now()}`,
           title: title,
           message: msg,
           target_role: 'admin',
@@ -112,6 +110,42 @@ export default function AdminDashboardPage() {
         }, ...prev]);
         
         loadAdminData();
+      })
+      // 4. NEW: Listen for RETURN & REPLACEMENT requests on the Assets table
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => {
+        const newAsset = payload.new;
+        const oldAsset = payload.old;
+
+        // Ensure we only trigger the alert the exact moment the status changes
+        if (newAsset.status === 'Return Requested' && oldAsset.status !== 'Return Requested') {
+          const title = 'Asset Return Requested';
+          const msg = `A staff member has requested to return: ${newAsset.name || newAsset.model}`;
+          
+          triggerDesktopAlert(title, msg);
+          setNotifications(prev => [{
+            id: `local-ret-${Date.now()}`,
+            title: title,
+            message: msg,
+            target_role: 'admin',
+            is_read: false
+          }, ...prev]);
+          loadAdminData();
+        }
+
+        if (newAsset.status === 'Replacement Requested' && oldAsset.status !== 'Replacement Requested') {
+          const title = 'Asset Replacement Requested';
+          const msg = `A staff member has requested a replacement for: ${newAsset.name || newAsset.model}`;
+          
+          triggerDesktopAlert(title, msg);
+          setNotifications(prev => [{
+            id: `local-rep-${Date.now()}`,
+            title: title,
+            message: msg,
+            target_role: 'admin',
+            is_read: false
+          }, ...prev]);
+          loadAdminData();
+        }
       })
       .subscribe();
 
@@ -177,7 +211,6 @@ export default function AdminDashboardPage() {
 
       if (notifRes.data) {
         setNotifications(prev => {
-          // Merge database notifications with any local "live" ones that haven't been dismissed yet
           const localOnly = prev.filter(n => String(n.id).startsWith('local-'));
           return [...localOnly, ...notifRes.data];
         });
@@ -218,7 +251,6 @@ export default function AdminDashboardPage() {
 
   const dismissNotification = async (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
-    // Only attempt to update the database if it's a real DB UUID, not a locally injected one
     if (!String(id).startsWith('local-')) {
       try {
         await supabase.from('notifications').update({ is_read: true }).eq('id', id);
@@ -226,14 +258,16 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // 🚦 UPDATED: Routes strictly to your dedicated return and replacement pages
   const getActionRoute = (title: string) => {
     const t = (title || '').toLowerCase();
+    if (t.includes('return')) return '/admin/returns';
+    if (t.includes('replacement')) return '/admin/replacements';
     if (t.includes('inspection') || t.includes('agreement') || t.includes('audit')) return '/admin/inspections';
-    if (t.includes('ticket') || t.includes('request') || t.includes('replacement')) return '/admin/tickets';
+    if (t.includes('ticket') || t.includes('request')) return '/admin/tickets';
     return '/admin/assets';
   };
 
-  // 📣 ADVANCED BROADCAST HANDLER
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastMessage.trim() && !broadcastImage) return;
@@ -242,7 +276,6 @@ export default function AdminDashboardPage() {
     try {
       let finalImageUrl = null;
 
-      // 1. Upload Image to Supabase Storage if attached
       if (broadcastImage) {
         const fileExt = broadcastImage.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
@@ -261,14 +294,12 @@ export default function AdminDashboardPage() {
         finalImageUrl = publicUrlData.publicUrl;
       }
 
-      // 2. Save Broadcast to your 'broadcasts' log table
       await supabase.from('broadcasts').insert({
         message: broadcastMessage.trim(),
         created_by: adminName,
         image_url: finalImageUrl
       });
 
-      // 3. Push to 'notifications'
       const { error: notifError } = await supabase.from('notifications').insert({
         title: "System Broadcast",
         message: finalImageUrl ? `${broadcastMessage.trim()} (Image Attached)` : broadcastMessage.trim(),
@@ -290,7 +321,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- RENDERING ERROR STATE ---
   if (authError) {
     return (
       <div className="w-full h-screen flex flex-col items-center justify-center gap-6 bg-zinc-950 p-4 text-center antialiased">
@@ -308,7 +338,6 @@ export default function AdminDashboardPage() {
     );
   }
 
-  // --- RENDERING LOADING STATE ---
   if (loading) {
     return (
       <div className={`w-full h-screen flex flex-col items-center justify-center gap-4 antialiased ${isDarkMode ? 'bg-zinc-950' : 'bg-slate-50'}`}>
@@ -338,7 +367,6 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* 🚀 CLEAN ENTERPRISE HEADER (REMOVED EXTRA BELL ICON) */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-colors`}>
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -354,7 +382,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 📣 QUICK BROADCAST WIDGET WITH IMAGE UPLOAD */}
         <div className={`${theme.card} p-5 rounded-3xl border shadow-sm transition-all`}>
           <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2 mb-3`}>
             <Megaphone size={14} className="text-indigo-500" /> Send Staff Announcement
@@ -387,7 +414,6 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Image Attachment Preview */}
             {broadcastImage && (
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-100 flex items-center gap-2">
@@ -399,7 +425,6 @@ export default function AdminDashboardPage() {
           </form>
         </div>
 
-        {/* 🚨 ACTIONABLE ALERTS SECTION */}
         {notifications.length > 0 && (
           <div id="actionable-alerts" className="space-y-3 animate-in slide-in-from-top-4 scroll-m-6">
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2`}>
@@ -434,7 +459,6 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* 📊 HIGH-LEVEL STATS GRID */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className={`${theme.card} p-5 rounded-3xl border shadow-sm flex flex-col justify-between transition-all ${theme.cardHover}`}>
             <div className="flex justify-between items-start mb-6">
@@ -484,7 +508,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🧭 NAVIGATION ACTION CARDS & LOG */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <div className="lg:col-span-2 space-y-3">
@@ -519,7 +542,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* 📡 LIVE ACTIVITY LOG */}
           <div className="space-y-3">
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText}`}>Live Activity Log</h3>
             <div className={`${theme.card} rounded-3xl border shadow-sm p-5 h-[320px] flex flex-col transition-colors`}>

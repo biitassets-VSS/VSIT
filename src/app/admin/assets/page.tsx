@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import toast, { Toaster } from 'react-hot-toast';
 import { 
   ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
@@ -72,7 +73,6 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
   let middle = 'OTH';
   const cat = safeString(category).toLowerCase();
   
-  // Fuzzy matching allows it to handle old legacy category names safely
   if (cat.includes('laptop')) middle = 'LAP';
   else if (cat.includes('wireless keyboard')) middle = 'WKM';
   else if (cat.includes('combo') || cat.includes('mouse kit')) middle = 'CKM';
@@ -85,9 +85,8 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 
   let suffix = Math.floor(1000 + Math.random() * 9000).toString();
 
-  // 🚀 Extracts and locks the exact numbers from the previous tag
   if (existingTagId) {
-    const match = existingTagId.match(/\d{4}$/); // Grabs the last 4 digits specifically
+    const match = existingTagId.match(/\d{4}$/); 
     if (match) {
       suffix = match[0];
     }
@@ -201,7 +200,7 @@ function AssetRegistryContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [printConfig, setPrintConfig] = useState({
-    pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,      
+    pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,    
     marginTop: 1.25, marginLeft: 1.37, gapX: 0.5, gapY: 0.0, packSmallAssets: true  
   });
 
@@ -233,13 +232,38 @@ function AssetRegistryContent() {
     fetchRegistryData();
   }, []);
 
+  // 🌟 REAL-TIME HANDOVER LISTENER
+  useEffect(() => {
+    const inventoryChannel = supabase
+      .channel('inventory-alerts')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => {
+        const newAsset = payload.new;
+        const oldAsset = payload.old;
+        
+        // Triggers alert when a staff member officially signs the handover agreement
+        if (oldAsset.status === 'Pending Handover' && newAsset.status === 'Assigned') {
+          toast.success(`Handover Agreement signed for ${newAsset.name || newAsset.model}!`, {
+            icon: '📝',
+            duration: 8000,
+            style: { 
+              background: isDarkMode ? '#18181b' : '#fff', 
+              color: isDarkMode ? '#fff' : '#000' 
+            }
+          });
+          fetchRegistryData();
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(inventoryChannel); };
+  }, [isDarkMode]);
+
   useEffect(() => {
     if (isAddModalOpen) {
       setNewAssetTag(generateCategoryPrefix(newAssetCategory));
     }
-  }, [isAddModalOpen]);
+  }, [isAddModalOpen, newAssetCategory]);
 
-  // 🌟 ASSET HISTORY ENGINE
   useEffect(() => {
     if (viewAssetModal && !isEditingAsset) {
       loadAssetHistory(viewAssetModal.id);
@@ -306,17 +330,17 @@ function AssetRegistryContent() {
 
   const getStockStatusBadge = (status: string) => {
     const s = safeString(status);
-    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-5 text-emerald-700 border-emerald-200';
-    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-5 text-orange-700 border-orange-200 animate-pulse';
-    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-5 text-purple-700 border-purple-200';
-    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-5 text-rose-700 border-rose-200 line-through';
-    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-5 text-amber-700 border-amber-200';
-    return isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-5 text-blue-700 border-blue-200';
+    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse';
+    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200';
+    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-700 border-rose-200 line-through';
+    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
+    return isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200';
   };
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    if (s.includes('approved') || s.includes('signed')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
     if (s.includes('return')) return isDarkMode ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-blue-700 bg-blue-50 border-blue-200';
     if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
     return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
@@ -419,7 +443,6 @@ function AssetRegistryContent() {
       const { error } = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
       if (error) throw error;
 
-      // Log the update
       await supabase.from('inspections').insert({
         asset_id: viewAssetModal.id, inspected_by: editForm.assignee || null, 
         status: resolvedStatus, notes: actionNote
@@ -676,6 +699,7 @@ function AssetRegistryContent() {
 
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
+      <Toaster position="top-right" />
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
         {/* HEADER */}
@@ -829,7 +853,7 @@ function AssetRegistryContent() {
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${getInspectionStatusColor(asset.live_inspection_status)}`}>
                       {(() => {
                         const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st.includes('approved')) return <CheckCircle2 size={12} />;
+                        if (st.includes('approved') || st.includes('signed')) return <CheckCircle2 size={12} />;
                         if (st.includes('return')) return <RefreshCw size={12} className="animate-spin" />;
                         return <AlertTriangle size={12} />;
                       })()}
@@ -992,10 +1016,10 @@ function AssetRegistryContent() {
 
                     {!isEditingAsset && (
                       <div className="flex gap-2 sm:ml-auto">
-                        <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white' : 'bg-rose-5 text-rose-700 hover:bg-rose-600 hover:text-white'}`}>
+                        <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white'}`}>
                           <Trash2 size={14} /> Delete
                         </button>
-                        <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-5 text-blue-700 hover:bg-blue-600 hover:text-white'}`}>
+                        <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2.5 rounded-xl text-xs font-semibold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white'}`}>
                           <Edit2 size={14} /> Edit
                         </button>
                       </div>
