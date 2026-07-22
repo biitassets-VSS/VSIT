@@ -49,9 +49,12 @@ function AdminInspectionReviewContent() {
     setLoading(true);
     try {
       const [inspRes, assetsRes, profilesRes] = await Promise.all([
+        // 🌟 CRITICAL FIX: STRICTLY EXCLUDE RETURNS AND REPLACEMENTS
         supabase.from('inspections').select('*')
           .not('notes', 'ilike', '%[RETURN REQUEST]%')
           .not('status', 'ilike', '%Return%')
+          .not('notes', 'ilike', '%[REPLACEMENT REQUEST]%') // Exclude Replacements
+          .not('status', 'ilike', '%Replace%')              // Exclude Replacements
           .order('created_at', { ascending: false }),
         supabase.from('assets').select('*'),
         supabase.from('profiles').select('*')
@@ -90,14 +93,14 @@ function AdminInspectionReviewContent() {
         const notesLower = String(insp.notes || '').toLowerCase();
         const statusLower = String(insp.status || '').toLowerCase();
 
+        // 🌟 IDENTIFY ADMIN ASSET REGISTRY EDITS VS STAFF MOBILE AUDITS
         const isSystemOrAdminKeyword = 
           inspByLower === 'admin' || inspByLower === 'system' || inspByLower === 'administrator' ||
-          inspByLower.includes('admin') || emailLower.includes('admin') ||
-          notesLower.includes('updated') || notesLower.includes('edited') || notesLower.includes('changed') ||
-          notesLower.includes('admin') || notesLower.includes('system') || notesLower.includes('check') ||
-          notesLower.includes('modif') || notesLower.includes('record') ||
-          statusLower.includes('update') || statusLower.includes('edit') || statusLower.includes('change') ||
-          statusLower.includes('admin') || statusLower.includes('system') || statusLower.includes('log');
+          notesLower.includes('asset configuration updated') || 
+          notesLower.includes('asset initially registered') ||
+          notesLower.includes('asset forcefully unassigned') ||
+          notesLower.includes('asset re-assigned') ||
+          statusLower === 'stock intake';
 
         const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
         const isUnmappedAdminAction = !matchedProfile.id && (!!insp.user_email || !!insp.inspected_by) && 
@@ -120,11 +123,8 @@ function AdminInspectionReviewContent() {
         let normalizedStatus = insp.status === 'Pending Review' || !insp.status ? 'Pending' : insp.status;
 
         if (isAdminAction) {
-          finalName = matchedProfile.full_name || matchedProfile.name || recoveredName || (insp.user_email ? insp.user_email.split('@')[0] : 'Admin User');
-          if (finalName.toLowerCase() === 'archived user' || finalName.toLowerCase() === 'former staff' || !finalName) {
-            finalName = 'Admin User';
-          }
-          finalEmpCode = matchedProfile.emp_code && !matchedProfile.emp_code.includes('ARCHIVED') ? matchedProfile.emp_code : 'ADMIN USER';
+          finalName = 'Administrator / System';
+          finalEmpCode = 'ADMIN USER';
           isDeletedUser = false;
           if (normalizedStatus === 'Pending' || !insp.status) {
             normalizedStatus = 'Admin Update';
@@ -134,13 +134,13 @@ function AdminInspectionReviewContent() {
           finalName = matchedProfile.full_name || matchedProfile.name || recoveredName || (isDeletedUser ? 'Former Staff' : 'Unassigned Staff');
           
           const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(insp.inspected_by || '');
-          finalEmpCode = (!isUuid && insp.inspected_by && insp.inspected_by !== 'ARCHIVED') ? insp.inspected_by : (matchedProfile.emp_code || matchedProfile.emp_code || insp.emp_code || (isDeletedUser ? 'ARCHIVED' : 'NO-EMP-RECORD'));
+          finalEmpCode = (!isUuid && insp.inspected_by && insp.inspected_by !== 'ARCHIVED') ? insp.inspected_by : (matchedProfile.emp_code || insp.emp_code || (isDeletedUser ? 'ARCHIVED' : 'NO-EMP-RECORD'));
         }
 
         masterLedger.push({
           ...insp,
           id: itemIdentifier,
-          is_submission: true,
+          is_submission: !isAdminAction,
           is_admin_action: isAdminAction,
           staff_id: matchedProfile.id || insp.inspected_by,
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
