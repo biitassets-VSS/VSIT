@@ -196,7 +196,13 @@ export default function AdminDashboardPage() {
         notifRes
       ] = await Promise.all([
         supabase.from('assets').select('*', { count: 'exact', head: true }),
-        supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false }),
+        // 🌟 CRITICAL FIX: STRICTLY EXCLUDE RETURNS AND REPLACEMENTS AT THE QUERY LEVEL
+        supabase.from('inspections').select('*, assets(asset_name)')
+          .not('notes', 'ilike', '%[RETURN REQUEST]%')
+          .not('status', 'ilike', '%Return%')
+          .not('notes', 'ilike', '%[REPLACEMENT REQUEST]%')
+          .not('status', 'ilike', '%Replace%')
+          .order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
         supabase.from('profiles').select('*'),
         supabase.from('notifications').select('*').eq('target_role', 'admin').eq('is_read', false).order('created_at', { ascending: false })
@@ -206,7 +212,21 @@ export default function AdminDashboardPage() {
       const inspData = inspections || [];
       const tktData = tickets || [];
 
-      const pendingCount = inspData.filter(i => i.status?.toLowerCase().includes('pending')).length;
+      // 🌟 STRICT PENDING COUNT ENGINE: Excludes System & Admin Logs
+      const pendingCount = inspData.filter(i => {
+        const s = (i.status || '').toLowerCase().trim();
+        const inspBy = (i.inspected_by || '').toLowerCase();
+        const notes = (i.notes || '').toLowerCase();
+        
+        if (s !== 'pending' && s !== 'pending review') return false;
+        
+        // Block automated system logs from appearing as pending tasks
+        if (inspBy === 'admin' || inspBy === 'system') return false;
+        if (notes.includes('asset configuration updated') || notes.includes('asset initially registered')) return false;
+
+        return true;
+      }).length;
+
       const ticketCount = tktData.filter(t => ['open', 'in_repair', 'pending'].includes((t.status || '').toLowerCase())).length;
 
       if (notifRes.data) {
@@ -258,7 +278,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 🚦 UPDATED: Routes strictly to your dedicated return and replacement pages
   const getActionRoute = (title: string) => {
     const t = (title || '').toLowerCase();
     if (t.includes('return')) return '/admin/returns';
