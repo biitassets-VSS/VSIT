@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import toast, { Toaster } from 'react-hot-toast';
 import { 
   CheckCircle2, XCircle, Loader2, LogOut, Package, 
   Image as ImageIcon, Search, AlertTriangle, History,
-  Clock, XOctagon, CheckCircle, Camera // 👈 ADDED CAMERA HERE
+  Clock, XOctagon, CheckCircle, Camera
 } from 'lucide-react';
 
 export default function AdminReturnsPage() {
@@ -22,8 +23,19 @@ export default function AdminReturnsPage() {
     isHistory: false
   });
 
+  // Track existing IDs to compare against new polling data
+  const pendingIdsRef = useRef<string[]>([]);
+
+  // Keep the ref synchronized with the state
+  useEffect(() => {
+    pendingIdsRef.current = pendingRequests.map(req => req.id);
+  }, [pendingRequests]);
+
   const fetchData = async () => {
-    setLoading(true);
+    // Only set loading to true on initial mount to avoid flickering during background polls
+    if (pendingRequests.length === 0 && historyRequests.length === 0) {
+      setLoading(true);
+    }
     try {
       // ==========================================
       // 1. FETCH PENDING RETURNS (Assets focused)
@@ -102,6 +114,52 @@ export default function AdminReturnsPage() {
 
   useEffect(() => {
     fetchData();
+
+    // ==========================================
+    // ALERT POLLING MECHANISM
+    // ==========================================
+    const intervalId = setInterval(async () => {
+      try {
+        // Run a lightweight query just checking for IDs
+        const { data: latestPending } = await supabase
+          .from('assets')
+          .select('id, name, model')
+          .eq('status', 'Return Requested');
+
+        if (latestPending) {
+          const currentIds = pendingIdsRef.current;
+          
+          // Find any asset IDs that were not in our local state
+          const newRequests = latestPending.filter(asset => !currentIds.includes(asset.id));
+
+          if (newRequests.length > 0) {
+            // Trigger alerts for new items
+            newRequests.forEach(asset => {
+              toast.success(`New return request received for ${asset.name || asset.model}!`, {
+                duration: 6000,
+                position: 'top-right',
+                style: {
+                  background: '#1e293b',
+                  color: '#fff',
+                  fontWeight: 'bold'
+                },
+                iconTheme: {
+                  primary: '#ea580c', // Orange theme match
+                  secondary: '#fff',
+                },
+              });
+            });
+
+            // Silently fetch full data to update UI
+            fetchData();
+          }
+        }
+      } catch (err) {
+        console.error('Error polling for new returns:', err);
+      }
+    }, 15000); // Check every 15 seconds
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const handleApproveReturn = async (request: any) => {
@@ -122,9 +180,10 @@ export default function AdminReturnsPage() {
       }
 
       setModal({ isOpen: false, data: null, isHistory: false });
+      toast.success('Return approved successfully.');
       fetchData(); 
     } catch (error: any) {
-      alert(`Error approving return: ${error.message}`);
+      toast.error(`Error approving return: ${error.message}`);
     } finally {
       setProcessingId(null);
     }
@@ -147,9 +206,10 @@ export default function AdminReturnsPage() {
       }
 
       setModal({ isOpen: false, data: null, isHistory: false });
+      toast.success('Return rejected.');
       fetchData();
     } catch (error: any) {
-      alert(`Error rejecting return: ${error.message}`);
+      toast.error(`Error rejecting return: ${error.message}`);
     } finally {
       setProcessingId(null);
     }
@@ -166,6 +226,9 @@ export default function AdminReturnsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900">
+      {/* Toast provider anchored to the page wrapper */}
+      <Toaster />
+
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header & Tabs */}
@@ -199,9 +262,7 @@ export default function AdminReturnsPage() {
           </div>
         </div>
 
-        {/* ========================================== */}
         {/* PENDING TAB CONTENT */}
-        {/* ========================================== */}
         {activeTab === 'pending' && (
           <div className="animate-in fade-in duration-300">
             {pendingRequests.length === 0 ? (
@@ -211,7 +272,6 @@ export default function AdminReturnsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {/* FIX: 100% Guaranteed Unique Key */}
                 {pendingRequests.map((request, index) => {
                   const staffName = request.user_profile?.full_name || request.user_profile?.name || 'Unknown User';
                   const staffEmpCode = request.user_profile?.emp_code || request.user_profile?.emp_id || 'NO-ID';
@@ -249,9 +309,7 @@ export default function AdminReturnsPage() {
           </div>
         )}
 
-        {/* ========================================== */}
         {/* HISTORY TAB CONTENT */}
-        {/* ========================================== */}
         {activeTab === 'history' && (
           <div className="animate-in fade-in duration-300">
             {historyRequests.length === 0 ? (
@@ -261,7 +319,6 @@ export default function AdminReturnsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {/* FIX: 100% Guaranteed Unique Key */}
                 {historyRequests.map((record, index) => {
                   const staffName = record.user_profile?.full_name || record.user_profile?.name || 'Unknown User';
                   const isApproved = record.status === 'Return Approved';
@@ -298,9 +355,7 @@ export default function AdminReturnsPage() {
         )}
       </div>
 
-      {/* ========================================== */}
       {/* UNIVERSAL REVIEW MODAL */}
-      {/* ========================================== */}
       {modal.isOpen && modal.data && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
@@ -354,7 +409,6 @@ export default function AdminReturnsPage() {
                   if (photosArray.length > 0) {
                     return (
                       <div className="grid grid-cols-2 gap-3">
-                        {/* FIX: 100% Guaranteed Unique Key */}
                         {photosArray.map((url: string, i: number) => (
                           <img key={`photo-${i}`} src={url} alt={`Evidence ${i}`} className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm" />
                         ))}
@@ -372,7 +426,6 @@ export default function AdminReturnsPage() {
               </div>
             </div>
 
-            {/* Action footer only shows if it's a Pending Request */}
             {!modal.isHistory && (
               <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-between gap-3 shrink-0">
                 <button onClick={() => handleRejectReturn(modal.data)} className="px-6 py-3 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors">
