@@ -242,7 +242,7 @@ export default function AdminReturnsPage() {
                           <span className="bg-slate-100 px-2 py-1 rounded-md">S/N: {request.serial_number}</span>
                         </div>
                         <p className="text-sm font-semibold text-slate-600 mt-3 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                          <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
                           Returning User: <strong className="text-slate-900">{staffName}</strong> ({staffEmpCode})
                         </p>
                       </div>

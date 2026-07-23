@@ -331,7 +331,7 @@ function AssetRegistryContent() {
   const getStockStatusBadge = (status: string) => {
     const s = safeString(status);
     if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse';
+    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-400/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse';
     if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200';
     if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-700 border-rose-200 line-through';
     if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
@@ -710,7 +710,7 @@ function AssetRegistryContent() {
             </button>
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className={`text-2xl font-semibold tracking-tight ${theme.textMain}`}>Hardware Registry <span className="text-orange-500 text-sm ml-2 bg-orange-50 border border-indigo-100 px-2 py-0.5 rounded-md">(v2.1)</span></h1>
+                <h1 className={`text-2xl font-semibold tracking-tight ${theme.textMain}`}>Hardware Registry <span className="text-orange-400 text-sm ml-2 bg-orange-50 border border-indigo-100 px-2 py-0.5 rounded-md">(v2.1)</span></h1>
                 <span className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest ${isDarkMode ? 'bg-[#27272a] text-zinc-300' : 'bg-slate-100 text-slate-700'}`}>{assets.length} Units</span>
               </div>
               <p className={`text-sm ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
@@ -759,7 +759,7 @@ function AssetRegistryContent() {
           <div className="flex gap-3 items-center">
             <button 
               onClick={handleSelectAllFiltered} 
-              className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-orange-500/20 border-indigo-500/50 text-orange-400' : 'bg-orange-50 border-indigo-200 text-orange-700') : theme.card + ' ' + theme.textMain}`}
+              className={`px-4 py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-colors ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-orange-400/20 border-indigo-500/50 text-orange-400' : 'bg-orange-50 border-indigo-200 text-orange-700') : theme.card + ' ' + theme.textMain}`}
             >
               <CheckSquare size={16}/> 
               <span className="hidden sm:inline">
@@ -801,7 +801,7 @@ function AssetRegistryContent() {
                   <div className={`p-5 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-50'}`}>
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-orange-500/20 text-orange-500' : theme.iconBgBlue}`}>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-orange-400/20 text-orange-400' : theme.iconBgBlue}`}>
                           {getCategoryIcon(asset.category, 20)}
                         </div>
                         <div className="overflow-hidden">
@@ -876,7 +876,7 @@ function AssetRegistryContent() {
             <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
               <div>
                 <h3 className={`text-lg font-bold tracking-tight flex items-center gap-3 ${theme.textMain}`}>
-                  <Settings2 size={20} className="text-orange-500"/> Label Print Layout
+                  <Settings2 size={20} className="text-orange-400"/> Label Print Layout
                 </h3>
                 <p className={`text-[11px] mt-1 uppercase tracking-widest font-semibold text-red-500 bg-red-500/10 inline-block px-2 py-1 rounded`}>
                   Important: When printing, uncheck "Fit to Page" and set Margins to "None".

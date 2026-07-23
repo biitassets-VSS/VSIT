@@ -81,7 +81,7 @@ export default function StaffDashboardPage() {
           {pendingCount > 0 && (
             <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-r-xl shadow-sm flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-orange-500 text-xl">⏳</span>
+                <span className="text-orange-400 text-xl">⏳</span>
                 <div>
                   <h3 className="text-sm font-bold text-orange-800">Upcoming Inspections</h3>
                   <p className="text-xs text-orange-600">You have {pendingCount} asset(s) waiting for inspection this month.</p>

@@ -311,7 +311,7 @@ export default function AdminDashboardPage() {
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     cardHover: isDarkMode ? 'hover:border-purple-500/50 hover:bg-zinc-900/50' : 'hover:border-purple-300 hover:shadow-lg hover:-translate-y-1',
     iconBg: {
-      orange: isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600',
+      orange: isDarkMode ? 'bg-orange-400/10 text-orange-400' : 'bg-orange-50 text-orange-600',
       purple: isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600',
       rose: isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600',
       emerald: isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600',
@@ -346,7 +346,7 @@ export default function AdminDashboardPage() {
               <Megaphone size={16} /> Announcement
             </button>
 
-            <button onClick={() => router.push('/admin/settings')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold tracking-wide border shadow-sm transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer ${isDarkMode ? 'bg-zinc-900 border-orange-500/30 text-orange-400 hover:bg-orange-500/10' : 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100'}`}>
+            <button onClick={() => router.push('/admin/settings')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold tracking-wide border shadow-sm transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer ${isDarkMode ? 'bg-zinc-900 border-orange-500/30 text-orange-400 hover:bg-orange-400/10' : 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100'}`}>
               <Settings size={16} /> Portal Settings
             </button>
 
@@ -414,7 +414,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${theme.cardHover}`}>
-            {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-bl-full animate-pulse" />}
+            {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-400/10 rounded-bl-full animate-pulse" />}
             <div className="flex justify-between items-start mb-6">
               <div className={`p-3.5 rounded-2xl transition-colors ${theme.iconBg.orange}`}>
                 {stats.pendingInspections > 0 ? <AlertCircle size={24} /> : <ClipboardCheck size={24} />}

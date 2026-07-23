@@ -205,7 +205,7 @@ export default function StaffInspectionsClient({
       {/* DASHBOARD STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="bg-orange-50 p-4 rounded-xl text-orange-500"><Clock size={24} /></div>
+          <div className="bg-orange-50 p-4 rounded-xl text-orange-400"><Clock size={24} /></div>
           <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pending Now</p><p className="text-2xl font-black text-gray-900">{pendingCount}</p></div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -247,7 +247,7 @@ export default function StaffInspectionsClient({
                   ) : (
                     <>
                       <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${
-                        asset.inspectionStatus === 'Overdue' ? 'text-red-500' : 'text-orange-500'
+                        asset.inspectionStatus === 'Overdue' ? 'text-red-500' : 'text-orange-400'
                       }`}>{asset.inspectionStatus}</p>
                       <button 
                         onClick={() => { setVerifyTag(asset.id); setIsModalOpen(true); }}

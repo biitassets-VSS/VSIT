@@ -158,7 +158,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   if (isCheckingAuth) return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+      <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
     </div>
   );
 

@@ -119,7 +119,7 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
               <div key={ticket.id} className="p-6 hover:bg-gray-50 transition-colors flex flex-col md:flex-row gap-4 md:items-center justify-between">
                 
                 <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-full mt-1 ${ticket.status === 'Open' ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-500'}`}>
+                  <div className={`p-3 rounded-full mt-1 ${ticket.status === 'Open' ? 'bg-orange-50 text-orange-400' : 'bg-green-50 text-green-500'}`}>
                     {ticket.status === 'Open' ? <AlertCircle size={24} /> : <CheckCircle2 size={24} />}
                   </div>
                   <div>

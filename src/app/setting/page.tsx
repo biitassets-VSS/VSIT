@@ -109,7 +109,7 @@ export default function SettingsPage() {
         {/* ========================================================= */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
           <div className="p-6 border-b border-gray-50 flex items-center gap-3 bg-gray-50/50">
-            <Database className="text-orange-500" size={20} />
+            <Database className="text-orange-400" size={20} />
             <h2 className="text-lg font-black text-gray-800">User Authentication Sync</h2>
           </div>
           

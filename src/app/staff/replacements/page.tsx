@@ -93,7 +93,7 @@ export default function ReplacementsHistoryPage() {
             </button>
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-                <History className="text-orange-500" /> Replacement History Log
+                <History className="text-orange-400" /> Replacement History Log
               </h1>
               <p className="text-sm font-medium text-slate-500 mt-1">Review your faulty asset reports and newly assigned replacement hardware.</p>
             </div>
@@ -106,7 +106,7 @@ export default function ReplacementsHistoryPage() {
         {/* List Content */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white rounded-3xl border border-slate-200 shadow-sm">
-            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+            <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
             <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Fetching records...</p>
           </div>
         ) : replacements.length === 0 ? (

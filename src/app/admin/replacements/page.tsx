@@ -214,7 +214,7 @@ export default function AdminReplacementsPage() {
                           <span className="bg-slate-100 px-2 py-1 rounded-md">S/N: {request.serial_number}</span>
                         </div>
                         <p className="text-sm font-semibold text-slate-600 mt-3 flex items-center gap-2">
-                          <User size={14} className="text-orange-500"/>
+                          <User size={14} className="text-orange-400"/>
                           Requested by: <strong className="text-slate-900">{staffName}</strong> ({staffEmpCode})
                         </p>
                       </div>
@@ -291,7 +291,7 @@ export default function AdminReplacementsPage() {
             
             <div className="p-6 overflow-y-auto space-y-6">
               <div className="p-5 border-2 border-dashed border-orange-200 bg-orange-50/50 rounded-2xl relative">
-                <div className="absolute -top-3 left-4 bg-white px-2 text-xs font-black text-orange-500 uppercase tracking-widest">Target: Faulty Asset</div>
+                <div className="absolute -top-3 left-4 bg-white px-2 text-xs font-black text-orange-400 uppercase tracking-widest">Target: Faulty Asset</div>
                 <h4 className="font-bold text-slate-900 mt-2">{modal.data.name}</h4>
                 <div className="flex gap-4 mt-2 text-sm font-mono text-slate-600">
                   <span>S/N: {modal.data.serial_number}</span>

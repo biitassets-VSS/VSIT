@@ -161,7 +161,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6 font-mono"><p className="text-red-400 max-w-lg">{layoutCrash}</p></div>
   );
 
-  if (isCheckingAuth) return <div className={`min-h-screen ${theme.bgApp} flex items-center justify-center`}><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>;
+  if (isCheckingAuth) return <div className={`min-h-screen ${theme.bgApp} flex items-center justify-center`}><Loader2 className="w-8 h-8 text-orange-400 animate-spin" /></div>;
 
   const unreadTotal = notifications.filter(n => !n.is_read).length + liveTicketCount + liveInspCount;
 

@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
       <button 
         onClick={toggleTheme}
         aria-label="Toggle Dark Mode"
-        className={`absolute top-6 right-6 p-3 rounded-full backdrop-blur-md border shadow-sm transition-all duration-300 z-50 ${isDark ? 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/50' : 'bg-white/80 border-slate-200 text-slate-500 hover:text-orange-500 hover:border-orange-300'}`}
+        className={`absolute top-6 right-6 p-3 rounded-full backdrop-blur-md border shadow-sm transition-all duration-300 z-50 ${isDark ? 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/50' : 'bg-white/80 border-slate-200 text-slate-500 hover:text-orange-400 hover:border-orange-300'}`}
       >
         {isDark ? <Sun size={20} className="stroke-[2.5]" /> : <Moon size={20} className="stroke-[2.5]" />}
       </button>
@@ -96,7 +96,7 @@ export default function AdminLoginPage() {
           
           {/* Typography Header */}
           <div className="w-full text-center mb-8">
-            <h2 className="text-[11px] sm:text-xs font-black uppercase tracking-[0.25em] mb-2 text-orange-500">
+            <h2 className="text-[11px] sm:text-xs font-black uppercase tracking-[0.25em] mb-2 text-orange-400">
               Virtual Staffing Solution
             </h2>
             <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight mb-2.5 transition-colors ${isDark ? 'text-zinc-100' : 'text-slate-900'}`}>
@@ -141,7 +141,7 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-4 mt-6 rounded-xl text-sm font-extrabold uppercase tracking-widest flex items-center justify-center gap-3 text-white bg-orange-500 hover:bg-orange-600 shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:shadow-[0_4px_25px_rgba(249,115,22,0.4)] transition-all disabled:opacity-70 active:scale-[0.98]">
+            <button type="submit" disabled={loading} className="w-full py-4 mt-6 rounded-xl text-sm font-extrabold uppercase tracking-widest flex items-center justify-center gap-3 text-white bg-orange-400 hover:bg-orange-600 shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:shadow-[0_4px_25px_rgba(249,115,22,0.4)] transition-all disabled:opacity-70 active:scale-[0.98]">
               {loading ? <><Loader2 size={20} className="animate-spin" /> Authenticating...</> : <>Secure Login <ArrowRight size={18} className="stroke-[2.5]" /></>}
             </button>
           </form>

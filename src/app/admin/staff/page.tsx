@@ -587,7 +587,7 @@ export default function AdminStaffDirectoryPage() {
 
                 <div className="space-y-5">
                   <div className={`flex items-center gap-3 border-b pb-2 ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                    <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-500 flex items-center justify-center text-[10px] font-bold">2</span>
+                    <span className="w-6 h-6 rounded-full bg-orange-400/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">2</span>
                     <span className={`text-[11px] font-bold uppercase tracking-widest ${theme.textMain}`}>Organizational Assignment</span>
                   </div>
                   

@@ -255,25 +255,25 @@ export default function StaffProfileView() {
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Email Address</p>
                 <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <Mail size={16} className="text-orange-500" /> {staff.email}
+                  <Mail size={16} className="text-orange-400" /> {staff.email}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Phone Number</p>
                 <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <Phone size={16} className="text-orange-500" /> {staff.contact_number || '-'}
+                  <Phone size={16} className="text-orange-400" /> {staff.contact_number || '-'}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Date of Birth</p>
                 <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <CalendarDays size={16} className="text-orange-500" /> {staff.dob || '-'}
+                  <CalendarDays size={16} className="text-orange-400" /> {staff.dob || '-'}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1.5">Joining Date</p>
                 <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <CalendarDays size={16} className="text-orange-500" /> {staff.joining_date || '-'}
+                  <CalendarDays size={16} className="text-orange-400" /> {staff.joining_date || '-'}
                 </p>
               </div>
             </div>
@@ -341,7 +341,7 @@ export default function StaffProfileView() {
               
               <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <h2 className="text-xl font-black text-[#002B49] flex items-center gap-2">
-                  <Edit size={20} className="text-orange-500"/> Edit Staff Details
+                  <Edit size={20} className="text-orange-400"/> Edit Staff Details
                 </h2>
                 <button onClick={() => setIsEditModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-200 rounded-full transition-colors"><X size={20} /></button>
               </div>

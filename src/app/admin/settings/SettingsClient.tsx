@@ -80,7 +80,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all duration-300 cursor-pointer ${
                 isActive 
-                  ? (isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-md' : 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm scale-105') 
+                  ? (isDarkMode ? 'bg-orange-400/20 text-orange-400 border border-orange-500/30 shadow-md' : 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm scale-105') 
                   : `${theme.card} ${theme.textMuted} hover:text-orange-600 hover:bg-orange-50/50 hover:-translate-y-0.5 border`
               }`}
             >
@@ -105,12 +105,12 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
               onClick={() => applyThemeMode('light')}
               className={`p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between relative hover:scale-[1.02] active:scale-95 ${
                 !isDarkMode 
-                  ? 'border-orange-500 bg-orange-500/5 shadow-md' 
+                  ? 'border-orange-500 bg-orange-400/5 shadow-md' 
                   : `${theme.cardInner} opacity-70 hover:opacity-100 border-transparent`
               }`}
             >
               <div className="flex justify-between items-start mb-6">
-                <div className="p-3 rounded-xl bg-white border border-slate-200 text-orange-500 shadow-sm">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 text-orange-400 shadow-sm">
                   <Sun size={24} />
                 </div>
                 {!isDarkMode && <span className="bg-orange-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full animate-in zoom-in">Active Mode</span>}
