@@ -194,7 +194,7 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
             <div className="flex items-center gap-3">
               <ShieldAlert size={24} className="text-red-500" />
               <div>
-                <h3 className="font-bold text-gray-900 text-sm">Action Required: Overdue Inspections</h3>
+                <h3 className="font-bold text-gray-900 text-sm">REQUIRES YOUR ATTENTION: Overdue Inspections</h3>
                 <p className="text-gray-500 text-xs mt-0.5">You have {overdueAssets.length} asset(s) pending inspection.</p>
               </div>
             </div>

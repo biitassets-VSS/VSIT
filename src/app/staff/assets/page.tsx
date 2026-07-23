@@ -246,7 +246,7 @@ export default function StaffAssetsPage() {
                 <AlertTriangle size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-black text-rose-900">Action Required: Sign Handover Agreement</h3>
+                <h3 className="text-lg font-black text-rose-900">REQUIRES YOUR ATTENTION: Sign Handover Agreement</h3>
                 <p className="text-sm font-medium text-rose-700 mt-1 max-w-lg">
                   You have {pendingAssets.length} new asset(s) assigned to you. You must electronically sign the IT asset handover policy to finalize the assignment.
                 </p>
