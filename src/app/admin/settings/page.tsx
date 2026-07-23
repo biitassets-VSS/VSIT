@@ -8,6 +8,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// 🌟 Defined a strict TypeScript interface for the Supabase data
+interface UserProfile {
+  id: string;
+  name: string;
+  full_name: string;
+  email: string;
+  role: string;
+  emp_code: string;
+}
+
 export default async function SettingsPage() {
   const liveSettings = {
     appName: 'Virtual Staffing IT Portal',
@@ -21,7 +31,9 @@ export default async function SettingsPage() {
     watermarkFormat: 'Date, Time & Tag ID'
   };
 
-  let dbUsers = [];
+  // 🌟 Applied the strict interface here instead of using 'any[]'
+  let dbUsers: UserProfile[] = [];
+  
   try {
     const { data, error } = await supabase
       .from('profiles') 
@@ -29,7 +41,7 @@ export default async function SettingsPage() {
       .order('full_name', { ascending: true });
 
     if (!error && data) {
-      dbUsers = data;
+      dbUsers = data as UserProfile[];
     } else {
       console.error("Supabase Error fetching users:", error?.message);
     }
