@@ -24,23 +24,17 @@ export default function AdminReturnsPage() {
     isHistory: false
   });
 
-  // Track existing IDs to compare against new polling data
   const pendingIdsRef = useRef<string[]>([]);
 
-  // Keep the ref synchronized with the state
   useEffect(() => {
     pendingIdsRef.current = pendingRequests.map(req => req.id);
   }, [pendingRequests]);
 
   const fetchData = async () => {
-    // Only set loading to true on initial mount to avoid flickering during background polls
     if (pendingRequests.length === 0 && historyRequests.length === 0) {
       setLoading(true);
     }
     try {
-      // ==========================================
-      // 1. FETCH PENDING RETURNS (Assets focused)
-      // ==========================================
       const { data: pendingAssets } = await supabase
         .from('assets')
         .select('*')
@@ -53,11 +47,7 @@ export default function AdminReturnsPage() {
       let pendProfiles: any[] = [];
 
       if (pendAssetIds.length > 0) {
-        const { data: insps } = await supabase
-          .from('inspections')
-          .select('*')
-          .in('asset_id', pendAssetIds)
-          .order('created_at', { ascending: false });
+        const { data: insps } = await supabase.from('inspections').select('*').in('asset_id', pendAssetIds).order('created_at', { ascending: false });
         pendInspections = insps || [];
       }
       
@@ -74,9 +64,6 @@ export default function AdminReturnsPage() {
 
       setPendingRequests(compiledPending);
 
-      // ==========================================
-      // 2. FETCH HISTORY (Inspections focused)
-      // ==========================================
       const { data: historyInsps } = await supabase
         .from('inspections')
         .select('*')
@@ -115,71 +102,38 @@ export default function AdminReturnsPage() {
 
   useEffect(() => {
     fetchData();
-
-    // ==========================================
-    // ALERT POLLING MECHANISM
-    // ==========================================
     const intervalId = setInterval(async () => {
       try {
-        // Run a lightweight query just checking for IDs
-        const { data: latestPending } = await supabase
-          .from('assets')
-          .select('id, name, model')
-          .eq('status', 'Return Requested');
-
+        const { data: latestPending } = await supabase.from('assets').select('id, name, model').eq('status', 'Return Requested');
         if (latestPending) {
           const currentIds = pendingIdsRef.current;
-          
-          // Find any asset IDs that were not in our local state
           const newRequests = latestPending.filter(asset => !currentIds.includes(asset.id));
-
           if (newRequests.length > 0) {
-            // Trigger alerts for new items
             newRequests.forEach(asset => {
               toast.success(`New return request received for ${asset.name || asset.model}!`, {
-                duration: 6000,
-                position: 'top-right',
-                style: {
-                  background: '#1e293b',
-                  color: '#fff',
-                  fontWeight: 'bold'
-                },
-                iconTheme: {
-                  primary: '#ea580c', // Orange theme match
-                  secondary: '#fff',
-                },
+                duration: 6000, position: 'top-right',
+                style: { background: '#1e293b', color: '#fff', fontWeight: 'bold' },
+                iconTheme: { primary: '#ea580c', secondary: '#fff' },
               });
             });
-
-            // Silently fetch full data to update UI
             fetchData();
           }
         }
-      } catch (err) {
-        console.error('Error polling for new returns:', err);
-      }
-    }, 15000); // Check every 15 seconds
-
+      } catch (err) {}
+    }, 15000);
     return () => clearInterval(intervalId);
   }, []);
 
   const handleApproveReturn = async (request: any) => {
     if (!window.confirm("Confirm physical asset received? This will log the return and unassign the device.")) return;
-    
     setProcessingId(request.id);
     try {
-      // 1. Unassign the asset & reset status
       await supabase.from('assets').update({ assigned_to: null, status: 'In Stock' }).eq('id', request.id);
-
-      // 2. Mark inspection as "Return Approved"
       if (request.return_details?.id) {
         await supabase.from('inspections').update({ status: 'Return Approved', notes: `${request.return_details.notes || ''}\n[ADMIN APPROVED]` }).eq('id', request.return_details.id);
       } else {
-        await supabase.from('inspections').insert({
-          asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Approved', notes: 'Approved via Admin Dashboard (No mobile photos provided)'
-        });
+        await supabase.from('inspections').insert({ asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Approved', notes: 'Approved via Admin Dashboard (No mobile photos provided)' });
       }
-
       setModal({ isOpen: false, data: null, isHistory: false });
       toast.success('Return approved successfully.');
       fetchData(); 
@@ -191,21 +145,16 @@ export default function AdminReturnsPage() {
   };
 
   const handleRejectReturn = async (request: any) => {
-    const reason = window.prompt("Enter reason for rejection (e.g., Asset missing, unresolved damage):");
+    const reason = window.prompt("Enter reason for rejection:");
     if (reason === null) return;
-
     setProcessingId(request.id);
     try {
       await supabase.from('assets').update({ status: 'Active' }).eq('id', request.id);
-
       if (request.return_details?.id) {
         await supabase.from('inspections').update({ status: 'Return Rejected', notes: `${request.return_details.notes || ''}\n[ADMIN REJECTED: ${reason}]` }).eq('id', request.return_details.id);
       } else {
-        await supabase.from('inspections').insert({
-          asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Rejected', notes: `Admin Rejected: ${reason}`
-        });
+        await supabase.from('inspections').insert({ asset_id: request.id, inspected_by: request.assigned_to, status: 'Return Rejected', notes: `Admin Rejected: ${reason}` });
       }
-
       setModal({ isOpen: false, data: null, isHistory: false });
       toast.success('Return rejected.');
       fetchData();
@@ -219,7 +168,7 @@ export default function AdminReturnsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
         <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Return Records...</p>
       </div>
     );
@@ -227,13 +176,11 @@ export default function AdminReturnsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900">
-      {/* Toast provider anchored to the page wrapper */}
       <Toaster />
-
       <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* Header & Tabs */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
+        {/* STANDARDIZED HEADER */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6 transition-all duration-300 hover:shadow-md">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
@@ -246,13 +193,12 @@ export default function AdminReturnsPage() {
             
             <Link 
               href="/admin" 
-              className="px-5 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0"
+              className="px-5 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all duration-300 hover:-translate-x-1 hover:shadow-sm shrink-0"
             >
               <ArrowLeft size={16} /> Back to Dashboard
             </Link>
           </div>
 
-          {/* TAB BAR */}
           <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
             <button 
               onClick={() => setActiveTab('pending')}
@@ -263,7 +209,7 @@ export default function AdminReturnsPage() {
             </button>
             <button 
               onClick={() => setActiveTab('history')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'history' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'history' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'text-slate-500 hover:bg-slate-50'}`}
             >
               <History size={16} /> Processed History
             </button>
@@ -272,9 +218,9 @@ export default function AdminReturnsPage() {
 
         {/* PENDING TAB CONTENT */}
         {activeTab === 'pending' && (
-          <div className="animate-in fade-in duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             {pendingRequests.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-3">
+              <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-3 shadow-sm hover:shadow-md transition-all">
                 <Package size={48} className="mx-auto text-slate-300" />
                 <p className="text-slate-500 font-bold">No pending return requests.</p>
               </div>
@@ -285,7 +231,7 @@ export default function AdminReturnsPage() {
                   const staffEmpCode = request.user_profile?.emp_code || request.user_profile?.emp_id || 'NO-ID';
 
                   return (
-                    <div key={`pending-${request.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-orange-200/50 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-orange-300 transition-colors">
+                    <div key={`pending-${request.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-orange-200/50 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-orange-300 transition-all duration-300">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
                           <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black uppercase rounded-md">Action Required</span>
@@ -302,10 +248,10 @@ export default function AdminReturnsPage() {
                       </div>
 
                       <div className="flex items-center gap-3 w-full md:w-auto">
-                        <button onClick={() => setModal({ isOpen: true, data: request, isHistory: false })} className="flex-1 md:flex-none px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                        <button onClick={() => setModal({ isOpen: true, data: request, isHistory: false })} className="flex-1 md:flex-none px-4 py-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95">
                           <ImageIcon size={16} /> Review
                         </button>
-                        <button disabled={processingId === request.id} onClick={() => handleApproveReturn(request)} className="flex-1 md:flex-none px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50">
+                        <button disabled={processingId === request.id} onClick={() => handleApproveReturn(request)} className="flex-1 md:flex-none px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
                           {processingId === request.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Approve Handover
                         </button>
                       </div>
@@ -319,9 +265,9 @@ export default function AdminReturnsPage() {
 
         {/* HISTORY TAB CONTENT */}
         {activeTab === 'history' && (
-          <div className="animate-in fade-in duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             {historyRequests.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-3">
+              <div className="bg-white rounded-3xl border border-slate-200 py-16 text-center space-y-3 shadow-sm hover:shadow-md transition-all">
                 <History size={48} className="mx-auto text-slate-300" />
                 <p className="text-slate-500 font-bold">No historical records found.</p>
               </div>
@@ -333,10 +279,10 @@ export default function AdminReturnsPage() {
                   const processDate = record.created_at ? new Date(record.created_at).toLocaleString() : 'Unknown Date';
 
                   return (
-                    <div key={`history-${record.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:border-slate-300 transition-colors opacity-90">
+                    <div key={`history-${record.id || 'no-id'}-${index}`} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-purple-300 transition-all duration-300 opacity-90">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md flex items-center gap-1 ${isApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md flex items-center gap-1 ${isApproved ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
                             {isApproved ? <CheckCircle size={12}/> : <XOctagon size={12}/>} {isApproved ? 'Handover Approved' : 'Return Rejected'}
                           </span>
                           <span className="text-[11px] font-bold text-slate-400">{processDate}</span>
@@ -350,7 +296,7 @@ export default function AdminReturnsPage() {
                       </div>
 
                       <div className="w-full md:w-auto">
-                        <button onClick={() => setModal({ isOpen: true, data: record, isHistory: true })} className="w-full md:w-auto px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                        <button onClick={() => setModal({ isOpen: true, data: record, isHistory: true })} className="w-full md:w-auto px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95">
                           <Search size={16} /> View Log Details
                         </button>
                       </div>
@@ -366,13 +312,13 @@ export default function AdminReturnsPage() {
       {/* UNIVERSAL REVIEW MODAL */}
       {modal.isOpen && modal.data && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-            <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-              <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase flex items-center gap-2">
-                {modal.isHistory ? <History size={16} className="text-blue-600"/> : <Search size={16} className="text-orange-600"/>} 
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+            <div className={`p-6 border-b flex items-center justify-between shrink-0 ${modal.isHistory ? 'bg-purple-50 border-purple-100' : 'bg-orange-50 border-orange-100'}`}>
+              <h3 className={`font-extrabold text-sm tracking-tight uppercase flex items-center gap-2 ${modal.isHistory ? 'text-purple-900' : 'text-orange-900'}`}>
+                {modal.isHistory ? <History size={16} className="text-purple-600"/> : <Search size={16} className="text-orange-600"/>} 
                 {modal.isHistory ? 'Historical Return Log' : 'Review Pending Return'}
               </h3>
-              <button onClick={() => setModal({ isOpen: false, data: null, isHistory: false })} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"><XCircle size={20}/></button>
+              <button onClick={() => setModal({ isOpen: false, data: null, isHistory: false })} className="p-2 rounded-full hover:bg-white/50 transition-all hover:scale-110"><XCircle size={20}/></button>
             </div>
             
             <div className="p-6 overflow-y-auto space-y-6">
@@ -396,7 +342,6 @@ export default function AdminReturnsPage() {
                       photosArray = rawPhotos;
                     } else if (typeof rawPhotos === 'string') {
                       const trimmed = rawPhotos.trim();
-                      
                       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
                         const parsed = JSON.parse(trimmed);
                         if (Array.isArray(parsed)) photosArray = parsed;
@@ -408,7 +353,6 @@ export default function AdminReturnsPage() {
                       photosArray = Object.values(rawPhotos);
                     }
                   } catch (e) {
-                    console.error("Failed to parse photo array", e);
                     if (typeof rawPhotos === 'string' && rawPhotos.startsWith('http')) {
                       photosArray = [rawPhotos.trim()];
                     }
@@ -418,7 +362,7 @@ export default function AdminReturnsPage() {
                     return (
                       <div className="grid grid-cols-2 gap-3">
                         {photosArray.map((url: string, i: number) => (
-                          <img key={`photo-${i}`} src={url} alt={`Evidence ${i}`} className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm" />
+                          <img key={`photo-${i}`} src={url} alt={`Evidence ${i}`} className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-sm transition-transform hover:scale-[1.02]" />
                         ))}
                       </div>
                     );
@@ -436,10 +380,10 @@ export default function AdminReturnsPage() {
 
             {!modal.isHistory && (
               <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-between gap-3 shrink-0">
-                <button onClick={() => handleRejectReturn(modal.data)} className="px-6 py-3 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors">
+                <button onClick={() => handleRejectReturn(modal.data)} className="px-6 py-3 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-all hover:scale-105 active:scale-95">
                   Reject Return
                 </button>
-                <button onClick={() => handleApproveReturn(modal.data)} className="px-8 py-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors">
+                <button onClick={() => handleApproveReturn(modal.data)} className="px-8 py-3 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-sm transition-all hover:scale-105 active:scale-95">
                   Approve & Unassign
                 </button>
               </div>

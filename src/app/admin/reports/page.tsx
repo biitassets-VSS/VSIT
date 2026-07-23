@@ -4,14 +4,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { 
   FileText, Download, Search, 
-  Box, UserCheck, Wrench, BarChart3,
+  Box, UserCheck, BarChart3,
   Laptop, Keyboard, MousePointer, Headphones, ShieldAlert, X, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// --- TYPES ---
 interface Asset {
   id: string;
   tagId: string;
@@ -22,21 +21,10 @@ interface Asset {
   brand?: string;
 }
 
-type ReportGroup = 
-  | 'CATEGORY_SUMMARY'
-  | 'LAPTOPS'
-  | 'WIRELESS_KEYBOARDS'
-  | 'COMBO_KITS'
-  | 'WIRED_KEYBOARDS'
-  | 'WIRED_MICE'
-  | 'HEADPHONES'
-  | 'RETIRED_DISCARD';
+type ReportGroup = 'CATEGORY_SUMMARY' | 'LAPTOPS' | 'WIRELESS_KEYBOARDS' | 'COMBO_KITS' | 'WIRED_KEYBOARDS' | 'WIRED_MICE' | 'HEADPHONES' | 'RETIRED_DISCARD';
 
-// 🌟 DEEP NORMALIZATION ENGINE FOR CATEGORIES
 const normalizeCategory = (cat: string, name: string) => {
-  const c = (cat || '').toLowerCase();
-  const n = (name || '').toLowerCase();
-  
+  const c = (cat || '').toLowerCase(); const n = (name || '').toLowerCase();
   if (c.includes('laptop') || n.includes('laptop')) return 'Laptop';
   if (c.includes('headphone') || n.includes('headphone') || c.includes('headset') || n.includes('earphone')) return 'Headphone';
   if (c.includes('combo') || n.includes('ckm') || (n.includes('keyboard') && n.includes('mouse'))) return 'Combo Kit (Keyboard + Mouse)';
@@ -44,32 +32,21 @@ const normalizeCategory = (cat: string, name: string) => {
   if (c.includes('keyboard') || n.includes('keyboard')) return 'USB Wired Keyboard';
   if (c.includes('mouse') || n.includes('mouse')) return 'USB Wired Mouse';
   if (c.includes('monitor') || n.includes('monitor') || n.includes('display')) return 'Monitor';
-  
   if (!cat) return 'Other / Uncategorized';
   return cat.trim().charAt(0).toUpperCase() + cat.trim().slice(1).toLowerCase();
 };
 
-// 🌟 EXACT STATUS BUCKET ENFORCEMENT (FIXED UNASSIGNED BUG)
 const normalizeStatus = (status: string): Asset['status'] => {
   const s = (status || '').toLowerCase().trim();
-  
   if (s === 'discarded' || s.includes('discard') || s.includes('scrap') || s.includes('retire')) return 'Discarded';
   if (s.includes('pending return') || s.includes('return requested')) return 'Pending Return';
-  
-  // CRITICAL FIX: Explicitly catch "unassigned" and "in stock" first, because "unassigned" contains "assign"!
   if (s.includes('in stock') || s.includes('unassigned') || s === 'available') return 'Available';
-  
-  // Now it is safe to check for "assign"
   if (s === 'in use' || s.includes('assign') || s.includes('deployed') || s.includes('pending handover')) return 'In Use';
-  
-  // Fallback
   return 'Available'; 
 };
 
-// 🌟 ADVANCED BRAND RECOGNITION ENGINE
 const extractBrand = (dbBrand: string | undefined, name: string) => {
   const textToSearch = `${dbBrand || ''} ${name || ''}`.toUpperCase();
-
   if (/(ASUS|TUF|ROG|ZENBOOK|VIVOBOOK|EXPERTBOOK)/.test(textToSearch)) return 'ASUS';
   if (/(DELL|LATITUDE|INSPIRON|OPTIPLEX|VOSTRO|XPS|ALIENWARE|PRECISION)/.test(textToSearch)) return 'DELL';
   if (/(LENOVO|THINKPAD|IDEAPAD|YOGA|THINKBOOK|LEGION|THINKCENTRE)/.test(textToSearch)) return 'LENOVO';
@@ -81,11 +58,7 @@ const extractBrand = (dbBrand: string | undefined, name: string) => {
   if (/(ZEBRONICS|ZEB-)/.test(textToSearch)) return 'ZEBRONICS';
   if (/(SAMSUNG)/.test(textToSearch)) return 'SAMSUNG';
   if (/(LG)/.test(textToSearch)) return 'LG';
-
-  if (dbBrand && dbBrand.trim().length > 1) {
-    return dbBrand.trim().toUpperCase();
-  }
-
+  if (dbBrand && dbBrand.trim().length > 1) return dbBrand.trim().toUpperCase();
   return 'Other';
 };
 
@@ -94,10 +67,8 @@ export default function AdminReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportGroup>('CATEGORY_SUMMARY');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
-  
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
-  // 1. FETCH AND COMPILING DATA
   useEffect(() => {
     const fetchAssets = async () => {
       const [{ data: profilesData }, { data: assetsData, error }] = await Promise.all([
@@ -112,20 +83,13 @@ export default function AdminReportsPage() {
             const profile = profilesData.find(p => p.id === a.assigned_to);
             if (profile) assignedName = `${profile.full_name || profile.name} (${profile.emp_code || profile.email})`;
           }
-
           return {
-            id: a.id,
-            tagId: a.asset_tag || a.tag_id || 'NO-TAG',
-            name: a.name || 'Unnamed Asset',
-            category: normalizeCategory(a.category, a.name),
-            status: normalizeStatus(a.status), 
-            assignedToName: assignedName,
-            brand: extractBrand(a.brand, a.name)
+            id: a.id, tagId: a.asset_tag || a.tag_id || 'NO-TAG',
+            name: a.name || 'Unnamed Asset', category: normalizeCategory(a.category, a.name),
+            status: normalizeStatus(a.status), assignedToName: assignedName, brand: extractBrand(a.brand, a.name)
           };
         });
         setAssets(mapped);
-      } else if (error) {
-        console.error("Error fetching assets:", error.message);
       }
       setIsLoaded(true);
     };
@@ -133,9 +97,7 @@ export default function AdminReportsPage() {
   }, []);
 
   const matchesReportGroup = (asset: Asset, group: ReportGroup): boolean => {
-    const cat = asset.category;
-    const status = asset.status;
-
+    const cat = asset.category; const status = asset.status;
     switch (group) {
       case 'LAPTOPS': return cat === 'Laptop';
       case 'WIRELESS_KEYBOARDS': return cat === 'Wireless Keyboard';
@@ -150,141 +112,78 @@ export default function AdminReportsPage() {
 
   const filteredAssets = useMemo(() => {
     let result = assets;
-
-    if (activeReport !== 'CATEGORY_SUMMARY') {
-      result = result.filter(a => matchesReportGroup(a, activeReport));
-    }
-
+    if (activeReport !== 'CATEGORY_SUMMARY') result = result.filter(a => matchesReportGroup(a, activeReport));
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(a => 
-        a.name.toLowerCase().includes(q) || 
-        a.tagId.toLowerCase().includes(q) ||
-        a.category.toLowerCase().includes(q) ||
-        (a.brand && a.brand.toLowerCase().includes(q))
-      );
+      result = result.filter(a => a.name.toLowerCase().includes(q) || a.tagId.toLowerCase().includes(q) || a.category.toLowerCase().includes(q) || (a.brand && a.brand.toLowerCase().includes(q)));
     }
     return result;
   }, [activeReport, searchQuery, assets]);
 
-  // 🌟 BRAND BREAKDOWN SUMMARY CALCULATOR
   const brandSummary = useMemo(() => {
-    const targetAssets = activeReport === 'CATEGORY_SUMMARY' 
-      ? assets 
-      : assets.filter(a => matchesReportGroup(a, activeReport));
-
+    const targetAssets = activeReport === 'CATEGORY_SUMMARY' ? assets : assets.filter(a => matchesReportGroup(a, activeReport));
     const brands = Array.from(new Set(targetAssets.map(a => a.brand || 'Other')));
-    
     return brands.map(brand => {
       const bAssets = targetAssets.filter(a => a.brand === brand);
       return {
-        brand: brand,
-        total: bAssets.length,
-        inUse: bAssets.filter(a => a.status === 'In Use').length,
-        available: bAssets.filter(a => a.status === 'Available').length,
-        pendingReturn: bAssets.filter(a => a.status === 'Pending Return').length,
+        brand: brand, total: bAssets.length, inUse: bAssets.filter(a => a.status === 'In Use').length,
+        available: bAssets.filter(a => a.status === 'Available').length, pendingReturn: bAssets.filter(a => a.status === 'Pending Return').length,
         discarded: bAssets.filter(a => a.status === 'Discarded').length,
       };
     }).sort((a, b) => b.total - a.total); 
   }, [activeReport, assets]);
 
-  // --- CATEGORY SUMMARY BREAKDOWN ---
   const categorySummary = useMemo(() => {
     const categories = Array.from(new Set(assets.map(a => a.category)));
     return categories.map(cat => {
       const catAssets = assets.filter(a => a.category === cat);
       return {
-        category: cat,
-        total: catAssets.length,
-        inUse: catAssets.filter(a => a.status === 'In Use').length,
-        available: catAssets.filter(a => a.status === 'Available').length,
-        pendingReturn: catAssets.filter(a => a.status === 'Pending Return').length,
+        category: cat, total: catAssets.length, inUse: catAssets.filter(a => a.status === 'In Use').length,
+        available: catAssets.filter(a => a.status === 'Available').length, pendingReturn: catAssets.filter(a => a.status === 'Pending Return').length,
         discarded: catAssets.filter(a => a.status === 'Discarded').length,
       };
     }).sort((a, b) => b.total - a.total);
   }, [assets]);
 
   const getGroupTitle = (group: ReportGroup) => {
-    return group
-      .replace('CATEGORY_SUMMARY', 'Category Global Summary')
-      .replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)')
-      .replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory')
-      .replace('COMBO_KITS', 'Combo Kits (Keyboard + Mouse)')
-      .replace('WIRED_KEYBOARDS', 'USB Wired Keyboards Inventory')
-      .replace('WIRED_MICE', 'USB Wired Mice Inventory')
-      .replace('HEADPHONES', 'Headphones & Audio Gear')
-      .replace('RETIRED_DISCARD', 'Discarded Ledger Records');
+    return group.replace('CATEGORY_SUMMARY', 'Category Global Summary').replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)').replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory').replace('COMBO_KITS', 'Combo Kits (Keyboard + Mouse)').replace('WIRED_KEYBOARDS', 'USB Wired Keyboards Inventory').replace('WIRED_MICE', 'USB Wired Mice Inventory').replace('HEADPHONES', 'Headphones & Audio Gear').replace('RETIRED_DISCARD', 'Discarded Ledger Records');
   };
 
-  // --- PDF EXPORT FUNCTION ---
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    
     const formattedTitle = getGroupTitle(activeReport);
     doc.text(`VSIT Asset Management Report`, 14, 18);
     doc.setFontSize(12);
     doc.text(`Report Target: ${formattedTitle}`, 14, 25);
     doc.text(`Generated On: ${new Date().toLocaleDateString()}`, 14, 31);
     
-    let columns: string[] = [];
-    let rows: string[][] = [];
+    let columns: string[] = []; let rows: string[][] = [];
 
     if (activeReport === 'CATEGORY_SUMMARY') {
       columns = ["Category Profile Name", "Total Inventory", "In Use", "Available", "Pending Return", "Discarded"];
-      rows = categorySummary.map(c => [
-        c.category, 
-        c.total.toString(), 
-        c.inUse.toString(), 
-        c.available.toString(), 
-        c.pendingReturn.toString(),
-        c.discarded.toString()
-      ]);
+      rows = categorySummary.map(c => [c.category, c.total.toString(), c.inUse.toString(), c.available.toString(), c.pendingReturn.toString(), c.discarded.toString()]);
     } else {
       doc.setFontSize(14);
       doc.text("Brand-Wise Matrix Configuration Summary", 14, 43);
-      
       autoTable(doc, {
         head: [["Brand Profile", "Total Count", "In Use", "Available", "Pending Return", "Discarded"]],
         body: brandSummary.map(b => [b.brand, b.total.toString(), b.inUse.toString(), b.available.toString(), b.pendingReturn.toString(), b.discarded.toString()]),
-        startY: 48,
-        headStyles: { fillColor: [79, 70, 229] }, 
+        startY: 48, headStyles: { fillColor: [234, 88, 12] }, // Orange branding in PDF
       });
-
       const nextY = (doc as any).lastAutoTable.finalY + 12;
       doc.text("Individual Serialized Register Tracking Logs", 14, nextY);
-
       columns = ["Asset Name", "Tag ID", "Brand", "Status Mapping", "Assigned Holder Details"];
-      rows = filteredAssets.map(a => [
-        a.name, 
-        a.tagId, 
-        a.brand || 'Other', 
-        a.status,
-        a.status === 'In Use' ? (a.assignedToName || 'N/A') : 'N/A'
-      ]);
-
-      autoTable(doc, {
-        head: [columns],
-        body: rows,
-        startY: nextY + 5,
-        headStyles: { fillColor: [0, 139, 116] }, 
-      });
-      
+      rows = filteredAssets.map(a => [a.name, a.tagId, a.brand || 'Other', a.status, a.status === 'In Use' ? (a.assignedToName || 'N/A') : 'N/A']);
+      autoTable(doc, { head: [columns], body: rows, startY: nextY + 5, headStyles: { fillColor: [147, 51, 234] } }); // Purple branding in PDF
       doc.save(`VSIT_${activeReport}_Report_${new Date().toISOString().slice(0,10)}.pdf`);
       return;
     }
-
-    autoTable(doc, {
-      head: [columns],
-      body: rows,
-      startY: 38,
-      headStyles: { fillColor: [0, 139, 116] }, 
-    });
-
+    autoTable(doc, { head: [columns], body: rows, startY: 38, headStyles: { fillColor: [234, 88, 12] } });
     doc.save(`VSIT_Global_Summary_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
-  if (!isLoaded) return <div className="p-10 text-center font-bold text-xs tracking-widest text-indigo-600 animate-pulse uppercase">Syncing Real-time Asset Logs...</div>;
+  if (!isLoaded) return <div className="p-10 text-center font-bold text-xs tracking-widest text-orange-600 animate-pulse uppercase">Syncing Real-time Asset Logs...</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10 bg-[#F8FAFC] min-h-screen p-4 md:p-8 font-sans antialiased text-slate-900 relative">
@@ -293,11 +192,11 @@ export default function AdminReportsPage() {
       {selectedAsset && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
-                <Laptop className="text-indigo-600"/> Asset Details
+            <div className="p-6 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
+              <h3 className="font-extrabold text-purple-900 text-lg flex items-center gap-2">
+                <Laptop className="text-purple-600"/> Asset Details
               </h3>
-              <button onClick={() => setSelectedAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer">
+              <button onClick={() => setSelectedAsset(null)} className="p-2 rounded-full hover:bg-white/50 text-purple-500 transition-all hover:scale-110 cursor-pointer">
                 <X size={18}/>
               </button>
             </div>
@@ -311,7 +210,7 @@ export default function AdminReportsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
                   <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Tag ID</span>
-                  <p className="font-mono text-sm font-bold text-indigo-600">{selectedAsset.tagId}</p>
+                  <p className="font-mono text-sm font-bold text-orange-600">{selectedAsset.tagId}</p>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
                   <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Detected Brand</span>
@@ -332,9 +231,9 @@ export default function AdminReportsPage() {
                   </span>
                 </div>
                 
-                <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100">
-                  <span className="text-[10px] uppercase tracking-widest font-black text-blue-400 block mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Information</span>
-                  <p className="font-bold text-sm text-blue-900 mt-1">
+                <div className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100">
+                  <span className="text-[10px] uppercase tracking-widest font-black text-orange-600 block mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Information</span>
+                  <p className="font-bold text-sm text-orange-900 mt-1">
                     {selectedAsset.status === 'In Use' ? selectedAsset.assignedToName : 'Not currently assigned out.'}
                   </p>
                 </div>
@@ -344,22 +243,22 @@ export default function AdminReportsPage() {
         </div>
       )}
 
-      {/* Header Widget */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* STANDARDIZED HEADER */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-300 hover:shadow-md">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            <FileText className="text-indigo-600" size={26} /> VSIT Advanced Metrics Engine
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <FileText className="text-orange-600" size={26} /> VSIT Advanced Metrics Engine
           </h1>
-          <p className="text-xs font-semibold text-slate-500 mt-1">Extract high-fidelity brand profiles, deployment summaries, and configurations records matrix logs.</p>
+          <p className="text-sm font-semibold text-slate-500 mt-2">Extract high-fidelity brand profiles, deployment summaries, and configurations records matrix logs.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto justify-end">
           <Link 
             href="/admin" 
-            className="w-full sm:w-auto px-5 py-3 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0 uppercase tracking-wider"
+            className="w-full sm:w-auto px-5 py-3 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all duration-300 hover:-translate-x-1 hover:shadow-sm shrink-0 uppercase tracking-wider"
           >
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
-          <button onClick={handleExportPDF} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl shadow-xs transition-colors font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer">
+          <button onClick={handleExportPDF} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-xl shadow-xs transition-all hover:scale-105 active:scale-95 font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer">
             <Download size={16} /> Compile PDF Blueprint
           </button>
         </div>
@@ -368,13 +267,13 @@ export default function AdminReportsPage() {
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         
         {/* Sidebar Navigation Filter Panel */}
-        <div className="w-full lg:w-72 shrink-0 space-y-1 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="w-full lg:w-72 shrink-0 space-y-1 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs transition-all hover:shadow-md">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Global Summary Matrix</h3>
           <button onClick={() => setActiveReport('CATEGORY_SUMMARY')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
               activeReport === 'CATEGORY_SUMMARY' 
-                ? 'bg-indigo-50 border-indigo-200/60 text-indigo-700 shadow-xs' 
-                : 'text-slate-600 hover:bg-slate-50 border-transparent hover:text-slate-900'
+                ? 'bg-orange-50 border-orange-200/60 text-orange-700 shadow-xs scale-[1.02]' 
+                : 'text-slate-600 hover:bg-slate-50 border-transparent hover:text-orange-600'
             }`}>
             <BarChart3 size={16}/> Global Summary Overview
           </button>
@@ -394,8 +293,8 @@ export default function AdminReportsPage() {
             <button key={tab.id} onClick={() => setActiveReport(tab.id as ReportGroup)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 activeReport === tab.id 
-                  ? 'bg-indigo-50 border-indigo-200/60 text-indigo-700 shadow-xs' 
-                  : 'text-slate-600 hover:bg-slate-50 border-transparent hover:text-slate-900'
+                  ? 'bg-orange-50 border-orange-200/60 text-orange-700 shadow-xs scale-[1.02]' 
+                  : 'text-slate-600 hover:bg-slate-50 border-transparent hover:text-orange-600'
               }`}>
               {tab.icon} {tab.label}
             </button>
@@ -405,46 +304,43 @@ export default function AdminReportsPage() {
         {/* Core Processing Panel */}
         <div className="flex-1 w-full space-y-5">
           
-          {/* Textual Search Filter Widget */}
-          <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs transition-all hover:shadow-md">
             <div className="relative w-full max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={16} />
               <input 
                 type="text" 
                 placeholder={`Search inside ${activeReport.replace('_',' ')}...`} 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none text-xs font-bold text-slate-900 placeholder:text-slate-400 transition-all" 
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-xs font-bold text-slate-900 placeholder:text-slate-400 transition-all" 
               />
             </div>
           </div>
 
-          {/* DYNAMIC METRIC CARDS */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-in fade-in duration-300">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Total Count</p>
               <h3 className="text-xl font-black text-slate-900 mt-1">{filteredAssets.length}</h3>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">In Use</p>
               <h3 className="text-xl font-black text-blue-600 mt-1">{filteredAssets.filter(a => a.status === 'In Use').length}</h3>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Available</p>
               <h3 className="text-xl font-black text-emerald-600 mt-1">{filteredAssets.filter(a => a.status === 'Available').length}</h3>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Pending Return</p>
               <h3 className="text-xl font-black text-amber-500 mt-1">{filteredAssets.filter(a => a.status === 'Pending Return').length}</h3>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Discarded</p>
               <h3 className="text-xl font-black text-rose-600 mt-1">{filteredAssets.filter(a => a.status === 'Discarded').length}</h3>
             </div>
           </div>
 
-          {/* Visualized Table Grid */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden transition-all hover:shadow-md">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{getGroupTitle(activeReport)}</h3>
             </div>
@@ -464,7 +360,7 @@ export default function AdminReportsPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs font-bold">
                     {categorySummary.map((cat, i) => (
-                      <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={i} className="hover:bg-purple-50/50 transition-colors">
                         <td className="p-4 text-slate-900">{cat.category}</td>
                         <td className="p-4 text-slate-600">{cat.total}</td>
                         <td className="p-4 text-blue-600">{cat.inUse}</td>
@@ -478,10 +374,8 @@ export default function AdminReportsPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                
-                {/* 🌟 BRAND-WISE LIVE SUMMARY MATRIX LOG VIEW */}
-                <div className="p-4 bg-slate-50/40 rounded-2xl border border-slate-100 mx-5 mt-4">
-                  <h4 className="text-[10px] font-black uppercase text-indigo-800 tracking-wider mb-2">Dynamic Brand Configuration Summary Matrix</h4>
+                <div className="p-4 bg-purple-50/40 rounded-2xl border border-purple-100 mx-5 mt-4">
+                  <h4 className="text-[10px] font-black uppercase text-purple-800 tracking-wider mb-2">Dynamic Brand Configuration Summary Matrix</h4>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[500px]">
                       <thead className="text-[9px] uppercase font-black text-slate-400 tracking-wider border-b border-slate-200/60">
@@ -510,7 +404,6 @@ export default function AdminReportsPage() {
                   </div>
                 </div>
 
-                {/* Serial Logs output */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-black tracking-widest border-b border-slate-200">
@@ -527,11 +420,11 @@ export default function AdminReportsPage() {
                         </tr>
                       ) : (
                         filteredAssets.map((a) => (
-                          <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
+                          <tr key={a.id} className="hover:bg-purple-50/30 transition-colors">
                             <td className="p-4">
                               <button 
                                 onClick={() => setSelectedAsset(a)}
-                                className="text-indigo-600 hover:text-indigo-800 text-left group flex flex-col cursor-pointer transition-colors"
+                                className="text-orange-600 hover:text-orange-800 text-left group flex flex-col cursor-pointer transition-colors"
                               >
                                 <span className="font-extrabold text-sm group-hover:underline">{a.name}</span>
                                 <span className="text-[10px] text-slate-400 font-mono tracking-wider mt-0.5 no-underline">Tag: {a.tagId}</span>
