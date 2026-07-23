@@ -7,7 +7,7 @@ import {
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
   AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink,
-  Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, RotateCcw
+  Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -226,7 +226,7 @@ export default function AdminDashboardPage() {
         });
       }
 
-      const formattedRecentLogs = inspData.slice(0, 5).map(log => {
+      const formattedRecentLogs = inspData.slice(0, 8).map(log => {
         const matchedProfile = staffData.find(p => 
           p.email?.toLowerCase() === log.user_email?.toLowerCase() || 
           p.id === log.inspected_by
@@ -489,7 +489,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 7 SYSTEM MODULES & ACTIVITY LOG */}
+        {/* 🌟 7 SYSTEM MODULES & STRETCHED ACTIVITY LOG */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <div className="lg:col-span-2 space-y-3">
@@ -529,17 +529,18 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="space-y-3">
+          {/* 🌟 VERTICALLY STRETCHED ACTIVITY LOG */}
+          <div className="flex flex-col space-y-3">
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText}`}>Live Activity Log</h3>
-            <div className={`${theme.card} rounded-3xl border shadow-sm p-5 h-[320px] flex flex-col transition-colors`}>
+            <div className={`${theme.card} rounded-3xl border shadow-sm p-5 flex-1 flex flex-col transition-colors min-h-[320px]`}>
               
               {recentActivity.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
+                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70 py-12">
                   <Activity size={28} className={`${theme.subText} mb-3`} />
                   <p className={`text-xs font-medium ${theme.subText}`}>No recent network activity</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar max-h-[500px] lg:max-h-none">
                   {recentActivity.map((log: any, index: number) => (
                     <div key={log.id || `activity-log-${index}`} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                       <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border ${theme.iconBg.blue} ${isDarkMode ? 'border-blue-900/30' : 'border-blue-100'}`}>
@@ -556,7 +557,7 @@ export default function AdminDashboardPage() {
                 </div>
               )}
               
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 w-full py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-auto pt-4 w-full py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
                 View All Logs
               </button>
             </div>
