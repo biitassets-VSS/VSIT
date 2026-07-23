@@ -206,7 +206,7 @@ export default function StaffAssetsPage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
         <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Inventory...</p>
       </div>
     );
@@ -227,11 +227,11 @@ export default function StaffAssetsPage() {
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">My Hardware</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Manage your assigned equipment and sign handover agreements.</p>
         </div>
-        <div className="flex items-center gap-3 bg-blue-50 px-4 py-2.5 rounded-xl border border-blue-100">
-          <ShieldCheck className="text-blue-600" size={20} />
+        <div className="flex items-center gap-3 bg-purple-50 px-4 py-2.5 rounded-xl border border-purple-100">
+          <ShieldCheck className="text-purple-600" size={20} />
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total Units</p>
-            <p className="text-lg font-black text-blue-700 leading-none">{assignedAssets.length}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-purple-500">Total Units</p>
+            <p className="text-lg font-black text-purple-700 leading-none">{assignedAssets.length}</p>
           </div>
         </div>
       </div>
@@ -299,7 +299,7 @@ export default function StaffAssetsPage() {
               <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
                       <AssetIcon size={18}/>
                     </div>
                     <div>
@@ -353,7 +353,7 @@ export default function StaffAssetsPage() {
                     className={`w-full py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
                       isPending 
                         ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md' 
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-blue-600'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-purple-600'
                     }`}
                   >
                     {isPending ? <><PenTool size={14}/> Sign Handover Form</> : <><FileSignature size={14}/> View Agreement</>}
@@ -391,7 +391,7 @@ export default function StaffAssetsPage() {
               
               <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md">
                     <FileSignature size={20} />
                   </div>
                   <div>
@@ -475,7 +475,7 @@ export default function StaffAssetsPage() {
                         placeholder="Type your full legal name to sign..."
                         value={signatureName}
                         onChange={(e) => setSignatureName(e.target.value)}
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
                       />
                       <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
                         <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
@@ -484,7 +484,7 @@ export default function StaffAssetsPage() {
 
                     <div className="flex gap-3 pt-2">
                       <button type="button" onClick={() => setSignModalAsset(null)} className="px-6 py-4 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
-                      <button type="submit" disabled={isSigning || !signatureName.trim()} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
+                      <button type="submit" disabled={isSigning || !signatureName.trim()} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
                         {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
                         {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
                       </button>

@@ -91,7 +91,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
   const getLogisticsColor = (state: string) => {
     switch (state?.toUpperCase()) {
       case 'ASSIGNED': return 'bg-emerald-100 text-emerald-800';
-      case 'IN STOCK': return 'bg-blue-100 text-blue-800';
+      case 'IN STOCK': return 'bg-purple-100 text-purple-800';
       case 'REPAIR': return 'bg-amber-100 text-amber-800';
       case 'DISCARDED': return 'bg-rose-100 text-rose-800';
       default: return 'bg-slate-100 text-slate-800';
@@ -136,7 +136,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
             </div>
             
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+              <button className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                 <Edit2 size={14}/> Edit Record
               </button>
               <button onClick={onClose} className="p-2 bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 rounded-full transition-colors">
@@ -149,7 +149,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Category</p>
-              <p className="text-sm font-black text-blue-600">{asset?.category || 'Laptop'}</p>
+              <p className="text-sm font-black text-purple-600">{asset?.category || 'Laptop'}</p>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number (S/N)</p>
@@ -190,7 +190,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
               
               {/* Quick State Toggles */}
               <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200">
-                <button onClick={() => handleStateChange('In Stock')} className={`p-2 rounded-lg transition-all ${logisticsState === 'In Stock' ? 'bg-blue-100 text-blue-700' : 'text-slate-400 hover:bg-slate-50'}`} title="Move to Stock">
+                <button onClick={() => handleStateChange('In Stock')} className={`p-2 rounded-lg transition-all ${logisticsState === 'In Stock' ? 'bg-purple-100 text-purple-700' : 'text-slate-400 hover:bg-slate-50'}`} title="Move to Stock">
                   <Package size={16} />
                 </button>
                 <button onClick={() => handleStateChange('Assigned')} className={`p-2 rounded-lg transition-all ${logisticsState === 'Assigned' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400 hover:bg-slate-50'}`} title="Assign to Staff">
@@ -207,11 +207,11 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
 
             {/* If state is ASSIGNED, show the Staff Search OR the Selected User */}
             {logisticsState === 'Assigned' && (
-              <div className="bg-white p-4 rounded-2xl border border-blue-200 shadow-sm shadow-blue-100 relative">
+              <div className="bg-white p-4 rounded-2xl border border-purple-200 shadow-sm shadow-blue-100 relative">
                 
                 {!assignedUser ? (
                   <>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Search Staff Directory</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 mb-2">Search Staff Directory</p>
                     <div className="relative">
                       <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input 
@@ -219,7 +219,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by Employee Name or EMP Code (e.g. 1001)..."
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 focus:border-blue-500 rounded-xl text-xs font-bold outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl text-xs font-bold outline-none transition-all"
                       />
                     </div>
 
@@ -230,7 +230,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
                         {!loading && filteredStaff.length === 0 && <p className="p-4 text-xs font-bold text-slate-400">No staff found matching "{searchQuery}"</p>}
                         
                         {filteredStaff.map(staff => (
-                          <div key={staff.id} onClick={() => handleSelectStaff(staff)} className="p-3 border-b border-slate-100 hover:bg-blue-50 cursor-pointer transition-colors flex items-center justify-between">
+                          <div key={staff.id} onClick={() => handleSelectStaff(staff)} className="p-3 border-b border-slate-100 hover:bg-purple-50 cursor-pointer transition-colors flex items-center justify-between">
                             <div>
                               <p className="text-sm font-black text-slate-900">{staff.full_name}</p>
                               <p className="text-[10px] font-bold text-slate-500">{staff.email}</p>
@@ -249,7 +249,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assigned Employee Holder:</p>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black">
+                        <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-black">
                           {assignedUser.full_name?.charAt(0) || <User size={16}/>}
                         </div>
                         <div>
@@ -277,7 +277,7 @@ export default function AssetDetailModal({ asset, onClose, onUpdate }: any) {
             <button 
               onClick={handleCommitChanges}
               disabled={isSaving || (logisticsState === 'Assigned' && !assignedUser)}
-              className="mt-4 w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+              className="mt-4 w-full py-3.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
             >
               {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
               {isSaving ? 'Syncing to Database...' : 'Commit Status Update'}

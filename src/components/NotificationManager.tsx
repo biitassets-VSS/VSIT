@@ -79,19 +79,19 @@ export default function NotificationManager({ userId, userRole = 'staff' }: { us
   if (permission === 'granted') return null;
 
   return (
-    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 shadow-sm animate-in fade-in">
+    <div className="bg-orange-50 border border-indigo-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 shadow-sm animate-in fade-in">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+        <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
           <BellRing size={20} className="animate-pulse" />
         </div>
         <div>
-          <h4 className="text-sm font-bold text-indigo-900">Enable Desktop Alerts</h4>
-          <p className="text-xs font-medium text-indigo-700 mt-0.5">Get instantly notified when admins update your tickets or send announcements.</p>
+          <h4 className="text-sm font-bold text-orange-900">Enable Desktop Alerts</h4>
+          <p className="text-xs font-medium text-orange-700 mt-0.5">Get instantly notified when admins update your tickets or send announcements.</p>
         </div>
       </div>
       <button 
         onClick={requestPermission}
-        className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-colors shrink-0 shadow-sm"
+        className="w-full sm:w-auto px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-colors shrink-0 shadow-sm"
       >
         Enable Notifications
       </button>

@@ -330,14 +330,14 @@ export default function AdminStaffDirectoryPage() {
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/60',
-    cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-blue-300 hover:shadow-md',
+    cardHover: isDarkMode ? 'hover:border-[#3f3f46] hover:bg-[#18181b]' : 'hover:border-purple-300 hover:shadow-md',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
-    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-blue-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-400',
+    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] focus:border-purple-500 text-zinc-100 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 focus:border-purple-500 text-slate-900 placeholder-slate-400',
     modalOverlay: 'bg-black/80 backdrop-blur-sm z-50',
     modalBody: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
     modalHeader: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-slate-50 border-slate-100',
-    iconBgBlue: isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
+    iconBgBlue: isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600',
   };
 
   return (
@@ -365,7 +365,7 @@ export default function AdminStaffDirectoryPage() {
             <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-colors text-xs font-semibold uppercase tracking-wider ${theme.card} ${theme.cardHover} ${theme.textMain}`}>
               <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
             </button>
-            <button onClick={handleOpenAdd} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-blue-600/20 transition-all">
+            <button onClick={handleOpenAdd} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-blue-600/20 transition-all">
               <PlusCircle size={16} /> <span>Add New Hire</span>
             </button>
           </div>
@@ -386,7 +386,7 @@ export default function AdminStaffDirectoryPage() {
         {/* STAFF GRID */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-500' : 'border-blue-600'}`}></div>
+            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-500' : 'border-purple-600'}`}></div>
             <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.textSub}`}>Loading Directory</span>
           </div>
         ) : filteredStaff.length === 0 ? (
@@ -413,7 +413,7 @@ export default function AdminStaffDirectoryPage() {
                           isActive 
                             ? (isAdmin 
                                 ? (isDarkMode ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-purple-100 text-purple-600 border border-purple-200/50') 
-                                : (isDarkMode ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-blue-100 text-blue-600 border border-blue-200/50')) 
+                                : (isDarkMode ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-purple-100 text-purple-600 border border-purple-200/50')) 
                             : (isDarkMode ? 'bg-zinc-900 text-zinc-600 border border-zinc-800' : 'bg-slate-100 text-slate-400 border border-slate-200')
                         }`}>
                           <span className="relative z-10">{user.full_name?.charAt(0) || <UserCheck size={20} />}</span>
@@ -422,18 +422,18 @@ export default function AdminStaffDirectoryPage() {
                         <div className="overflow-hidden">
                           <button 
                             onClick={() => handleOpenEdit(user)}
-                            className={`text-sm font-semibold text-left leading-tight truncate w-full hover:underline cursor-pointer ${isActive ? theme.textMain + ' hover:text-blue-500' : theme.textSub}`}
+                            className={`text-sm font-semibold text-left leading-tight truncate w-full hover:underline cursor-pointer ${isActive ? theme.textMain + ' hover:text-purple-500' : theme.textSub}`}
                           >
                             {user.full_name || 'Unnamed Employee'}
                           </button>
                           <div className={`flex items-center gap-1.5 text-[11px] font-medium mt-1 ${theme.textSub}`}>
-                            <Building size={12} className={isActive ? (isDarkMode ? "text-blue-400" : "text-blue-500") : ""} />
+                            <Building size={12} className={isActive ? (isDarkMode ? "text-purple-400" : "text-purple-500") : ""} />
                             <span className="truncate">{user.department || 'Migration'}</span>
                           </div>
                         </div>
                       </div>
                       
-                      <button onClick={() => handleOpenEdit(user)} className={`p-2.5 rounded-xl transition-colors cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a] hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600'}`}>
+                      <button onClick={() => handleOpenEdit(user)} className={`p-2.5 rounded-xl transition-colors cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a] hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-purple-50 hover:text-purple-600'}`}>
                         <Edit2 size={16} />
                       </button>
                     </div>
@@ -443,7 +443,7 @@ export default function AdminStaffDirectoryPage() {
                     
                     <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
                       <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                        <Hash size={14} className={isDarkMode ? "text-blue-400" : "text-blue-500"} />
+                        <Hash size={14} className={isDarkMode ? "text-purple-400" : "text-purple-500"} />
                         <span className="font-semibold text-[9px] uppercase tracking-widest">EMP CODE</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -468,13 +468,13 @@ export default function AdminStaffDirectoryPage() {
 
                     <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${theme.card}`}>
                       <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                        <KeyRound size={14} className={isDarkMode ? "text-blue-400" : "text-blue-500"}/>
+                        <KeyRound size={14} className={isDarkMode ? "text-purple-400" : "text-purple-500"}/>
                         <span className="font-semibold text-[9px] uppercase tracking-widest">Login Auth</span>
                       </div>
                       <button 
                         type="button" 
                         onClick={() => handleManualAuthSync(user)}
-                        className={`px-3 py-1 rounded-lg border font-semibold text-[9px] uppercase tracking-widest transition-all cursor-pointer ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/30 hover:text-white' : 'bg-blue-50 hover:bg-blue-600 border-blue-200 hover:border-transparent text-blue-700 hover:text-white'}`}
+                        className={`px-3 py-1 rounded-lg border font-semibold text-[9px] uppercase tracking-widest transition-all cursor-pointer ${isDarkMode ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/30 hover:text-white' : 'bg-purple-50 hover:bg-purple-600 border-purple-200 hover:border-transparent text-purple-700 hover:text-white'}`}
                       >
                         Overwrite Pass
                       </button>
@@ -486,7 +486,7 @@ export default function AdminStaffDirectoryPage() {
                       <Package size={14} className={theme.textSub} />
                       <div className="flex flex-col">
                         <span className={`text-[8px] font-bold uppercase tracking-widest ${theme.textSub}`}>Asset Load</span>
-                        <span className={`text-[10px] font-bold tracking-wider uppercase ${user.assetCount > 0 ? (isDarkMode ? 'text-blue-400' : 'text-blue-700') : theme.textSub}`}>
+                        <span className={`text-[10px] font-bold tracking-wider uppercase ${user.assetCount > 0 ? (isDarkMode ? 'text-purple-400' : 'text-purple-700') : theme.textSub}`}>
                           {user.assetCount} Assigned
                         </span>
                       </div>
@@ -518,7 +518,7 @@ export default function AdminStaffDirectoryPage() {
               <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
                 <div>
                   <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}>
-                    {isEditing ? <Edit2 size={16} className={isDarkMode ? "text-blue-400" : "text-blue-600"}/> : <UserCheck size={16} className={isDarkMode ? "text-blue-400" : "text-blue-600"}/>} 
+                    {isEditing ? <Edit2 size={16} className={isDarkMode ? "text-purple-400" : "text-purple-600"}/> : <UserCheck size={16} className={isDarkMode ? "text-purple-400" : "text-purple-600"}/>} 
                     {isEditing ? 'Edit Employee Dossier' : 'Register New Employee'}
                   </h3>
                   {isEditing && <p className={`text-[10px] font-mono font-medium mt-1 tracking-widest ${theme.textSub}`}>ID: {formData.id}</p>}
@@ -543,7 +543,7 @@ export default function AdminStaffDirectoryPage() {
                 
                 <div className="space-y-5">
                   <div className={`flex items-center gap-3 border-b pb-2 ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                    <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center text-[10px] font-bold">1</span>
+                    <span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-500 flex items-center justify-center text-[10px] font-bold">1</span>
                     <span className={`text-[11px] font-bold uppercase tracking-widest ${theme.textMain}`}>Employee Identity & Auth</span>
                   </div>
                   
@@ -587,7 +587,7 @@ export default function AdminStaffDirectoryPage() {
 
                 <div className="space-y-5">
                   <div className={`flex items-center gap-3 border-b pb-2 ${isDarkMode ? 'border-[#27272a]' : 'border-slate-100'}`}>
-                    <span className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-500 flex items-center justify-center text-[10px] font-bold">2</span>
+                    <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-500 flex items-center justify-center text-[10px] font-bold">2</span>
                     <span className={`text-[11px] font-bold uppercase tracking-widest ${theme.textMain}`}>Organizational Assignment</span>
                   </div>
                   
@@ -650,7 +650,7 @@ export default function AdminStaffDirectoryPage() {
 
                 <div className="pt-2 flex gap-4">
                   <button type="button" onClick={() => setIsDossierModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#121212] border-[#27272a] text-zinc-300 hover:bg-[#18181b]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                  <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
+                  <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition-all">
                     {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
                     <span>{isSaving ? 'Syncing to Database...' : (isEditing ? 'Save Dossier Updates' : 'Activate Employee Account')}</span>
                   </button>
@@ -670,18 +670,18 @@ export default function AdminStaffDirectoryPage() {
               </div>
 
               <div className="space-y-4 text-left">
-                <button onClick={downloadStaffCsvTemplate} className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}>
+                <button onClick={downloadStaffCsvTemplate} className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer border ${isDarkMode ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20' : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200'}`}>
                   <Download size={16}/> <span>1. Download Staff CSV Template</span>
                 </button>
                 <p className={`text-[11px] font-medium leading-relaxed px-1 ${theme.textSub}`}>Notice: Column 3 is <b>Password</b>. If you upload an existing staff member to add a missing phone number, leave the password blank and it will keep their old password safe.</p>
               </div>
 
               <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-[#3f3f46] bg-[#0a0a0a] hover:bg-[#18181b]' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'}`}>
-                <FileSpreadsheet size={48} className="text-blue-500 animate-pulse" />
-                <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-blue-600 file:text-white hover:file:bg-blue-700' : 'text-slate-700 file:bg-slate-900 file:text-white'}`} />
+                <FileSpreadsheet size={48} className="text-purple-500 animate-pulse" />
+                <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-purple-600 file:text-white hover:file:bg-purple-700' : 'text-slate-700 file:bg-slate-900 file:text-white'}`} />
               </div>
 
-              <button onClick={executeStaffBulkImport} disabled={isImporting || !bulkFile} className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all ${bulkFile ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20 cursor-pointer' : isDarkMode ? 'bg-[#27272a] text-zinc-500 cursor-not-allowed' : 'bg-slate-300 text-white cursor-not-allowed'}`}>
+              <button onClick={executeStaffBulkImport} disabled={isImporting || !bulkFile} className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all ${bulkFile ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-blue-600/20 cursor-pointer' : isDarkMode ? 'bg-[#27272a] text-zinc-500 cursor-not-allowed' : 'bg-slate-300 text-white cursor-not-allowed'}`}>
                 {isImporting ? 'Parsing CSV Rows...' : '2. Execute Batch Staff Upload'}
               </button>
             </div>

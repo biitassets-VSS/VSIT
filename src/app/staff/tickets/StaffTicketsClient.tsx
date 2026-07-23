@@ -94,7 +94,7 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
         >
           <PlusCircle size={18} />
           Raise New Ticket
@@ -105,7 +105,7 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
           <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-            <Ticket size={20} className="text-blue-500"/> Ticket History
+            <Ticket size={20} className="text-purple-500"/> Ticket History
           </h2>
         </div>
         
@@ -131,7 +131,7 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
                         {ticket.status}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-blue-600 mt-1">{ticket.asset}</p>
+                    <p className="text-sm font-semibold text-purple-600 mt-1">{ticket.asset}</p>
                     <div className="flex items-center gap-2 mt-2 text-sm text-gray-600 bg-gray-100/50 p-3 rounded-lg border border-gray-100">
                       <MessageSquare size={16} className="text-gray-400 min-w-[16px]"/>
                       <span className="italic">"{ticket.notes}"</span>
@@ -144,7 +144,7 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
                     <Clock size={14} /> {ticket.date}
                   </div>
                   {ticket.hasAttachment && (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-md">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-purple-500 bg-purple-50 px-2.5 py-1 rounded-md">
                       <ImageIcon size={14} /> Screenshot attached
                     </div>
                   )}
@@ -223,8 +223,8 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
               {/* FILE UPLOAD DRAG & DROP */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Attach Screenshot (Optional)</label>
-                <div className="relative border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-blue-50 hover:border-blue-400 transition-colors cursor-pointer group">
-                  <div className="bg-blue-100 text-blue-600 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                <div className="relative border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-purple-50 hover:border-purple-400 transition-colors cursor-pointer group">
+                  <div className="bg-purple-100 text-purple-600 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform">
                     <UploadCloud size={24} />
                   </div>
                   <p className="text-sm font-bold text-gray-700">
@@ -252,7 +252,7 @@ export default function StaffTicketsClient({ initialTickets, assignedAssets }: S
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200 transition-all flex justify-center items-center disabled:opacity-70"
+                  className="flex-1 px-5 py-3 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-blue-200 transition-all flex justify-center items-center disabled:opacity-70"
                 >
                   {isSubmitting ? "Submitting..." : "Submit Ticket"}
                 </button>

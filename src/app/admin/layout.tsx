@@ -172,8 +172,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className={`fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse ring-4 ring-blue-500/20"></span>
-              <h4 className="text-[11px] font-bold text-blue-500 uppercase tracking-widest">{activeAlert.type} ALERT</h4>
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse ring-4 ring-purple-500/20"></span>
+              <h4 className="text-[11px] font-bold text-purple-500 uppercase tracking-widest">{activeAlert.type} ALERT</h4>
             </div>
             <button onClick={() => setActiveAlert(null)} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={16}/></button>
           </div>
@@ -202,7 +202,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           
           {/* Notifications Bell */}
           <div className="relative">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-colors cursor-pointer ${isNotifOpen ? 'bg-blue-500/10 border-blue-500/30 text-blue-500' : `${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a]' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500'}`}`}>
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-colors cursor-pointer ${isNotifOpen ? 'bg-purple-500/10 border-purple-500/30 text-purple-500' : `${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a]' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500'}`}`}>
               <Bell size={20} className={unreadTotal > 0 ? 'animate-[wiggle_1s_ease-in-out_infinite]' : ''} />
               {unreadTotal > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full shadow-sm">{unreadTotal > 9 ? '9+' : unreadTotal}</span>}
             </button>
@@ -211,7 +211,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div className={`absolute top-[calc(100%+12px)] right-0 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[80vh] animate-in slide-in-from-top-2 fade-in ${theme.dropdownBg} ${theme.border}`}>
                 <div className={`p-4 border-b flex justify-between items-center shrink-0 ${theme.dropdownHeader} ${theme.border}`}>
                   <h3 className={`text-xs font-semibold uppercase tracking-wider ${theme.textMain}`}>Notifications</h3>
-                  {unreadTotal > 0 && <span className="text-[10px] font-medium text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-md">{unreadTotal} New</span>}
+                  {unreadTotal > 0 && <span className="text-[10px] font-medium text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-md">{unreadTotal} New</span>}
                 </div>
                 
                 <div className="overflow-y-auto custom-scrollbar flex-1">
@@ -223,11 +223,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   ) : (
                     <div className={`divide-y ${isDarkMode ? 'divide-[#27272a]' : 'divide-slate-100'}`}>
                       {liveTicketCount > 0 && (
-                        <Link href="/admin/tickets" onClick={() => { setIsNotifOpen(false); setLiveTicketCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20' : 'bg-blue-50/50 hover:bg-blue-50'}`}>
+                        <Link href="/admin/tickets" onClick={() => { setIsNotifOpen(false); setLiveTicketCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-purple-500/10 hover:bg-purple-500/20' : 'bg-purple-50/50 hover:bg-purple-50'}`}>
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0"><Ticket size={14}/></div>
+                            <div className="w-8 h-8 rounded-full bg-purple-500/20 text-purple-500 flex items-center justify-center shrink-0"><Ticket size={14}/></div>
                             <div>
-                              <h4 className="text-xs font-semibold text-blue-500">New Tickets Received</h4>
+                              <h4 className="text-xs font-semibold text-purple-500">New Tickets Received</h4>
                               <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>Staff members have submitted {liveTicketCount} new support ticket(s).</p>
                             </div>
                           </div>
@@ -254,7 +254,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                               <span className="text-[10px] text-zinc-500 mt-2 block">{new Date(n.created_at).toLocaleString()}</span>
                             </div>
                             {!n.is_read && (
-                              <button onClick={() => markAsRead(n.id)} className="w-2 h-2 bg-blue-500 rounded-full shrink-0 shadow-sm shadow-blue-500/50 cursor-pointer hover:scale-150 transition-transform" title="Mark as read" />
+                              <button onClick={() => markAsRead(n.id)} className="w-2 h-2 bg-purple-500 rounded-full shrink-0 shadow-sm shadow-purple-500/50 cursor-pointer hover:scale-150 transition-transform" title="Mark as read" />
                             )}
                           </div>
                         </div>
@@ -278,7 +278,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             {/* Tooltip visible strictly on hover showing Login User Email and Name */}
             <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border border-slate-700 pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Logged in as</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-orange-400">Logged in as</span>
               <span className="text-xs font-bold truncate mt-0.5">{adminProfile.name}</span>
               <span className="text-[11px] font-mono text-slate-400 truncate mt-0.5">{adminProfile.email}</span>
             </div>

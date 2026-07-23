@@ -154,7 +154,7 @@ function MobileAuditScanner() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 font-sans pb-32">
       <div className="bg-slate-900 text-white p-6 rounded-3xl mb-6 shadow-xl">
-        <h1 className="text-xl font-black uppercase tracking-widest flex items-center gap-2"><Camera size={20} className="text-blue-500"/> Mobile Audit Camera</h1>
+        <h1 className="text-xl font-black uppercase tracking-widest flex items-center gap-2"><Camera size={20} className="text-purple-500"/> Mobile Audit Camera</h1>
         <p className="text-sm font-medium text-slate-400 mt-2">Asset ID: {assetId}</p>
         <p className="text-xs font-mono text-emerald-400 mt-1">Operator: {staffName} ({empCode})</p>
       </div>
@@ -185,8 +185,8 @@ function MobileAuditScanner() {
               ) : (
                 <label className="flex items-center justify-center w-full py-8 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors group">
                   <div className="text-center">
-                    <Camera size={28} className="mx-auto text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-black uppercase tracking-widest text-blue-700">Open Camera</span>
+                    <Camera size={28} className="mx-auto text-purple-500 mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-black uppercase tracking-widest text-purple-700">Open Camera</span>
                   </div>
                   <input type="file" accept="image/*" capture="environment" onChange={(e) => handleCapture(e, shot.id)} className="hidden" />
                 </label>
@@ -200,7 +200,7 @@ function MobileAuditScanner() {
         <button 
           onClick={submitFinalAudit} 
           disabled={!allPhotosTaken || loading}
-          className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${allPhotosTaken ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-200 text-slate-400'}`}
+          className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${allPhotosTaken ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-200 text-slate-400'}`}
         >
           {loading ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
           {loading ? 'Uploading Secure Files...' : 'Submit Certified Audit'}

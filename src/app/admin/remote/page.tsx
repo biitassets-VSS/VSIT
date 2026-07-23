@@ -47,7 +47,7 @@ export default function AdminRemotePage() {
 
   if (loading) return (
     <div className="w-full h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
-      <Loader2 className="animate-spin text-indigo-600" size={32} />
+      <Loader2 className="animate-spin text-orange-600" size={32} />
       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Loading Network Core...</p>
     </div>
   );
@@ -62,7 +62,7 @@ export default function AdminRemotePage() {
             <ArrowLeft size={18} />
           </button>
           <div className="flex items-center gap-2">
-            <ShieldAlert className="text-indigo-600" size={20} />
+            <ShieldAlert className="text-orange-600" size={20} />
             <h1 className="text-xl font-black text-slate-900 tracking-tight">Admin Remote Access</h1>
           </div>
         </div>
@@ -107,11 +107,11 @@ export default function AdminRemotePage() {
                     onClick={() => setActiveSession(staff)}
                     className={`w-full text-left px-3 py-2.5 rounded-xl transition-all border ${
                       activeSession?.id === staff.id 
-                        ? 'bg-indigo-50 border-indigo-200' 
+                        ? 'bg-orange-50 border-indigo-200' 
                         : 'bg-transparent border-transparent hover:bg-slate-50 hover:border-slate-100'
                     }`}
                   >
-                    <p className={`font-bold text-sm leading-tight ${activeSession?.id === staff.id ? 'text-indigo-900' : 'text-slate-800'}`}>
+                    <p className={`font-bold text-sm leading-tight ${activeSession?.id === staff.id ? 'text-orange-900' : 'text-slate-800'}`}>
                       {staff.full_name || staff.name || staff.email.split('@')[0]}
                     </p>
                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">ID: {staff.emp_code || staff.emp_id || 'N/A'}</p>

@@ -205,7 +205,7 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input type="text" placeholder="Search by Name, Tag ID, or Category..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-500 shadow-sm" />
+            <input type="text" placeholder="Search by Name, Tag ID, or Category..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-purple-500 shadow-sm" />
           </div>
         </div>
 
@@ -273,7 +273,7 @@ export default function StaffDashboardClient({ initialAssets }: StaffDashboardCl
               </div>
               <div className="p-5 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white rounded-b-2xl">
                 <button onClick={closeModal} className="px-5 py-2 text-sm font-semibold hover:bg-gray-100 rounded-xl">Cancel</button>
-                <button onClick={submitInspection} disabled={!isVerified} className={`px-6 py-2.5 text-sm font-bold rounded-xl text-white ${isVerified ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300'}`}>Submit</button>
+                <button onClick={submitInspection} disabled={!isVerified} className={`px-6 py-2.5 text-sm font-bold rounded-xl text-white ${isVerified ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-300'}`}>Submit</button>
               </div>
             </motion.div>
           </div>

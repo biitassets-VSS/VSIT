@@ -48,7 +48,7 @@ export default function StaffRemotePage() {
 
   if (loading) return (
     <div className="w-full h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
-      <Loader2 className="animate-spin text-blue-600" size={32} />
+      <Loader2 className="animate-spin text-purple-600" size={32} />
       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Connecting to Team Hub...</p>
     </div>
   );
@@ -63,7 +63,7 @@ export default function StaffRemotePage() {
             <ArrowLeft size={18} />
           </button>
           <div className="flex items-center gap-2">
-            <Network className="text-blue-600" size={20} />
+            <Network className="text-purple-600" size={20} />
             <h1 className="text-xl font-black text-slate-900 tracking-tight">Team Collaboration</h1>
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function StaffRemotePage() {
                   placeholder="Search Teammate or Emp ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -108,11 +108,11 @@ export default function StaffRemotePage() {
                     onClick={() => setActiveSession(peer)}
                     className={`w-full text-left px-3 py-2.5 rounded-xl transition-all border ${
                       activeSession?.id === peer.id 
-                        ? 'bg-blue-50 border-blue-200' 
+                        ? 'bg-purple-50 border-purple-200' 
                         : 'bg-transparent border-transparent hover:bg-slate-50 hover:border-slate-100'
                     }`}
                   >
-                    <p className={`font-bold text-sm leading-tight ${activeSession?.id === peer.id ? 'text-blue-900' : 'text-slate-800'}`}>
+                    <p className={`font-bold text-sm leading-tight ${activeSession?.id === peer.id ? 'text-purple-900' : 'text-slate-800'}`}>
                       {peer.full_name || peer.name || peer.email.split('@')[0]}
                     </p>
                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">ID: {peer.emp_code || peer.emp_id || 'N/A'}</p>

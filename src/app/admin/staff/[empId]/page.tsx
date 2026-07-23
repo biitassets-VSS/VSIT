@@ -281,7 +281,7 @@ export default function StaffProfileView() {
 
           <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100">
             <h2 className="text-xl font-black text-[#002B49] mb-6 border-b border-gray-100 pb-3 flex items-center gap-2">
-              <Briefcase className="text-blue-600" size={20}/> Work Information
+              <Briefcase className="text-purple-600" size={20}/> Work Information
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8">
               <div>
@@ -306,9 +306,9 @@ export default function StaffProfileView() {
           <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-gray-100 h-full min-h-[300px]">
             <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
               <h2 className="text-lg font-black text-[#002B49] flex items-center gap-2">
-                <Package className="text-blue-600" size={20}/> Assigned Assets
+                <Package className="text-purple-600" size={20}/> Assigned Assets
               </h2>
-              <span className="w-6 h-6 bg-blue-50 text-blue-600 font-black text-xs rounded-full flex items-center justify-center">
+              <span className="w-6 h-6 bg-purple-50 text-purple-600 font-black text-xs rounded-full flex items-center justify-center">
                 {assets.length}
               </span>
             </div>

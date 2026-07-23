@@ -118,7 +118,7 @@ export default function SettingsPage() {
               <p className="text-sm text-gray-600 font-medium leading-relaxed mb-4">
                 If you bulk-uploaded staff members or created accounts before authentication was fully active, those users may not be able to log in. 
               </p>
-              <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-xs font-bold text-blue-800 flex items-start gap-2">
+              <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl text-xs font-bold text-purple-800 flex items-start gap-2">
                 <Users size={16} className="shrink-0 mt-0.5" />
                 <p>This tool scans your Staff database and securely generates login permissions for any active staff member who has an email and password assigned.</p>
               </div>

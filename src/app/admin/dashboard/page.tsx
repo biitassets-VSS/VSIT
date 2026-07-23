@@ -139,7 +139,7 @@ export default function AdminDashboard() {
           <input 
             type="text" 
             placeholder="Search Assets (Serial, Tag) or Staff (Name, ID)..." 
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm outline-none focus:border-purple-500 focus:ring-1 focus:ring-blue-500 transition-all"
           />
         </div>
       </div>
@@ -154,26 +154,26 @@ export default function AdminDashboard() {
               <h2 className="text-xl font-bold text-gray-900">Assets Status</h2>
               <p className="text-sm text-gray-500">Hardware & Equipment Inventory</p>
             </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl">
               <Monitor size={24} />
             </div>
           </div>
           
           <div className="mb-6">
             <p className="text-xs font-bold text-gray-500 tracking-wide uppercase mb-1">Total Assets</p>
-            <h3 className="text-4xl font-bold text-blue-600">
+            <h3 className="text-4xl font-bold text-purple-600">
               {loading ? <span className="text-gray-300 animate-pulse">...</span> : metrics.totalAssets}
             </h3>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mt-auto">
-            <div className="bg-[#F8FAFC] border border-blue-100 p-4 rounded-xl">
-              <h4 className="text-2xl font-bold text-blue-700">
+            <div className="bg-[#F8FAFC] border border-purple-100 p-4 rounded-xl">
+              <h4 className="text-2xl font-bold text-purple-700">
                 {loading ? '...' : metrics.assignedToStaff}
               </h4>
               <div className="flex items-center gap-1.5 mt-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
-                <p className="text-[10px] font-bold text-blue-600 uppercase">Assigned to Staff</p>
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-600"></div>
+                <p className="text-[10px] font-bold text-purple-600 uppercase">Assigned to Staff</p>
               </div>
             </div>
             <div className="bg-[#F0FDF4] border border-green-100 p-4 rounded-xl">

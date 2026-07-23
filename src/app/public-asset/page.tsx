@@ -70,7 +70,7 @@ function PublicAssetContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
+        <Loader2 className="w-10 h-10 animate-spin text-purple-600 mb-4" />
         <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest">Loading Asset Data</p>
       </div>
     );
@@ -101,7 +101,7 @@ function PublicAssetContent() {
         <div className="p-6 md:p-10 space-y-8">
           
           <div className="flex items-center gap-4 pb-6 border-b border-slate-100">
-            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
               <Laptop size={32} />
             </div>
             <div>
@@ -113,7 +113,7 @@ function PublicAssetContent() {
           <div className="grid grid-cols-2 gap-6">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Asset Tag ID</span>
-              <span className="text-sm font-mono font-bold text-blue-600 break-all">{asset.asset_tag}</span>
+              <span className="text-sm font-mono font-bold text-purple-600 break-all">{asset.asset_tag}</span>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Serial Number (S/N)</span>
@@ -158,7 +158,7 @@ function PublicAssetContent() {
 
 export default function PublicAssetViewPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 animate-spin text-blue-600" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 animate-spin text-purple-600" /></div>}>
       <PublicAssetContent />
     </Suspense>
   );

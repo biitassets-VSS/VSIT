@@ -191,12 +191,12 @@ export default function StaffInspectionsClient({
         <div>
           <h1 className="text-2xl font-black text-gray-900">Asset Inspections</h1>
           <p className="text-sm font-medium text-gray-500 mt-1">
-            Assigned to: <span className="font-bold text-blue-600">{staffName}</span>
+            Assigned to: <span className="font-bold text-purple-600">{staffName}</span>
           </p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
         >
           <Camera size={18} /> Start New Inspection
         </button>
@@ -225,7 +225,7 @@ export default function StaffInspectionsClient({
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
             <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-              <ShieldCheck size={20} className="text-blue-500"/> My Assigned Equipment
+              <ShieldCheck size={20} className="text-purple-500"/> My Assigned Equipment
             </h2>
           </div>
           <div className="divide-y divide-gray-100">
@@ -251,7 +251,7 @@ export default function StaffInspectionsClient({
                       }`}>{asset.inspectionStatus}</p>
                       <button 
                         onClick={() => { setVerifyTag(asset.id); setIsModalOpen(true); }}
-                        className="text-xs font-bold text-blue-600 hover:text-blue-800 underline"
+                        className="text-xs font-bold text-purple-600 hover:text-purple-800 underline"
                       >
                         Inspect Now
                       </button>
@@ -322,7 +322,7 @@ export default function StaffInspectionsClient({
               {/* STEP 1 */}
               {step === 1 && (
                 <form onSubmit={handleVerify} className="space-y-6">
-                  <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-3 text-blue-800">
+                  <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl flex gap-3 text-purple-800">
                     <ShieldCheck className="shrink-0" />
                     <p className="text-sm font-semibold">Verify the physical tag ID matches your assigned system records.</p>
                   </div>
@@ -339,7 +339,7 @@ export default function StaffInspectionsClient({
                       />
                     </div>
                   </div>
-                  <button type="submit" className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md">
+                  <button type="submit" className="w-full py-3 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all shadow-md">
                     Verify & Continue
                   </button>
                 </form>

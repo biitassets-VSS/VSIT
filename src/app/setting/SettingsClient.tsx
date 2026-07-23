@@ -100,7 +100,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
         {/* SECTION 1: GLOBAL ACCESS CONTROL */}
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><UserCog size={20}/></div>
+            <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center"><UserCog size={20}/></div>
             <div>
               <h2 className="text-lg font-black text-gray-900">Global Permissions</h2>
               <p className="text-xs font-bold text-gray-500">Manage overarching portal rules.</p>
@@ -243,7 +243,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
                     <td className="py-4">
                       <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                         user.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                        user.role === 'Staff' ? 'bg-blue-100 text-blue-700' :
+                        user.role === 'Staff' ? 'bg-purple-100 text-purple-700' :
                         'bg-red-100 text-red-700'
                       }`}>
                         {user.role}

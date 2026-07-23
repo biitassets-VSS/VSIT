@@ -148,7 +148,7 @@ export default function StaffInspectionsPage() {
     if (s.includes('approved')) return { bg: 'bg-emerald-50 border-emerald-200 text-emerald-700', icon: <CheckCircle2 size={14} />, label: 'Approved' };
     if (s.includes('reject') || s.includes('not approved') || s.includes('refuse')) return { bg: 'bg-rose-50 border-rose-200 text-rose-700', icon: <XOctagon size={14} />, label: 'Refused / Rejected' };
     if (s.includes('re-inspection')) return { bg: 'bg-orange-50 border-orange-200 text-orange-700', icon: <AlertTriangle size={14} />, label: 'Re-Audit Required' };
-    return { bg: 'bg-blue-50 border-blue-200 text-blue-700', icon: <Clock size={14} />, label: 'Pending Review' };
+    return { bg: 'bg-purple-50 border-purple-200 text-purple-700', icon: <Clock size={14} />, label: 'Pending Review' };
   };
 
   const filteredInspections = inspections.filter(insp => {
@@ -156,7 +156,7 @@ export default function StaffInspectionsPage() {
     return searchString.includes(searchQuery.toLowerCase());
   });
 
-  if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>;
+  if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 select-none" onContextMenu={(e) => e.preventDefault()}>
@@ -165,7 +165,7 @@ export default function StaffInspectionsPage() {
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <ClipboardCheck className="text-blue-600" /> Audit Ledger
+            <ClipboardCheck className="text-purple-600" /> Audit Ledger
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-2">
             Review the complete historical log of your device compliance and admin feedback.
@@ -180,7 +180,7 @@ export default function StaffInspectionsPage() {
               placeholder="Search Tag ID or Name..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-blue-500 focus:bg-white transition-all"
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-purple-500 focus:bg-white transition-all"
             />
           </div>
           <button 
@@ -206,8 +206,8 @@ export default function StaffInspectionsPage() {
               const isReject = s.includes('reject');
               const isApprove = s.includes('approve');
               
-              const bgColor = isReject ? 'bg-rose-50 border-rose-200' : isApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200';
-              const iconColor = isReject ? 'text-rose-600' : isApprove ? 'text-emerald-600' : 'text-blue-600';
+              const bgColor = isReject ? 'bg-rose-50 border-rose-200' : isApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-purple-50 border-purple-200';
+              const iconColor = isReject ? 'text-rose-600' : isApprove ? 'text-emerald-600' : 'text-purple-600';
 
               return (
                 <div key={notif.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
@@ -233,8 +233,8 @@ export default function StaffInspectionsPage() {
       {/* 🌟 ADVANCED GRID VIEW */}
       <div className="relative min-h-[400px]">
         {isRefreshing && (
-          <div className="absolute top-0 left-0 right-0 h-1 bg-blue-100 overflow-hidden z-10 rounded-t-3xl">
-            <div className="w-1/3 h-full bg-blue-600 animate-[pulse_1s_ease-in-out_infinite] translate-x-full" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-purple-100 overflow-hidden z-10 rounded-t-3xl">
+            <div className="w-1/3 h-full bg-purple-600 animate-[pulse_1s_ease-in-out_infinite] translate-x-full" />
           </div>
         )}
         
@@ -261,7 +261,7 @@ export default function StaffInspectionsPage() {
               } catch (e) {}
 
               return (
-                <div key={`${insp.id}-${index}`} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:border-blue-200 hover:shadow-md transition-all">
+                <div key={`${insp.id}-${index}`} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:border-purple-200 hover:shadow-md transition-all">
                   
                   {/* TOP HEADER: Identity & Tag */}
                   <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
@@ -297,9 +297,9 @@ export default function StaffInspectionsPage() {
                         <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Submitted On</span>
                         <span className="font-bold text-xs text-slate-800">{insp.created_at ? new Date(insp.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown'}</span>
                       </div>
-                      <div className={`p-3 rounded-xl border ${isApproved ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className={`p-3 rounded-xl border ${isApproved ? 'bg-purple-50 border-purple-100' : 'bg-slate-50 border-slate-100'}`}>
                         <span className="block text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">Next Due Date</span>
-                        <span className={`font-bold text-xs ${isApproved ? 'text-blue-700' : 'text-slate-400'}`}>
+                        <span className={`font-bold text-xs ${isApproved ? 'text-purple-700' : 'text-slate-400'}`}>
                           {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending Approval'}
                         </span>
                       </div>

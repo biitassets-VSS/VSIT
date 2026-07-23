@@ -56,7 +56,7 @@ export default function AddNewStaffPage() {
   };
 
   // Reusable input classes for perfect visibility
-  const inputClassName = "w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white outline-none transition-all shadow-sm font-medium";
+  const inputClassName = "w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-purple-500 text-gray-900 bg-white outline-none transition-all shadow-sm font-medium";
   const labelClassName = "block text-sm font-bold text-gray-700 mb-1.5";
 
   return (
@@ -137,14 +137,14 @@ export default function AddNewStaffPage() {
         </div>
 
         {/* SECTION 3: LOGIN CREDENTIALS */}
-        <div className="bg-blue-50/50 p-6 sm:p-8 rounded-2xl shadow-sm border border-blue-100">
-          <div className="mb-6 pb-2 border-b border-blue-200">
-            <h2 className="text-lg font-bold text-blue-900">3. Login Credentials</h2>
-            <p className="text-sm text-blue-700">These credentials will be used by the staff member to log in to the portal.</p>
+        <div className="bg-purple-50/50 p-6 sm:p-8 rounded-2xl shadow-sm border border-purple-100">
+          <div className="mb-6 pb-2 border-b border-purple-200">
+            <h2 className="text-lg font-bold text-purple-900">3. Login Credentials</h2>
+            <p className="text-sm text-purple-700">These credentials will be used by the staff member to log in to the portal.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-bold text-blue-900 mb-1.5">Email Address (Login ID) *</label>
+              <label className="block text-sm font-bold text-purple-900 mb-1.5">Email Address (Login ID) *</label>
               <input 
                 type="email" 
                 name="email" 
@@ -156,7 +156,7 @@ export default function AddNewStaffPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-blue-900 mb-1.5">Account Password *</label>
+              <label className="block text-sm font-bold text-purple-900 mb-1.5">Account Password *</label>
               <input 
                 type="password" 
                 name="password" 
@@ -180,7 +180,7 @@ export default function AddNewStaffPage() {
           </Link>
           <button 
             type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold shadow-md shadow-blue-500/20 transition-all"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-xl font-bold shadow-md shadow-blue-500/20 transition-all"
           >
             Save Staff Member
           </button>

@@ -81,7 +81,7 @@ export function AssignAssetModal({ assetId, onClose, onSuccess }: { assetId: str
           
           <div className="pt-4 flex space-x-3">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">
               {loading ? 'Assigning...' : 'Confirm Assignment'}
             </button>
           </div>

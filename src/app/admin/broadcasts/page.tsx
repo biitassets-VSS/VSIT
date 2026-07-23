@@ -63,7 +63,7 @@ export default function AdminBroadcastsPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-        <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl"><Megaphone size={28} /></div>
+        <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl"><Megaphone size={28} /></div>
         <div>
           <h1 className="text-2xl font-black text-slate-900">Broadcast Center</h1>
           <p className="text-sm font-medium text-slate-500">Send announcements to all staff members instantly.</p>
@@ -80,7 +80,7 @@ export default function AdminBroadcastsPage() {
             className="w-full p-4 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none resize-none h-32"
           />
           <div className="flex justify-end">
-            <button disabled={isSending || !message.trim()} type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50">
+            <button disabled={isSending || !message.trim()} type="submit" className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50">
               {isSending ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
               Publish Broadcast
             </button>
@@ -90,14 +90,14 @@ export default function AdminBroadcastsPage() {
 
       <div className="space-y-4">
         <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Previous Broadcasts</h3>
-        {loading ? <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-indigo-600" /></div> : 
+        {loading ? <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-orange-600" /></div> : 
           broadcasts.map(b => (
             <div key={b.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-slate-800 font-medium whitespace-pre-wrap">{b.message}</p>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
                 <span className="font-semibold text-slate-400">{new Date(b.created_at).toLocaleString()}</span>
                 <div className="flex gap-4 font-bold text-slate-600">
-                  <span className="flex items-center gap-1"><ThumbsUp size={14} className="text-blue-500"/> {b.likes}</span>
+                  <span className="flex items-center gap-1"><ThumbsUp size={14} className="text-purple-500"/> {b.likes}</span>
                   <span className="flex items-center gap-1"><Heart size={14} className="text-rose-500"/> {b.loves}</span>
                   <span className="flex items-center gap-1"><ThumbsDown size={14} className="text-slate-400"/> {b.dislikes}</span>
                 </div>

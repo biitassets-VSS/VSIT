@@ -101,7 +101,7 @@ export default function AdminTicketsPage() {
   // 🎨 Carbon/Slate Aware Badges
   const getStatusColor = (status: string) => {
     const s = (status || '').toLowerCase().trim();
-    if (s.includes('progress')) return isDarkMode ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-blue-700 bg-blue-50 border-blue-200';
+    if (s.includes('progress')) return isDarkMode ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' : 'text-purple-700 bg-purple-50 border-purple-200';
     if (s.includes('hold')) return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
     if (s.includes('resolved') || s.includes('closed')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
     return isDarkMode ? 'text-zinc-400 bg-zinc-800 border-zinc-700' : 'text-slate-700 bg-slate-50 border-slate-200';
@@ -113,7 +113,7 @@ export default function AdminTicketsPage() {
     card: isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200/80',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', 
-    inputBg: isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-blue-500 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500 placeholder-slate-400',
+    inputBg: isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-purple-500 placeholder-zinc-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-purple-500 placeholder-slate-400',
     cardHover: isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-slate-50',
     divider: isDarkMode ? 'border-zinc-800' : 'border-slate-100',
   };
@@ -189,8 +189,8 @@ export default function AdminTicketsPage() {
                 key={tab.id} onClick={() => setFilterTab(tab.id as any)}
                 className={`px-5 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wider shrink-0 transition-all ${
                   filterTab === tab.id 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : `${theme.card} ${theme.subText} hover:text-blue-500`
+                    ? 'bg-purple-600 text-white shadow-md' 
+                    : `${theme.card} ${theme.subText} hover:text-purple-500`
                 }`}
               >
                 {tab.label}
@@ -213,7 +213,7 @@ export default function AdminTicketsPage() {
         {/* TICKETS GRID */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-400' : 'border-blue-600'}`}></div>
+            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-zinc-400' : 'border-purple-600'}`}></div>
             <span className={`text-[11px] font-semibold tracking-widest uppercase ${theme.subText}`}>Fetching Tickets...</span>
           </div>
         ) : filteredTickets.length === 0 ? (
@@ -248,7 +248,7 @@ export default function AdminTicketsPage() {
                     </div>
                     <div className={`flex justify-between items-center text-xs border-t pt-3 ${theme.divider}`}>
                       <span className={`font-semibold uppercase tracking-widest ${theme.subText}`}>Emp ID</span>
-                      <span className={`font-mono font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{tix.emp_code || 'N/A'}</span>
+                      <span className={`font-mono font-bold ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>{tix.emp_code || 'N/A'}</span>
                     </div>
                     <div className={`flex justify-between items-center text-xs border-t pt-3 ${theme.divider}`}>
                       <span className={`font-semibold uppercase tracking-widest ${theme.subText}`}>Submitted</span>
@@ -273,10 +273,10 @@ export default function AdminTicketsPage() {
                     {/* 🌟 THE ADMIN SCREENSHOT VIEWER */}
                     {tix.screenshot_attachment && (
                       <div className="space-y-2">
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-blue-500 flex items-center gap-1.5">
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-purple-500 flex items-center gap-1.5">
                           <ImageIcon size={14}/> User Attached Screenshot
                         </h4>
-                        <div className={`p-2 border rounded-2xl inline-block shadow-sm hover:border-blue-500 transition-all cursor-pointer overflow-hidden ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className={`p-2 border rounded-2xl inline-block shadow-sm hover:border-purple-500 transition-all cursor-pointer overflow-hidden ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-slate-50 border-slate-200'}`}>
                           <img 
                             onClick={() => window.open(tix.screenshot_attachment, '_blank')}
                             src={tix.screenshot_attachment} 
@@ -305,7 +305,7 @@ export default function AdminTicketsPage() {
                       <button
                         disabled={updatingId === tix.id}
                         onClick={() => executeTicketVerdict(tix.id, 'In Progress', tix.created_by)}
-                        className="flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                        className="flex items-center justify-center gap-2 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm"
                       >
                         <PlayCircle size={16} /> Work on it
                       </button>

@@ -106,7 +106,7 @@ export default function StaffInspectionsPage() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl shadow-sm shadow-blue-200 transition-all font-bold text-sm"
         >
           <Camera size={18} /> Start New Inspection
         </button>
@@ -115,7 +115,7 @@ export default function StaffInspectionsPage() {
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="bg-blue-50 p-4 rounded-xl text-blue-500"><Clock size={24} /></div>
+          <div className="bg-purple-50 p-4 rounded-xl text-purple-500"><Clock size={24} /></div>
           <div><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Pending Review</p><p className="text-2xl font-black text-gray-900">1</p></div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -132,7 +132,7 @@ export default function StaffInspectionsPage() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
           <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-            <ClipboardCheck size={20} className="text-blue-500"/> Inspection History
+            <ClipboardCheck size={20} className="text-purple-500"/> Inspection History
           </h2>
         </div>
         <div className="divide-y divide-gray-100">
@@ -175,7 +175,7 @@ export default function StaffInspectionsPage() {
               {/* STEP 1: VERIFICATION */}
               {step === 1 && (
                 <form onSubmit={handleVerify} className="space-y-6">
-                  <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-3 text-blue-800">
+                  <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl flex gap-3 text-purple-800">
                     <ShieldCheck className="shrink-0" />
                     <p className="text-sm font-semibold">Please enter the exact Asset Tag ID of the equipment you are inspecting to verify it is assigned to you.</p>
                   </div>
@@ -192,7 +192,7 @@ export default function StaffInspectionsPage() {
                       />
                     </div>
                   </div>
-                  <button type="submit" className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-md">
+                  <button type="submit" className="w-full py-3 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all shadow-md">
                     Verify & Continue
                   </button>
                 </form>
@@ -226,7 +226,7 @@ export default function StaffInspectionsPage() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="block text-sm font-bold text-gray-700">Live Photo Capture</label>
-                      <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-md">
+                      <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-1 rounded-md">
                         Requires {requiredPhotos.length} photos
                       </span>
                     </div>
@@ -250,9 +250,9 @@ export default function StaffInspectionsPage() {
                               </div>
                             </div>
                           ) : (
-                            <label className="cursor-pointer flex flex-col items-center justify-center aspect-video rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-400 transition-colors">
-                              <Camera className="text-gray-400 mb-2 group-hover:text-blue-500 transition-colors" size={24} />
-                              <span className="text-xs font-bold text-gray-600 group-hover:text-blue-600 text-center px-2">{label}</span>
+                            <label className="cursor-pointer flex flex-col items-center justify-center aspect-video rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-purple-50 hover:border-purple-400 transition-colors">
+                              <Camera className="text-gray-400 mb-2 group-hover:text-purple-500 transition-colors" size={24} />
+                              <span className="text-xs font-bold text-gray-600 group-hover:text-purple-600 text-center px-2">{label}</span>
                               <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handlePhotoCapture(label, e.target.files?.[0])} />
                             </label>
                           )}

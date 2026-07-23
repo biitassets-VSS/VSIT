@@ -258,7 +258,7 @@ export default function StaffTicketsPage() {
   };
 
   if (loading) {
-    return <div className="min-h-[60vh] flex justify-center items-center"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>;
+    return <div className="min-h-[60vh] flex justify-center items-center"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /></div>;
   }
 
   const filteredTickets = tickets.filter(t => activeTab === 'All' ? true : t.status === activeTab);
@@ -269,12 +269,12 @@ export default function StaffTicketsPage() {
       {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2"><Ticket className="text-blue-600"/> My IT Tickets</h1>
+          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2"><Ticket className="text-purple-600"/> My IT Tickets</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">Report broken assets or request repairs from the Admin team.</p>
         </div>
         <button 
           onClick={() => setIsRaiseModalOpen(true)} 
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-all"
+          className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 shadow-sm transition-all"
         >
           <Plus size={18} /> Raise Ticket
         </button>
@@ -286,7 +286,7 @@ export default function StaffTicketsPage() {
           <button 
             key={tab} 
             onClick={() => setActiveTab(tab as any)} 
-            className={`flex-1 sm:flex-none sm:w-32 py-2 px-4 text-sm font-bold rounded-xl transition-all ${activeTab === tab ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+            className={`flex-1 sm:flex-none sm:w-32 py-2 px-4 text-sm font-bold rounded-xl transition-all ${activeTab === tab ? 'bg-purple-50 text-purple-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
           >
             {tab}
           </button>
@@ -306,13 +306,13 @@ export default function StaffTicketsPage() {
               <div key={ticket.id} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50 transition-all">
                 
                 <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-xl shrink-0 ${ticket.status === 'Open' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`p-3 rounded-xl shrink-0 ${ticket.status === 'Open' ? 'bg-purple-50 text-purple-600' : 'bg-slate-100 text-slate-500'}`}>
                     <Ticket size={24} />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-black text-slate-900">{ticket.token}</span>
-                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md border flex items-center gap-1 ${ticket.status === 'Open' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md border flex items-center gap-1 ${ticket.status === 'Open' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
                         {ticket.status === 'Open' ? <Clock size={12}/> : <CheckCircle2 size={12}/>} 
                         {ticket.status}
                       </span>
@@ -351,7 +351,7 @@ export default function StaffTicketsPage() {
 
               <form onSubmit={handleRaiseTicket} className="p-6 space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Laptop size={16} className="text-blue-500"/> Which Asset has an issue?</label>
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Laptop size={16} className="text-purple-500"/> Which Asset has an issue?</label>
                   <select 
                     required 
                     value={formData.assetId} 
@@ -366,7 +366,7 @@ export default function StaffTicketsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-blue-500"/> Describe the problem</label>
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-purple-500"/> Describe the problem</label>
                   <textarea 
                     required 
                     value={formData.issue}
@@ -379,7 +379,7 @@ export default function StaffTicketsPage() {
 
                 <div className="pt-2 flex gap-3">
                   <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
-                  <button type="submit" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-sm">
+                  <button type="submit" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 rounded-xl shadow-sm">
                     <Send size={18} /> Submit Ticket
                   </button>
                 </div>
@@ -397,7 +397,7 @@ export default function StaffTicketsPage() {
               <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-black text-slate-900">Ticket Record</h2>
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs font-black border border-blue-200">{viewTicket.token}</span>
+                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs font-black border border-purple-200">{viewTicket.token}</span>
                 </div>
                 <button onClick={() => setViewTicket(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
@@ -441,9 +441,9 @@ export default function StaffTicketsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3">
-                    <Clock size={20} className="text-blue-500 shrink-0" />
-                    <p className="text-sm font-bold text-blue-800">This ticket is currently open. An admin will review it shortly.</p>
+                  <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl flex items-center gap-3">
+                    <Clock size={20} className="text-purple-500 shrink-0" />
+                    <p className="text-sm font-bold text-purple-800">This ticket is currently open. An admin will review it shortly.</p>
                   </div>
                 )}
                 

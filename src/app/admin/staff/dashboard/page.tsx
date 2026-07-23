@@ -121,7 +121,7 @@ export default function StaffDashboardPage() {
             </thead>
             <tbody className="text-gray-700 divide-y divide-gray-50">
               {myAssets.map((asset) => (
-                <tr key={asset.id} className="hover:bg-blue-50/30 transition-colors group">
+                <tr key={asset.id} className="hover:bg-purple-50/30 transition-colors group">
                   
                   <td className="px-6 py-4">
                     <div className="font-bold text-gray-800">{asset.name}</div>
@@ -155,7 +155,7 @@ export default function StaffDashboardPage() {
                       <button 
                         onClick={() => openInspection(asset)}
                         className={`px-4 py-2 text-xs font-bold text-white rounded-lg shadow-sm transition-transform hover:scale-105 ${
-                          asset.status === 'Overdue' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                          asset.status === 'Overdue' ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'
                         }`}
                       >
                         Start Inspection
@@ -178,7 +178,7 @@ export default function StaffDashboardPage() {
             <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
               <div>
                 <h3 className="text-xl font-bold text-gray-800">Asset Inspection</h3>
-                <p className="text-sm text-gray-500 mt-1">Inspecting: <span className="font-semibold text-blue-600">{activeAsset.name}</span></p>
+                <p className="text-sm text-gray-500 mt-1">Inspecting: <span className="font-semibold text-purple-600">{activeAsset.name}</span></p>
               </div>
               <button onClick={closeInspection} className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-gray-200 hover:bg-red-50 rounded-full">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -189,9 +189,9 @@ export default function StaffDashboardPage() {
             <div className="p-6 overflow-y-auto space-y-8">
               
               {/* STEP 1: VERIFICATION */}
-              <div className={`p-5 rounded-2xl border transition-all duration-300 ${verificationStatus === 'success' ? 'bg-green-50/50 border-green-200' : 'bg-blue-50/30 border-blue-100'}`}>
+              <div className={`p-5 rounded-2xl border transition-all duration-300 ${verificationStatus === 'success' ? 'bg-green-50/50 border-green-200' : 'bg-purple-50/30 border-purple-100'}`}>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold ${verificationStatus === 'success' ? 'bg-green-500' : 'bg-blue-600'}`}>1</div>
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold ${verificationStatus === 'success' ? 'bg-green-500' : 'bg-purple-600'}`}>1</div>
                   <h4 className="font-bold text-gray-800">Verify Asset Identity</h4>
                 </div>
                 
@@ -231,7 +231,7 @@ export default function StaffDashboardPage() {
               {/* STEP 2: EVIDENCE UPLOAD */}
               <div className={`transition-all duration-500 ${verificationStatus === 'success' ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">2</div>
+                  <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">2</div>
                   <h4 className="font-bold text-gray-800">Upload Evidence & Notes</h4>
                 </div>
 
@@ -246,9 +246,9 @@ export default function StaffDashboardPage() {
                       ['Top (Lid)', 'Bottom (Serial)', 'Left Side', 'Right Side', 'Keyboard/Screen'] : 
                       ['Top View', 'Bottom (Serial)']
                     ).map((label, idx) => (
-                      <div key={idx} className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:bg-blue-50 hover:border-blue-400 transition-colors cursor-pointer group h-32">
-                        <svg className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        <span className="text-xs font-semibold text-gray-600 group-hover:text-blue-600">{label}</span>
+                      <div key={idx} className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:bg-purple-50 hover:border-purple-400 transition-colors cursor-pointer group h-32">
+                        <svg className="w-8 h-8 text-gray-400 group-hover:text-purple-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        <span className="text-xs font-semibold text-gray-600 group-hover:text-purple-600">{label}</span>
                       </div>
                     ))}
                   </div>
@@ -278,7 +278,7 @@ export default function StaffDashboardPage() {
                 disabled={verificationStatus !== 'success'}
                 className={`px-6 py-2.5 text-sm font-bold rounded-xl shadow-lg transition-all ${
                   verificationStatus === 'success' 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/30' 
+                    ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-blue-500/30' 
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >

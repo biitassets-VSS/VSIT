@@ -223,7 +223,7 @@ export default function AdminReportsPage() {
                   <span className="text-[10px] uppercase tracking-widest font-bold text-slate-400 block mb-1">Current Real Status</span>
                   <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black tracking-wide uppercase border ${
                     selectedAsset.status === 'Available' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                    selectedAsset.status === 'In Use' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                    selectedAsset.status === 'In Use' ? 'bg-purple-50 text-purple-700 border-purple-200/60' :
                     selectedAsset.status === 'Pending Return' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
                     'bg-rose-50 text-rose-700 border-rose-200/60'
                   }`}>
@@ -324,7 +324,7 @@ export default function AdminReportsPage() {
             </div>
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">In Use</p>
-              <h3 className="text-xl font-black text-blue-600 mt-1">{filteredAssets.filter(a => a.status === 'In Use').length}</h3>
+              <h3 className="text-xl font-black text-purple-600 mt-1">{filteredAssets.filter(a => a.status === 'In Use').length}</h3>
             </div>
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all">
               <p className="text-[10px] font-black tracking-wider uppercase text-slate-400">Available</p>
@@ -363,7 +363,7 @@ export default function AdminReportsPage() {
                       <tr key={i} className="hover:bg-purple-50/50 transition-colors">
                         <td className="p-4 text-slate-900">{cat.category}</td>
                         <td className="p-4 text-slate-600">{cat.total}</td>
-                        <td className="p-4 text-blue-600">{cat.inUse}</td>
+                        <td className="p-4 text-purple-600">{cat.inUse}</td>
                         <td className="p-4 text-emerald-600">{cat.available}</td>
                         <td className="p-4 text-amber-500">{cat.pendingReturn}</td>
                         <td className="p-4 text-rose-500">{cat.discarded}</td>
@@ -393,7 +393,7 @@ export default function AdminReportsPage() {
                           <tr key={idx} className="hover:bg-white/50">
                             <td className="py-2.5 font-black text-slate-900">{b.brand}</td>
                             <td className="py-2.5">{b.total}</td>
-                            <td className="py-2.5 text-blue-600">{b.inUse}</td>
+                            <td className="py-2.5 text-purple-600">{b.inUse}</td>
                             <td className="py-2.5 text-emerald-600">{b.available}</td>
                             <td className="py-2.5 text-amber-500">{b.pendingReturn}</td>
                             <td className="py-2.5 text-rose-500">{b.discarded}</td>
@@ -434,7 +434,7 @@ export default function AdminReportsPage() {
                             <td className="p-4">
                               <span className={`px-2.5 py-1 rounded-md text-[10px] font-black tracking-wide uppercase border ${
                                 a.status === 'Available' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                                a.status === 'In Use' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                                a.status === 'In Use' ? 'bg-purple-50 text-purple-700 border-purple-200/60' :
                                 a.status === 'Pending Return' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
                                 'bg-rose-50 text-rose-700 border-rose-200/60'
                               }`}>
