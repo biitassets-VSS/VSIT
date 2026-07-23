@@ -7,7 +7,8 @@ import {
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
   AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink,
-  Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw
+  Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
+  BarChart3, Settings
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -16,6 +17,7 @@ export default function AdminDashboardPage() {
   // State
   const [loading, setLoading] = useState(true);
   const [adminName, setAdminName] = useState('Admin');
+  const [adminEmail, setAdminEmail] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [authError, setAuthError] = useState('');
   
@@ -181,6 +183,7 @@ export default function AdminDashboardPage() {
       }
 
       setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
+      setAdminEmail(cleanEmail || activeUser.email || 'admin@vsit.com');
 
       const [
         { count: assets }, 
@@ -379,28 +382,68 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* 🌟 TOP HEADER WITH SLEEK BROADCAST TRIGGER */}
-        <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-colors`}>
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <ShieldCheck size={26} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
-              <h1 className={`text-2xl font-semibold tracking-tight ${theme.text}`}>Systems Overview</h1>
+        {/* 🌟 TOP HEADER WITH LOGO, BROADCAST TRIGGER, BELL & SMART HOVER LOGOUT */}
+        <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 transition-colors`}>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+              VSS
             </div>
-            <p className={`text-sm ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className={`text-2xl font-semibold tracking-tight ${theme.text}`}>Systems Overview</h1>
+              </div>
+              <p className={`text-sm ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
+            </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
             <button 
               onClick={() => setIsBroadcastModalOpen(true)}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold tracking-wide shadow-sm transition-all cursor-pointer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold tracking-wide shadow-sm transition-all cursor-pointer"
             >
-              <Megaphone size={15} /> Send Announcement
+              <Megaphone size={16} /> Send Announcement
             </button>
 
-            <div className={`hidden md:flex px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+            {/* Notifications Shortcut / Scroll Trigger */}
+            {notifications.length > 0 && (
+              <button 
+                onClick={() => {
+                  const el = document.getElementById('actionable-alerts');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="relative p-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 transition-all cursor-pointer"
+                title="View Actionable Alerts"
+              >
+                <Bell size={18} className="animate-bounce" />
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-black text-[9px] w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                  {notifications.length}
+                </span>
+              </button>
+            )}
+
+            <div className={`hidden sm:flex px-4 py-3 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              All Systems Operational
+              Operational
             </div>
+
+            {/* 🌟 LOGOUT BUTTON WITH HOVER USER TOOLTIP */}
+            <div className="relative group">
+              <button 
+                onClick={handleSecureLogout}
+                className={`p-3 rounded-xl border transition-all flex items-center gap-2 cursor-pointer ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30' : 'bg-slate-50 border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200'}`}
+              >
+                <LogOut size={18} />
+                <span className="text-xs font-bold sm:hidden">Logout</span>
+              </button>
+
+              {/* Tooltip visible only on hover */}
+              <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl z-50 min-w-[200px] text-left border border-slate-700 pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Signed in as</span>
+                <span className="text-xs font-bold truncate mt-0.5">{adminName}</span>
+                <span className="text-[11px] font-mono text-slate-400 truncate mt-0.5">{adminEmail}</span>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -489,7 +532,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 7 SYSTEM MODULES & STRETCHED ACTIVITY LOG */}
+        {/* 🌟 9 SYSTEM MODULES & STRETCHED ACTIVITY LOG */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <div className="lg:col-span-2 space-y-3">
@@ -503,11 +546,13 @@ export default function AdminDashboardPage() {
                 { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose' },
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald' },
                 { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo' },
+                { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns, asset matrices, and PDF exports.', icon: BarChart3, path: '/admin/reports', color: 'blue' },
+                { title: 'Portal Settings', desc: 'Configure global themes, permissions, and system preferences.', icon: Settings, path: '/admin/settings', color: 'gray' },
               ].map((module, i) => (
                 <button 
                   key={i}
                   onClick={() => router.push(module.path)} 
-                  className={`text-left cursor-pointer ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover} ${i === 6 ? 'sm:col-span-2 sm:flex-row sm:items-center' : ''}`}
+                  className={`text-left cursor-pointer ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover} ${i === 8 ? 'sm:col-span-2 sm:flex-row sm:items-center' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
@@ -515,11 +560,11 @@ export default function AdminDashboardPage() {
                     </div>
                     <div>
                       <h4 className={`text-sm font-semibold tracking-tight ${theme.text}`}>{module.title}</h4>
-                      {i === 6 && <p className={`text-[11px] mt-1 ${theme.subText} hidden sm:block`}>{module.desc}</p>}
+                      {i === 8 && <p className={`text-[11px] mt-1 ${theme.subText} hidden sm:block`}>{module.desc}</p>}
                     </div>
                   </div>
-                  <div className={`flex items-center justify-between ${i === 6 ? 'sm:mt-0 mt-4' : 'mt-4'}`}>
-                    {i !== 6 && <p className={`text-[11px] leading-relaxed max-w-[180px] ${theme.subText}`}>{module.desc}</p>}
+                  <div className={`flex items-center justify-between ${i === 8 ? 'sm:mt-0 mt-4' : 'mt-4'}`}>
+                    {i !== 8 && <p className={`text-[11px] leading-relaxed max-w-[180px] ${theme.subText}`}>{module.desc}</p>}
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${theme.iconBg[module.color as keyof typeof theme.iconBg]} group-hover:bg-${module.color}-500 group-hover:text-white shrink-0 ml-auto`}>
                       <ArrowRight size={14} />
                     </div>
@@ -540,7 +585,7 @@ export default function AdminDashboardPage() {
                   <p className={`text-xs font-medium ${theme.subText}`}>No recent network activity</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar max-h-[500px] lg:max-h-none">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar max-h-[550px] lg:max-h-none">
                   {recentActivity.map((log: any, index: number) => (
                     <div key={log.id || `activity-log-${index}`} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                       <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border ${theme.iconBg.blue} ${isDarkMode ? 'border-blue-900/30' : 'border-blue-100'}`}>
