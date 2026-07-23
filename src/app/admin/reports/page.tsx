@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { 
   FileText, Download, Search, 
   Box, UserCheck, Wrench, BarChart3,
-  Laptop, Keyboard, MousePointer, Headphones, ShieldAlert, X
+  Laptop, Keyboard, MousePointer, Headphones, ShieldAlert, X, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import jsPDF from 'jspdf';
@@ -351,9 +352,17 @@ export default function AdminReportsPage() {
           </h1>
           <p className="text-xs font-semibold text-slate-500 mt-1">Extract high-fidelity brand profiles, deployment summaries, and configurations records matrix logs.</p>
         </div>
-        <button onClick={handleExportPDF} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl shadow-xs transition-colors font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer">
-          <Download size={16} /> Compile PDF Blueprint
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto justify-end">
+          <Link 
+            href="/admin" 
+            className="w-full sm:w-auto px-5 py-3 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0 uppercase tracking-wider"
+          >
+            <ArrowLeft size={16} /> Back to Dashboard
+          </Link>
+          <button onClick={handleExportPDF} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl shadow-xs transition-colors font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer">
+            <Download size={16} /> Compile PDF Blueprint
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">

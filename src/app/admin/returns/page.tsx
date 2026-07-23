@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import toast, { Toaster } from 'react-hot-toast';
+import Link from 'next/link';
 import { 
   CheckCircle2, XCircle, Loader2, LogOut, Package, 
   Image as ImageIcon, Search, AlertTriangle, History,
-  Clock, XOctagon, CheckCircle, Camera
+  Clock, XOctagon, CheckCircle, Camera, ArrowLeft
 } from 'lucide-react';
 
 export default function AdminReturnsPage() {
@@ -242,6 +243,13 @@ export default function AdminReturnsPage() {
                 Manage physical hardware handovers and view historical return logs.
               </p>
             </div>
+            
+            <Link 
+              href="/admin" 
+              className="px-5 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0"
+            >
+              <ArrowLeft size={16} /> Back to Dashboard
+            </Link>
           </div>
 
           {/* TAB BAR */}

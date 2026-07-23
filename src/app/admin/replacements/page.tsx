@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import toast, { Toaster } from 'react-hot-toast';
+import Link from 'next/link';
 import { 
   CheckCircle2, XCircle, Loader2, Package, 
   Search, AlertTriangle, History, ArrowRightLeft,
-  Clock, XOctagon, Monitor, User, ArrowRight
+  Clock, XOctagon, Monitor, User, ArrowRight, ArrowLeft
 } from 'lucide-react';
 
 export default function AdminReplacementsPage() {
@@ -222,6 +223,13 @@ export default function AdminReplacementsPage() {
                 Process faulty device requests and assign new inventory to staff.
               </p>
             </div>
+            
+            <Link 
+              href="/admin" 
+              className="px-5 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0"
+            >
+              <ArrowLeft size={16} /> Back to Dashboard
+            </Link>
           </div>
 
           {/* TAB BAR */}
