@@ -7,7 +7,7 @@ import {
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
   AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink,
-  Megaphone, Send, Loader2, ImagePlus, X
+  Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, RotateCcw
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -20,6 +20,7 @@ export default function AdminDashboardPage() {
   const [authError, setAuthError] = useState('');
   
   // Broadcast State
+  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -50,13 +51,11 @@ export default function AdminDashboardPage() {
   }, []);
 
   const triggerDesktopAlert = (title: string, body: string) => {
-    // 1. Play Sound
     try {
       const audio = new Audio('/alert.mp3');
       audio.play().catch(e => console.log("Audio play blocked by browser:", e));
     } catch (err) {}
 
-    // 2. Show Native OS Notification
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, {
         body: body,
@@ -71,12 +70,10 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const adminChannel = supabase
       .channel('admin-live-feed')
-      // 1. Listen for standard notifications
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
         setNotifications((prev) => [payload.new, ...prev]);
         triggerDesktopAlert(payload.new.title || 'Admin Alert', payload.new.message || 'New alert received.');
       })
-      // 2. Listen for NEW TICKETS
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
         const tix = payload.new;
         const title = 'New IT Ticket Raised';
@@ -94,7 +91,6 @@ export default function AdminDashboardPage() {
         
         loadAdminData(); 
       })
-      // 3. Listen for NEW ASSET INSPECTIONS
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, (payload) => {
         const title = 'New Asset Inspection';
         const msg = 'A device inspection was just submitted and requires your review.';
@@ -111,12 +107,10 @@ export default function AdminDashboardPage() {
         
         loadAdminData();
       })
-      // 4. NEW: Listen for RETURN & REPLACEMENT requests on the Assets table
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => {
         const newAsset = payload.new;
         const oldAsset = payload.old;
 
-        // Ensure we only trigger the alert the exact moment the status changes
         if (newAsset.status === 'Return Requested' && oldAsset.status !== 'Return Requested') {
           const title = 'Asset Return Requested';
           const msg = `A staff member has requested to return: ${newAsset.name || newAsset.model}`;
@@ -196,7 +190,6 @@ export default function AdminDashboardPage() {
         notifRes
       ] = await Promise.all([
         supabase.from('assets').select('*', { count: 'exact', head: true }),
-        // 🌟 CRITICAL FIX: STRICTLY EXCLUDE RETURNS AND REPLACEMENTS AT THE QUERY LEVEL
         supabase.from('inspections').select('*, assets(asset_name)')
           .not('notes', 'ilike', '%[RETURN REQUEST]%')
           .not('status', 'ilike', '%Return%')
@@ -212,15 +205,12 @@ export default function AdminDashboardPage() {
       const inspData = inspections || [];
       const tktData = tickets || [];
 
-      // 🌟 STRICT PENDING COUNT ENGINE: Excludes System & Admin Logs
       const pendingCount = inspData.filter(i => {
         const s = (i.status || '').toLowerCase().trim();
         const inspBy = (i.inspected_by || '').toLowerCase();
         const notes = (i.notes || '').toLowerCase();
         
         if (s !== 'pending' && s !== 'pending review') return false;
-        
-        // Block automated system logs from appearing as pending tasks
         if (inspBy === 'admin' || inspBy === 'system') return false;
         if (notes.includes('asset configuration updated') || notes.includes('asset initially registered')) return false;
 
@@ -331,6 +321,7 @@ export default function AdminDashboardPage() {
       
       setBroadcastMessage('');
       setBroadcastImage(null);
+      setIsBroadcastModalOpen(false);
       alert("Announcement successfully broadcasted to all staff dashboards!");
     } catch (err: any) {
       console.error(err);
@@ -378,6 +369,8 @@ export default function AdminDashboardPage() {
       rose: isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600',
       emerald: isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600',
       indigo: isDarkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600',
+      purple: isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600',
+      amber: isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600',
       gray: isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-500',
     }
   };
@@ -386,6 +379,7 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
+        {/* 🌟 TOP HEADER WITH SLEEK BROADCAST TRIGGER */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-colors`}>
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -395,55 +389,22 @@ export default function AdminDashboardPage() {
             <p className={`text-sm ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
           </div>
           
-          <div className={`hidden md:flex px-4 py-2 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            All Systems Operational
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <button 
+              onClick={() => setIsBroadcastModalOpen(true)}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold tracking-wide shadow-sm transition-all cursor-pointer"
+            >
+              <Megaphone size={15} /> Send Announcement
+            </button>
+
+            <div className={`hidden md:flex px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              All Systems Operational
+            </div>
           </div>
         </div>
 
-        <div className={`${theme.card} p-5 rounded-3xl border shadow-sm transition-all`}>
-          <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2 mb-3`}>
-            <Megaphone size={14} className="text-indigo-500" /> Send Staff Announcement
-          </h3>
-          <form onSubmit={handleSendBroadcast} className="flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input 
-                type="text" 
-                placeholder="Type an announcement to broadcast to all staff dashboards..."
-                value={broadcastMessage}
-                onChange={e => setBroadcastMessage(e.target.value)}
-                className={`flex-1 px-4 py-3 rounded-xl border outline-none text-sm font-medium transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-200 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-indigo-500'}`}
-              />
-              
-              <div className="flex gap-2">
-                <label className={`cursor-pointer px-4 py-3 rounded-xl border flex items-center justify-center transition-colors ${isDarkMode ? 'border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'}`}>
-                  <ImagePlus size={18} className={broadcastImage ? "text-indigo-500" : ""} />
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)}
-                  />
-                </label>
-                
-                <button disabled={isBroadcasting || (!broadcastMessage.trim() && !broadcastImage)} type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-xs uppercase tracking-widest shadow-sm shrink-0 cursor-pointer">
-                  {isBroadcasting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  Broadcast
-                </button>
-              </div>
-            </div>
-
-            {broadcastImage && (
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-100 flex items-center gap-2">
-                  <ImagePlus size={12} /> Image Attached: {broadcastImage.name}
-                  <button type="button" onClick={() => setBroadcastImage(null)} className="hover:text-rose-600 ml-2 cursor-pointer"><X size={12}/></button>
-                </span>
-              </div>
-            )}
-          </form>
-        </div>
-
+        {/* 🔔 ACTIONABLE NOTIFICATIONS */}
         {notifications.length > 0 && (
           <div id="actionable-alerts" className="space-y-3 animate-in slide-in-from-top-4 scroll-m-6">
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText} flex items-center gap-2`}>
@@ -478,6 +439,7 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* 📊 FOUR PRIMARY METRIC CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className={`${theme.card} p-5 rounded-3xl border shadow-sm flex flex-col justify-between transition-all ${theme.cardHover}`}>
             <div className="flex justify-between items-start mb-6">
@@ -527,6 +489,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+        {/* 🌟 7 SYSTEM MODULES & ACTIVITY LOG */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <div className="lg:col-span-2 space-y-3">
@@ -535,6 +498,8 @@ export default function AdminDashboardPage() {
               {[
                 { title: 'Review Inspections', desc: 'Audit smartphone visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: 'orange' },
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'blue' },
+                { title: 'Return Requests', desc: 'Manage hardware returns and physical asset handovers.', icon: LogOut, path: '/admin/returns', color: 'amber' },
+                { title: 'Replacements', desc: 'Process device swap requests and hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: 'purple' },
                 { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose' },
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald' },
                 { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo' },
@@ -542,17 +507,20 @@ export default function AdminDashboardPage() {
                 <button 
                   key={i}
                   onClick={() => router.push(module.path)} 
-                  className={`text-left cursor-pointer ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover}`}
+                  className={`text-left cursor-pointer ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover} ${i === 6 ? 'sm:col-span-2 sm:flex-row sm:items-center' : ''}`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
                       <module.icon size={20} strokeWidth={2.5} />
                     </div>
-                    <h4 className={`text-sm font-semibold tracking-tight ${theme.text}`}>{module.title}</h4>
+                    <div>
+                      <h4 className={`text-sm font-semibold tracking-tight ${theme.text}`}>{module.title}</h4>
+                      {i === 6 && <p className={`text-[11px] mt-1 ${theme.subText} hidden sm:block`}>{module.desc}</p>}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-4">
-                    <p className={`text-[11px] leading-relaxed max-w-[180px] ${theme.subText}`}>{module.desc}</p>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${theme.iconBg[module.color as keyof typeof theme.iconBg]} group-hover:bg-${module.color}-500 group-hover:text-white`}>
+                  <div className={`flex items-center justify-between ${i === 6 ? 'sm:mt-0 mt-4' : 'mt-4'}`}>
+                    {i !== 6 && <p className={`text-[11px] leading-relaxed max-w-[180px] ${theme.subText}`}>{module.desc}</p>}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${theme.iconBg[module.color as keyof typeof theme.iconBg]} group-hover:bg-${module.color}-500 group-hover:text-white shrink-0 ml-auto`}>
                       <ArrowRight size={14} />
                     </div>
                   </div>
@@ -596,6 +564,66 @@ export default function AdminDashboardPage() {
 
         </div>
       </div>
+
+      {/* 🚀 TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
+      {isBroadcastModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className={`rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl border space-y-6 ${theme.card}`}>
+            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <h3 className={`text-base font-bold flex items-center gap-2 ${theme.text}`}>
+                <Megaphone size={18} className="text-indigo-500" /> Send Staff Announcement
+              </h3>
+              <button onClick={() => setIsBroadcastModalOpen(false)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                <X size={16} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSendBroadcast} className="space-y-4">
+              <div>
+                <label className={`text-[10px] font-semibold uppercase tracking-wider block mb-1.5 ${theme.subText}`}>Announcement Message *</label>
+                <textarea 
+                  rows={4}
+                  required
+                  placeholder="Type an announcement to broadcast to all staff dashboards..."
+                  value={broadcastMessage}
+                  onChange={e => setBroadcastMessage(e.target.value)}
+                  className={`w-full p-3.5 rounded-xl border outline-none text-sm font-medium transition-all resize-none ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-200 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-indigo-500'}`}
+                />
+              </div>
+
+              <div>
+                <label className={`text-[10px] font-semibold uppercase tracking-wider block mb-1.5 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
+                <label className={`cursor-pointer w-full p-4 rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${isDarkMode ? 'border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'}`}>
+                  <ImagePlus size={24} className={broadcastImage ? "text-indigo-500" : ""} />
+                  <span className="text-xs font-semibold">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)}
+                  />
+                </label>
+                {broadcastImage && (
+                  <button type="button" onClick={() => setBroadcastImage(null)} className="text-[11px] text-rose-500 hover:underline mt-1 font-semibold flex items-center gap-1">
+                    <X size={12} /> Remove attached file
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-zinc-800">
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider border transition-colors ${isDarkMode ? 'border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'}`}>
+                  Cancel
+                </button>
+                <button disabled={isBroadcasting || (!broadcastMessage.trim() && !broadcastImage)} type="submit" className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-xs uppercase tracking-widest shadow-sm cursor-pointer">
+                  {isBroadcasting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Broadcast Now
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
