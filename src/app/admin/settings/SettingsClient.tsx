@@ -52,32 +52,19 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
     }, 600);
   };
 
-  // Styling Map for High-Contrast Readability
+  // Styling Map for High-Contrast Readability & Orange/Purple Theme
   const theme = {
     card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/80',
     cardInner: isDarkMode ? 'bg-[#18181b] border-[#27272a]' : 'bg-slate-50 border-slate-200',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textMuted: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-100 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500',
+    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-100 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20' : 'bg-white border-slate-200 text-slate-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20',
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+    <div className="space-y-6">
       
-      {/* Header */}
-      <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors`}>
-        <div>
-          <h1 className={`text-2xl font-bold tracking-tight ${theme.textMain}`}>Portal Preferences & Settings</h1>
-          <p className={`text-sm mt-1 ${theme.textMuted}`}>Configure global appearance, security policies, and system defaults.</p>
-        </div>
-        {saveStatus && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-xl text-xs font-semibold animate-in fade-in">
-            <CheckCircle2 size={16} /> {saveStatus}
-          </div>
-        )}
-      </div>
-
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs (Animated & Themed) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
         {[
           { id: 'appearance', label: 'Appearance & Theme', icon: Moon },
@@ -91,10 +78,10 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all duration-300 cursor-pointer ${
                 isActive 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
-                  : `${theme.card} ${theme.textMuted} hover:text-indigo-500 border`
+                  ? (isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-md' : 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm scale-105') 
+                  : `${theme.card} ${theme.textMuted} hover:text-orange-600 hover:bg-orange-50/50 hover:-translate-y-0.5 border`
               }`}
             >
               <Icon size={16} /> <span>{tab.label}</span>
@@ -105,7 +92,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
 
       {/* Tab 1: Appearance & Theme (Global Dark Mode Controller) */}
       {activeTab === 'appearance' && (
-        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-8 animate-in fade-in duration-200`}>
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
           <div>
             <h3 className={`text-lg font-bold ${theme.textMain}`}>Global Color Scheme</h3>
             <p className={`text-xs mt-1 ${theme.textMuted}`}>Select how the portal appears across all hardware inventory, dashboard, and inspection modules.</p>
@@ -113,20 +100,20 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             
-            {/* Light Mode Selector */}
+            {/* Light Mode Selector (Orange Primary) */}
             <div 
               onClick={() => applyThemeMode('light')}
-              className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+              className={`p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between relative hover:scale-[1.02] active:scale-95 ${
                 !isDarkMode 
-                  ? 'border-indigo-600 bg-indigo-500/5 shadow-md' 
-                  : `${theme.cardInner} opacity-70 hover:opacity-100`
+                  ? 'border-orange-500 bg-orange-500/5 shadow-md' 
+                  : `${theme.cardInner} opacity-70 hover:opacity-100 border-transparent`
               }`}
             >
               <div className="flex justify-between items-start mb-6">
-                <div className="p-3 rounded-xl bg-white border border-slate-200 text-amber-500 shadow-sm">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 text-orange-500 shadow-sm">
                   <Sun size={24} />
                 </div>
-                {!isDarkMode && <span className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">Active Mode</span>}
+                {!isDarkMode && <span className="bg-orange-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full animate-in zoom-in">Active Mode</span>}
               </div>
               <div>
                 <h4 className={`text-base font-bold ${theme.textMain}`}>Light Theme</h4>
@@ -134,20 +121,20 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
               </div>
             </div>
 
-            {/* Dark Mode Selector */}
+            {/* Dark Mode Selector (Purple Accent) */}
             <div 
               onClick={() => applyThemeMode('dark')}
-              className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+              className={`p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between relative hover:scale-[1.02] active:scale-95 ${
                 isDarkMode 
-                  ? 'border-indigo-500 bg-indigo-500/10 shadow-md' 
+                  ? 'border-purple-500 bg-purple-500/10 shadow-md' 
                   : 'bg-slate-900 border-slate-800 text-white opacity-90 hover:opacity-100'
               }`}
             >
               <div className="flex justify-between items-start mb-6">
-                <div className="p-3 rounded-xl bg-black border border-zinc-800 text-indigo-400 shadow-sm">
+                <div className="p-3 rounded-xl bg-black border border-zinc-800 text-purple-400 shadow-sm">
                   <Moon size={24} />
                 </div>
-                {isDarkMode && <span className="bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">Active Mode</span>}
+                {isDarkMode && <span className="bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full animate-in zoom-in">Active Mode</span>}
               </div>
               <div>
                 <h4 className="text-base font-bold text-white">Dark Theme (Full Portal)</h4>
@@ -157,8 +144,8 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
 
           </div>
 
-          <div className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-medium ${theme.cardInner} ${theme.textMuted}`}>
-            <Monitor size={18} className="text-indigo-500 shrink-0" />
+          <div className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-medium transition-colors ${theme.cardInner} ${theme.textMuted}`}>
+            <Monitor size={18} className="text-purple-500 shrink-0" />
             <span>Theme preferences are saved directly to your session browser and apply globally to all data tables and modals.</span>
           </div>
         </div>
@@ -166,7 +153,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
 
       {/* Tab 2: General Defaults */}
       {activeTab === 'general' && (
-        <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in duration-200`}>
+        <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
           <div>
             <h3 className={`text-lg font-bold ${theme.textMain}`}>System Configurations</h3>
             <p className={`text-xs mt-1 ${theme.textMuted}`}>Manage default titles, email recipients, and file processing rules.</p>
@@ -179,7 +166,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
                 type="text" 
                 value={settings.appName} 
                 onChange={e => setSettings({...settings, appName: e.target.value})}
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-colors ${theme.inputBg}`} 
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-all duration-300 ${theme.inputBg}`} 
               />
             </div>
             <div>
@@ -188,7 +175,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
                 type="email" 
                 value={settings.supportEmail} 
                 onChange={e => setSettings({...settings, supportEmail: e.target.value})}
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-colors ${theme.inputBg}`} 
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-all duration-300 ${theme.inputBg}`} 
               />
             </div>
           </div>
@@ -199,7 +186,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
               <select 
                 value={settings.maxUploadSizeMB} 
                 onChange={e => setSettings({...settings, maxUploadSizeMB: e.target.value})}
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-colors ${theme.inputBg}`}
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-all duration-300 ${theme.inputBg}`}
               >
                 <option value="5">5 MB (Standard)</option>
                 <option value="10">10 MB (High Definition)</option>
@@ -217,8 +204,15 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
             </div>
           </div>
 
-          <div className="pt-4 flex justify-end">
-            <button type="submit" disabled={isSaving} className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-sm cursor-pointer transition-all">
+          <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex-1">
+              {saveStatus && (
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 rounded-xl text-xs font-bold animate-in fade-in zoom-in">
+                  <CheckCircle2 size={16} /> {saveStatus}
+                </div>
+              )}
+            </div>
+            <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-8 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100">
               {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Preferences
             </button>
           </div>
@@ -227,13 +221,13 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
 
       {/* Tab 3: Staff Directory */}
       {activeTab === 'users' && (
-        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in duration-200`}>
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
           <div className="flex justify-between items-center">
             <div>
               <h3 className={`text-lg font-bold ${theme.textMain}`}>Registered Accounts</h3>
               <p className={`text-xs mt-1 ${theme.textMuted}`}>Staff members with active clearance in the Supabase directory.</p>
             </div>
-            <span className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-500 text-xs font-bold">{users.length} Active</span>
+            <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 border border-purple-500/20 text-xs font-bold shadow-sm">{users.length} Active</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -253,15 +247,15 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
                   </tr>
                 ) : (
                   users.map((u: any, idx: number) => (
-                    <tr key={u.id || idx} className={`transition-colors ${isDarkMode ? 'hover:bg-zinc-800/40' : 'hover:bg-slate-50/80'}`}>
+                    <tr key={u.id || idx} className={`transition-all duration-200 ${isDarkMode ? 'hover:bg-zinc-800/40' : 'hover:bg-orange-50/50'}`}>
                       <td className={`py-3.5 pl-2 font-bold ${theme.textMain}`}>{u.full_name || u.name || 'Unnamed Staff'}</td>
-                      <td className="py-3.5 font-mono text-indigo-500 font-bold">{u.emp_code || 'N/A'}</td>
+                      <td className="py-3.5 font-mono text-orange-600 font-bold">{u.emp_code || 'N/A'}</td>
                       <td className={`py-3.5 ${theme.textMuted}`}>{u.email || 'No email registered'}</td>
                       <td className="py-3.5 text-right pr-2">
                         <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
                           u.role === 'admin' 
-                            ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' 
-                            : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                            ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20 shadow-sm' 
+                            : 'bg-purple-500/10 text-purple-600 border border-purple-500/20 shadow-sm'
                         }`}>
                           {u.role || 'Staff'}
                         </span>
@@ -277,27 +271,27 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
 
       {/* Tab 4: Security */}
       {activeTab === 'security' && (
-        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in duration-200`}>
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
           <div>
             <h3 className={`text-lg font-bold ${theme.textMain}`}>Access Control Policies</h3>
             <p className={`text-xs mt-1 ${theme.textMuted}`}>Manage authentication restrictions and audit enforcement.</p>
           </div>
 
           <div className="space-y-4">
-            <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme.cardInner}`}>
+            <div className={`p-5 rounded-2xl border flex items-center justify-between transition-colors ${theme.cardInner} hover:border-orange-200 dark:hover:border-zinc-700`}>
               <div>
                 <h4 className={`text-sm font-bold ${theme.textMain}`}>Require Admin Adjudication</h4>
                 <p className={`text-xs mt-0.5 ${theme.textMuted}`}>All mobile hardware inspections must be manually approved before asset status changes.</p>
               </div>
-              <input type="checkbox" checked={settings.requireAdminApproval} readOnly className="w-5 h-5 accent-indigo-600 rounded cursor-pointer" />
+              <input type="checkbox" checked={settings.requireAdminApproval} readOnly className="w-5 h-5 accent-orange-600 rounded cursor-pointer transition-transform hover:scale-110" />
             </div>
 
-            <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme.cardInner}`}>
+            <div className={`p-5 rounded-2xl border flex items-center justify-between transition-colors ${theme.cardInner} hover:border-orange-200 dark:hover:border-zinc-700`}>
               <div>
                 <h4 className={`text-sm font-bold ${theme.textMain}`}>Staff Self-Service Edits</h4>
                 <p className={`text-xs mt-0.5 ${theme.textMuted}`}>Allow employees to modify serial tags or hardware categories after assignment.</p>
               </div>
-              <input type="checkbox" checked={settings.allowStaffEditAssets} readOnly className="w-5 h-5 accent-indigo-600 rounded cursor-pointer" />
+              <input type="checkbox" checked={settings.allowStaffEditAssets} readOnly className="w-5 h-5 accent-orange-600 rounded cursor-pointer transition-transform hover:scale-110" />
             </div>
           </div>
         </div>
