@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, ShieldCheck, AlertCircle, Clock,
   AlertTriangle, Bell, Monitor, CheckCircle2, Trash2, ExternalLink,
   Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
-  BarChart3, Settings, Server
+  BarChart3, Settings, Server, Home
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -27,12 +28,14 @@ export default function AdminDashboardPage() {
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
-  // Dashboard Stats
+  // Dashboard Stats (Updated for module badges)
   const [stats, setStats] = useState({
     totalAssets: 0,
     pendingInspections: 0,
     activeTickets: 0,
-    totalStaff: 0
+    totalStaff: 0,
+    returnRequests: 0,
+    replacementRequests: 0
   });
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -46,7 +49,6 @@ export default function AdminDashboardPage() {
     }
     loadAdminData();
     
-    // Request Desktop Notification Permission on Load
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
@@ -68,7 +70,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // ⚡ UPGRADED OMNI-CHANNEL REALTIME LISTENER
   useEffect(() => {
     const adminChannel = supabase
       .channel('admin-live-feed')
@@ -186,13 +187,13 @@ export default function AdminDashboardPage() {
       setAdminEmail(cleanEmail || activeUser.email || 'admin@vsit.com');
 
       const [
-        { count: assets }, 
+        { data: assets }, 
         { data: inspections }, 
         { data: tickets }, 
         staffRes,
         notifRes
       ] = await Promise.all([
-        supabase.from('assets').select('*', { count: 'exact', head: true }),
+        supabase.from('assets').select('id, status'), // Updated to pull status for counts
         supabase.from('inspections').select('*, assets(asset_name)')
           .not('notes', 'ilike', '%[RETURN REQUEST]%')
           .not('status', 'ilike', '%Return%')
@@ -207,7 +208,9 @@ export default function AdminDashboardPage() {
       const staffData = staffRes.data || [];
       const inspData = inspections || [];
       const tktData = tickets || [];
+      const assetsData = assets || [];
 
+      // Generate accurate counts for the notification badges
       const pendingCount = inspData.filter(i => {
         const s = (i.status || '').toLowerCase().trim();
         const inspBy = (i.inspected_by || '').toLowerCase();
@@ -221,6 +224,9 @@ export default function AdminDashboardPage() {
       }).length;
 
       const ticketCount = tktData.filter(t => ['open', 'in_repair', 'pending'].includes((t.status || '').toLowerCase())).length;
+      
+      const returnRequestsCount = assetsData.filter(a => a.status === 'Return Requested').length;
+      const replacementRequestsCount = assetsData.filter(a => a.status === 'Replacement Requested').length;
 
       if (notifRes.data) {
         setNotifications(prev => {
@@ -247,10 +253,12 @@ export default function AdminDashboardPage() {
       });
 
       setStats({
-        totalAssets: assets || 0,
+        totalAssets: assetsData.length || 0,
         pendingInspections: pendingCount,
         activeTickets: ticketCount,
-        totalStaff: staffData.length
+        totalStaff: staffData.length,
+        returnRequests: returnRequestsCount,
+        replacementRequests: replacementRequestsCount
       });
       
       setRecentActivity(formattedRecentLogs);
@@ -382,9 +390,9 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-10`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* 🌟 TOP HEADER WITH LOGO, BROADCAST TRIGGER, SETTINGS, BELL */}
+        {/* 🌟 TOP HEADER - NOW INCLUDES NAVIGATION LINKS */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 transition-colors`}>
-          <div className="flex items-center gap-4">
+          <Link href="/admin" className="flex items-center gap-4 group cursor-pointer transition-opacity hover:opacity-80">
             <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md shrink-0">
               <Server size={24} />
             </div>
@@ -394,9 +402,18 @@ export default function AdminDashboardPage() {
               </div>
               <p className={`text-sm ${theme.subText}`}>Welcome back, {adminName}. Here is your IT infrastructure status.</p>
             </div>
-          </div>
+          </Link>
           
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+            
+            {/* Added a back-to-dashboard home button for cross-page navigation consistency */}
+            <Link
+              href="/admin"
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide border shadow-sm transition-all cursor-pointer ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-slate-300 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            >
+              <Home size={16} /> Dashboard
+            </Link>
+
             <button 
               onClick={() => setIsBroadcastModalOpen(true)}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold tracking-wide shadow-sm transition-all cursor-pointer"
@@ -427,12 +444,6 @@ export default function AdminDashboardPage() {
                 </span>
               </button>
             )}
-
-            <div className={`hidden sm:flex px-4 py-3 rounded-xl text-xs font-semibold tracking-wide items-center gap-2 border ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Operational
-            </div>
-
           </div>
         </div>
 
@@ -528,14 +539,14 @@ export default function AdminDashboardPage() {
             <h3 className={`text-xs font-semibold uppercase tracking-wider pl-1 ${theme.subText}`}>System Modules</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { title: 'Review Inspections', desc: 'Audit smartphone visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: 'orange' },
-                { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'blue' },
-                { title: 'Return Requests', desc: 'Manage hardware returns and physical asset handovers.', icon: LogOut, path: '/admin/returns', color: 'amber' },
-                { title: 'Replacements', desc: 'Process device swap requests and hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: 'purple' },
-                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose' },
-                { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald' },
-                { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo' },
-                { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns, asset matrices, and PDF exports.', icon: BarChart3, path: '/admin/reports', color: 'blue' },
+                { title: 'Review Inspections', desc: 'Audit smartphone visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: 'orange', badgeCount: stats.pendingInspections },
+                { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'blue', badgeCount: 0 },
+                { title: 'Return Requests', desc: 'Manage hardware returns and physical asset handovers.', icon: LogOut, path: '/admin/returns', color: 'amber', badgeCount: stats.returnRequests },
+                { title: 'Replacements', desc: 'Process device swap requests and hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: 'purple', badgeCount: stats.replacementRequests },
+                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'rose', badgeCount: stats.activeTickets },
+                { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'emerald', badgeCount: 0 },
+                { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'indigo', badgeCount: 0 },
+                { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns, asset matrices, and PDF exports.', icon: BarChart3, path: '/admin/reports', color: 'blue', badgeCount: 0 },
               ].map((module, i) => (
                 <button 
                   key={i}
@@ -543,8 +554,14 @@ export default function AdminDashboardPage() {
                   className={`text-left cursor-pointer ${theme.card} p-5 rounded-3xl border shadow-sm transition-all group flex flex-col justify-between min-h-[140px] ${theme.cardHover}`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
+                    <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${theme.iconBg[module.color as keyof typeof theme.iconBg]}`}>
                       <module.icon size={20} strokeWidth={2.5} />
+                      {/* ALERT BADGE - Only shows if there are actionable items */}
+                      {module.badgeCount > 0 && (
+                        <span className={`absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 bg-rose-500 shadow-sm animate-in zoom-in ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
+                          {module.badgeCount}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <h4 className={`text-sm font-semibold tracking-tight ${theme.text}`}>{module.title}</h4>
@@ -656,7 +673,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
