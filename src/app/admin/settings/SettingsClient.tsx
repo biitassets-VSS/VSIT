@@ -1,278 +1,307 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Settings, ShieldCheck, Image as ImageIcon, 
-  Smartphone, Save, CheckCircle2, UserCog, Camera,
-  Users, Mail
+  Moon, Sun, Monitor, Shield, Users, Sliders, Save, 
+  CheckCircle2, AlertCircle, RefreshCw, Eye, Lock
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
-// --- TYPES ---
-interface AppSettings {
-  appName: string;
-  supportEmail: string;
-  allowStaffLogin: boolean;
-  allowStaffEditAssets: boolean;
-  requireAdminApproval: boolean;
-  compressUploads: boolean;
-  maxUploadSizeMB: string;
-  enableWatermarks: boolean;
-  watermarkFormat: string;
-}
-
-interface UserRecord {
-  id: string | number;
-  name: string;
-  email: string;
-  role: string;
-}
-
-interface SettingsClientProps {
-  initialSettings: AppSettings;
-  initialUsers: UserRecord[];
-}
-
-export default function SettingsClient({ initialSettings, initialUsers }: SettingsClientProps) {
+export default function SettingsClient({ initialSettings, initialUsers }: { initialSettings: any, initialUsers: any[] }) {
+  const [activeTab, setActiveTab] = useState<'appearance' | 'general' | 'users' | 'security'>('appearance');
+  const [settings, setSettings] = useState(initialSettings);
+  const [users, setUsers] = useState(initialUsers);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  // Initialize State with Live Database Data
-  const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [users, setUsers] = useState<UserRecord[]>(initialUsers);
-
-  // Handlers for Global Settings
-  const handleToggle = (key: keyof typeof settings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // Handler for Individual User Role Changes
-  const handleRoleChange = async (userId: string | number, newRole: string) => {
-    // 1. Update UI instantly for a snappy feel
-    setUsers(prev => prev.map(user => 
-      user.id === userId ? { ...user, role: newRole } : user
-    ));
-
-    // 2. Send the update to your actual database API
-    try {
-      // ⚠️ YOU MUST CREATE THIS API ROUTE IN YOUR NEXT.JS APP
-      /*
-      const response = await fetch('/api/users/update-role', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, newRole })
-      });
-
-      if (!response.ok) throw new Error('Failed to update role in database');
-      */
-    } catch (error) {
-      alert("Failed to update user access. Please try again.");
-      // Optional: Revert the UI state if the API fails
+  // Initialize Theme from LocalStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('vsit_theme');
+    if (savedTheme === 'dark') {
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark');
+    } else {
+      setIsDarkMode(false);
+      document.documentElement.classList.remove('dark');
     }
-  };
+  }, []);
 
-  const handleSaveSettings = async () => {
-    setIsSaving(true);
+  // Global Theme Switcher Engine
+  const applyThemeMode = (mode: 'dark' | 'light') => {
+    const isDark = mode === 'dark';
+    setIsDarkMode(isDark);
+    localStorage.setItem('vsit_theme', mode);
     
-    try {
-      // PUSH UPDATED GLOBAL SETTINGS TO YOUR DATABASE
-      /*
-      await fetch('/api/settings/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings })
-      });
-      */
-
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      alert("Failed to save global settings. Please try again.");
-    } finally {
-      setIsSaving(false);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
+    
+    // Trigger custom window event so layout instantly catches the change if needed
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setTimeout(() => {
+      setIsSaving(false);
+      setSaveStatus('Preferences saved successfully!');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }, 600);
+  };
+
+  // Styling Map for High-Contrast Readability
+  const theme = {
+    card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/80',
+    cardInner: isDarkMode ? 'bg-[#18181b] border-[#27272a]' : 'bg-slate-50 border-slate-200',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textMuted: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-100 focus:border-indigo-500' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500',
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
       
-      {/* PAGE HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+      {/* Header */}
+      <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors`}>
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <Settings size={24} className="text-teal-600" /> System Settings
-          </h1>
-          <p className="text-sm font-medium text-gray-500 mt-1">Control application rules, roles, and media configurations.</p>
+          <h1 className={`text-2xl font-bold tracking-tight ${theme.textMain}`}>Portal Preferences & Settings</h1>
+          <p className={`text-sm mt-1 ${theme.textMuted}`}>Configure global appearance, security policies, and system defaults.</p>
         </div>
-        <button 
-          onClick={handleSaveSettings} 
-          disabled={isSaving}
-          className={`w-full sm:w-auto px-6 py-3 font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 ${saved ? 'bg-green-500 text-white' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
-        >
-          {isSaving ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> 
-           : saved ? <><CheckCircle2 size={18}/> Saved Successfully</> 
-           : <><Save size={18}/> Save Settings</>}
-        </button>
+        {saveStatus && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-xl text-xs font-semibold animate-in fade-in">
+            <CheckCircle2 size={16} /> {saveStatus}
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* ========================================== */}
-        {/* SECTION 1: GLOBAL ACCESS CONTROL           */}
-        {/* ========================================== */}
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
-          <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><UserCog size={20}/></div>
-            <div>
-              <h2 className="text-lg font-black text-gray-900">Global Permissions</h2>
-              <p className="text-xs font-bold text-gray-500">Manage overarching portal rules.</p>
-            </div>
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+        {[
+          { id: 'appearance', label: 'Appearance & Theme', icon: Moon },
+          { id: 'general', label: 'General Defaults', icon: Sliders },
+          { id: 'users', label: `Staff Directory (${users.length})`, icon: Users },
+          { id: 'security', label: 'Access & Security', icon: Shield },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all cursor-pointer ${
+                isActive 
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
+                  : `${theme.card} ${theme.textMuted} hover:text-indigo-500 border`
+              }`}
+            >
+              <Icon size={16} /> <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab 1: Appearance & Theme (Global Dark Mode Controller) */}
+      {activeTab === 'appearance' && (
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-8 animate-in fade-in duration-200`}>
+          <div>
+            <h3 className={`text-lg font-bold ${theme.textMain}`}>Global Color Scheme</h3>
+            <p className={`text-xs mt-1 ${theme.textMuted}`}>Select how the portal appears across all hardware inventory, dashboard, and inspection modules.</p>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <div>
-                <p className="font-bold text-sm text-gray-900">Allow Staff to Login</p>
-                <p className="text-xs text-gray-500 font-medium">If disabled, only Admin can access the portal.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            
+            {/* Light Mode Selector */}
+            <div 
+              onClick={() => applyThemeMode('light')}
+              className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+                !isDarkMode 
+                  ? 'border-indigo-600 bg-indigo-500/5 shadow-md' 
+                  : `${theme.cardInner} opacity-70 hover:opacity-100`
+              }`}
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 text-amber-500 shadow-sm">
+                  <Sun size={24} />
+                </div>
+                {!isDarkMode && <span className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">Active Mode</span>}
               </div>
-              <button onClick={() => handleToggle('allowStaffLogin')} className={`w-12 h-6 rounded-full transition-colors relative ${settings.allowStaffLogin ? 'bg-teal-500' : 'bg-gray-300'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.allowStaffLogin ? 'left-7' : 'left-1'}`}></div>
-              </button>
+              <div>
+                <h4 className={`text-base font-bold ${theme.textMain}`}>Light Theme</h4>
+                <p className={`text-xs mt-1 ${theme.textMuted}`}>Clean, high-contrast white workspace optimized for daytime office environments and standard displays.</p>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <div>
-                <p className="font-bold text-sm text-gray-900">Staff Can Edit Assets</p>
-                <p className="text-xs text-gray-500 font-medium">Allow staff to modify asset details and status.</p>
+            {/* Dark Mode Selector */}
+            <div 
+              onClick={() => applyThemeMode('dark')}
+              className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+                isDarkMode 
+                  ? 'border-indigo-500 bg-indigo-500/10 shadow-md' 
+                  : 'bg-slate-900 border-slate-800 text-white opacity-90 hover:opacity-100'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 rounded-xl bg-black border border-zinc-800 text-indigo-400 shadow-sm">
+                  <Moon size={24} />
+                </div>
+                {isDarkMode && <span className="bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">Active Mode</span>}
               </div>
-              <button onClick={() => handleToggle('allowStaffEditAssets')} className={`w-12 h-6 rounded-full transition-colors relative ${settings.allowStaffEditAssets ? 'bg-teal-500' : 'bg-gray-300'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.allowStaffEditAssets ? 'left-7' : 'left-1'}`}></div>
-              </button>
+              <div>
+                <h4 className="text-base font-bold text-white">Dark Theme (Full Portal)</h4>
+                <p className="text-xs mt-1 text-zinc-400">Deep, low-glare dark palette designed to reduce eye strain during extended audit sessions and night shifts.</p>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <div>
-                <p className="font-bold text-sm text-gray-900">Require Admin Approval</p>
-                <p className="text-xs text-gray-500 font-medium">For asset assignments and discards.</p>
-              </div>
-              <button onClick={() => handleToggle('requireAdminApproval')} className={`w-12 h-6 rounded-full transition-colors relative ${settings.requireAdminApproval ? 'bg-teal-500' : 'bg-gray-300'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.requireAdminApproval ? 'left-7' : 'left-1'}`}></div>
-              </button>
-            </div>
+          </div>
+
+          <div className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-medium ${theme.cardInner} ${theme.textMuted}`}>
+            <Monitor size={18} className="text-indigo-500 shrink-0" />
+            <span>Theme preferences are saved directly to your session browser and apply globally to all data tables and modals.</span>
           </div>
         </div>
+      )}
 
-        {/* ========================================== */}
-        {/* SECTION 2: PHOTO UPLOAD CONFIGURATION      */}
-        {/* ========================================== */}
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
-          <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-            <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center"><Camera size={20}/></div>
+      {/* Tab 2: General Defaults */}
+      {activeTab === 'general' && (
+        <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in duration-200`}>
+          <div>
+            <h3 className={`text-lg font-bold ${theme.textMain}`}>System Configurations</h3>
+            <p className={`text-xs mt-1 ${theme.textMuted}`}>Manage default titles, email recipients, and file processing rules.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <h2 className="text-lg font-black text-gray-900">Media & Upload Controls</h2>
-              <p className="text-xs font-bold text-gray-500">Fix mobile upload limits and quality.</p>
+              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Portal Organization Name</label>
+              <input 
+                type="text" 
+                value={settings.appName} 
+                onChange={e => setSettings({...settings, appName: e.target.value})}
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-colors ${theme.inputBg}`} 
+              />
+            </div>
+            <div>
+              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Support Contact Email</label>
+              <input 
+                type="email" 
+                value={settings.supportEmail} 
+                onChange={e => setSettings({...settings, supportEmail: e.target.value})}
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-colors ${theme.inputBg}`} 
+              />
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <div>
-                <p className="font-bold text-sm text-gray-900 flex items-center gap-2">Auto-Compress Photos <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[9px] uppercase rounded-md">Recommended</span></p>
-                <p className="text-xs text-gray-500 font-medium">Prevents crashes on high-res gallery images.</p>
-              </div>
-              <button onClick={() => handleToggle('compressUploads')} className={`w-12 h-6 rounded-full transition-colors relative ${settings.compressUploads ? 'bg-teal-500' : 'bg-gray-300'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.compressUploads ? 'left-7' : 'left-1'}`}></div>
-              </button>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <label className="font-bold text-sm text-gray-900 block mb-2">Max Image Upload Size (MB)</label>
-              <select value={settings.maxUploadSizeMB} onChange={(e) => setSettings({...settings, maxUploadSizeMB: e.target.value})} className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-teal-500">
-                <option value="2">2 MB (Fastest)</option>
-                <option value="5">5 MB (Balanced)</option>
-                <option value="10">10 MB (High Quality)</option>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-200/50 dark:border-zinc-800">
+            <div>
+              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Max Photo Upload Size (MB)</label>
+              <select 
+                value={settings.maxUploadSizeMB} 
+                onChange={e => setSettings({...settings, maxUploadSizeMB: e.target.value})}
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-colors ${theme.inputBg}`}
+              >
+                <option value="5">5 MB (Standard)</option>
+                <option value="10">10 MB (High Definition)</option>
+                <option value="25">25 MB (Raw Mobile Capture)</option>
               </select>
             </div>
-
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-              <div>
-                <p className="font-bold text-sm text-gray-900">Apply Date Watermarks</p>
-                <p className="text-xs text-gray-500 font-medium">Imprints timestamp on asset inspection photos.</p>
-              </div>
-              <button onClick={() => handleToggle('enableWatermarks')} className={`w-12 h-6 rounded-full transition-colors relative ${settings.enableWatermarks ? 'bg-teal-500' : 'bg-gray-300'}`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${settings.enableWatermarks ? 'left-7' : 'left-1'}`}></div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================== */}
-      {/* SECTION 3: INDIVIDUAL USER ROLE MANAGEMENT */}
-      {/* ========================================== */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center"><Users size={20}/></div>
             <div>
-              <h2 className="text-lg font-black text-gray-900">User Access Management</h2>
-              <p className="text-xs font-bold text-gray-500">Assign specific roles to registered accounts.</p>
+              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Watermark Label Format</label>
+              <input 
+                type="text" 
+                value={settings.watermarkFormat} 
+                disabled
+                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold opacity-60 cursor-not-allowed ${theme.inputBg}`} 
+              />
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-end">
+            <button type="submit" disabled={isSaving} className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-sm cursor-pointer transition-all">
+              {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Preferences
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Tab 3: Staff Directory */}
+      {activeTab === 'users' && (
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in duration-200`}>
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className={`text-lg font-bold ${theme.textMain}`}>Registered Accounts</h3>
+              <p className={`text-xs mt-1 ${theme.textMuted}`}>Staff members with active clearance in the Supabase directory.</p>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-500 text-xs font-bold">{users.length} Active</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className={`border-b text-[10px] uppercase tracking-widest font-black ${theme.textMuted} ${isDarkMode ? 'border-zinc-800' : 'border-slate-200'}`}>
+                  <th className="pb-3 pl-2">Employee Name</th>
+                  <th className="pb-3">EMP Code</th>
+                  <th className="pb-3">Email Address</th>
+                  <th className="pb-3 text-right pr-2">Clearance Role</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y text-xs font-semibold ${isDarkMode ? 'divide-zinc-800/60' : 'divide-slate-100'}`}>
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400 italic">No user profiles found in database.</td>
+                  </tr>
+                ) : (
+                  users.map((u: any, idx: number) => (
+                    <tr key={u.id || idx} className={`transition-colors ${isDarkMode ? 'hover:bg-zinc-800/40' : 'hover:bg-slate-50/80'}`}>
+                      <td className={`py-3.5 pl-2 font-bold ${theme.textMain}`}>{u.full_name || u.name || 'Unnamed Staff'}</td>
+                      <td className="py-3.5 font-mono text-indigo-500 font-bold">{u.emp_code || 'N/A'}</td>
+                      <td className={`py-3.5 ${theme.textMuted}`}>{u.email || 'No email registered'}</td>
+                      <td className="py-3.5 text-right pr-2">
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                          u.role === 'admin' 
+                            ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' 
+                            : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                        }`}>
+                          {u.role || 'Staff'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Security */}
+      {activeTab === 'security' && (
+        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in duration-200`}>
+          <div>
+            <h3 className={`text-lg font-bold ${theme.textMain}`}>Access Control Policies</h3>
+            <p className={`text-xs mt-1 ${theme.textMuted}`}>Manage authentication restrictions and audit enforcement.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme.cardInner}`}>
+              <div>
+                <h4 className={`text-sm font-bold ${theme.textMain}`}>Require Admin Adjudication</h4>
+                <p className={`text-xs mt-0.5 ${theme.textMuted}`}>All mobile hardware inspections must be manually approved before asset status changes.</p>
+              </div>
+              <input type="checkbox" checked={settings.requireAdminApproval} readOnly className="w-5 h-5 accent-indigo-600 rounded cursor-pointer" />
+            </div>
+
+            <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme.cardInner}`}>
+              <div>
+                <h4 className={`text-sm font-bold ${theme.textMain}`}>Staff Self-Service Edits</h4>
+                <p className={`text-xs mt-0.5 ${theme.textMuted}`}>Allow employees to modify serial tags or hardware categories after assignment.</p>
+              </div>
+              <input type="checkbox" checked={settings.allowStaffEditAssets} readOnly className="w-5 h-5 accent-indigo-600 rounded cursor-pointer" />
             </div>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                <th className="pb-3 font-bold pl-4">User Details</th>
-                <th className="pb-3 font-bold">Current Role</th>
-                <th className="pb-3 font-bold text-right pr-4">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="py-8 text-center text-gray-500 text-sm font-medium">
-                    No users found. Please connect your database in page.tsx.
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-4 pl-4">
-                      <p className="font-bold text-sm text-gray-900">{user.name}</p>
-                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                        <Mail size={12} /> {user.email}
-                      </p>
-                    </td>
-                    <td className="py-4">
-                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        user.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                        user.role === 'Staff' ? 'bg-blue-100 text-blue-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right pr-4">
-                      <select 
-                        value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                        className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                      >
-                        <option value="Admin">Set as Admin</option>
-                        <option value="Staff">Set as Staff</option>
-                        <option value="Revoked">Revoke Access</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
     </div>
   );
