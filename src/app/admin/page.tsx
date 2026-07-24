@@ -9,7 +9,7 @@ import {
   Activity, ArrowRight, AlertCircle, Clock,
   AlertTriangle, Bell, Monitor, Trash2, ExternalLink,
   Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
-  BarChart3, Settings, Server, Home
+  BarChart3, Settings, Server, Home, CheckCircle2
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -26,11 +26,23 @@ export default function AdminDashboardPage() {
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
+  // 🌟 Expanded stats state to hold all detailed metrics
   const [stats, setStats] = useState({
     totalAssets: 0,
+    usedAssets: 0,
+    inStockAssets: 0,
+    discardedAssets: 0,
+    
+    totalInspections: 0,
     pendingInspections: 0,
-    activeTickets: 0,
+    
+    totalTickets: 0,
+    pendingTickets: 0,
+    inProcessTickets: 0,
+    
     totalStaff: 0,
+    activeStaff: 0,
+    
     returnRequests: 0,
     replacementRequests: 0
   });
@@ -163,8 +175,8 @@ export default function AdminDashboardPage() {
           .not('notes', 'ilike', '%[REPLACEMENT REQUEST]%')
           .not('status', 'ilike', '%Replace%')
           .order('created_at', { ascending: false }),
-        supabase.from('tickets').select('*'),
-        supabase.from('profiles').select('*'),
+        supabase.from('tickets').select('id, status'),
+        supabase.from('profiles').select('id, email, status, full_name, name, emp_code, emp_id'),
         supabase.from('notifications').select('*').eq('target_role', 'admin').eq('is_read', false).order('created_at', { ascending: false })
       ]);
 
@@ -173,19 +185,30 @@ export default function AdminDashboardPage() {
       const tktData = tickets || [];
       const assetsData = assets || [];
 
+      // 🌟 DETAILED ASSET CALCULATIONS
+      const usedAssets = assetsData.filter(a => (a.status || '').toLowerCase().includes('assigned') || (a.status || '').toLowerCase() === 'in use').length;
+      const inStockAssets = assetsData.filter(a => (a.status || '').toLowerCase().includes('in stock') || (a.status || '').toLowerCase() === 'available').length;
+      const discardedAssets = assetsData.filter(a => (a.status || '').toLowerCase().includes('discard')).length;
+
+      // 🌟 DETAILED INSPECTION CALCULATIONS
+      const totalInspections = inspData.length;
       const pendingCount = inspData.filter(i => {
         const s = (i.status || '').toLowerCase().trim();
         const inspBy = (i.inspected_by || '').toLowerCase();
         const notes = (i.notes || '').toLowerCase();
-        
         if (s !== 'pending' && s !== 'pending review') return false;
         if (inspBy === 'admin' || inspBy === 'system') return false;
         if (notes.includes('asset configuration updated') || notes.includes('asset initially registered')) return false;
-
         return true;
       }).length;
 
-      const ticketCount = tktData.filter(t => ['open', 'in_repair', 'pending'].includes((t.status || '').toLowerCase())).length;
+      // 🌟 DETAILED TICKET CALCULATIONS
+      const pendingTickets = tktData.filter(t => ['open', 'pending', 'new'].includes((t.status || '').toLowerCase())).length;
+      const inProcessTickets = tktData.filter(t => ['in_progress', 'processing', 'in repair'].includes((t.status || '').toLowerCase())).length;
+
+      // 🌟 DETAILED STAFF CALCULATIONS
+      const activeStaff = staffData.filter(s => (s.status || '').toLowerCase() === 'active').length;
+
       const returnRequestsCount = assetsData.filter(a => a.status === 'Return Requested').length;
       const replacementRequestsCount = assetsData.filter(a => a.status === 'Replacement Requested').length;
 
@@ -199,7 +222,6 @@ export default function AdminDashboardPage() {
       const formattedRecentLogs = inspData.slice(0, 8).map(log => {
         const matchedProfile = staffData.find(p => p.email?.toLowerCase() === log.user_email?.toLowerCase() || p.id === log.inspected_by);
         let displayName = log.user_email?.split('@')[0] || 'A user'; 
-        
         if (matchedProfile) {
           const name = matchedProfile.full_name || matchedProfile.name || displayName;
           const empCode = matchedProfile.emp_code || matchedProfile.emp_id || 'N/A';
@@ -210,9 +232,20 @@ export default function AdminDashboardPage() {
 
       setStats({
         totalAssets: assetsData.length || 0,
+        usedAssets,
+        inStockAssets,
+        discardedAssets,
+        
+        totalInspections,
         pendingInspections: pendingCount,
-        activeTickets: ticketCount,
-        totalStaff: staffData.length,
+        
+        totalTickets: tktData.length || 0,
+        pendingTickets,
+        inProcessTickets,
+        
+        totalStaff: staffData.length || 0,
+        activeStaff,
+        
         returnRequests: returnRequestsCount,
         replacementRequests: replacementRequestsCount
       });
@@ -306,13 +339,12 @@ export default function AdminDashboardPage() {
 
   const theme = {
     bg: isDarkMode ? 'bg-zinc-950' : 'bg-[#F8FAFC]',
-    card: isDarkMode ? 'bg-[#121212] border-zinc-800/80' : 'bg-white border-slate-200/80',
+    card: isDarkMode ? 'bg-[#121212] border-zinc-800/80' : 'bg-white border-slate-200/60',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     cardHover: isDarkMode ? 'hover:border-purple-500/50 hover:bg-zinc-900/50' : 'hover:border-purple-200 hover:shadow-[0_8px_30px_rgb(147,51,234,0.06)] hover:-translate-y-1',
   };
 
-  // Safe dynamic theme generator for System Modules (prevents Tailwind purge bugs)
   const getModuleTheme = (color: string) => {
     if (color === 'orange') return {
       iconBg: isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600',
@@ -405,52 +437,101 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* 📊 FOUR PRIMARY METRIC CARDS */}
+        {/* 📊 FOUR PRIMARY METRIC CARDS (DETAILED & RESPONSIVE) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 ${theme.cardHover}`}>
-            <div className="flex justify-between items-start mb-6">
-              <div className={`p-3.5 rounded-2xl transition-colors ${isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}><Laptop size={24} /></div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
-            </div>
+          
+          {/* INVENTORY CARD */}
+          <div className={`${theme.card} p-5 sm:p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 ${theme.cardHover}`}>
             <div>
-              <h2 className={`text-4xl font-black tracking-tight text-purple-600 dark:text-purple-400`}>{stats.totalAssets}</h2>
-              <p className={`text-xs font-semibold mt-1.5 ${theme.subText}`}>Total hardware units</p>
-            </div>
-          </div>
-
-          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${theme.cardHover}`}>
-            {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-400/10 rounded-bl-full animate-pulse" />}
-            <div className="flex justify-between items-start mb-6">
-              <div className={`p-3.5 rounded-2xl transition-colors ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
-                {stats.pendingInspections > 0 ? <AlertCircle size={24} /> : <ClipboardCheck size={24} />}
+              <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-2xl transition-colors ${isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}><Laptop size={20} /></div>
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
               </div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
+              <div className="mb-5">
+                <h2 className={`text-3xl sm:text-4xl font-black tracking-tight text-purple-600 dark:text-purple-400`}>{stats.totalAssets}</h2>
+                <p className={`text-[10px] sm:text-xs font-semibold mt-1 ${theme.subText}`}>Total hardware units</p>
+              </div>
             </div>
-            <div>
-              <h2 className={`text-4xl font-black tracking-tight ${stats.pendingInspections > 0 ? 'text-orange-600 dark:text-orange-400' : theme.text}`}>{stats.pendingInspections}</h2>
-              <p className={`text-xs font-semibold mt-1.5 ${theme.subText}`}>Awaiting Admin Review</p>
+            <div className={`grid grid-cols-3 gap-2 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>Used</p>
+                <p className="text-xs sm:text-sm font-black text-purple-600 dark:text-purple-400 mt-0.5">{stats.usedAssets}</p>
+              </div>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>Stock</p>
+                <p className="text-xs sm:text-sm font-black text-emerald-500 mt-0.5">{stats.inStockAssets}</p>
+              </div>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>Discard</p>
+                <p className="text-xs sm:text-sm font-black text-rose-500 mt-0.5">{stats.discardedAssets}</p>
+              </div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 ${theme.cardHover}`}>
-            <div className="flex justify-between items-start mb-6">
-              <div className={`p-3.5 rounded-2xl transition-colors ${isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}><Ticket size={24} /></div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
-            </div>
+          {/* VERIFICATIONS CARD */}
+          <div className={`${theme.card} p-5 sm:p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${theme.cardHover}`}>
+            {stats.pendingInspections > 0 && <div className="absolute top-0 right-0 w-16 h-16 bg-orange-400/10 rounded-bl-full animate-pulse" />}
             <div>
-              <h2 className={`text-4xl font-black tracking-tight text-purple-600 dark:text-purple-400`}>{stats.activeTickets}</h2>
-              <p className={`text-xs font-semibold mt-1.5 ${theme.subText}`}>Active IT tickets</p>
+              <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-2xl transition-colors ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                  {stats.pendingInspections > 0 ? <AlertCircle size={20} /> : <ClipboardCheck size={20} />}
+                </div>
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
+              </div>
+              <div className="mb-5">
+                <h2 className={`text-3xl sm:text-4xl font-black tracking-tight ${theme.text}`}>{stats.totalInspections}</h2>
+                <p className={`text-[10px] sm:text-xs font-semibold mt-1 ${theme.subText}`}>Total Requests</p>
+              </div>
+            </div>
+            <div className={`flex justify-between items-center pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>Pending Review</p>
+                <p className={`text-xs sm:text-sm font-black mt-0.5 ${stats.pendingInspections > 0 ? 'text-orange-600 dark:text-orange-400' : theme.text}`}>{stats.pendingInspections}</p>
+              </div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 ${theme.cardHover}`}>
-            <div className="flex justify-between items-start mb-6">
-              <div className={`p-3.5 rounded-2xl transition-colors ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}><Users size={24} /></div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
-            </div>
+          {/* HELPDESK CARD */}
+          <div className={`${theme.card} p-5 sm:p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 ${theme.cardHover}`}>
             <div>
-              <h2 className={`text-4xl font-black tracking-tight text-orange-600 dark:text-orange-400`}>{stats.totalStaff}</h2>
-              <p className={`text-xs font-semibold mt-1.5 ${theme.subText}`}>Active staff accounts</p>
+              <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-2xl transition-colors ${isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}><Ticket size={20} /></div>
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
+              </div>
+              <div className="mb-5">
+                <h2 className={`text-3xl sm:text-4xl font-black tracking-tight text-purple-600 dark:text-purple-400`}>{stats.totalTickets}</h2>
+                <p className={`text-[10px] sm:text-xs font-semibold mt-1 ${theme.subText}`}>Total Tickets</p>
+              </div>
+            </div>
+            <div className={`grid grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>Pending</p>
+                <p className="text-xs sm:text-sm font-black text-amber-500 mt-0.5">{stats.pendingTickets}</p>
+              </div>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>In Process</p>
+                <p className="text-xs sm:text-sm font-black text-blue-500 mt-0.5">{stats.inProcessTickets}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* NETWORK (STAFF) CARD */}
+          <div className={`${theme.card} p-5 sm:p-6 rounded-3xl border shadow-sm flex flex-col justify-between transition-all duration-300 ${theme.cardHover}`}>
+            <div>
+              <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-2xl transition-colors ${isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600'}`}><Users size={20} /></div>
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
+              </div>
+              <div className="mb-5">
+                <h2 className={`text-3xl sm:text-4xl font-black tracking-tight text-orange-600 dark:text-orange-400`}>{stats.totalStaff}</h2>
+                <p className={`text-[10px] sm:text-xs font-semibold mt-1 ${theme.subText}`}>Total Staff</p>
+              </div>
+            </div>
+            <div className={`flex justify-between items-center pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div>
+                <p className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>Live / Active</p>
+                <p className="text-xs sm:text-sm font-black text-emerald-500 mt-0.5">{stats.activeStaff}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -466,7 +547,7 @@ export default function AdminDashboardPage() {
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'purple', badgeCount: 0 },
                 { title: 'Return Requests', desc: 'Manage hardware returns and physical asset handovers.', icon: LogOut, path: '/admin/returns', color: 'orange', badgeCount: stats.returnRequests },
                 { title: 'Replacements', desc: 'Process device swap requests and hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: 'purple', badgeCount: stats.replacementRequests },
-                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'purple', badgeCount: stats.activeTickets },
+                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: 'purple', badgeCount: stats.inProcessTickets },
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: 'orange', badgeCount: 0 },
                 { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: 'purple', badgeCount: 0 },
                 { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns, asset matrices, and PDF exports.', icon: BarChart3, path: '/admin/reports', color: 'purple', badgeCount: 0 },
@@ -555,7 +636,7 @@ export default function AdminDashboardPage() {
             
             <form onSubmit={handleSendBroadcast} className="space-y-5">
               <div>
-                <label className={`text-[11px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Announcement Message *</label>
+                <label className={`text-[11px] font-black uppercase tracking-widest block mb-2 ${theme.subText}`}>Announcement Message *</label>
                 <textarea 
                   rows={4}
                   required
@@ -567,7 +648,7 @@ export default function AdminDashboardPage() {
               </div>
 
               <div>
-                <label className={`text-[11px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
+                <label className={`text-[11px] font-black uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
                 <label className={`cursor-pointer w-full p-5 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 transition-colors ${isDarkMode ? 'border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-purple-300 text-slate-500'}`}>
                   <ImagePlus size={28} className={broadcastImage ? "text-purple-600" : ""} />
                   <span className="text-xs font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
@@ -579,17 +660,17 @@ export default function AdminDashboardPage() {
                   />
                 </label>
                 {broadcastImage && (
-                  <button type="button" onClick={() => setBroadcastImage(null)} className="text-[11px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                  <button type="button" onClick={() => setBroadcastImage(null)} className="text-[11px] text-rose-500 hover:underline mt-2 font-black uppercase tracking-widest flex items-center gap-1.5">
                     <X size={14} /> Remove attached file
                   </button>
                 )}
               </div>
 
               <div className="flex gap-3 pt-5 border-t border-slate-100 dark:border-zinc-800">
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all hover:scale-[1.02] ${isDarkMode ? 'border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shadow-sm'}`}>
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest border transition-all hover:scale-[1.02] ${isDarkMode ? 'border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shadow-sm'}`}>
                   Cancel
                 </button>
-                <button disabled={isBroadcasting || (!broadcastMessage.trim() && !broadcastImage)} type="submit" className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-xs uppercase tracking-widest shadow-sm shadow-orange-600/20 cursor-pointer hover:scale-[1.02] active:scale-95">
+                <button disabled={isBroadcasting || (!broadcastMessage.trim() && !broadcastImage)} type="submit" className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-xs uppercase tracking-widest shadow-sm cursor-pointer hover:scale-[1.02] active:scale-95">
                   {isBroadcasting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                   Broadcast Now
                 </button>
