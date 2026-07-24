@@ -9,7 +9,7 @@ import {
   Activity, ArrowRight, AlertCircle, Clock,
   AlertTriangle, Bell, Monitor, Trash2, ExternalLink,
   Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
-  BarChart3, Settings, Server, Home
+  BarChart3, Settings, Cpu
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -145,7 +145,7 @@ export default function AdminDashboardPage() {
       const tktData = tickets || [];
       const assetsData = assets || [];
 
-      // 1. ASSETS (CATCH-ALL LOGIC APPLIED TO ENSURE 100% COUNT)
+      // 1. ASSETS
       let usedAssetsCount = 0;
       let inStockAssetsCount = 0;
       let discardedAssetsCount = 0;
@@ -158,15 +158,12 @@ export default function AdminDashboardPage() {
         if (s.includes('return request')) returnRequestsCount++;
         else if (s.includes('replace')) replacementRequestsCount++;
         
-        // Check for Used
         if (['use', 'assign', 'allocat', 'deploy', 'active'].some(k => s.includes(k))) {
           usedAssetsCount++;
         } 
-        // Check for Discarded / Broken
         else if (['discard', 'retire', 'scrap', 'broken', 'lost', 'missing', 'stolen', 'damage'].some(k => s.includes(k))) {
           discardedAssetsCount++;
         } 
-        // CATCH-ALL: Everything else automatically goes to Stock so nothing is missed.
         else {
           inStockAssetsCount++;
         }
@@ -325,32 +322,34 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
       <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-3 sm:p-4 gap-3 lg:gap-4 overflow-y-auto custom-scrollbar">
         
-        {/* 🌟 TOP HEADER */}
-        <div className={`${theme.card} rounded-2xl p-4 sm:p-5 border flex flex-col md:flex-row justify-between md:items-center gap-4 shrink-0`}>
-          <Link href="/admin" className="flex items-center gap-4 group">
-            <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-md shrink-0 transition-transform group-hover:scale-105">
-              <Server className="w-7 h-7 lg:w-8 lg:h-8" />
+        {/* 🌟 TOP HEADER (UPDATED TITLE, SLOGAN, LOGO SIZE & ICON) */}
+        <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border flex flex-col md:flex-row justify-between md:items-center gap-4 shrink-0 shadow-sm`}>
+          <Link href="/admin" className="flex items-center gap-4 lg:gap-6 group">
+            {/* 🔴 INCREASED CONTAINER, SMALLER ICON */}
+            <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-[20px] lg:rounded-[24px] bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0 transition-transform group-hover:scale-105">
+              <Cpu className="w-7 h-7 lg:w-8 lg:h-8 opacity-90" strokeWidth={2} />
             </div>
             <div>
-              <h1 className={`text-xl lg:text-2xl font-extrabold tracking-tight ${theme.text}`}>Systems Overview</h1>
-              <p className={`text-xs font-semibold mt-0.5 ${theme.subText}`}>Welcome back, {adminName}.</p>
+              {/* 🔴 RENAMED TITLE */}
+              <h1 className={`text-xl lg:text-[26px] font-black tracking-tight ${theme.text}`}>IT Asset & Service Management</h1>
+              {/* 🔴 RESTORED & IMPROVED SLOGAN */}
+              <p className={`text-xs lg:text-sm font-semibold mt-1 lg:mt-1.5 ${theme.subText}`}>Welcome back, {adminName}. Here is your live IT infrastructure status.</p>
             </div>
           </Link>
           
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <Link href="/admin" className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider border shadow-sm transition-all hover:-translate-x-1 ${isDarkMode ? 'bg-zinc-900 border-zinc-700 text-slate-300 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-              <Home size={14} /> Dashboard
-            </Link>
-            <button onClick={() => setIsBroadcastModalOpen(true)} className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider shadow-sm transition-all hover:scale-105 active:scale-95">
+            {/* 🔴 DASHBOARD BUTTON REMOVED FROM HERE */}
+
+            <button onClick={() => setIsBroadcastModalOpen(true)} className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all hover:scale-105 active:scale-95">
               <Megaphone size={14} /> Announcement
             </button>
-            <button onClick={() => router.push('/admin/settings')} className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider border shadow-sm transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-zinc-900 border-orange-500/30 text-orange-400' : 'bg-orange-50 border-orange-200 text-orange-600'}`}>
+            <button onClick={() => router.push('/admin/settings')} className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-3 rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border shadow-sm transition-all hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-zinc-900 border-orange-500/30 text-orange-400' : 'bg-orange-50 border-orange-200 text-orange-600'}`}>
               <Settings size={14} /> Settings
             </button>
             {notifications.length > 0 && (
-              <button className="p-2 sm:p-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 relative animate-bounce">
+              <button className="p-2 sm:p-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 relative animate-bounce">
                 <Bell size={16} />
-                <span className="absolute -top-1 -right-1 bg-rose-600 text-white font-black text-[9px] w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center">{notifications.length}</span>
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-black text-[9px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">{notifications.length}</span>
               </button>
             )}
           </div>
@@ -449,7 +448,6 @@ export default function AdminDashboardPage() {
                     onClick={() => router.push(m.path)} 
                     className={`text-left cursor-pointer ${theme.card} p-4 sm:p-5 rounded-3xl border shadow-sm flex flex-col transition-all duration-300 group ${theme.cardHover}`}
                   >
-                    {/* TOP: ICON + TITLE + DESCRIPTION TIED TIGHTLY TOGETHER */}
                     <div className="flex items-center gap-3 mb-2">
                       <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${modTheme.iconBg}`}>
                         <m.icon size={18} strokeWidth={2.5} />
@@ -464,7 +462,6 @@ export default function AdminDashboardPage() {
                     
                     <p className={`text-[10px] lg:text-[11px] font-medium leading-relaxed mb-3 pr-2 ${theme.subText}`}>{m.desc}</p>
                     
-                    {/* BOTTOM: ARROW ANCHORED TO BOTTOM RIGHT */}
                     <div className="mt-auto self-end">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${modTheme.iconBg} ${modTheme.hoverBtn} shrink-0`}>
                         <ArrowRight size={14} strokeWidth={2.5} />
