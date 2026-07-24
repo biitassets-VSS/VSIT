@@ -145,9 +145,7 @@ export default function AdminDashboardPage() {
       const tktData = tickets || [];
       const assetsData = assets || [];
 
-      // 🟢 AGGRESSIVE CASE-INSENSITIVE MATCHING LOGIC TO FIX "0" COUNTERS
-      
-      // 1. ASSETS
+      // 1. ASSETS (CATCH-ALL LOGIC APPLIED TO ENSURE 100% COUNT)
       let usedAssetsCount = 0;
       let inStockAssetsCount = 0;
       let discardedAssetsCount = 0;
@@ -156,14 +154,20 @@ export default function AdminDashboardPage() {
 
       assetsData.forEach(a => {
         const s = (a.status || '').toLowerCase().trim();
+        
         if (s.includes('return request')) returnRequestsCount++;
         else if (s.includes('replace')) replacementRequestsCount++;
         
-        if (s.includes('use') || s.includes('assign') || s.includes('allocat')) {
+        // Check for Used
+        if (['use', 'assign', 'allocat', 'deploy', 'active'].some(k => s.includes(k))) {
           usedAssetsCount++;
-        } else if (s.includes('discard') || s.includes('retire') || s.includes('scrap') || s.includes('broken')) {
+        } 
+        // Check for Discarded / Broken
+        else if (['discard', 'retire', 'scrap', 'broken', 'lost', 'missing', 'stolen', 'damage'].some(k => s.includes(k))) {
           discardedAssetsCount++;
-        } else if (s.includes('stock') || s.includes('avail') || s.includes('unassign') || s === '') {
+        } 
+        // CATCH-ALL: Everything else automatically goes to Stock so nothing is missed.
+        else {
           inStockAssetsCount++;
         }
       });
@@ -304,7 +308,7 @@ export default function AdminDashboardPage() {
     card: isDarkMode ? 'bg-[#121212] border-zinc-800/80' : 'bg-white border-slate-200/80',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    cardHover: isDarkMode ? 'hover:border-purple-500/50' : 'hover:border-purple-200 hover:shadow-md',
+    cardHover: isDarkMode ? 'hover:border-purple-500/50' : 'hover:border-purple-200 hover:shadow-md hover:-translate-y-1',
   };
 
   const getModuleTheme = (color: string) => color === 'orange' 
@@ -318,9 +322,7 @@ export default function AdminDashboardPage() {
       };
 
   return (
-    // 🟢 LAPTOP LAYOUT OPTIMIZATION: lg:h-screen constraints it to fit inside the viewport!
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
-      {/* Scrollable inner container ensures no UI clipping on smaller/zoomed screens, but defaults to no-scroll on 1080p */}
       <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-3 sm:p-4 gap-3 lg:gap-4 overflow-y-auto custom-scrollbar">
         
         {/* 🌟 TOP HEADER */}
@@ -424,12 +426,12 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🟢 RESTORED ORIGINAL MODULE DESIGN (Scales to fit screen) */}
+        {/* 🟢 SYSTEM MODULES (NEW TIGHT LAYOUT) & ACTIVITY LOG */}
         <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-4 min-h-0 pb-4 lg:pb-0">
           
           <div className="w-full lg:w-[75%] flex flex-col gap-2">
             <h3 className={`text-[10px] font-bold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>System Modules</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 lg:gap-3 flex-1 overflow-y-auto lg:overflow-visible">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4 flex-1 overflow-y-auto lg:overflow-visible">
               {[
                 { title: 'Review Inspections', desc: 'Audit smartphone visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: 'orange', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: 'purple', badge: 0 },
@@ -445,22 +447,26 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    className={`text-left cursor-pointer ${theme.card} p-3 sm:p-4 rounded-2xl border shadow-sm flex flex-col justify-between transition-all duration-300 group min-h-[90px] lg:min-h-[110px] ${theme.cardHover}`}
+                    className={`text-left cursor-pointer ${theme.card} p-4 sm:p-5 rounded-3xl border shadow-sm flex flex-col transition-all duration-300 group ${theme.cardHover}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`relative w-8 h-8 lg:w-10 lg:h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${modTheme.iconBg}`}>
+                    {/* TOP: ICON + TITLE + DESCRIPTION TIED TIGHTLY TOGETHER */}
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${modTheme.iconBg}`}>
                         <m.icon size={18} strokeWidth={2.5} />
                         {m.badge > 0 && (
-                          <span className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-4 lg:h-5 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white border-2 bg-rose-500 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
+                          <span className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white border-2 bg-rose-500 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
                             {m.badge}
                           </span>
                         )}
                       </div>
-                      <h4 className={`text-xs lg:text-sm font-bold tracking-tight ${theme.text}`}>{m.title}</h4>
+                      <h4 className={`text-[13px] lg:text-sm font-extrabold tracking-tight ${theme.text}`}>{m.title}</h4>
                     </div>
-                    <div className="flex items-center justify-between mt-2 lg:mt-3">
-                      <p className={`text-[9px] lg:text-[10px] font-medium leading-tight max-w-[130px] lg:max-w-[150px] ${theme.subText}`}>{m.desc}</p>
-                      <div className={`w-7 h-7 lg:w-8 lg:h-8 rounded-full flex items-center justify-center transition-all duration-300 ${modTheme.iconBg} ${modTheme.hoverBtn} shrink-0 ml-2`}>
+                    
+                    <p className={`text-[10px] lg:text-[11px] font-medium leading-relaxed mb-3 pr-2 ${theme.subText}`}>{m.desc}</p>
+                    
+                    {/* BOTTOM: ARROW ANCHORED TO BOTTOM RIGHT */}
+                    <div className="mt-auto self-end">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${modTheme.iconBg} ${modTheme.hoverBtn} shrink-0`}>
                         <ArrowRight size={14} strokeWidth={2.5} />
                       </div>
                     </div>
@@ -472,7 +478,7 @@ export default function AdminDashboardPage() {
 
           <div className="w-full lg:w-[25%] flex flex-col gap-2 h-[350px] lg:h-full">
             <h3 className={`text-[10px] font-bold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity</h3>
-            <div className={`${theme.card} rounded-2xl border p-4 flex-1 flex flex-col overflow-hidden`}>
+            <div className={`${theme.card} rounded-3xl border p-5 flex-1 flex flex-col overflow-hidden`}>
               {recentActivity.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
                   <Activity size={24} className={`${theme.subText} mb-2`} />
@@ -493,7 +499,7 @@ export default function AdminDashboardPage() {
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-3 w-full py-2.5 rounded-xl text-[10px] font-bold uppercase border transition-all ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-3 w-full py-3 rounded-xl text-[10px] font-bold uppercase border transition-all ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
                 View All Logs
               </button>
             </div>
