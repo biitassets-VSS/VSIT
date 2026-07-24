@@ -10,7 +10,7 @@ import {
   Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
   Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
   Keyboard, RectangleHorizontal, Monitor, Sparkles, History,
-  Filter, FilterX, ShieldCheck, FileText, Cpu, CheckCircle
+  Filter, FilterX, ShieldCheck, FileText, Cpu, CheckCircle, Zap
 } from 'lucide-react';
 
 // ==========================================
@@ -93,6 +93,53 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
   }
   
   return `VSS-${middle}-${suffix}`;
+}
+
+// ==========================================
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER
+// ==========================================
+function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
+  if (!category.toLowerCase().includes('laptop')) {
+    return fallback || 'Standard Business Grade IT Hardware Configuration';
+  }
+
+  const t = textToParse.toLowerCase();
+
+  // 1. Detect Processor (CPU)
+  let cpu = 'Intel Core i5 (vPro)';
+  if (t.includes('ryzen 9') || t.includes('r9')) cpu = 'AMD Ryzen 9 Pro';
+  else if (t.includes('ryzen 7') || t.includes('r7')) cpu = 'AMD Ryzen 7 Pro';
+  else if (t.includes('ryzen 5') || t.includes('r5')) cpu = 'AMD Ryzen 5 Pro';
+  else if (t.includes('ryzen')) cpu = 'AMD Ryzen Pro Series';
+  else if (t.includes('ultra 7') || t.includes('intel 7')) cpu = 'Intel Core Ultra 7 (vPro)';
+  else if (t.includes('ultra 5') || t.includes('intel 5')) cpu = 'Intel Core Ultra 5 (vPro)';
+  else if (t.includes('i9')) cpu = 'Intel Core i9 (vPro)';
+  else if (t.includes('i7')) cpu = 'Intel Core i7 (vPro)';
+  else if (t.includes('i5')) cpu = 'Intel Core i5 (vPro)';
+  else if (t.includes('m3')) cpu = 'Apple M3 Pro / Max Silicon';
+  else if (t.includes('m2')) cpu = 'Apple M2 Pro / Max Silicon';
+  else if (t.includes('m1')) cpu = 'Apple M1 Silicon';
+  else if (t.includes('probook') || t.includes('thinkpad') || t.includes('latitude') || t.includes('elitebook') || t.includes('vpro')) cpu = 'Intel Core i5 / i7 (vPro Business Edition)';
+
+  // 2. Detect RAM
+  let ram = '16GB DDR4/DDR5 RAM';
+  if (t.includes('64gb')) ram = '64GB High-Speed RAM';
+  else if (t.includes('32gb')) ram = '32GB DDR5 RAM';
+  else if (t.includes('8gb')) ram = '8GB DDR4 RAM';
+
+  // 3. Detect SSD Storage
+  let storage = '512GB NVMe SSD';
+  if (t.includes('2tb')) storage = '2TB PCIe NVMe SSD';
+  else if (t.includes('1tb')) storage = '1TB PCIe NVMe SSD';
+  else if (t.includes('256gb')) storage = '256GB NVMe SSD';
+
+  // 4. Detect Operating System
+  let os = 'Windows 11 Pro';
+  if (t.includes('macbook') || t.includes('apple') || t.includes('m1') || t.includes('m2') || t.includes('m3')) os = 'macOS Sonoma / Sequoia';
+  else if (t.includes('ubuntu') || t.includes('linux')) os = 'Linux Ubuntu LTS';
+  else if (t.includes('win 10') || t.includes('windows 10')) os = 'Windows 10 Pro (64-bit)';
+
+  return `${cpu} | ${ram} | ${storage} | ${os}`;
 }
 
 // ==========================================
@@ -221,7 +268,7 @@ function AssetRegistryContent() {
   const [newAssetCondition, setNewAssetCondition] = useState('New');
   const [newAssetStatus, setNewAssetStatus] = useState('In Stock (Unassigned)');
   const [newAssetAssignee, setNewAssetAssignee] = useState('');
-  const [newAssetSpecs, setNewAssetSpecs] = useState('Intel Core i5/i7 | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
+  const [newAssetSpecs, setNewAssetSpecs] = useState('Intel Core i5 (vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
   const [isSaving, setIsSaving] = useState(false);
 
   const [isEditingAsset, setIsEditingAsset] = useState(false);
@@ -241,7 +288,7 @@ function AssetRegistryContent() {
     if (isAddModalOpen) {
       setNewAssetTag(generateCategoryPrefix(newAssetCategory));
       if (newAssetCategory === 'Laptop') {
-        setNewAssetSpecs('Intel Core i5/i7 | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
+        setNewAssetSpecs('Intel Core i5 (vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
       } else if (newAssetCategory.includes('Keyboard') || newAssetCategory.includes('Mouse')) {
         setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
       } else {
@@ -310,7 +357,7 @@ function AssetRegistryContent() {
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
           live_inspection_notes: latestInspection?.notes || null,
           live_inspection_photos: latestInspection?.photos || null,
-          system_specs: asset.system_specs || asset.specs || (String(asset.category).toLowerCase().includes('laptop') ? 'Intel Core i5/i7 | 16GB RAM | 512GB SSD | Win 11 Pro' : 'Standard Business Hardware Configuration')
+          system_specs: asset.system_specs || asset.specs || (String(asset.category).toLowerCase().includes('laptop') ? 'Intel Core i5/i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro' : 'Standard Business Hardware Configuration')
         };
       });
       setAssets(compiledAssets);
@@ -1271,7 +1318,13 @@ function AssetRegistryContent() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                        <div>
+                          <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
+                            <span>Assets Name</span>
+                            <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
+                          </label>
+                          <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1280,9 +1333,30 @@ function AssetRegistryContent() {
                         <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
                       </div>
 
-                      <div>
-                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                        <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
+                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                        </div>
+                        <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {[
+                            "Intel Core i5 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
+                            "Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
+                            "AMD Ryzen 7 Pro | 16GB RAM | 512GB SSD | Win 11 Pro",
+                            "Intel Core Ultra 7 | 32GB RAM | 1TB SSD | Win 11 Pro",
+                            "Apple M2/M3 Pro | 16GB Unified RAM | 512GB SSD | macOS"
+                          ].map((preset, pIdx) => (
+                            <button
+                              key={`preset-edit-${pIdx}`}
+                              type="button"
+                              onClick={() => setEditForm({...editForm, system_specs: preset})}
+                              className={`text-[9px] px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-purple-950/50 border-purple-800/60 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'}`}
+                            >
+                              ⚡ {preset.split('|')[0].trim()}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
@@ -1451,6 +1525,13 @@ function AssetRegistryContent() {
                     const newCat = e.target.value;
                     setNewAssetCategory(newCat);
                     setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
+                    if (newCat === 'Laptop') {
+                      setNewAssetSpecs('Intel Core i5 (vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
+                    } else if (newCat.includes('Keyboard') || newCat.includes('Mouse')) {
+                      setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
+                    } else {
+                      setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
+                    }
                   }} className={`w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-colors border ${theme.inputBg}`}>
                     {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
@@ -1477,7 +1558,13 @@ function AssetRegistryContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Assets Name *</label><input type="text" required value={newAssetName} onChange={e => setNewAssetName(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                <div>
+                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
+                    <span>Assets Name *</span>
+                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
+                  </label>
+                  <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1486,9 +1573,30 @@ function AssetRegistryContent() {
                 <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
               </div>
 
-              <div>
-                <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
+                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                </div>
+                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[
+                    "Intel Core i5 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
+                    "Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
+                    "AMD Ryzen 7 Pro | 16GB RAM | 512GB SSD | Win 11 Pro",
+                    "Intel Core Ultra 7 | 32GB RAM | 1TB SSD | Win 11 Pro",
+                    "Apple M2/M3 Pro | 16GB Unified RAM | 512GB SSD | macOS"
+                  ].map((preset, pIdx) => (
+                    <button
+                      key={`preset-add-${pIdx}`}
+                      type="button"
+                      onClick={() => setNewAssetSpecs(preset)}
+                      className={`text-[9px] px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-purple-950/50 border-purple-800/60 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'}`}
+                    >
+                      ⚡ {preset.split('|')[0].trim()}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
