@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, Ticket as TicketIcon, Clock, CheckCircle2, 
   AlertTriangle, Search, RefreshCw, ShieldCheck, Image as ImageIcon, 
-  PauseCircle, PlayCircle, ExternalLink, User, Sparkles, X
+  PauseCircle, PlayCircle, ExternalLink, User, X
 } from 'lucide-react';
 
 export default function AdminTicketsPage() {
@@ -19,7 +19,6 @@ export default function AdminTicketsPage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  // 🌟 GLOBAL THEME SYNC
   useEffect(() => {
     const savedTheme = localStorage.getItem('vsit_theme');
     if (savedTheme === 'dark') {
@@ -46,7 +45,6 @@ export default function AdminTicketsPage() {
     }
   };
 
-  // 🌟 THE ADMIN ADJUDICATION ENGINE (GUARANTEED SYNC WITH STAFF DASHBOARD)
   const executeTicketVerdict = async (ticketId: string, newStatus: string, staffEmail: string) => {
     const remarks = prompt(`Provide an update note for the staff member (Status changing to: ${newStatus}):`) || '';
     
@@ -96,7 +94,6 @@ export default function AdminTicketsPage() {
     }
   };
 
-  // 🎨 Deep Purple & Light Orange Brand Badges
   const getStatusColor = (status: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s.includes('progress')) return isDarkMode ? 'text-purple-300 bg-purple-900/40 border-purple-700/60' : 'text-purple-800 bg-purple-100 border-purple-300';
@@ -105,7 +102,6 @@ export default function AdminTicketsPage() {
     return isDarkMode ? 'text-orange-300 bg-orange-950/40 border-orange-700/60' : 'text-orange-800 bg-orange-100 border-orange-300';
   };
 
-  // 🌟 BRAND PALETTE: DEEP PURPLE & LIGHT ORANGE (HIGH CONTRAST)
   const theme = {
     bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-gradient-to-br from-orange-50/30 via-purple-50/20 to-slate-50',
     card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200/80',
@@ -148,7 +144,7 @@ export default function AdminTicketsPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* BRAND HEADER */}
+        {/* HEADER */}
         <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all duration-300`}>
           <div className="flex items-center gap-5">
             <button onClick={() => router.push('/admin')} className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}>
@@ -158,8 +154,7 @@ export default function AdminTicketsPage() {
               <div className="flex items-center gap-3 mb-1">
                 <h1 className={`text-2xl font-black tracking-tight ${theme.textMain} flex items-center gap-2.5`}>
                   <ShieldCheck className="text-purple-700 dark:text-purple-400" />
-                  Support Desk Commander 
-                  <span className="text-orange-600 dark:text-orange-400 text-xs font-extrabold ml-1 bg-orange-50 dark:bg-orange-950/50 border border-orange-300 dark:border-orange-800/60 px-2.5 py-1 rounded-lg uppercase tracking-wider">(v3.0 Brand Edition)</span>
+                  Support Desk Commander
                 </h1>
                 {openCount > 0 && (
                   <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
@@ -194,11 +189,11 @@ export default function AdminTicketsPage() {
                   key={tab.id} onClick={() => setFilterTab(tab.id as any)}
                   className={`group flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shrink-0 transition-all duration-200 cursor-pointer border ${
                     isActive 
-                      ? 'bg-gradient-to-r from-purple-700 to-purple-900 text-white shadow-lg shadow-purple-900/25 border-purple-600 scale-[1.02]' 
-                      : `${theme.card} ${theme.textSub} hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 dark:hover:bg-purple-950/50 dark:hover:text-purple-300 border`
+                      ? 'bg-purple-600 text-white shadow-md border-purple-600 scale-[1.02]' 
+                      : `${theme.card} ${theme.textSub} hover:text-purple-600 hover:border-purple-300 dark:hover:text-purple-300 dark:hover:border-purple-700`
                   }`}
                 >
-                  <span className={isActive ? 'text-orange-400' : 'text-purple-500 group-hover:text-orange-500 transition-colors'}>{tab.icon}</span>
+                  <span className={isActive ? 'text-white' : 'text-purple-500 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors'}>{tab.icon}</span>
                   <span>{tab.label}</span>
                 </button>
               );
