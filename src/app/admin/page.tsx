@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
         }
       });
 
-      // 2. VERIFICATIONS (INSPECTIONS)
+      // 2. VERIFICATIONS
       let pendingCount = 0;
       inspData.forEach(i => {
         const s = (i.status || '').toLowerCase().trim();
@@ -196,12 +196,14 @@ export default function AdminDashboardPage() {
       });
       const totalActiveTickets = pendingTicketsCount + inProcessTicketsCount;
 
-      // 4. LIVE STAFF
+      // 4. LIVE STAFF (FIXED STRICT LOGIC)
       let liveStaffCount = 0;
       staffData.forEach(s => {
-        const statusStr = (s.status || '').toLowerCase();
+        const statusStr = (s.status || '').toLowerCase().trim();
         const isOnlineBool = s.is_online === true || String(s.is_online).toLowerCase() === 'true';
-        if (isOnlineBool || statusStr.includes('online') || statusStr.includes('live') || statusStr.includes('active')) {
+        
+        // Removed "active" from this check so it doesn't count everyone with an active account
+        if (isOnlineBool || statusStr === 'online' || statusStr === 'live') {
           liveStaffCount++;
         }
       });
@@ -322,24 +324,22 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
       <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-3 sm:p-4 gap-3 lg:gap-4 overflow-y-auto custom-scrollbar">
         
-        {/* 🌟 TOP HEADER (UPDATED TITLE, SLOGAN, LOGO SIZE & ICON) */}
+        {/* 🌟 TOP HEADER */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border flex flex-col md:flex-row justify-between md:items-center gap-4 shrink-0 shadow-sm`}>
           <Link href="/admin" className="flex items-center gap-4 lg:gap-6 group">
-            {/* 🔴 INCREASED CONTAINER, SMALLER ICON */}
-            <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-[20px] lg:rounded-[24px] bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0 transition-transform group-hover:scale-105">
-              <Cpu className="w-7 h-7 lg:w-8 lg:h-8 opacity-90" strokeWidth={2} />
+            
+            {/* 🔴 NEW LOGO DESIGN: Outlined light orange background with orange icon */}
+            <div className={`w-16 h-16 lg:w-20 lg:h-20 rounded-[20px] lg:rounded-[24px] border-2 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-500' : 'bg-orange-50 border-orange-200 text-orange-500'}`}>
+              <Cpu className="w-8 h-8 lg:w-10 lg:h-10" strokeWidth={1.5} />
             </div>
+            
             <div>
-              {/* 🔴 RENAMED TITLE */}
               <h1 className={`text-xl lg:text-[26px] font-black tracking-tight ${theme.text}`}>IT Asset & Service Management</h1>
-              {/* 🔴 RESTORED & IMPROVED SLOGAN */}
               <p className={`text-xs lg:text-sm font-semibold mt-1 lg:mt-1.5 ${theme.subText}`}>Welcome back, {adminName}. Here is your live IT infrastructure status.</p>
             </div>
           </Link>
           
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {/* 🔴 DASHBOARD BUTTON REMOVED FROM HERE */}
-
             <button onClick={() => setIsBroadcastModalOpen(true)} className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all hover:scale-105 active:scale-95">
               <Megaphone size={14} /> Announcement
             </button>
@@ -425,7 +425,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🟢 SYSTEM MODULES (NEW TIGHT LAYOUT) & ACTIVITY LOG */}
+        {/* 🟢 SYSTEM MODULES & ACTIVITY LOG */}
         <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-4 min-h-0 pb-4 lg:pb-0">
           
           <div className="w-full lg:w-[75%] flex flex-col gap-2">
