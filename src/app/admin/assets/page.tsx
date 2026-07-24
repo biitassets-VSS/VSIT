@@ -104,7 +104,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const t = {
-    bg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-white border-slate-200',
+    bg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-white border-slate-300',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     menu: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
@@ -136,7 +136,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <div className={`flex items-center w-full p-3.5 border rounded-xl focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all ${t.bg}`}>
+      <div className={`flex items-center w-full p-3.5 border rounded-xl focus-within:border-purple-600 focus-within:ring-2 focus-within:ring-purple-600/20 transition-all ${t.bg}`}>
         <Search size={14} className={`${t.textSub} mr-2 shrink-0`} />
         <input 
           type="text" value={open ? query : query || ''} 
@@ -160,8 +160,8 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
                 key={s.id} className={`p-3.5 text-xs cursor-pointer border-b ${isDarkMode ? 'border-[#27272a]/50' : 'border-slate-50'} flex justify-between items-center transition-colors group ${t.hover}`}
                 onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}
               >
-                <span className={`font-semibold group-hover:text-purple-600 dark:group-hover:text-purple-400 ${t.text}`}>{s.full_name || s.name}</span>
-                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md transition-colors ${isDarkMode ? 'bg-[#18181b] text-zinc-400 group-hover:bg-purple-500/20 group-hover:text-purple-300' : 'bg-slate-100 text-slate-500 group-hover:bg-purple-100 group-hover:text-purple-700'}`}>
+                <span className={`font-semibold group-hover:text-purple-700 dark:group-hover:text-purple-400 ${t.text}`}>{s.full_name || s.name}</span>
+                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md transition-colors ${isDarkMode ? 'bg-[#18181b] text-zinc-400 group-hover:bg-purple-500/20 group-hover:text-purple-300' : 'bg-slate-100 text-slate-600 group-hover:bg-purple-100 group-hover:text-purple-700'}`}>
                   {s.emp_code || s.email}
                 </span>
               </div>
@@ -314,7 +314,7 @@ function AssetRegistryContent() {
     if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200';
     if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-700 border-rose-200 line-through';
     if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
-    return isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200';
+    return isDarkMode ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' : 'bg-purple-50 text-purple-800 border-purple-200';
   };
 
   const getInspectionStatusColor = (status: string) => {
@@ -741,7 +741,7 @@ function AssetRegistryContent() {
           </div>
         </div>
 
-        {/* TABS, SEARCH & 🌟 NEW ADVANCED FILTER BAR */}
+        {/* TABS, SEARCH & 🌟 EXACT APPROVED TAB STYLING */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {[
@@ -796,7 +796,7 @@ function AssetRegistryContent() {
             </div>
           </div>
 
-          {/* 🌟 DEDICATED DROPDOWN FILTER BAR (100% READABILITY IN LIGHT & DARK MODE) */}
+          {/* 🌟 DEDICATED DROPDOWN FILTER BAR (100% LIGHT & DARK MODE READABILITY) */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
               <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${theme.textSub}`}>
@@ -1080,7 +1080,7 @@ function AssetRegistryContent() {
               <div className={`w-full md:w-[35%] p-8 flex flex-col items-center border-b md:border-b-0 md:border-r ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-100'} relative shrink-0`}>
                 <button onClick={() => setViewAssetModal(null)} className={`absolute md:hidden top-4 right-4 p-2 rounded-full shadow-sm ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-white text-slate-400'}`}><X size={14}/></button>
                 
-                <h3 className={`text-2xl font-black tracking-widest uppercase mb-8 mt-4 text-purple-700 dark:text-purple-300`}>VSS</h3>
+                <h3 className={`text-2xl font-black tracking-widest uppercase mb-8 mt-4 text-purple-800 dark:text-purple-300`}>VSS</h3>
                 
                 <div className="bg-white p-5 rounded-[1.5rem] shadow-md border border-purple-100 mb-8 relative group">
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-48 h-48 object-contain" />
@@ -1103,7 +1103,7 @@ function AssetRegistryContent() {
 
               {/* Right Column: Editor Workspace & History Log */}
               <div className={`w-full md:w-[65%] flex flex-col overflow-y-auto custom-scrollbar relative ${theme.modalBody}`}>
-                <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex absolute top-6 right-6 p-2.5 rounded-full cursor-pointer z-10 transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-purple-50 hover:bg-purple-100 text-purple-700'}`}><X size={18}/></button>
+                <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex absolute top-6 right-6 p-2.5 rounded-full cursor-pointer z-10 transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-800'}`}><X size={18}/></button>
 
                 <div className="p-8 md:p-10 space-y-8">
                   <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b gap-4 ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
@@ -1117,7 +1117,7 @@ function AssetRegistryContent() {
                         <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20' : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200'}`}>
                           <Trash2 size={14} /> Delete
                         </button>
-                        <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-50 text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
+                        <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-100 text-purple-900 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
                           <Edit2 size={14} /> Edit
                         </button>
                       </div>
@@ -1127,7 +1127,7 @@ function AssetRegistryContent() {
                   {isEditingAsset ? (
                     <div className="space-y-6 animate-in fade-in duration-200">
                       <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                        <span className={`text-sm font-bold uppercase tracking-widest text-purple-700 dark:text-purple-300`}>Editing Hardware Record</span>
+                        <span className={`text-sm font-bold uppercase tracking-widest text-purple-800 dark:text-purple-300`}>Editing Hardware Record</span>
                       </div>
 
                       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
@@ -1169,7 +1169,7 @@ function AssetRegistryContent() {
                         <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
                       </div>
 
-                      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
+                      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
                         <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
                         <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
                         <div>
@@ -1180,13 +1180,13 @@ function AssetRegistryContent() {
                         </div>
                       </div>
 
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200'}`}>
+                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50 border-purple-200'}`}>
                         <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
                         <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
                       </div>
 
                       <div className="flex gap-4 pt-6">
-                        <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
+                        <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
                         <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 cursor-pointer transition-all">
                           {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
                         </button>
@@ -1195,7 +1195,7 @@ function AssetRegistryContent() {
                   ) : (
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-purple-700 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-purple-800 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
                         <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Serial Number (S/N)</p><p className={`text-sm font-mono font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
                       </div>
 
@@ -1210,7 +1210,7 @@ function AssetRegistryContent() {
                         <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Inspection Status</p><div className="flex items-center gap-1.5 mt-1.5"><span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
                       </div>
 
-                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/60 border-purple-200/80'}`}>
+                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-100 border-purple-300'}`}>
                         <div>
                           <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
                           <div className="flex items-center gap-3">
@@ -1220,14 +1220,14 @@ function AssetRegistryContent() {
                         </div>
                         <div className="flex flex-col items-end">
                            <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
-                           <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-800 text-purple-300' : 'bg-white border-purple-200 text-purple-900'}`}>{viewAssetModal.emp_code}</span>
+                           <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-800 text-purple-300' : 'bg-white border-purple-300 text-purple-950'}`}>{viewAssetModal.emp_code}</span>
                         </div>
                       </div>
 
                       {/* 🌟 LIFECYCLE & ACTIVITY HISTORY */}
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/40 border-purple-200/70'}`}>
+                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
                         <div className="flex items-center gap-2 mb-4">
-                          <History size={16} className="text-purple-600 dark:text-purple-400" />
+                          <History size={16} className="text-purple-700 dark:text-purple-400" />
                           <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
                         </div>
                         
@@ -1248,7 +1248,7 @@ function AssetRegistryContent() {
                               } catch(e){}
 
                               return (
-                                <div key={idx} className={`p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-100'}`}>
+                                <div key={idx} className={`p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200'}`}>
                                   <div className="flex justify-between items-start mb-2">
                                     <div>
                                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
@@ -1257,7 +1257,7 @@ function AssetRegistryContent() {
                                     <span className={`text-[10px] font-bold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
                                   </div>
                                   {log.notes && (
-                                    <div className={`mt-2 text-xs font-mono p-3 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-200/80' : 'bg-purple-50/50 border-purple-100 text-slate-700'}`}>
+                                    <div className={`mt-2 text-xs font-mono p-3 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-200/80' : 'bg-purple-50 border-purple-200 text-slate-800'}`}>
                                       {log.notes}
                                     </div>
                                   )}
@@ -1368,12 +1368,12 @@ function AssetRegistryContent() {
             </div>
             
             <div className="space-y-4 text-left">
-              <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border ${isDarkMode ? 'bg-purple-900/30 border-purple-800/60 text-purple-300 hover:bg-purple-900/50' : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border-purple-200'}`}>
+              <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border ${isDarkMode ? 'bg-purple-900/30 border-purple-800/60 text-purple-300 hover:bg-purple-900/50' : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-300'}`}>
                 <Download size={16} className="text-purple-600"/> <span>Download CSV Template</span>
               </button>
             </div>
 
-            <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c] hover:bg-purple-950/30' : 'border-purple-200 bg-purple-50/30 hover:bg-purple-50/60'}`}>
+            <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c] hover:bg-purple-950/30' : 'border-purple-300 bg-purple-50/30 hover:bg-purple-50/60'}`}>
               <FileSpreadsheet size={48} className="text-purple-600 animate-pulse" />
               <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-purple-600 file:text-white hover:file:opacity-90' : 'text-slate-700 file:bg-purple-600 file:text-white'}`} />
             </div>
