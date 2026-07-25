@@ -97,7 +97,7 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 }
 
 // ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.1 PRO)
 // ==========================================
 function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
   if (!category.toLowerCase().includes('laptop')) {
@@ -106,6 +106,7 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
 
   const t = textToParse.toLowerCase();
 
+  // 1. Exact Model Detection Rules (100% Accuracy)
   if (t.includes('thinkbook') && (t.includes('16s') || t.includes('r7') || t.includes('7735hs'))) {
     return 'AMD Ryzen 7 7735HS | 16GB DDR5 RAM | 512GB NVMe SSD | Windows 11 Home';
   }
@@ -125,6 +126,7 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
     return 'Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro';
   }
 
+  // 2. Generic Processor Fallbacks
   let cpu = 'Intel Core i5 (vPro Business Edition)';
   if (t.includes('ryzen 7') || t.includes('r7')) cpu = 'AMD Ryzen 7 Pro Series';
   else if (t.includes('ryzen 5') || t.includes('r5')) cpu = 'AMD Ryzen 5 Pro Series';
@@ -170,7 +172,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     menu: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
-    hover: isDarkMode ? 'hover:bg-purple-950/40' : 'hover:bg-purple-50',
+    hover: isDarkMode ? 'hover:bg-purple-950/40' : 'hover:bg-orange-50',
     header: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-500' : 'bg-slate-50 border-slate-100 text-slate-500',
   };
 
@@ -198,7 +200,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <div className={`flex items-center w-full p-3.5 border rounded-xl focus-within:border-purple-600 focus-within:ring-2 focus-within:ring-purple-600/20 transition-all ${t.bg}`}>
+      <div className={`flex items-center w-full p-3 border rounded-xl focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all ${t.bg}`}>
         <Search size={14} className={`${t.textSub} mr-2 shrink-0`} />
         <input 
           type="text" value={open ? query : query || ''} 
@@ -222,8 +224,8 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
                 key={s.id} className={`p-3.5 text-xs cursor-pointer border-b ${isDarkMode ? 'border-[#27272a]/50' : 'border-slate-50'} flex justify-between items-center transition-colors group ${t.hover}`}
                 onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}
               >
-                <span className={`font-semibold group-hover:text-purple-700 dark:group-hover:text-purple-400 ${t.text}`}>{s.full_name || s.name}</span>
-                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md transition-colors ${isDarkMode ? 'bg-[#18181b] text-zinc-400 group-hover:bg-purple-500/20 group-hover:text-purple-300' : 'bg-slate-100 text-slate-600 group-hover:bg-purple-100 group-hover:text-purple-700'}`}>
+                <span className={`font-semibold group-hover:text-orange-600 dark:group-hover:text-orange-400 ${t.text}`}>{s.full_name || s.name}</span>
+                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md transition-colors ${isDarkMode ? 'bg-[#18181b] text-zinc-400 group-hover:bg-orange-500/20 group-hover:text-orange-300' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-700'}`}>
                   {s.emp_code || s.email}
                 </span>
               </div>
@@ -388,7 +390,7 @@ function AssetRegistryContent() {
     if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-800 border-purple-300';
     if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-800 border-rose-300 line-through';
     if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-800 border-amber-300';
-    return isDarkMode ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' : 'bg-purple-100/80 text-purple-900 border-purple-300';
+    return isDarkMode ? 'bg-orange-500/10 text-orange-300 border-orange-500/20' : 'bg-orange-50/80 text-orange-900 border-orange-300';
   };
 
   const getInspectionStatusColor = (status: string) => {
@@ -413,7 +415,7 @@ function AssetRegistryContent() {
     });
   };
 
-  // 🌟 OFFICIAL HANDOVER AGREEMENT GENERATOR WITH UPDATED TERMS & INSPECTION EVIDENCE
+  // 🌟 OFFICIAL HANDOVER AGREEMENT GENERATOR WITH EXACT 6-POINT CORPORATE POLICY
   const handleGenerateHandoverPDF = (asset: any) => {
     const printWindow = window.open('', '_blank', 'width=900,height=1100');
     if (!printWindow) return alert("Please allow pop-ups to view and download the official Handover Agreement.");
@@ -424,7 +426,6 @@ function AssetRegistryContent() {
 
     const proofHash = `AUTH-PROOF-${safeString(asset.id).substring(0, 8).toUpperCase()}-${safeString(asset.emp_code || 'EMP').substring(0, 6).toUpperCase()}-${Date.now().toString(16).substring(0, 6).toUpperCase()}`;
 
-    // Extract latest inspection photos for agreement audit trail
     let photosHtml = '';
     let photosArray: string[] = [];
     try {
@@ -438,7 +439,7 @@ function AssetRegistryContent() {
     if (photosArray.length > 0) {
       photosHtml = `
         <div style="margin-top: 15px;">
-          <span class="label" style="color: #6b21a8; margin-bottom: 8px;">Visual Inspection Evidence / Hardware Condition Photos:</span>
+          <span class="label" style="color: #ea580c; margin-bottom: 8px;">Visual Inspection Evidence / Hardware Condition Photos:</span>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             ${photosArray.slice(0, 4).map(url => `<img src="${url}" style="width: 130px; height: 130px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" />`).join('')}
           </div>
@@ -454,25 +455,25 @@ function AssetRegistryContent() {
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
             body { font-family: 'Inter', sans-serif; color: #1e293b; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; }
-            .header { border-bottom: 3px solid #6b21a8; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; items-center; }
-            .logo { font-size: 28px; font-weight: 900; color: #6b21a8; letter-spacing: 2px; }
+            .header { border-bottom: 3px solid #ea580c; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; items-center; }
+            .logo { font-size: 28px; font-weight: 900; color: #ea580c; letter-spacing: 2px; }
             .doc-title { font-size: 22px; font-weight: 800; color: #0f172a; text-transform: uppercase; }
             .section { margin-bottom: 25px; }
-            .section-title { font-size: 13px; font-weight: 800; color: #6b21a8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 15px; }
+            .section-title { font-size: 13px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 15px; }
             .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
             .field { background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
             .label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px; }
             .value { font-size: 14px; font-weight: 700; color: #0f172a; }
             .specs-box { background: #fff7ed; border: 1px solid #fed7aa; padding: 15px; border-radius: 8px; color: #9a3412; font-weight: 700; font-size: 13px; margin-top: 5px; }
             .notes-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; color: #334155; font-size: 12px; font-family: monospace; margin-top: 5px; }
-            .terms { font-size: 12px; color: #334155; background: #f1f5f9; padding: 22px; border-radius: 8px; margin-top: 30px; border: 1px solid #cbd5e1; }
+            .terms { font-size: 12px; color: #334155; background: #f8fafc; padding: 22px; border-radius: 8px; margin-top: 30px; border: 1px solid #cbd5e1; }
             .terms ul { margin: 10px 0 0 0; padding-left: 20px; }
             .terms li { margin-bottom: 10px; }
             .signature-area { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
             .sig-box { border: 1px solid #cbd5e1; padding: 20px; border-radius: 8px; background: #fff; }
             .sig-line { border-top: 2px solid #0f172a; padding-top: 8px; font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 35px; }
-            .badge { display: inline-block; background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; border: 1px solid #bbf7d0; }
-            .audit-stamp { margin-top: 30px; background: #f0fdf4; border: 2px dashed #16a34a; padding: 16px; border-radius: 8px; color: #14532d; font-family: monospace; font-size: 11px; }
+            .badge { display: inline-block; background: #ffedd5; color: #9a3412; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; border: 1px solid #fed7aa; }
+            .audit-stamp { margin-top: 30px; background: #f8fafc; border: 2px dashed #ea580c; padding: 16px; border-radius: 8px; color: #9a3412; font-family: monospace; font-size: 11px; }
             @media print { body { padding: 0; } }
           </style>
         </head>
@@ -501,13 +502,13 @@ function AssetRegistryContent() {
           <div class="section">
             <div class="section-title">2. Hardware Identity & Specifications</div>
             <div class="grid">
-              <div class="field"><span class="label">Asset Tag ID</span><span class="value" style="color: #6b21a8;">${asset.clean_tag}</span></div>
+              <div class="field"><span class="label">Asset Tag ID</span><span class="value" style="color: #ea580c;">${asset.clean_tag}</span></div>
               <div class="field"><span class="label">Serial Number (Laptop SN - Charger SN)</span><span class="value">${asset.serial_number || 'N/A'}</span></div>
               <div class="field"><span class="label">Device Name</span><span class="value">${asset.safe_display_name}</span></div>
               <div class="field"><span class="label">Brand & Category</span><span class="value">${asset.brand || 'Standard'} (${asset.category})</span></div>
             </div>
             <div style="margin-top: 15px;">
-              <span class="label" style="color: #c2410c;">System Hardware Configuration / Specifications:</span>
+              <span class="label" style="color: #ea580c;">System Hardware Configuration / Specifications:</span>
               <div class="specs-box">${asset.system_specs || 'Standard Business Hardware Configuration'}</div>
             </div>
           </div>
@@ -523,6 +524,7 @@ function AssetRegistryContent() {
             ${photosHtml}
           </div>
 
+          <!-- 🌟 EXACT 6-POINT CORPORATE COMPLIANCE POLICY -->
           <div class="terms">
             <strong style="color: #0f172a; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">Terms of Asset Custody & Compliance:</strong>
             <p style="margin: 8px 0 0 0; font-weight: 600;">I acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
@@ -537,7 +539,7 @@ function AssetRegistryContent() {
 
           <div class="signature-area">
             <div class="sig-box">
-              <div style="font-size: 11px; color: #166534; font-weight: 800; text-transform: uppercase;">Employee Custody Acceptance</div>
+              <div style="font-size: 11px; color: #ea580c; font-weight: 800; text-transform: uppercase;">Employee Custody Acceptance</div>
               <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-top: 8px;">${asset.staff_name}</div>
               <div style="font-size: 11px; color: #64748b;">ID: ${asset.emp_code}</div>
               <div class="sig-line">Digitally Accepted & Executed Online</div>
@@ -552,7 +554,7 @@ function AssetRegistryContent() {
 
           <!-- 🌟 AUTHORITATIVE DIGITAL AUDIT PROOF STAMP -->
           <div class="audit-stamp">
-            <div style="font-size: 12px; font-weight: 800; text-transform: uppercase; margin-bottom: 6px; color: #166534;">🛡️ Digital Signature Execution & Audit Verification Proof</div>
+            <div style="font-size: 12px; font-weight: 800; text-transform: uppercase; margin-bottom: 6px; color: #ea580c;">🛡️ Digital Signature Execution & Audit Verification Proof</div>
             <div><strong>Verification Status:</strong> GENUINE ONLINE SIGNATURE RECORDED</div>
             <div><strong>Execution Timestamp:</strong> ${agreementDate}</div>
             <div><strong>Custody Identity:</strong> ${asset.staff_name} (${asset.staff_email || asset.emp_code})</div>
@@ -949,121 +951,121 @@ function AssetRegistryContent() {
     card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
     textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
     textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
-    inputBg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 focus:border-purple-500 text-purple-100 placeholder-purple-400/50' : 'bg-slate-50 border-slate-200 focus:border-purple-600 text-slate-900 placeholder-slate-400 font-medium',
-    cardHover: isDarkMode ? 'hover:border-purple-600/70 hover:bg-[#1c1430] hover:shadow-xl hover:-translate-y-1' : 'hover:border-purple-300 hover:shadow-md hover:-translate-y-1',
-    modalBody: isDarkMode ? 'bg-[#150f24] border-purple-900/60' : 'bg-white border-purple-200',
-    modalHeader: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-purple-50/50 border-purple-100',
-    iconBgBrand: isDarkMode ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700 font-bold',
+    inputBg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 focus:border-orange-500 text-purple-100 placeholder-purple-400/50' : 'bg-slate-50 border-slate-200 focus:border-orange-600 text-slate-900 placeholder-slate-400 font-medium',
+    cardHover: isDarkMode ? 'hover:border-orange-500/70 hover:bg-[#1c1430] hover:shadow-xl hover:-translate-y-1' : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1',
+    modalBody: isDarkMode ? 'bg-[#150f24] border-purple-900/60' : 'bg-white border-slate-200',
+    modalHeader: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-slate-50/80 border-slate-200/80',
+    iconBgBrand: isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600 font-bold',
   };
 
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
-      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+      <div className="max-w-7xl mx-auto p-3 sm:p-6 md:p-8 space-y-5 sm:space-y-6">
         
-        {/* BRAND HEADER */}
-        <div className={`${theme.card} rounded-3xl p-5 md:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all duration-300`}>
-          <div className="flex items-center gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-purple-500 hover:text-purple-600 ${theme.textSub}`}>
+        {/* BRAND HEADER (COMPACT MOBILE TYPOGRAPHY) */}
+        <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
+          <div className="flex items-center gap-3.5 sm:gap-5">
+            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}>
               <ArrowLeft size={18} />
             </button>
             <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className={`text-2xl font-black tracking-tight ${theme.textMain} flex items-center gap-2.5`}>
-                  <ShieldCheck className="text-purple-600 dark:text-purple-400" />
-                  Hardware Registry 
+              <div className="flex items-center gap-2.5 mb-0.5">
+                <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
+                  <ShieldCheck className="text-orange-600 dark:text-orange-400 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                  <span>Asset Records</span>
                 </h1>
-                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'bg-purple-900/50 text-purple-200 border border-purple-800/50' : 'bg-purple-50 text-purple-800 border border-purple-200'}`}>{assets.length} Units</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>{assets.length} Units</span>
               </div>
-              <p className={`text-sm font-medium ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
+              <p className={`text-xs sm:text-sm font-medium ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             {selectedAssetIds.size > 0 && (
-              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-purple-600/20 transition-all duration-200 animate-in zoom-in-95 cursor-pointer">
-                <Printer size={16} /> <span>Print {selectedAssetIds.size} QRs</span>
+              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-purple-600/20 transition-all duration-200 animate-in zoom-in-95 cursor-pointer shrink-0">
+                <Printer size={15} /> <span>Print {selectedAssetIds.size} QRs</span>
               </button>
             )}
-            <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition-all duration-200 text-xs font-bold uppercase tracking-wider cursor-pointer ${theme.card} hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-300 ${theme.textMain}`}>
-              <FileSpreadsheet size={16} /> <span>Bulk Upload</span>
+            <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all duration-200 text-xs font-bold uppercase tracking-wider cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 ${theme.textMain} shrink-0`}>
+              <FileSpreadsheet size={15} /> <span>Bulk Upload</span>
             </button>
-            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-purple-600/20 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer">
-              <PlusCircle size={16} /> <span>Register Asset</span>
+            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-orange-600/20 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer shrink-0">
+              <PlusCircle size={15} /> <span>New Asset</span>
             </button>
           </div>
         </div>
 
-        {/* TABS, SEARCH & 🌟 EXACT APPROVED TAB STYLING */}
+        {/* TABS, SEARCH & 🌟 MOBILE-FRIENDLY CATEGORY TABS (ICON + COUNT ONLY ON MOBILE) */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {[
-              { name: 'All', icon: <Package size={14}/> }, 
-              { name: 'Laptop', icon: <Laptop size={14}/> },
-              { name: 'Accessories', icon: <Mouse size={14}/> }, 
-              { name: 'Headphone', icon: <Headphones size={14}/> },
-              { name: 'Other', icon: <SlidersHorizontal size={14}/> }
+              { name: 'All', icon: <Package size={15}/> }, 
+              { name: 'Laptop', icon: <Laptop size={15}/> },
+              { name: 'Accessories', icon: <Mouse size={15}/> }, 
+              { name: 'Headphone', icon: <Headphones size={15}/> },
+              { name: 'Other', icon: <SlidersHorizontal size={15}/> }
             ].map(cat => {
               const isActive = selectedCategory === cat.name;
               return (
                 <button
                   key={cat.name} onClick={() => setSelectedCategory(cat.name)}
-                  className={`group flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-semibold uppercase tracking-wider shrink-0 transition-all duration-200 cursor-pointer border ${
+                  className={`group flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all duration-200 cursor-pointer border ${
                     isActive 
-                      ? 'bg-purple-600 text-white shadow-md border-purple-600 scale-[1.02]' 
+                      ? 'bg-orange-600 text-white shadow-sm border-orange-600 scale-[1.02]' 
                       : `${theme.card} ${theme.textSub} hover:text-purple-600 hover:border-purple-300 dark:hover:text-purple-300 dark:hover:border-purple-700`
                   }`}
                 >
-                  <span className={isActive ? 'text-white' : 'text-purple-500 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors'}>{cat.icon}</span> 
-                  <span>{cat.name}</span>
-                  <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold transition-colors ${
+                  <span className={isActive ? 'text-white' : 'text-purple-600 dark:text-purple-400 group-hover:text-purple-700 transition-colors'}>{cat.icon}</span> 
+                  <span className="hidden sm:inline">{cat.name}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md font-mono text-[10px] font-extrabold transition-colors ${
                     isActive 
                       ? 'bg-white/20 text-white' 
-                      : 'bg-slate-100 text-slate-600 group-hover:bg-purple-50 group-hover:text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 dark:group-hover:bg-purple-900/80 dark:group-hover:text-white'
+                      : 'bg-purple-50 text-purple-800 group-hover:bg-purple-100 dark:bg-purple-900/50 dark:text-purple-300 dark:group-hover:bg-purple-900/80'
                   }`}>{getCatCount(cat.name)}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-2.5 sm:gap-3 items-center">
             <button 
               onClick={handleSelectAllFiltered} 
-              className={`px-4 py-3.5 shrink-0 rounded-xl border shadow-sm flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-purple-500/20 border-purple-500/50 text-purple-300' : 'bg-purple-50 border-purple-300 text-purple-800') : `${theme.card} hover:border-purple-400 ${theme.textMain}`}`}
+              className={`px-3 py-2.5 sm:px-4 sm:py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-orange-500/20 border-orange-500/50 text-orange-300' : 'bg-orange-50 border-orange-300 text-orange-800') : `${theme.card} hover:border-orange-400 ${theme.textMain}`}`}
             >
-              <CheckSquare size={16} className={selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-purple-500'} /> 
+              <CheckSquare size={16} className={selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-purple-600'} /> 
               <span className="hidden sm:inline">
                 {selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}
               </span>
             </button>
 
-            <div className={`flex-1 p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-purple-600 focus-within:ring-4 focus-within:ring-purple-600/10 hover:border-purple-300 ${theme.card}`}>
+            <div className={`flex-1 p-2 sm:p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 hover:border-orange-300 ${theme.card}`}>
               <div className="relative w-full">
-                <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+                <Search size={16} className={`absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
                 <input 
                   type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search by Brand, Tag ID, Category, Assets Name, S/N, or Staff Name..." 
-                  className={`w-full pl-12 pr-4 py-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`}
+                  placeholder="Search by Asset Name, Tag ID, Brand, Category, S/N, or Staff..." 
+                  className={`w-full pl-10 sm:pl-11 pr-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all border ${theme.inputBg}`}
                 />
               </div>
             </div>
           </div>
 
-          {/* 🌟 DEDICATED DROPDOWN FILTER BAR (100% LIGHT & DARK MODE READABILITY WITH EXPLICIT STYLE SCHEME) */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-              <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${theme.textSub}`}>
-                <Filter size={14} className="text-purple-600 dark:text-purple-400" /> Filter By:
+          {/* 🌟 SINGLE-ROW COMPACT FILTER BAR (NO BLACK UI, ROSE RESET BUTTON, LIGHT ORANGE COUNT) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t sm:border-t-0 border-slate-200 dark:border-purple-900/30">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto custom-scrollbar">
+              <span className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${theme.textSub}`}>
+                <Filter size={13} className="text-orange-600 dark:text-orange-400" /> Filter:
               </span>
               
-              {/* Status Dropdown */}
+              {/* Status Dropdown (100% White in Light Mode) */}
               <select
                 style={{ colorScheme: isDarkMode ? 'dark' : 'light' }}
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold outline-none border transition-all duration-200 cursor-pointer ${
+                className={`text-[11px] sm:text-xs font-bold py-1.5 px-2.5 rounded-lg border transition-all duration-200 cursor-pointer outline-none shrink-0 ${
                   statusFilter !== 'All' 
-                    ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
-                    : 'bg-white text-slate-900 border-slate-300 hover:border-purple-500 dark:bg-[#150f24] dark:text-purple-100 dark:border-purple-900/60 dark:hover:border-purple-500'
+                    ? 'bg-orange-600 text-white border-orange-600 shadow-sm' 
+                    : 'bg-white text-slate-800 border-slate-300 hover:border-orange-500 dark:bg-[#150f24] dark:text-purple-100 dark:border-purple-900/60'
                 }`}
               >
                 <option value="All" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 All Stock Statuses</option>
@@ -1079,10 +1081,10 @@ function AssetRegistryContent() {
                 style={{ colorScheme: isDarkMode ? 'dark' : 'light' }}
                 value={conditionFilter}
                 onChange={e => setConditionFilter(e.target.value)}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold outline-none border transition-all duration-200 cursor-pointer ${
+                className={`text-[11px] sm:text-xs font-bold py-1.5 px-2.5 rounded-lg border transition-all duration-200 cursor-pointer outline-none shrink-0 ${
                   conditionFilter !== 'All' 
-                    ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
-                    : 'bg-white text-slate-900 border-slate-300 hover:border-purple-500 dark:bg-[#150f24] dark:text-purple-100 dark:border-purple-900/60 dark:hover:border-purple-500'
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-sm' 
+                    : 'bg-white text-slate-800 border-slate-300 hover:border-purple-500 dark:bg-[#150f24] dark:text-purple-100 dark:border-purple-900/60'
                 }`}
               >
                 <option value="All" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ All Conditions</option>
@@ -1091,7 +1093,7 @@ function AssetRegistryContent() {
                 <option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option>
               </select>
 
-              {/* Clear Filters Button (NO BLACK UI!) */}
+              {/* High-Contrast Rose Reset Button (No Black UI) */}
               {(statusFilter !== 'All' || conditionFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
                 <button
                   onClick={() => {
@@ -1100,16 +1102,16 @@ function AssetRegistryContent() {
                     setSearchQuery('');
                     setSelectedCategory('All');
                   }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-100/80 border border-rose-200 transition-all duration-200 flex items-center gap-1 cursor-pointer shadow-sm bg-rose-50/80 dark:bg-rose-950/30 dark:border-rose-800/50 dark:text-rose-400"
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-rose-500 hover:bg-rose-600 text-white transition-all duration-200 flex items-center gap-1 cursor-pointer shadow-sm shrink-0"
                 >
-                  <FilterX size={14} /> Reset All Filters
+                  <FilterX size={13} /> <span>Reset</span>
                 </button>
               )}
             </div>
 
-            {/* Showing Count */}
-            <span className={`text-xs font-bold ${theme.textSub}`}>
-              Showing <strong className={`text-purple-700 dark:text-purple-300 font-black`}>{filteredAssets.length}</strong> of {assets.length} assets
+            {/* Light Orange Highlighted Count */}
+            <span className={`text-xs font-bold ${theme.textSub} shrink-0`}>
+              Showing <strong className="text-orange-600 dark:text-orange-400 font-black">{filteredAssets.length}</strong> of {assets.length} assets
             </span>
           </div>
 
@@ -1118,12 +1120,12 @@ function AssetRegistryContent() {
         {/* ASSET GRID */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-purple-400' : 'border-purple-600'}`}></div>
-            <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Loading Brand Registry...</span>
+            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-orange-400' : 'border-orange-600'}`}></div>
+            <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Loading Asset Records...</span>
           </div>
         ) : filteredAssets.length === 0 ? (
           <div className={`${theme.card} rounded-3xl p-16 border text-center flex flex-col items-center justify-center space-y-3 shadow-sm`}>
-            <Package size={48} className="text-purple-600 opacity-60" />
+            <Package size={48} className="text-orange-600 opacity-60" />
             <h3 className={`text-base font-bold ${theme.textMain}`}>No Hardware Found</h3>
             <p className={`text-xs max-w-sm font-medium ${theme.textSub}`}>No assets match your selected filter combination. Try resetting your filters to view all 213 registered units.</p>
             <button
@@ -1133,13 +1135,13 @@ function AssetRegistryContent() {
                 setSearchQuery('');
                 setSelectedCategory('All');
               }}
-              className="mt-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-purple-600/20 transition-all cursor-pointer"
+              className="mt-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer"
             >
               Reset All Filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredAssets.map(asset => {
               const isSelected = selectedAssetIds.has(asset.id);
 
@@ -1148,66 +1150,66 @@ function AssetRegistryContent() {
                   const target = e.target as HTMLElement;
                   if (target.closest('button')) return;
                   toggleSelectAsset(asset.id);
-                }} className={`${theme.card} rounded-3xl border shadow-sm flex flex-col justify-between group transition-all duration-300 cursor-pointer ${isSelected ? (isDarkMode ? '!border-purple-500 ring-2 ring-purple-500 !bg-purple-950/40' : '!border-purple-500 ring-2 ring-purple-500 !bg-purple-50/40') : theme.cardHover} overflow-hidden`}>
+                }} className={`${theme.card} rounded-3xl border shadow-sm flex flex-col justify-between group transition-all duration-300 cursor-pointer ${isSelected ? (isDarkMode ? '!border-orange-500 ring-2 ring-orange-500 !bg-purple-950/40' : '!border-orange-500 ring-2 ring-orange-500 !bg-orange-50/30') : theme.cardHover} overflow-hidden`}>
                   
-                  <div className={`p-5 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${isSelected ? 'bg-purple-600 text-white shadow-md' : `${theme.iconBgBrand} group-hover:bg-purple-600 group-hover:text-white shadow-sm`}`}>
-                          {getCategoryIcon(asset.category, 20)}
+                  <div className={`p-4 sm:p-5 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
+                    <div className="flex justify-between items-start mb-3.5">
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${isSelected ? 'bg-orange-600 text-white shadow-sm' : `${theme.iconBgBrand} group-hover:bg-orange-600 group-hover:text-white`}`}>
+                          {getCategoryIcon(asset.category, 18)}
                         </div>
                         <div className="overflow-hidden">
-                          <h3 className={`text-sm font-bold leading-tight truncate max-w-[170px] ${theme.textMain} group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
+                          <h3 className={`text-sm font-bold leading-tight truncate max-w-[170px] ${theme.textMain} group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
                           <p className={`text-[11px] font-medium mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 rounded-xl transition-all duration-200 cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-purple-900 hover:text-white hover:border-purple-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-purple-600 hover:text-white hover:border-purple-600'}`}>
-                          <QrCode size={18} />
+                        <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 rounded-xl transition-all duration-200 cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-orange-600 hover:text-white hover:border-orange-600' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-orange-600 hover:text-white hover:border-orange-600'}`}>
+                          <QrCode size={16} />
                         </button>
-                        <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 rounded cursor-pointer accent-purple-600 ml-1" />
+                        <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 rounded cursor-pointer accent-orange-600 ml-0.5" />
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                      <span className={`px-2.5 py-1 rounded-md font-bold text-[9px] uppercase tracking-widest border ${isDarkMode ? 'bg-purple-900/30 text-purple-200 border-purple-800/40' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>{asset.asset_condition || 'New'}</span>
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${isDarkMode ? 'bg-purple-900/30 text-purple-200 border-purple-800/40' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>{asset.asset_condition || 'New'}</span>
                     </div>
                   </div>
 
-                  <div className={`p-5 space-y-3 flex-1 ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/50'}`}>
-                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-colors ${theme.card} group-hover:border-purple-300 dark:group-hover:border-purple-800`}>
+                  <div className={`p-4 sm:p-5 space-y-2.5 flex-1 ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/50'}`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
                       <span className={`font-bold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
-                      <span className={`font-mono font-extrabold text-xs ${isDarkMode ? 'text-purple-400' : 'text-purple-700'}`}>{asset.clean_tag}</span>
+                      <span className="font-mono font-extrabold text-xs text-purple-700 dark:text-purple-400">{asset.clean_tag}</span>
                     </div>
-                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-colors ${theme.card} group-hover:border-purple-300 dark:group-hover:border-purple-800`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
                       <span className={`font-bold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
                       <span className={`font-mono font-bold text-[11px] truncate max-w-[140px] ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
                     </div>
                     
-                    <div className={`flex justify-between items-center p-3 rounded-xl border shadow-sm transition-all duration-200 ${theme.card} group-hover:border-purple-400 dark:group-hover:border-purple-700`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-all duration-200 ${theme.card} group-hover:border-orange-400 dark:group-hover:border-purple-700`}>
                       <div className="flex flex-col">
                         <span className={`font-bold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Holder</span> 
                         <span className={`font-bold text-[11px] truncate max-w-[120px] ${theme.textMain}`} title={asset.staff_name}>{asset.staff_name}</span>
                       </div>
-                      <span className={`font-mono font-bold px-2 py-1 rounded-lg text-[9px] ${isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{asset.emp_code}</span>
+                      <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-[9px] ${isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{asset.emp_code}</span>
                     </div>
                   </div>
 
-                  <div className={`p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-slate-100/60 border-slate-200'}`}>
-                    <div className="flex items-center gap-2">
-                      <Clock size={14} className={theme.textSub} />
+                  <div className={`p-3.5 sm:p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-slate-100/60 border-slate-200'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={13} className={theme.textSub} />
                       <div className="flex flex-col">
                         <span className={`text-[8px] font-extrabold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
                         <span className={`text-[10px] font-mono font-bold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold ${getInspectionStatusColor(asset.live_inspection_status)}`}>
+                    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold ${getInspectionStatusColor(asset.live_inspection_status)}`}>
                       {(() => {
                         const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st.includes('approved')) return <CheckCircle2 size={12} />;
-                        if (st.includes('return')) return <RefreshCw size={12} className="animate-spin" />;
-                        return <AlertTriangle size={12} />;
+                        if (st.includes('approved')) return <CheckCircle2 size={11} />;
+                        if (st.includes('return')) return <RefreshCw size={11} className="animate-spin" />;
+                        return <AlertTriangle size={11} />;
                       })()}
                       <span className="text-[9px] font-bold uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
                     </div>
@@ -1228,7 +1230,7 @@ function AssetRegistryContent() {
             <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-slate-100'}`}>
               <div>
                 <h3 className={`text-lg font-bold tracking-tight flex items-center gap-3 ${theme.textMain}`}>
-                  <Settings2 size={20} className="text-purple-600"/> Label Print Layout
+                  <Settings2 size={20} className="text-orange-600"/> Label Print Layout
                 </h3>
                 <p className={`text-[11px] mt-1 uppercase tracking-widest font-bold text-red-600 bg-red-50 inline-block px-2 py-1 rounded border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50`}>
                   Important: When printing, uncheck "Fit to Page" and set Margins to "None".
@@ -1238,9 +1240,8 @@ function AssetRegistryContent() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              
               <div className="space-y-4">
-                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-700'}`}>Sheet Formatting</h4>
+                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}>Sheet Formatting</h4>
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Paper Size</label>
                   <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`}>
@@ -1249,74 +1250,22 @@ function AssetRegistryContent() {
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label>
-                    <input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label>
-                    <input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Top Margin (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.marginTop} onChange={e => setPrintConfig({...printConfig, marginTop: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Left Margin (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.marginLeft} onChange={e => setPrintConfig({...printConfig, marginLeft: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} /></div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} /></div>
                 </div>
               </div>
-
               <div className="space-y-4">
-                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-purple-400' : 'text-purple-700'}`}>Label Dimensions</h4>
+                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}>Label Dimensions</h4>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Width (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Height (cm)</label>
-                    <input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Col Gap (cm)</label>
-                    <input type="number" step="0.1" value={printConfig.gapX} onChange={e => setPrintConfig({...printConfig, gapX: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Row Gap (cm)</label>
-                    <input type="number" step="0.1" value={printConfig.gapY} onChange={e => setPrintConfig({...printConfig, gapY: parseFloat(e.target.value) || 0})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} />
-                  </div>
-                </div>
-
-                <div className={`mt-4 p-4 rounded-xl border ${isDarkMode ? 'bg-purple-950/40 border-purple-800/50' : 'bg-purple-50 border-purple-200'}`}>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={printConfig.packSmallAssets}
-                      onChange={e => setPrintConfig({...printConfig, packSmallAssets: e.target.checked})}
-                      className="w-5 h-5 accent-purple-600 rounded cursor-pointer" 
-                    />
-                    <div>
-                      <span className={`text-sm font-bold block ${theme.textMain}`}>Smart Packing</span>
-                      <span className={`text-[10px] font-medium mt-0.5 block ${theme.textSub}`}>Fit 2 accessories in 1 physical sticker</span>
-                    </div>
-                  </label>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} /></div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`} /></div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-4 pt-4 border-t border-purple-200/40 dark:border-purple-900/40">
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-colors ${theme.card} ${theme.textSub} hover:text-slate-800 dark:hover:text-white`}>
-                Cancel
-              </button>
-              <button onClick={executeGridBulkPrint} className="flex-[2] py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg bg-purple-600 hover:bg-purple-700 text-white flex justify-center items-center gap-2 cursor-pointer transition-all shadow-purple-600/20">
-                <Printer size={16}/> Generate Print Page
-              </button>
+            <div className="flex gap-4 pt-4 border-t border-slate-200 dark:border-purple-900/40">
+              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-colors ${theme.card} ${theme.textSub} hover:text-slate-800 dark:hover:text-white`}>Cancel</button>
+              <button onClick={executeGridBulkPrint} className="flex-[2] py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md bg-orange-600 hover:bg-orange-700 text-white flex justify-center items-center gap-2 cursor-pointer transition-all shadow-orange-600/20"><Printer size={16}/> Generate Print Page</button>
             </div>
           </div>
         </div>
@@ -1350,7 +1299,7 @@ function AssetRegistryContent() {
 
                 {/* Grouped Actions: Print QR | Edit | Delete | X */}
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm'}`}>
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-orange-600 hover:bg-orange-700 text-white shadow-sm'}`}>
                     <Printer size={13} /> <span>Print QR</span>
                   </button>
                   {!isEditingAsset && (
@@ -1372,7 +1321,7 @@ function AssetRegistryContent() {
                 {isEditingAsset ? (
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                      <span className={`text-sm font-bold uppercase tracking-widest text-purple-800 dark:text-purple-300`}>Editing Hardware Record</span>
+                      <span className={`text-sm font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400`}>Editing Hardware Record</span>
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
@@ -1408,7 +1357,7 @@ function AssetRegistryContent() {
                       <div>
                         <label className={`text-[10px] font-bold uppercase flex justify-between mb-1 ${theme.textSub}`}>
                           <span>Assets Name</span>
-                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
+                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
                         </label>
                         <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
                       </div>
@@ -1423,7 +1372,7 @@ function AssetRegistryContent() {
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
                         <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
                       </div>
                       <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
                       <div className="flex flex-wrap gap-1 pt-1">
@@ -1464,7 +1413,7 @@ function AssetRegistryContent() {
 
                     <div className="flex gap-3 pt-4">
                       <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                      <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-purple-600/20 cursor-pointer transition-all">
+                      <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-orange-600/20 cursor-pointer transition-all">
                         {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
                       </button>
                     </div>
@@ -1473,7 +1422,7 @@ function AssetRegistryContent() {
                   <div className="space-y-4">
                     {/* Compact 3-Column Header Specs */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1 text-purple-700 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1 text-orange-600 dark:text-orange-400`}>{viewAssetModal.category || 'Laptop'}</p></div>
                       <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
                       <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-xs font-bold mt-1 truncate ${theme.textMain}`} title={viewAssetModal.safe_display_name}>{viewAssetModal.safe_display_name}</p></div>
                     </div>
@@ -1487,7 +1436,7 @@ function AssetRegistryContent() {
 
                     {/* 🌟 SYSTEM SPECIFICATIONS ONLINE BLOCK */}
                     <div className={`p-3.5 rounded-xl border flex items-center gap-3 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
-                      <Cpu size={18} className="text-purple-700 dark:text-purple-400 shrink-0" />
+                      <Cpu size={18} className="text-orange-600 dark:text-orange-400 shrink-0" />
                       <div className="w-full">
                         <span className={`text-[9px] font-bold uppercase tracking-widest block ${theme.textSub}`}>System Hardware Configuration / Specifications:</span>
                         <p className={`text-xs font-semibold mt-0.5 ${theme.textMain}`}>{viewAssetModal.system_specs || 'Standard Business Hardware Configuration'}</p>
@@ -1537,13 +1486,13 @@ function AssetRegistryContent() {
                     <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <History size={15} className="text-purple-700 dark:text-purple-400" />
+                          <History size={15} className="text-orange-600 dark:text-orange-400" />
                           <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
                         </div>
                         {assetHistory.length > 1 && (
                           <button
                             onClick={() => setShowFullHistory(!showFullHistory)}
-                            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1"
+                            className="text-[10px] font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1"
                           >
                             {showFullHistory ? (
                               <><span>Show Less</span> <ChevronUp size={12}/></>
@@ -1555,7 +1504,7 @@ function AssetRegistryContent() {
                       </div>
                       
                       {isLoadingHistory ? (
-                        <div className="flex justify-center p-3"><Loader2 className="animate-spin text-purple-600 size-5"/></div>
+                        <div className="flex justify-center p-3"><Loader2 className="animate-spin text-orange-600 size-5"/></div>
                       ) : assetHistory.length === 0 ? (
                         <p className={`text-xs font-medium italic ${theme.textSub}`}>No history logs found for this asset.</p>
                       ) : (
@@ -1660,7 +1609,7 @@ function AssetRegistryContent() {
                 <div>
                   <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
                     <span>Assets Name *</span>
-                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
+                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
                   </label>
                   <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
                 </div>
@@ -1675,7 +1624,7 @@ function AssetRegistryContent() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
                 </div>
                 <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
                 <div className="flex flex-wrap gap-1.5 pt-1">
@@ -1710,7 +1659,7 @@ function AssetRegistryContent() {
 
               <div className="flex gap-4 pt-6">
                 <button type="button" onClick={() => setIsAddModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 cursor-pointer transition-all">
+                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-600/20 cursor-pointer transition-all">
                   {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Register New Asset
                 </button>
               </div>
@@ -1724,19 +1673,19 @@ function AssetRegistryContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
             <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18} className="text-purple-600"/> Bulk Asset Import</h3>
+              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18} className="text-orange-600"/> Bulk Asset Import</h3>
               <button onClick={() => setIsBulkModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
             </div>
             
             <div className="space-y-4 text-left">
               <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border ${isDarkMode ? 'bg-purple-900/30 border-purple-800/60 text-purple-300 hover:bg-purple-900/50' : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-300'}`}>
-                <Download size={16} className="text-purple-600"/> <span>Download CSV Template</span>
+                <Download size={16} className="text-orange-600"/> <span>Download CSV Template</span>
               </button>
             </div>
 
             <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c] hover:bg-purple-950/30' : 'border-purple-300 bg-purple-50/30 hover:bg-purple-50/60'}`}>
-              <FileSpreadsheet size={48} className="text-purple-600 animate-pulse" />
-              <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-purple-600 file:text-white hover:file:opacity-90' : 'text-slate-700 file:bg-purple-600 file:text-white'}`} />
+              <FileSpreadsheet size={48} className="text-orange-600 animate-pulse" />
+              <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-orange-600 file:text-white hover:file:opacity-90' : 'text-slate-700 file:bg-orange-600 file:text-white'}`} />
             </div>
 
             <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all bg-slate-300 dark:bg-zinc-800 text-white cursor-not-allowed`}>
@@ -1752,7 +1701,7 @@ function AssetRegistryContent() {
 
 export default function AssetRegistryPageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-purple-50/30 dark:bg-[#0b0712]"><Loader2 className="w-10 h-10 animate-spin text-purple-600" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-purple-50/30 dark:bg-[#0b0712]"><Loader2 className="w-10 h-10 animate-spin text-orange-600" /></div>}>
       <AssetRegistryContent />
     </Suspense>
   );
