@@ -1,314 +1,29 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  ArrowLeft, Laptop, PlusCircle, Search, QrCode, 
-  User, X, Save, RefreshCw, Download, Printer, Edit2, 
-  Upload, FileSpreadsheet, Package, Mouse, 
-  Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
-  Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
-  Keyboard, RectangleHorizontal, Monitor, Sparkles, History,
-  Filter, FilterX, ShieldCheck, FileText, Cpu, CheckCircle, Zap, ShieldAlert, Image as ImageIcon,
-  ChevronUp, ExternalLink
+  ArrowLeft, RotateCcw, CheckCircle2, XCircle, Clock, 
+  Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
+  X, Image as ImageIcon, History, FilterX, ExternalLink, Settings,
+  Send, ShieldCheck, Check, AlertTriangle, Package, CornerDownLeft
 } from 'lucide-react';
 
-// ==========================================
-// 🌟 EXACT ASSET CATEGORIES FROM ADMIN
-// ==========================================
-const ASSET_CATEGORIES = [
-  'Laptop', 
-  'Stand', 
-  'USB Wired Keyboard', 
-  'USB Keyboard Mouse Kit', 
-  'Wireless Keyboard kit', 
-  'USB Wired Mouse', 
-  'Headphone', 
-  'Cleaning Kit', 
-  'Others'
-];
-
-// ==========================================
-// 🎨 DYNAMIC ICON MAPPER HELPER
-// ==========================================
-function getCategoryIcon(category: string, size = 18) {
-  const cat = String(category || '').toLowerCase();
-  if (cat.includes('laptop')) return <Laptop size={size} />;
-  if (cat.includes('stand')) return <Monitor size={size} />;
-  if (cat.includes('keyboard') || cat.includes('combo')) return <Keyboard size={size} />;
-  if (cat.includes('mouse pad') || cat.includes('pad')) return <RectangleHorizontal size={size} />;
-  if (cat.includes('mouse')) return <Mouse size={size} />;
-  if (cat.includes('headphone')) return <Headphones size={size} />;
-  if (cat.includes('cleaning')) return <Sparkles size={size} />;
-  return <Package size={size} />;
-}
-
-// ==========================================
-// 🛡️ SAFE HELPERS & PARSERS
-// ==========================================
-function safeDate(dateStr: any) {
-  if (!dateStr) return 'N/A';
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString('en-IN', {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
-}
-
-function safeString(val: any) {
-  if (val === null || val === undefined) return '';
-  return String(val);
-}
-
-function generateSafeUuid() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-// ==========================================
-// 🌟 SMART TAG GENERATOR (LOCKS SUFFIX)
-// ==========================================
-function generateCategoryPrefix(category: string, existingTagId?: string) {
-  let middle = 'OTH';
-  const cat = safeString(category).toLowerCase();
-  
-  if (cat.includes('laptop')) middle = 'LAP';
-  else if (cat.includes('wireless keyboard')) middle = 'WKM';
-  else if (cat.includes('combo') || cat.includes('mouse kit')) middle = 'CKM';
-  else if (cat.includes('wired keyboard') || cat === 'keyboard usb') middle = 'KMU';
-  else if (cat.includes('mouse')) middle = 'MOU';
-  else if (cat.includes('headphone')) middle = 'HDP';
-  else if (cat.includes('stand')) middle = 'STD';
-  else if (cat.includes('cleaning')) middle = 'CKT';
-  else middle = 'OTH';
-
-  let suffix = Math.floor(1000 + Math.random() * 9000).toString();
-
-  if (existingTagId) {
-    const match = existingTagId.match(/\d{4}$/); 
-    if (match) {
-      suffix = match[0];
-    }
-  }
-  
-  return `VSS-${middle}-${suffix}`;
-}
-
-// ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.4 PRO)
-// ==========================================
-function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
-  if (!category.toLowerCase().includes('laptop')) {
-    return fallback || 'Standard Business Grade IT Hardware Configuration';
-  }
-
-  const t = textToParse.toLowerCase();
-
-  if (t.includes('thinkbook') && (t.includes('16s') || t.includes('r7') || t.includes('7735hs'))) {
-    return 'AMD Ryzen 7 7735HS | 16GB DDR5 RAM | 512GB NVMe SSD | Windows 11 Home';
-  }
-  if (t.includes('fx507zv') || t.includes('tuf gaming') || t.includes('12700h')) {
-    return 'Intel Core i7-12700H (12th Gen) | 16GB DDR4 RAM | 512GB PCIe 4.0 SSD | RTX 4060 8GB | Win 11';
-  }
-  if (t.includes('ryzen 9') || t.includes('r9') || (t.includes('rog') && t.includes('strix'))) {
-    return 'AMD Ryzen 9 6900HX/7940HS | 16GB DDR5 RAM | 1TB NVMe SSD | RTX 4060/4070 | Win 11';
-  }
-  if (t.includes('thinkbook') || t.includes('r7 16') || (t.includes('lenovo') && t.includes('ryzen 7'))) {
-    return 'AMD Ryzen 7 5800U/6800U Pro Series | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro';
-  }
-  if (t.includes('inspiron') || t.includes('3530') || (t.includes('dell') && (t.includes('inspiron') || t.includes('3530')))) {
-    return 'Intel Core i5-1335U (13th Gen) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro';
-  }
-  if (t.includes('precision') || t.includes('elitebook') || t.includes('probook') || t.includes('11 gen') || t.includes('12 gen') || (t.includes('hp') && t.includes('i7'))) {
-    return 'Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro';
-  }
-
-  let cpu = 'Intel Core i5 (vPro Business Edition)';
-  if (t.includes('ryzen 7') || t.includes('r7')) cpu = 'AMD Ryzen 7 Pro Series';
-  else if (t.includes('ryzen 5') || t.includes('r5')) cpu = 'AMD Ryzen 5 Pro Series';
-  else if (t.includes('ryzen')) cpu = 'AMD Ryzen Pro Business Series';
-  else if (t.includes('ultra 7') || t.includes('intel 7')) cpu = 'Intel Core Ultra 7 (vPro)';
-  else if (t.includes('ultra 5') || t.includes('intel 5')) cpu = 'Intel Core Ultra 5 (vPro)';
-  else if (t.includes('i9')) cpu = 'Intel Core i9 (vPro Business Edition)';
-  else if (t.includes('i7')) cpu = 'Intel Core i7 (11th/12th Gen vPro)';
-  else if (t.includes('i5')) cpu = 'Intel Core i5 (vPro Business Edition)';
-  else if (t.includes('m3')) cpu = 'Apple M3 Pro / Max Silicon';
-  else if (t.includes('m2')) cpu = 'Apple M2 Pro / Max Silicon';
-  else if (t.includes('m1')) cpu = 'Apple M1 Silicon';
-
-  let ram = '16GB DDR4/DDR5 RAM';
-  if (t.includes('64gb')) ram = '64GB High-Speed RAM';
-  else if (t.includes('32gb')) ram = '32GB DDR5 RAM';
-  else if (t.includes('8gb')) ram = '8GB DDR4 RAM';
-
-  let storage = '512GB NVMe SSD';
-  if (t.includes('2tb')) storage = '2TB PCIe NVMe SSD';
-  else if (t.includes('1tb')) storage = '1TB PCIe NVMe SSD';
-  else if (t.includes('256gb')) storage = '256GB NVMe SSD';
-
-  let os = 'Windows 11 Pro';
-  if (t.includes('home')) os = 'Windows 11 Home';
-  else if (t.includes('macbook') || t.includes('apple') || t.includes('m1') || t.includes('m2') || t.includes('m3')) os = 'macOS Sonoma / Sequoia';
-  else if (t.includes('ubuntu') || t.includes('linux')) os = 'Linux Ubuntu LTS';
-  else if (t.includes('win 10') || t.includes('windows 10')) os = 'Windows 10 Pro (64-bit)';
-
-  return `${cpu} | ${ram} | ${storage} | ${os}`;
-}
-
-// ==========================================
-// 🌟 UPGRADED SEARCHABLE STAFF DROPDOWN (100% DARK/LIGHT ADAPTIVE)
-// ==========================================
-const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Type employee name or EMP code..." }: any) => {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (value) {
-      const s = staffList.find((st: any) => st.id === value);
-      if (s) setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`);
-    } else {
-      setQuery('');
-    }
-  }, [value, staffList]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filtered = query.trim().length === 0 
-    ? [] 
-    : staffList.filter((s: any) => {
-        const str = `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase();
-        return str.includes(query.toLowerCase());
-      });
-
-  return (
-    <div className="relative" ref={wrapperRef}>
-      <div 
-        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-        className="flex items-center w-full p-3 border rounded-xl focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all"
-      >
-        <Search size={14} className={`${isDarkMode ? 'text-purple-300' : 'text-slate-500'} mr-2 shrink-0`} />
-        <input 
-          type="text" 
-          value={open ? query : query || ''} 
-          onChange={e => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)} 
-          placeholder={placeholder}
-          style={{ color: isDarkMode ? '#f3e8ff' : '#0f172a' }}
-          className="w-full text-xs font-semibold outline-none bg-transparent"
-        />
-        {value && (
-          <X size={14} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-1 shrink-0" onClick={() => { onChange(''); setQuery(''); }} />
-        )}
-        <ChevronDown size={14} className={`${isDarkMode ? 'text-purple-300' : 'text-slate-500'} ml-1 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
-      </div>
-
-      {open && (
-        <div 
-          style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
-          className="absolute z-50 w-full mt-2 border rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar"
-        >
-          <div 
-            onClick={() => { onChange(''); setQuery(''); setOpen(false); }}
-            className={`p-3 text-[11px] font-bold tracking-widest uppercase cursor-pointer border-b flex items-center gap-1.5 transition-colors ${isDarkMode ? 'border-purple-900/60 text-orange-400 hover:bg-purple-900/40' : 'border-slate-100 text-orange-600 hover:bg-orange-50'}`}
-          >
-            📦 Unassign / Return to Warehouse Stock
-          </div>
-
-          {query.trim().length === 0 ? (
-            <div className={`p-4 text-center text-xs font-medium italic ${isDarkMode ? 'text-purple-300/70' : 'text-slate-500'}`}>
-              🔍 Type an employee name or EMP code above to search matched staff...
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="p-4 text-center text-xs font-semibold text-rose-500">
-              No matched employee found for "{query}".
-            </div>
-          ) : (
-            filtered.map((s: any) => (
-              <div 
-                key={s.id} 
-                style={{ borderBottomColor: isDarkMode ? '#3b0764' : '#f1f5f9' }}
-                className={`p-3.5 text-xs cursor-pointer border-b flex justify-between items-center transition-colors group ${isDarkMode ? 'hover:bg-purple-900/50 text-purple-100' : 'hover:bg-orange-50 text-slate-800'}`}
-                onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}
-              >
-                <span className="font-semibold group-hover:text-orange-500 transition-colors">{s.full_name || s.name}</span>
-                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${isDarkMode ? 'bg-purple-950 text-purple-300 group-hover:bg-orange-500/20 group-hover:text-orange-300' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-700'}`}>
-                  {s.emp_code || s.email}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ==========================================
-// CORE CONTENT COMPONENT
-// ==========================================
-function AssetRegistryContent() {
+function AdminAssetReturnsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  
   const [loading, setLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  
-  const [assets, setAssets] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
-  
-  // 🌟 FILTER STATES
+  const [returns, setReturns] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'pending' | 'processed'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [conditionFilter, setConditionFilter] = useState<string>('All');
   
-  // Bulk Selection State
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [sendingAlertId, setSendingAlertId] = useState<string | null>(null);
+  const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Modals & History State
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
-  const [viewAssetModal, setViewAssetModal] = useState<any>(null);
-  
-  const [assetHistory, setAssetHistory] = useState<any[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [showFullHistory, setShowFullHistory] = useState(false);
-
-  const [printConfig, setPrintConfig] = useState({
-    pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,      
-    marginTop: 1.25, marginLeft: 1.37, gapX: 0.5, gapY: 0.0, packSmallAssets: true  
-  });
-
-  // Forms with System Specifications
-  const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
-  const [newAssetTag, setNewAssetTag] = useState(''); 
-  const [newAssetName, setNewAssetName] = useState('');
-  const [newAssetBrand, setNewAssetBrand] = useState('');
-  const [newAssetSerial, setNewAssetSerial] = useState('');
-  const [newAssetPrice, setNewAssetPrice] = useState('');
-  const [newAssetVendor, setNewAssetVendor] = useState('');
-  const [newAssetPurchaseDate, setNewAssetPurchaseDate] = useState('');
-  const [newAssetWarranty, setNewAssetWarranty] = useState('');
-  const [newAssetCondition, setNewAssetCondition] = useState('New');
-  const [newAssetStatus, setNewAssetStatus] = useState('In Stock (Unassigned)');
-  const [newAssetAssignee, setNewAssetAssignee] = useState('');
-  const [newAssetSpecs, setNewAssetSpecs] = useState('Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [isEditingAsset, setIsEditingAsset] = useState(false);
-  const [editForm, setEditForm] = useState<any>({});
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  // 🌟 REAL-TIME GLOBAL THEME LISTENER (FIXES LOGO / TOP BAR SYNC!)
+  // 🌟 REAL-TIME GLOBAL THEME LISTENER
   useEffect(() => {
     const checkTheme = () => {
       const savedTheme = localStorage.getItem('vsit_theme');
@@ -326,1422 +41,554 @@ function AssetRegistryContent() {
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-    fetchRegistryData();
+    fetchReturnRecords();
     return () => {
       window.removeEventListener('storage', checkTheme);
       observer.disconnect();
     };
   }, []);
 
-  useEffect(() => {
-    if (isAddModalOpen) {
-      setNewAssetTag(generateCategoryPrefix(newAssetCategory));
-      if (newAssetCategory === 'Laptop') {
-        setNewAssetSpecs('Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
-      } else if (newAssetCategory.includes('Keyboard') || newAssetCategory.includes('Mouse')) {
-        setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
-      } else {
-        setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
-      }
-    }
-  }, [isAddModalOpen, newAssetCategory]);
-
-  // 🌟 ASSET HISTORY ENGINE
-  useEffect(() => {
-    if (viewAssetModal && !isEditingAsset) {
-      setShowFullHistory(false);
-      loadAssetHistory(viewAssetModal.id);
-    }
-  }, [viewAssetModal, isEditingAsset]);
-
-  const loadAssetHistory = async (assetId: string) => {
-    setIsLoadingHistory(true);
-    try {
-      const { data: historyData } = await supabase
-        .from('inspections')
-        .select('*')
-        .eq('asset_id', assetId)
-        .order('created_at', { ascending: false });
-
-      const compiled = (historyData || []).map(log => {
-         const staff = staffList.find(s => s.id === log.inspected_by);
-         return {
-           ...log,
-           staff_name: staff ? (staff.full_name || staff.name) : 'Admin / System Execution',
-           emp_code: staff ? (staff.emp_code || staff.email) : 'N/A'
-         };
-      });
-      setAssetHistory(compiled);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  const fetchRegistryData = async () => {
+  const fetchReturnRecords = async () => {
     setLoading(true);
     try {
-      const [assetRes, staffRes, inspectionRes] = await Promise.all([
-        supabase.from('assets').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*'),
-        supabase.from('inspections').select('asset_id, status, notes, photos, created_at').order('created_at', { ascending: false })
+      // Query inspections that represent Return or Replacement workflows
+      const [inspRes, assetsRes, profilesRes] = await Promise.all([
+        supabase.from('inspections').select('*')
+          .or('notes.ilike.%return%,status.ilike.%return%,notes.ilike.%replace%,status.ilike.%replace%')
+          .order('created_at', { ascending: false }),
+        supabase.from('assets').select('*'),
+        supabase.from('profiles').select('*')
       ]);
 
-      const assetData = assetRes.data || [];
-      const staffData = staffRes.data || [];
-      const inspectionData = inspectionRes.data || [];
-      setStaffList(staffData);
-      
-      const compiledAssets = assetData.map(asset => {
-        const assignee = staffData.find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
-        const latestInspection = inspectionData.find(i => i.asset_id === asset.id);
-        return {
-          ...asset,
-          safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
-          staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
-          emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
-          staff_email: assignee.email || 'N/A',
-          clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
-          live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
-          live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
-          live_inspection_notes: latestInspection?.notes || null,
-          live_inspection_photos: latestInspection?.photos || null,
-          system_specs: asset.system_specs || asset.specs || autoDetectSpecs(`${asset.name || ''} ${asset.brand || ''} ${asset.serial_number || ''}`, asset.category)
-        };
-      });
-      setAssets(compiledAssets);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  };
+      const rawReturns = inspRes.data || [];
+      const assetsData = assetsRes.data || [];
+      const profilesData = profilesRes.data || [];
 
-  const getStockStatusBadge = (status: string) => {
-    const s = safeString(status);
-    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-800 border-emerald-300';
-    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-800 border-orange-300 animate-pulse';
-    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-800 border-purple-300';
-    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-800 border-rose-300 line-through';
-    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-800 border-amber-300';
-    return isDarkMode ? 'bg-orange-500/10 text-orange-300 border-orange-500/20' : 'bg-orange-50/80 text-orange-900 border-orange-300';
-  };
+      const masterLedger: any[] = [];
 
-  const getInspectionStatusColor = (status: string) => {
-    const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-300';
-    if (s.includes('return')) return isDarkMode ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' : 'text-purple-800 bg-purple-50 border-purple-300';
-    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-800 bg-rose-50 border-rose-300';
-    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-800 bg-amber-50 border-amber-300';
-  };
+      rawReturns.forEach((insp, idx) => {
+        const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
+        const matchedProfile = profilesData.find(p => 
+          (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
+          (insp.inspected_by && String(p.id) === String(insp.inspected_by)) ||
+          (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase()) ||
+          (matchedAsset.assigned_to && String(p.id) === String(matchedAsset.assigned_to))
+        ) || {};
 
-  const openAssetViewModal = (asset: any) => {
-    const stableTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.id);
-    setViewAssetModal({ ...asset, clean_tag: stableTag });
-    setIsEditingAsset(false);
-    setEditForm({
-      category: asset.category || 'Laptop', asset_tag: stableTag, serial: asset.serial_number || '',
-      name: asset.safe_display_name, brand: asset.brand || '', price: asset.price || '', 
-      vendor: asset.vendor || '', purchase_date: asset.purchase_date || '', warranty_expiry: asset.warranty_expiry || '',
-      condition: asset.asset_condition || 'New', status: asset.status || 'In Stock (Unassigned)', 
-      inspection_status: asset.live_inspection_status || 'Approved', assignee: asset.assigned_to || '',
-      system_specs: asset.system_specs || ''
-    });
-  };
+        const itemIdentifier = insp.id || `return-${insp.asset_id}-${idx}-${Date.now()}`;
+        const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
 
-  // 🌟 OFFICIAL HANDOVER AGREEMENT GENERATOR WITH EXACT 6-POINT CORPORATE POLICY
-  const handleGenerateHandoverPDF = (asset: any) => {
-    const printWindow = window.open('', '_blank', 'width=900,height=1100');
-    if (!printWindow) return alert("Please allow pop-ups to view and download the official Handover Agreement.");
-
-    const agreementDate = asset.live_inspection_date 
-      ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-    const proofHash = `AUTH-PROOF-${safeString(asset.id).substring(0, 8).toUpperCase()}-${safeString(asset.emp_code || 'EMP').substring(0, 6).toUpperCase()}-${Date.now().toString(16).substring(0, 6).toUpperCase()}`;
-
-    let photosHtml = '';
-    let photosArray: string[] = [];
-    try {
-      if (Array.isArray(asset.live_inspection_photos)) photosArray = asset.live_inspection_photos;
-      else if (typeof asset.live_inspection_photos === 'string') {
-        const parsed = JSON.parse(asset.live_inspection_photos);
-        if (Array.isArray(parsed)) photosArray = parsed;
-      }
-    } catch(e){}
-
-    if (photosArray.length > 0) {
-      photosHtml = `
-        <div style="margin-top: 15px;">
-          <span class="label" style="color: #ea580c; margin-bottom: 8px;">Visual Inspection Evidence / Hardware Condition Photos:</span>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            ${photosArray.slice(0, 4).map(url => `<img src="${url}" style="width: 130px; height: 130px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" />`).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Handover_Agreement_${asset.clean_tag}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-            body { font-family: 'Inter', sans-serif; color: #1e293b; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; }
-            .header { border-bottom: 3px solid #ea580c; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; items-center; }
-            .logo { font-size: 28px; font-weight: 900; color: #ea580c; letter-spacing: 2px; }
-            .doc-title { font-size: 22px; font-weight: 800; color: #0f172a; text-transform: uppercase; }
-            .section { margin-bottom: 25px; }
-            .section-title { font-size: 13px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 15px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-            .field { background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
-            .label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px; }
-            .value { font-size: 14px; font-weight: 700; color: #0f172a; }
-            .specs-box { background: #fff7ed; border: 1px solid #fed7aa; padding: 15px; border-radius: 8px; color: #9a3412; font-weight: 700; font-size: 13px; margin-top: 5px; }
-            .notes-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; color: #334155; font-size: 12px; font-family: monospace; margin-top: 5px; }
-            .terms { font-size: 12px; color: #334155; background: #f8fafc; padding: 22px; border-radius: 8px; margin-top: 30px; border: 1px solid #cbd5e1; }
-            .terms ul { margin: 10px 0 0 0; padding-left: 20px; }
-            .terms li { margin-bottom: 10px; }
-            .signature-area { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-            .sig-box { border: 1px solid #cbd5e1; padding: 20px; border-radius: 8px; background: #fff; }
-            .sig-line { border-top: 2px solid #0f172a; padding-top: 8px; font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 35px; }
-            .badge { display: inline-block; background: #ffedd5; color: #9a3412; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; border: 1px solid #fed7aa; }
-            .audit-stamp { margin-top: 30px; background: #f8fafc; border: 2px dashed #ea580c; padding: 16px; border-radius: 8px; color: #9a3412; font-family: monospace; font-size: 11px; }
-            @media print { body { padding: 0; } }
-          </style>
-        </head>
-        <body onload="setTimeout(() => { window.print(); }, 500)">
-          <div class="header">
-            <div>
-              <div class="logo">VIRTUAL STAFFING SOLUTIONS</div>
-              <div style="font-size: 12px; color: #64748b; font-weight: 600;">IT Infrastructure & Asset Compliance Division</div>
-            </div>
-            <div style="text-align: right;">
-              <div class="doc-title">Hardware Handover Agreement</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Executed: ${agreementDate}</div>
-              <div style="margin-top: 6px;"><span class="badge">✔ Digitally Executed & Verified</span></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">1. Employee Assignment Details</div>
-            <div class="grid">
-              <div class="field"><span class="label">Holder Name</span><span class="value">${asset.staff_name || 'Unassigned'}</span></div>
-              <div class="field"><span class="label">Employee ID Code</span><span class="value">${asset.emp_code || 'N/A'}</span></div>
-              <div class="field" style="grid-column: span 2;"><span class="label">Staff Registered Email</span><span class="value">${asset.staff_email || 'N/A'}</span></div>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">2. Hardware Identity & Specifications</div>
-            <div class="grid">
-              <div class="field"><span class="label">Asset Tag ID</span><span class="value" style="color: #ea580c;">${asset.clean_tag}</span></div>
-              <div class="field"><span class="label">Serial Number (Laptop SN - Charger SN)</span><span class="value">${asset.serial_number || 'N/A'}</span></div>
-              <div class="field"><span class="label">Device Name</span><span class="value">${asset.safe_display_name}</span></div>
-              <div class="field"><span class="label">Brand & Category</span><span class="value">${asset.brand || 'Standard'} (${asset.category})</span></div>
-            </div>
-            <div style="margin-top: 15px;">
-              <span class="label" style="color: #ea580c;">System Hardware Configuration / Specifications:</span>
-              <div class="specs-box">${asset.system_specs || 'Standard Business Hardware Configuration'}</div>
-            </div>
-          </div>
-
-          <!-- 🌟 SECTION 3: VISUAL INSPECTION NOTES & PHOTOS IN AGREEMENT -->
-          <div class="section">
-            <div class="section-title">3. Visual Inspection & Audit Evidence Log</div>
-            <div class="field">
-              <span class="label">Latest Inspection State</span>
-              <span class="value" style="color: #166534;">✔ ${asset.live_inspection_status || 'Approved'} (${agreementDate})</span>
-              ${asset.live_inspection_notes ? `<div class="notes-box">"${asset.live_inspection_notes}"</div>` : ''}
-            </div>
-            ${photosHtml}
-          </div>
-
-          <!-- 🌟 EXACT 6-POINT CORPORATE COMPLIANCE POLICY -->
-          <div class="terms">
-            <strong style="color: #0f172a; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">Terms of Asset Custody & Compliance:</strong>
-            <p style="margin: 8px 0 0 0; font-weight: 600;">I acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
-            <ul>
-              <li><strong>Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
-              <li><strong>Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-              <li><strong>Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months. On your Dashboard, the Device Audit Button will activate 4 days before the due date.</li>
-              <li><strong>Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
-              <li><strong>Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management. Gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
-            </ul>
-          </div>
-
-          <div class="signature-area">
-            <div class="sig-box">
-              <div style="font-size: 11px; color: #ea580c; font-weight: 800; text-transform: uppercase;">Employee Custody Acceptance</div>
-              <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-top: 8px;">${asset.staff_name}</div>
-              <div style="font-size: 11px; color: #64748b;">ID: ${asset.emp_code}</div>
-              <div class="sig-line">Digitally Accepted & Executed Online</div>
-            </div>
-            <div class="sig-box">
-              <div style="font-size: 11px; color: #6b21a8; font-weight: 800; text-transform: uppercase;">VSS IT Administrator Stamp</div>
-              <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-top: 8px;">IT Compliance Division</div>
-              <div style="font-size: 11px; color: #64748b;">Authorized Verification Officer</div>
-              <div class="sig-line">Authorized IT Officer Stamp & Signature</div>
-            </div>
-          </div>
-
-          <!-- 🌟 AUTHORITATIVE DIGITAL AUDIT PROOF STAMP -->
-          <div class="audit-stamp">
-            <div style="font-size: 12px; font-weight: 800; text-transform: uppercase; margin-bottom: 6px; color: #ea580c;">🛡️ Digital Signature Execution & Audit Verification Proof</div>
-            <div><strong>Verification Status:</strong> GENUINE ONLINE SIGNATURE RECORDED</div>
-            <div><strong>Execution Timestamp:</strong> ${agreementDate}</div>
-            <div><strong>Custody Identity:</strong> ${asset.staff_name} (${asset.staff_email || asset.emp_code})</div>
-            <div><strong>Cryptographic Proof ID:</strong> ${proofHash}</div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  // 🌟 RESILIENT SAVE ENGINE
-  const handleSaveNewAsset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAssetName || !newAssetSerial) return alert("Assets Name and Serial Number are required.");
-    setIsSaving(true);
-    try {
-      const serialUpper = newAssetSerial.toUpperCase();
-      const { data: existingSerial } = await supabase.from('assets').select('serial_number').eq('serial_number', serialUpper).maybeSingle();
-
-      if (existingSerial) {
-        alert(`Error: An asset with the Serial Number "${serialUpper}" already exists in the system.`);
-        setIsSaving(false); return;
-      }
-
-      const resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
-      const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
-      const newAssetId = generateSafeUuid();
-      
-      const payload: any = {
-        id: newAssetId, asset_tag: finalTag.toUpperCase(), name: newAssetName, 
-        brand: newAssetBrand || 'Standard', serial_number: serialUpper, 
-        category: newAssetCategory, price: newAssetPrice ? parseFloat(newAssetPrice) : null, 
-        vendor: newAssetVendor || 'Direct', purchase_date: newAssetPurchaseDate || null, 
-        warranty_expiry: newAssetWarranty || null, asset_condition: newAssetCondition,
-        status: resolvedStatus, assigned_to: newAssetAssignee || null, inspection_status: 'Approved',
-        system_specs: newAssetSpecs || 'Standard Business Configuration'
-      };
-
-      let { error } = await supabase.from('assets').insert([payload]);
-      
-      if (error && (error.message.includes('system_specs') || error.message.includes('column'))) {
-        delete payload.system_specs;
-        const retry = await supabase.from('assets').insert([payload]);
-        error = retry.error;
-        if (!error) {
-          alert("Asset registered successfully! 💡 Note: Run 'ALTER TABLE assets ADD COLUMN system_specs TEXT;' in your Supabase SQL Editor to store custom specifications permanently in your database.");
+        let recoveredName = insp.user_name || insp.staff_name || insp.full_name;
+        if (!recoveredName && insp.notes) {
+          const match = insp.notes.match(/by\s+(.*?)\s+on/i);
+          if (match) recoveredName = match[1].trim();
         }
-      }
-      
-      if (error) throw error;
-      
-      await supabase.from('inspections').insert({
-        asset_id: newAssetId, inspected_by: newAssetAssignee || null, 
-        status: newAssetAssignee ? 'Pending Handover' : 'Stock Intake', 
-        notes: `Asset initially registered into the system as ${newAssetCondition}. Specs: ${newAssetSpecs}`
-      });
-
-      if (newAssetAssignee) {
-        try {
-          await supabase.from('notifications').insert({
-            title: 'New Hardware Assigned',
-            message: `An admin has assigned ${newAssetName} (${finalTag}) to you. Please check your staff dashboard to sign the Handover Agreement.`,
-            target_role: newAssetAssignee, is_read: false
-          });
-        } catch (notifError) { console.warn("Notification error:", notifError); }
-      }
-
-      setIsAddModalOpen(false); 
-      fetchRegistryData();
-    } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
-  };
-
-  const handleUpdateExistingAsset = async () => {
-    setIsUpdating(true);
-    try {
-      const serialUpper = editForm.serial.toUpperCase();
-      const { data: duplicateCheck } = await supabase.from('assets').select('id, serial_number')
-        .eq('serial_number', serialUpper).neq('id', viewAssetModal.id).maybeSingle();
-
-      if (duplicateCheck) {
-        alert(`Error: The Serial Number "${serialUpper}" is already assigned to another asset.`);
-        setIsUpdating(false); return;
-      }
-
-      let resolvedStatus = editForm.status;
-      let actionNote = "Asset configuration updated by administrator.";
-
-      if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) {
-        resolvedStatus = 'Pending Handover';
-        actionNote = `Asset re-assigned to new holder. Awaiting agreement.`;
-      } else if (!editForm.assignee && viewAssetModal.assigned_to) {
-        resolvedStatus = 'In Stock (Unassigned)';
-        actionNote = `Asset forcefully unassigned and returned to stock.`;
-      }
-
-      const updatePayload: any = {
-        category: editForm.category, serial_number: serialUpper, asset_tag: editForm.asset_tag.toUpperCase(),
-        name: editForm.name, brand: editForm.brand, price: editForm.price ? parseFloat(editForm.price) : null,
-        vendor: editForm.vendor, purchase_date: editForm.purchase_date || null, warranty_expiry: editForm.warranty_expiry || null, 
-        asset_condition: editForm.condition, status: resolvedStatus, inspection_status: editForm.inspection_status || 'Approved',
-        assigned_to: editForm.assignee || null, system_specs: editForm.system_specs || ''
-      };
-
-      let { error } = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
-      
-      if (error && (error.message.includes('system_specs') || error.message.includes('column'))) {
-        delete updatePayload.system_specs;
-        const retry = await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
-        error = retry.error;
-        if (!error) {
-          alert("Asset updated successfully! 💡 Note: Run 'ALTER TABLE assets ADD COLUMN system_specs TEXT;' in your Supabase SQL Editor to permanently store custom specs.");
+        if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
+          recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
-      }
 
-      if (error) throw error;
+        const finalName = matchedProfile.full_name || matchedProfile.name || recoveredName || 'Unassigned Staff';
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(insp.inspected_by || '');
+        const finalEmpCode = (!isUuid && insp.inspected_by) ? insp.inspected_by : (matchedProfile.emp_code || insp.emp_code || 'EMP-UNKNOWN');
 
-      await supabase.from('inspections').insert({
-        asset_id: viewAssetModal.id, inspected_by: editForm.assignee || null, 
-        status: resolvedStatus, notes: actionNote
+        const sLower = (insp.status || '').toLowerCase();
+        let isProcessed = sLower.includes('approved') || sLower.includes('rejected') || sLower.includes('restocked') || sLower.includes('completed');
+
+        masterLedger.push({
+          ...insp,
+          id: itemIdentifier,
+          staff_id: matchedProfile.id || insp.inspected_by,
+          asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Hardware',
+          category: matchedAsset.category || 'Laptop', 
+          serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
+          asset_tag: matchedAsset.asset_tag || 'NO-TAG',
+          staff_name: finalName,
+          emp_code: finalEmpCode,
+          is_processed: isProcessed,
+          status: insp.status || 'Pending Return Review',
+          photos: photosArray
+        });
       });
 
-      setIsEditingAsset(false); 
-      fetchRegistryData();
-    } catch (err: any) { alert(`Error updating: ${err.message}`); } finally { setIsUpdating(false); }
-  };
-
-  const handleDeleteAsset = async (assetId: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this asset? This action cannot be undone.")) return;
-    setIsUpdating(true);
-    try {
-      const { error } = await supabase.from('assets').delete().eq('id', assetId);
-      if (error) throw error;
-      
-      setAssets(prev => prev.filter(a => a.id !== assetId));
-      setViewAssetModal(null);
+      setReturns(masterLedger);
     } catch (err: any) {
-      alert(`Error deleting asset: ${err.message}`);
+      alert("Failed to sync return records.");
     } finally {
-      setIsUpdating(false);
+      setLoading(false);
     }
   };
 
-  const getAssetViewUrl = (asset: any) => {
-    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    const targetRef = asset.clean_tag || asset.asset_tag || asset.id;
-    return `${baseDomain}/public-asset?id=${targetRef}`;
+  // 🌟 ONE-CLICK DIRECT STAFF NOTIFICATION & MESSAGE PING
+  const sendStaffAlert = async (staffId: string, assetName: string, tagId: string, customMessage?: string) => {
+    if (!staffId || staffId.includes('EMP-UNKNOWN') || staffId.includes('ADMIN')) {
+      return alert("Cannot send alert: No valid employee profile ID attached to this record.");
+    }
+
+    setSendingAlertId(staffId);
+    try {
+      const message = customMessage || `Please check with IT management regarding your hardware return status for ${assetName} (${tagId}).`;
+      
+      const { error } = await supabase.from('notifications').insert([{
+        target_user: staffId,
+        title: '🔔 Hardware Return Update',
+        message: message,
+        is_read: false,
+        type: 'info'
+      }]);
+
+      if (error) throw error;
+      alert(`✔ Success: Active notification pushed directly to employee dashboard!`);
+    } catch (err: any) {
+      alert(`Error sending notification push: ${err.message}`);
+    } finally {
+      setSendingAlertId(null);
+    }
   };
 
-  const executeGridBulkPrint = () => {
-    const assetsToPrint = assets.filter(a => selectedAssetIds.has(a.id));
-    if (assetsToPrint.length === 0) return;
+  // 🌟 PROCESS RETURN VERDICT WITH SCHEMA-IMMUNE COMPOSITE TARGETING (NO 'id' COLUMN NEEDED!)
+  const processReturnVerdict = async (item: any, action: 'Approve Return' | 'Reject Return' | 'Approve Replacement') => {
+    const assetId = item.asset_id;
+    const staffId = item.staff_id;
+    const returnId = item.id;
 
-    const printWindow = window.open('', '_blank', 'width=1000,height=800');
-    if (!printWindow) return alert("Pop-up blocked! Allow pop-ups to print bulk hardware stickers.");
+    if (!assetId) return alert("System Error: Missing Asset ID for this record.");
 
-    let printCells: any[] = [];
-    
-    if (printConfig.packSmallAssets) {
-      const smallAssets: any[] = [];
-      const largeAssets: any[] = [];
-      
-      assetsToPrint.forEach(a => {
-        const cat = String(a.category).toLowerCase();
-        if (cat.includes('mouse') || cat.includes('headphone') || cat.includes('cleaning') || cat.includes('others') || cat.includes('pad')) {
-          smallAssets.push(a);
-        } else {
-          largeAssets.push(a);
-        }
-      });
+    let remarks = '';
+    if (action === 'Reject Return') {
+      remarks = prompt(`Provide administrative reason for rejecting this return request:`) || '';
+      if (!remarks.trim()) return alert("Remarks are required when rejecting return requests.");
+    } else if (action === 'Approve Return') {
+      remarks = prompt(`Optional inspection notes upon receiving asset into stock:`) || 'Returned to warehouse stock in good condition.';
+    }
 
-      largeAssets.forEach(a => printCells.push([a]));
-      
-      for (let i = 0; i < smallAssets.length; i += 2) {
-        if (smallAssets[i + 1]) {
-          printCells.push([smallAssets[i], smallAssets[i + 1]]);
-        } else {
-          printCells.push([smallAssets[i]]);
+    if (!confirm(`Are you sure you want to execute "${action}"?`)) return;
+
+    setUpdatingId(returnId);
+    try {
+      let targetStatus = 'Return Approved';
+      let assetStatus = 'In Stock (Unassigned)';
+      let notifTitle = '✔ Hardware Return Approved';
+      let notifMsg = `Your return request has been processed and accepted by IT management. The asset is now unassigned from your custody.`;
+      let notifType = 'success';
+
+      if (action === 'Reject Return') {
+        targetStatus = 'Return Rejected';
+        assetStatus = 'Assigned';
+        notifTitle = '⚠️ Hardware Return Rejected';
+        notifMsg = `Your return request was not accepted by IT management: ${remarks}`;
+        notifType = 'warning';
+      } else if (action === 'Approve Replacement') {
+        targetStatus = 'Replacement Approved';
+        assetStatus = 'In Repair';
+        notifTitle = '🔄 Hardware Replacement Approved';
+        notifMsg = `Your replacement request has been authorized. Please submit your current unit to IT management to receive your replacement.`;
+        notifType = 'success';
+      }
+
+      // 🛡️ BULLETPROOF NO-ID SCHEMA TARGETING: Target by asset_id + created_at (or status) instead of 'id'
+      let query = supabase.from('inspections')
+        .update({ status: targetStatus, admin_remarks: remarks || null })
+        .eq('asset_id', assetId);
+
+      if (item.created_at) {
+        query = query.eq('created_at', item.created_at);
+      } else if (item.status) {
+        query = query.eq('status', item.status);
+      }
+
+      const { error: inspErr } = await query;
+      if (inspErr) throw inspErr;
+
+      // Update asset status and assignment if approved
+      const assetUpdatePayload: any = { status: assetStatus, inspection_status: 'Approved' };
+      if (action === 'Approve Return') {
+        assetUpdatePayload.assigned_to = null;
+        assetUpdatePayload.last_inspection_date = new Date().toISOString();
+      }
+
+      const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
+      if (assetErr) throw assetErr;
+
+      // 🌟 PUSH ACTIVE NOTIFICATION TO STAFF DASHBOARD (STRICT SCHEMA COMPATIBILITY)
+      if (staffId && !staffId.includes('EMP-UNKNOWN') && !staffId.includes('ADMIN')) {
+        try {
+          await supabase.from('notifications').insert([{
+            target_user: staffId,
+            title: notifTitle,
+            message: notifMsg,
+            is_read: false,
+            type: notifType
+          }]);
+        } catch (notifErr) {
+          console.warn("Non-fatal notification error:", notifErr);
         }
       }
-    } else {
-      assetsToPrint.forEach(a => printCells.push([a]));
+
+      setReturns(prev => prev.map(r => 
+        (r.id === returnId) 
+          ? { ...r, status: targetStatus, admin_remarks: remarks || r.admin_remarks, is_processed: true } 
+          : r
+      ));
+
+      alert(`Success: ${action} executed. Notification sent to employee dashboard.`);
+    } catch (err: any) {
+      alert(`Error processing return: ${err.message}`);
+    } finally {
+      setUpdatingId(null);
     }
-
-    const renderAssetBlock = (asset: any, isHalfSize: boolean) => {
-      const scanUrl = getAssetViewUrl(asset);
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(scanUrl)}`;
-
-      return `
-        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2px; box-sizing: border-box; width: 100%; height: 100%;">
-          <img src="${qrUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; border: 4px solid #000; padding: 8px; border-radius: 8px; box-sizing: border-box;" />
-        </div>
-      `;
-    };
-
-    const cellsPerPage = printConfig.columns * printConfig.rows;
-    let pagesHtml = '';
-
-    for (let i = 0; i < printCells.length; i += cellsPerPage) {
-      const pageCells = printCells.slice(i, i + cellsPerPage);
-      
-      let gridCellsHtml = '';
-      pageCells.forEach(cellAssets => {
-        let innerHtml = '';
-        if (cellAssets.length === 2) {
-          innerHtml = `
-            <div style="width: 100%; height: 100%; max-height: 100%; display: flex; flex-direction: column; justify-content: space-evenly; gap: 1px; padding: 2px; box-sizing: border-box; overflow: hidden;">
-              ${renderAssetBlock(cellAssets[0], true)}
-              <div style="height: 1px; width: 90%; background: #ddd; margin: 0 auto; flex-shrink: 0;"></div>
-              ${renderAssetBlock(cellAssets[1], true)}
-            </div>
-          `;
-        } else {
-          innerHtml = `
-            <div style="width: 100%; height: 100%; max-height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px; box-sizing: border-box; overflow: hidden;">
-              ${renderAssetBlock(cellAssets[0], false)}
-            </div>
-          `;
-        }
-        
-        gridCellsHtml += `
-          <div class="label-cell">
-            ${innerHtml}
-          </div>
-        `;
-      });
-
-      pagesHtml += `
-        <div class="page">
-          ${gridCellsHtml}
-        </div>
-      `;
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Bulk_Print_Label_Sheet</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800;900&display=swap');
-            @page { size: ${printConfig.pageSize}; margin: 0 !important; }
-            body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #e2e8f0; color: #000; -webkit-font-smoothing: antialiased; }
-            .page { background: #fff; width: ${printConfig.pageSize === 'A4' ? '210mm' : '215.9mm'}; height: ${printConfig.pageSize === 'A4' ? '297mm' : '279.4mm'}; box-sizing: border-box; padding-top: ${printConfig.marginTop}cm; padding-left: ${printConfig.marginLeft}cm; display: grid; grid-template-columns: repeat(${printConfig.columns}, ${printConfig.labelWidth}cm); grid-template-rows: repeat(${printConfig.rows}, ${printConfig.labelHeight}cm); column-gap: ${printConfig.gapX}cm; row-gap: ${printConfig.gapY}cm; page-break-after: always; margin: 20px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; }
-            .label-cell { width: ${printConfig.labelWidth}cm; height: ${printConfig.labelHeight}cm; max-width: ${printConfig.labelWidth}cm; max-height: ${printConfig.labelHeight}cm; outline: 1px dashed #cbd5e1; box-sizing: border-box; overflow: hidden; background: #fff; }
-            @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; } .label-cell { outline: none; } }
-          </style>
-        </head>
-        <body>
-          ${pagesHtml}
-          <script>
-            window.onload = () => { setTimeout(() => { window.print(); }, ${Math.max(800, assetsToPrint.length * 100)}); };
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open(); 
-    printWindow.document.write(htmlContent); 
-    printWindow.document.close();
-    setIsPrintConfigModalOpen(false);
   };
 
-  const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    const baseDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    const targetRef = cleanTag || asset.asset_tag || asset.id;
-    const scanUrl = `${baseDomain}/public-asset?id=${targetRef}`;
-    
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(scanUrl)}`;
+  const pendingCount = returns.filter(r => !r.is_processed).length;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=400');
-    if (!printWindow) return alert("Pop-up blocked! Please allow pop-ups to print the QR code.");
+  const filteredList = returns.filter(item => {
+    const matchesTab = activeTab === 'pending' ? !item.is_processed : item.is_processed;
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = 
+      (item.staff_name || '').toLowerCase().includes(query) ||
+      (item.emp_code || '').toLowerCase().includes(query) ||
+      (item.asset_name || '').toLowerCase().includes(query) ||
+      (item.serial_number || '').toLowerCase().includes(query) ||
+      (item.asset_tag || '').toLowerCase().includes(query);
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR_${targetRef}</title>
-          <style>
-            body, html { margin: 0; padding: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #fff; }
-            img { width: 90%; max-height: 90%; object-fit: contain; border: 8px solid #000; padding: 16px; border-radius: 16px; box-sizing: border-box; }
-            @media print { @page { margin: 0; size: auto; } body { display: flex; justify-content: center; align-items: center; margin: 0; padding: 0; } }
-          </style>
-        </head>
-        <body onload="setTimeout(() => { window.print(); window.close(); }, 600)">
-          <img src="${qrUrl}" alt="QR Code" />
-        </body>
-      </html>
-    `;
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  const getCatCount = (filterName: string) => {
-    if (filterName === 'All') return assets.length;
-    if (filterName === 'Laptop') return assets.filter(a => safeString(a.category).toLowerCase().includes('laptop')).length;
-    if (filterName === 'Accessories') return assets.filter(a => {
-       const c = safeString(a.category).toLowerCase();
-       return c.includes('mouse') || c.includes('keyboard') || c.includes('stand') || c.includes('combo') || c.includes('pad');
-    }).length;
-    if (filterName === 'Headphone') return assets.filter(a => safeString(a.category).toLowerCase().includes('headphone')).length;
-    if (filterName === 'Other') return assets.filter(a => {
-       const c = safeString(a.category).toLowerCase();
-       return c.includes('cleaning') || c.includes('other') || (!c.includes('laptop') && !c.includes('mouse') && !c.includes('keyboard') && !c.includes('stand') && !c.includes('headphone') && !c.includes('pad') && !c.includes('combo'));
-    }).length;
-    
-    return assets.filter(a => safeString(a.category).toLowerCase() === filterName.toLowerCase()).length;
-  };
-
-  // 🌟 UPGRADED MULTI-LAYER FILTERING ENGINE
-  const filteredAssets = assets.filter(a => {
-    const q = safeString(searchQuery).toLowerCase();
-    const cleanTag = safeString(a.clean_tag).toLowerCase();
-    const cat = safeString(a.category).toLowerCase();
-    const status = safeString(a.status).toLowerCase();
-    const cond = safeString(a.asset_condition).toLowerCase();
-    
-    // 1. Search Query
-    const matchesSearch = !q || (
-      safeString(a.id).toLowerCase().includes(q) || 
-      cleanTag.includes(q) ||
-      safeString(a.safe_display_name).toLowerCase().includes(q) || 
-      safeString(a.brand).toLowerCase().includes(q) || 
-      cat.includes(q) || 
-      safeString(a.serial_number).toLowerCase().includes(q) ||
-      safeString(a.staff_name).toLowerCase().includes(q) || 
-      safeString(a.emp_code).toLowerCase().includes(q)
-    );
-    
-    // 2. Category Tab
-    let matchesCat = true;
-    if (selectedCategory !== 'All') {
-      if (selectedCategory === 'Laptop') {
-          matchesCat = cat.includes('laptop');
-      } else if (selectedCategory === 'Accessories') {
-          matchesCat = cat.includes('mouse') || cat.includes('keyboard') || cat.includes('stand') || cat.includes('pad') || cat.includes('combo');
-      } else if (selectedCategory === 'Headphone') {
-          matchesCat = cat.includes('headphone') || cat.includes('headset');
-      } else if (selectedCategory === 'Other') {
-          matchesCat = cat.includes('cleaning') || cat.includes('other') || (!cat.includes('laptop') && !cat.includes('mouse') && !cat.includes('keyboard') && !cat.includes('stand') && !cat.includes('headphone') && !cat.includes('pad') && !cat.includes('combo'));
-      } else {
-          matchesCat = cat === selectedCategory.toLowerCase();
-      }
-    }
-
-    // 3. Status Filter
-    let matchesStatus = true;
-    if (statusFilter !== 'All') {
-      if (statusFilter === 'In Stock') {
-        matchesStatus = status.includes('stock') || status.includes('unassigned');
-      } else if (statusFilter === 'Assigned') {
-        matchesStatus = status === 'assigned' || status.includes('assigned');
-      } else if (statusFilter === 'Pending Handover') {
-        matchesStatus = status.includes('pending');
-      } else if (statusFilter === 'In Repair') {
-        matchesStatus = status.includes('repair');
-      } else if (statusFilter === 'Demo Use') {
-        matchesStatus = status.includes('demo');
-      } else {
-        matchesStatus = status === statusFilter.toLowerCase();
-      }
-    }
-
-    // 4. Condition Filter
-    let matchesCond = true;
-    if (conditionFilter !== 'All') {
-      matchesCond = cond.includes(conditionFilter.toLowerCase());
-    }
-    
-    return matchesSearch && matchesCat && matchesStatus && matchesCond;
+    return matchesTab && matchesSearch;
   });
 
-  const toggleSelectAsset = (id: string) => {
-    const newSet = new Set(selectedAssetIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedAssetIds(newSet);
-  };
-
-  const handleSelectAllFiltered = () => {
-    if (selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0) {
-      setSelectedAssetIds(new Set()); 
-    } else {
-      setSelectedAssetIds(new Set(filteredAssets.map(a => a.id))); 
-    }
-  };
-
-  // 🌟 ENTERPRISE ADAPTIVE THEME DICTIONARY (FULLY BOUND TO ISDARKMODE)
   const theme = {
     bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
     textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
     textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
-    cardHover: isDarkMode ? 'hover:border-orange-500/70 hover:bg-[#1c1430] hover:shadow-xl hover:-translate-y-1' : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1',
-    modalBody: isDarkMode ? 'bg-[#150f24] border-purple-900/60' : 'bg-white border-slate-200',
-    modalHeader: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-slate-50/80 border-slate-200/80',
-    iconBgBrand: isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600 font-bold',
+    cardHover: isDarkMode ? 'hover:border-orange-500/60 hover:bg-[#1c1430]' : 'hover:border-orange-400 hover:shadow-lg hover:-translate-y-1',
+    iconBgPrimary: isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600',
+    iconBgPurple: isDarkMode ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700',
+  };
+
+  const getSemanticBadge = (status: string) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('approved') || s.includes('restocked')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
+    if (s.includes('replace')) return isDarkMode ? 'text-purple-300 bg-purple-950/60 border-purple-800/60' : 'text-purple-700 bg-purple-50 border-purple-200';
+    return isDarkMode ? 'text-orange-400 bg-orange-500/10 border-orange-500/20 animate-pulse' : 'text-orange-700 bg-orange-50 border-orange-300 animate-pulse';
   };
 
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
         
-        {/* BRAND HEADER (COMPACT MOBILE TYPOGRAPHY) */}
+        {/* 🌟 DYNAMIC HEADER (WITH BACK ARROW IN FRONT OF ICON & NO EXTRA RIGHT BUTTON) */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
           <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}>
+            {/* Back Arrow directly to the left of the title block */}
+            <button 
+              onClick={() => router.push('/admin')} 
+              className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}
+              title="Back to Dashboard"
+            >
               <ArrowLeft size={18} />
             </button>
             <div>
-              <div className="flex items-center gap-2.5 mb-0.5">
+              <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
                 <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
-                  <ShieldCheck className="text-orange-600 dark:text-orange-400 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                  <span>Asset Records</span>
+                  <RotateCcw className="text-orange-600 dark:text-orange-400 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                  <span>Asset Returns</span>
                 </h1>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>{assets.length} Units</span>
+                {pendingCount > 0 && (
+                  <span className="px-3 py-0.5 bg-linear-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
+                    {pendingCount} Pending Requests
+                  </span>
+                )}
               </div>
-              <p className={`text-xs sm:text-sm font-medium ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
+              <p className={`text-xs sm:text-sm font-semibold ${theme.textSub}`}>Manage physical hardware handovers, restock approvals, and active dashboard notifications</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            {selectedAssetIds.size > 0 && (
-              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-purple-600/20 transition-all duration-200 animate-in zoom-in-95 cursor-pointer shrink-0">
-                <Printer size={15} /> <span>Print {selectedAssetIds.size} QRs</span>
-              </button>
-            )}
-            <button onClick={() => setIsBulkModalOpen(true)} className={`flex items-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all duration-200 text-xs font-bold uppercase tracking-wider cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 ${theme.textMain} shrink-0`}>
-              <FileSpreadsheet size={15} /> <span>Bulk Upload</span>
-            </button>
-            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-orange-600/20 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer shrink-0">
-              <PlusCircle size={15} /> <span>New Asset</span>
-            </button>
-          </div>
+          <button 
+            onClick={fetchReturnRecords} 
+            disabled={loading}
+            className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm disabled:opacity-50 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 ${theme.card} ${theme.textMain} shrink-0`}
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin text-orange-600' : 'text-purple-600 dark:text-purple-400'} />
+            <span>Sync Records</span>
+          </button>
         </div>
 
-        {/* TABS, SEARCH & 🌟 MOBILE-FRIENDLY CATEGORY TABS (ICON + COUNT ONLY ON MOBILE) */}
+        {/* 🌟 BRAND COLOR NAVIGATION TABS & ADAPTIVE SEARCH BAR */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+          <div className="flex items-center gap-3 overflow-x-auto pb-1 custom-scrollbar">
             {[
-              { name: 'All', icon: <Package size={15}/> }, 
-              { name: 'Laptop', icon: <Laptop size={15}/> },
-              { name: 'Accessories', icon: <Mouse size={15}/> }, 
-              { name: 'Headphone', icon: <Headphones size={15}/> },
-              { name: 'Other', icon: <SlidersHorizontal size={15}/> }
-            ].map(cat => {
-              const isActive = selectedCategory === cat.name;
+              { id: 'pending', label: `Pending Actions (${pendingCount})`, icon: <Clock size={14} /> },
+              { id: 'processed', label: `Processed History (${returns.filter(r => r.is_processed).length})`, icon: <History size={14} /> }
+            ].map(tab => {
+              const isActive = activeTab === tab.id;
               return (
                 <button
-                  key={cat.name} onClick={() => setSelectedCategory(cat.name)}
-                  className={`group flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all duration-200 cursor-pointer border ${
+                  key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+                  className={`group flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer transition-all duration-200 border ${
                     isActive 
-                      ? 'bg-orange-600 text-white shadow-sm border-orange-600 scale-[1.02]' 
+                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/25 border-orange-600 scale-[1.02]' 
                       : `${theme.card} ${theme.textSub} hover:text-purple-600 hover:border-purple-300 dark:hover:text-purple-300 dark:hover:border-purple-700`
                   }`}
                 >
-                  <span className={isActive ? 'text-white' : 'text-purple-600 dark:text-purple-400 group-hover:text-purple-700 transition-colors'}>{cat.icon}</span> 
-                  <span className="hidden sm:inline">{cat.name}</span>
-                  <span className={`px-1.5 py-0.5 rounded-md font-mono text-[10px] font-extrabold transition-colors ${
-                    isActive 
-                      ? 'bg-white/20 text-white' 
-                      : 'bg-purple-50 text-purple-800 group-hover:bg-purple-100 dark:bg-purple-900/50 dark:text-purple-300 dark:group-hover:bg-purple-900/80'
-                  }`}>{getCatCount(cat.name)}</span>
+                  <span className={isActive ? 'text-white' : 'text-purple-500 dark:text-purple-400 group-hover:text-orange-500 transition-colors'}>{tab.icon}</span>
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className="flex gap-2.5 sm:gap-3 items-center">
-            <button 
-              onClick={handleSelectAllFiltered} 
-              className={`px-3 py-2.5 sm:px-4 sm:py-3 shrink-0 rounded-xl border shadow-sm flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? (isDarkMode ? 'bg-orange-500/20 border-orange-500/50 text-orange-300' : 'bg-orange-50 border-orange-300 text-orange-800') : `${theme.card} hover:border-orange-400 ${theme.textMain}`}`}
-            >
-              <CheckSquare size={16} className={selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-purple-600'} /> 
-              <span className="hidden sm:inline">
-                {selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}
-              </span>
-            </button>
-
-            {/* 🌟 100% ADAPTIVE SEARCH BAR (ZERO WHITE BOX IN DARK MODE!) */}
-            <div 
-              style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
-              className="flex-1 p-2 sm:p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 hover:border-orange-300"
-            >
-              <div className="relative w-full">
-                <Search size={16} className={`absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
-                <input 
-                  type="text" 
-                  value={searchQuery} 
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search by Asset Name, Tag ID, Brand, Category, S/N, or Staff..." 
-                  style={{ color: isDarkMode ? '#f3e8ff' : '#0f172a' }}
-                  className="w-full pl-10 sm:pl-11 pr-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all bg-transparent"
-                />
-              </div>
+          {/* 100% Adaptive Search Bar (No White Box Glitch in Dark Mode) */}
+          <div 
+            style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
+            className="p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 hover:border-orange-300"
+          >
+            <div className="relative w-full">
+              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+              <input 
+                type="text" 
+                value={searchQuery} 
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
+                style={{ backgroundColor: 'transparent', color: isDarkMode ? '#f3e8ff' : '#0f172a', colorScheme: isDarkMode ? 'dark' : 'light' }}
+                className="w-full pl-12 pr-4 py-3 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all bg-transparent border-0 shadow-none"
+              />
             </div>
           </div>
-
-          {/* 🌟 SINGLE-ROW COMPACT FILTER BAR (100% ADAPTIVE, ROSE RESET BUTTON, LIGHT ORANGE COUNT) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t sm:border-t-0 border-slate-200 dark:border-purple-900/30">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto custom-scrollbar">
-              <span className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${theme.textSub}`}>
-                <Filter size={13} className="text-orange-600 dark:text-orange-400" /> Filter:
-              </span>
-              
-              {/* Status Dropdown */}
-              <select
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className={`text-[11px] sm:text-xs font-bold py-1.5 px-2.5 rounded-lg border transition-all duration-200 cursor-pointer outline-none shrink-0 ${
-                  statusFilter !== 'All' 
-                    ? '!bg-orange-600 !text-white !border-orange-600 shadow-sm' 
-                    : 'hover:border-orange-500'
-                }`}
-              >
-                <option value="All" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 All Stock Statuses</option>
-                <option value="In Stock" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟢 In Stock (Unassigned)</option>
-                <option value="Assigned" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option>
-                <option value="Pending Handover" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⏳ Pending Handover</option>
-                <option value="In Repair" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ In Repair</option>
-                <option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo Use</option>
-              </select>
-
-              {/* Condition Dropdown */}
-              <select
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                value={conditionFilter}
-                onChange={e => setConditionFilter(e.target.value)}
-                className={`text-[11px] sm:text-xs font-bold py-1.5 px-2.5 rounded-lg border transition-all duration-200 cursor-pointer outline-none shrink-0 ${
-                  conditionFilter !== 'All' 
-                    ? '!bg-purple-600 !text-white !border-purple-600 shadow-sm' 
-                    : 'hover:border-purple-500'
-                }`}
-              >
-                <option value="All" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ All Conditions</option>
-                <option value="New" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option>
-                <option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option>
-                <option value="Repaired" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option>
-              </select>
-
-              {/* High-Contrast Rose Reset Button (No Black UI) */}
-              {(statusFilter !== 'All' || conditionFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
-                <button
-                  onClick={() => {
-                    setStatusFilter('All');
-                    setConditionFilter('All');
-                    setSearchQuery('');
-                    setSelectedCategory('All');
-                  }}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-rose-500 hover:bg-rose-600 text-white transition-all duration-200 flex items-center gap-1 cursor-pointer shadow-sm shrink-0"
-                >
-                  <FilterX size={13} /> <span>Reset</span>
-                </button>
-              )}
-            </div>
-
-            {/* Light Orange Highlighted Count */}
-            <span className={`text-xs font-bold ${theme.textSub} shrink-0`}>
-              Showing <strong className="text-orange-600 dark:text-orange-400 font-black">{filteredAssets.length}</strong> of {assets.length} assets
-            </span>
-          </div>
-
         </div>
 
-        {/* 🌟 ASSET GRID (UPGRADED TO 4 COLUMNS ON WIDESCREEN FOR SLEEKER CARDS!) */}
+        {/* 🌟 RETURNS LISTING GRID */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isDarkMode ? 'border-orange-400' : 'border-orange-600'}`}></div>
-            <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Loading Asset Records...</span>
+            <div className={`animate-spin rounded-full h-10 w-10 border-b-2 ${isDarkMode ? 'border-orange-400' : 'border-orange-600'}`}></div>
+            <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Fetching Hardware Handovers...</span>
           </div>
-        ) : filteredAssets.length === 0 ? (
-          <div className={`${theme.card} rounded-3xl p-16 border text-center flex flex-col items-center justify-center space-y-3 shadow-sm`}>
-            <Package size={48} className="text-orange-600 opacity-60" />
-            <h3 className={`text-base font-bold ${theme.textMain}`}>No Hardware Found</h3>
-            <p className={`text-xs max-w-sm font-medium ${theme.textSub}`}>No assets match your selected filter combination. Try resetting your filters to view all 213 registered units.</p>
-            <button
-              onClick={() => {
-                setStatusFilter('All');
-                setConditionFilter('All');
-                setSearchQuery('');
-                setSelectedCategory('All');
-              }}
-              className="mt-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer"
-            >
-              Reset All Filters
-            </button>
+        ) : filteredList.length === 0 ? (
+          <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.card}`}>
+            <Package size={48} className={`mx-auto ${isDarkMode ? 'text-zinc-700' : 'text-purple-200'}`} />
+            <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>
+              {activeTab === 'pending' ? 'No Pending Return Requests' : 'No Processed History Found'}
+            </h3>
+            <p className={`text-xs font-semibold ${theme.textSub}`}>
+              {activeTab === 'pending' ? 'All hardware returns and replacement requests have been resolved.' : 'No historical return records match your search.'}
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-            {filteredAssets.map(asset => {
-              const isSelected = selectedAssetIds.has(asset.id);
+          <div className="space-y-6">
+            {filteredList.map((item, index) => {
+              const photosArray = item.photos || [];
 
               return (
-                <div key={asset.id} onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('button')) return;
-                  toggleSelectAsset(asset.id);
-                }} className={`${theme.card} rounded-3xl border shadow-sm flex flex-col justify-between group transition-all duration-300 cursor-pointer ${isSelected ? (isDarkMode ? '!border-orange-500 ring-2 ring-orange-500 !bg-purple-950/40' : '!border-orange-500 ring-2 ring-orange-500 !bg-orange-50/30') : theme.cardHover} overflow-hidden`}>
-                  
-                  <div className={`p-4 sm:p-5 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
-                    <div className="flex justify-between items-start mb-3.5">
-                      <div className="flex items-center gap-3.5">
-                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${isSelected ? 'bg-orange-600 text-white shadow-sm' : `${theme.iconBgBrand} group-hover:bg-orange-600 group-hover:text-white`}`}>
-                          {getCategoryIcon(asset.category, 18)}
-                        </div>
-                        <div className="overflow-hidden">
-                          <h3 className={`text-sm font-bold leading-tight truncate max-w-[170px] ${theme.textMain} group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
-                          <p className={`text-[11px] font-medium mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
+                <div 
+                  key={`${item.id}-${index}`} 
+                  className={`p-6 md:p-8 rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.card} ${
+                    !item.is_processed ? (isDarkMode ? 'border-orange-500/50 shadow-orange-600/10' : 'border-orange-300 shadow-orange-600/5') : theme.cardHover
+                  }`}
+                >
+                  {/* Left: Employee Custody & Hardware Info */}
+                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shrink-0 shadow-sm ${theme.iconBgPrimary}`}>
+                        <User size={20} />
+                      </div>
+                      <div className="overflow-hidden">
+                        <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-2xs ${
+                            isDarkMode ? 'bg-[#18181b] text-zinc-300 border border-purple-800/50' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}>
+                            {item.emp_code}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getSemanticBadge(item.status)}`}>
+                            {item.status}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 rounded-xl transition-all duration-200 cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-orange-600 hover:text-white hover:border-orange-600' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-orange-600 hover:text-white hover:border-orange-600'}`}>
-                          <QrCode size={16} />
+                    </div>
+
+                    <div className={`p-5 rounded-2xl border space-y-3 shadow-2xs ${isDarkMode ? 'bg-[#0f0a1c]/80 border-purple-900/50' : 'bg-slate-50/80 border-slate-200'}`}>
+                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
+                        <Laptop size={14} className="text-orange-600 dark:text-orange-400 shrink-0" />
+                        <button 
+                          type="button"
+                          onClick={() => router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`)}
+                          className={`truncate cursor-pointer text-left font-bold transition-colors ${isDarkMode ? 'hover:text-orange-400 hover:underline' : 'hover:text-orange-600 hover:underline'}`}
+                          title="View Asset Details"
+                        >
+                          {item.asset_name}
                         </button>
-                        <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 rounded cursor-pointer accent-orange-600 ml-0.5" />
+                      </div>
+                      <div className={`flex justify-between items-center text-[11px] border-t pt-2.5 mt-2.5 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-200/60'}`}>
+                        <span className={`font-semibold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
+                        <span className={`font-mono font-bold ${theme.textMain}`}>{item.serial_number}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className={`font-semibold uppercase tracking-widest ${theme.textSub}`}>TAG ID:</span>
+                        <button 
+                          type="button"
+                          onClick={() => router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`)}
+                          className={`font-mono font-bold cursor-pointer flex items-center gap-1 transition-colors ${isDarkMode ? 'text-purple-400 hover:text-purple-300 hover:underline' : 'text-purple-700 hover:text-purple-800 hover:underline'}`}
+                          title="View Asset Details"
+                        >
+                          {item.asset_tag} <ExternalLink size={10} className="mb-0.5" />
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${isDarkMode ? 'bg-purple-900/30 text-purple-200 border-purple-800/40' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>{asset.asset_condition || 'New'}</span>
-                    </div>
-                  </div>
-
-                  <div className={`p-4 sm:p-5 space-y-2.5 flex-1 ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/50'}`}>
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
-                      <span className={`font-bold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
-                      <span className="font-mono font-extrabold text-xs text-purple-700 dark:text-purple-400">{asset.clean_tag}</span>
-                    </div>
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
-                      <span className={`font-bold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
-                      <span className={`font-mono font-bold text-[11px] truncate max-w-[140px] ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
-                    </div>
-                    
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-all duration-200 ${theme.card} group-hover:border-orange-400 dark:group-hover:border-purple-700`}>
-                      <div className="flex flex-col">
-                        <span className={`font-bold uppercase text-[9px] tracking-widest ${theme.textSub}`}>Holder</span> 
-                        <span className={`font-bold text-[11px] truncate max-w-[120px] ${theme.textMain}`} title={asset.staff_name}>{asset.staff_name}</span>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className={`flex items-center gap-2 ${theme.textSub}`}>
+                        <Clock size={14} className="text-purple-600 dark:text-purple-400" /> 
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Requested On</span>
                       </div>
-                      <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-[9px] ${isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{asset.emp_code}</span>
+                      <span className={`font-bold ${theme.textMain}`}>{new Date(item.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
+
+                    {/* Active Ping Button */}
+                    {!item.is_processed && (
+                      <button
+                        type="button"
+                        disabled={sendingAlertId === item.staff_id}
+                        onClick={() => sendStaffAlert(item.staff_id, item.asset_name, item.asset_tag)}
+                        className="w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20"
+                      >
+                        <Send size={14} className={sendingAlertId === item.staff_id ? 'animate-bounce' : ''} />
+                        <span>{sendingAlertId === item.staff_id ? 'Pushing Alert...' : '⚡ Send Update Ping to Staff'}</span>
+                      </button>
+                    )}
                   </div>
 
-                  <div className={`p-3.5 sm:p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-slate-100/60 border-slate-200'}`}>
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={13} className={theme.textSub} />
-                      <div className="flex flex-col">
-                        <span className={`text-[8px] font-extrabold uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
-                        <span className={`text-[10px] font-mono font-bold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                  {/* Right: Return Reason, Evidence & Adjudication Actions */}
+                  <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Return Request Details & Evidence</h4>
+                      <span className={`px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border shadow-2xs w-fit ${getSemanticBadge(item.status)}`}>
+                        {item.is_processed ? 'Resolved Action' : 'Action Required'}
+                      </span>
+                    </div>
+
+                    {photosArray.length > 0 && (
+                      <div className="space-y-2.5">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className="text-orange-600 dark:text-orange-400"/> Attached Hardware Condition Shots ({photosArray.length})</span>
+                        <div className="flex flex-wrap gap-3">
+                          {photosArray.map((url: any, idx: number) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setPreviewPhotoModal(url)}
+                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 ${isDarkMode ? 'border-purple-900/60 hover:border-orange-500' : 'border-slate-200 hover:border-orange-500 bg-slate-50'}`}
+                            >
+                              <img src={url} alt={`Return Shot ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                              <div className="absolute inset-0 bg-purple-950/75 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-xs">
+                                <Eye size={20} className="mb-1 text-orange-400" />
+                                <span className="text-[9px] font-bold uppercase tracking-widest px-1 text-center leading-tight">Shot {idx + 1}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Employee Return Declaration / Reason</span>
+                      <div className={`p-4 border rounded-2xl text-xs font-medium leading-relaxed shadow-inner ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
+                        "{item.notes || 'No specific return notes or reason provided by staff member.'}"
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold ${getInspectionStatusColor(asset.live_inspection_status)}`}>
-                      {(() => {
-                        const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st.includes('approved')) return <CheckCircle2 size={11} />;
-                        if (st.includes('return')) return <RefreshCw size={11} className="animate-spin" />;
-                        return <AlertTriangle size={11} />;
-                      })()}
-                      <span className="text-[9px] font-bold uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
-                    </div>
-                  </div>
 
+                    {item.admin_remarks && (
+                      <div className={`p-4 border rounded-2xl text-xs font-semibold shadow-2xs ${isDarkMode ? 'bg-purple-950/40 border-purple-800/50' : 'bg-purple-50/70 border-purple-100'}`}>
+                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 ${isDarkMode ? 'text-orange-400' : 'text-purple-800'}`}>Administrative Resolution Notes:</span>
+                        <p className={theme.textMain}>"{item.admin_remarks}"</p>
+                      </div>
+                    )}
+
+                    <div className={`pt-4 border-t mt-auto ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
+                      {!item.is_processed ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <button
+                            type="button"
+                            disabled={updatingId === item.id}
+                            onClick={() => processReturnVerdict(item, 'Approve Return')}
+                            className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                          >
+                            <CheckCircle2 size={16} /> {updatingId === item.id ? 'Processing...' : '✔ Approve Return & Restock'}
+                          </button>
+                          
+                          <button
+                            type="button"
+                            disabled={updatingId === item.id}
+                            onClick={() => processReturnVerdict(item, 'Approve Replacement')}
+                            className="flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-orange-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                          >
+                            <RefreshCw size={16} /> 🔄 Approve Replacement
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={updatingId === item.id}
+                            onClick={() => processReturnVerdict(item, 'Reject Return')}
+                            className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-rose-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                          >
+                            <XCircle size={16} /> ❌ Reject Return
+                          </button>
+                        </div>
+                      ) : (
+                        <div className={`flex items-center justify-between px-5 py-4 border rounded-xl shadow-2xs ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200'}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Return Action Executed</span>
+                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
+                            <CheckCircle2 size={14} className={isDarkMode ? "text-emerald-400" : "text-emerald-600"}/>
+                            <span className={isDarkMode ? "text-emerald-400" : "text-emerald-700"}>
+                              {item.status}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
 
-      </div>
-
-      {/* 🚀 PRINT SETTINGS UI MODAL */}
-      {isPrintConfigModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-2xl w-full p-8 shadow-2xl border space-y-8 animate-in fade-in zoom-in-95 duration-200 ${theme.modalBody}`}>
-            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-slate-100'}`}>
-              <div>
-                <h3 className={`text-lg font-bold tracking-tight flex items-center gap-3 ${theme.textMain}`}>
-                  <Settings2 size={20} className="text-orange-600"/> Label Print Layout
-                </h3>
-                <p className={`text-[11px] mt-1 uppercase tracking-widest font-bold text-red-600 bg-red-50 inline-block px-2 py-1 rounded border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50`}>
-                  Important: When printing, uncheck "Fit to Page" and set Margins to "None".
-                </p>
-              </div>
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-500 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}>Sheet Formatting</h4>
-                <div>
-                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Paper Size</label>
-                  <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all">
-                    <option value="A4" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>A4 (210 x 297mm)</option>
-                    <option value="Letter" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>US Letter (8.5 x 11in)</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}>Label Dimensions</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-4 pt-4 border-t border-slate-200 dark:border-purple-900/40">
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-colors ${theme.card} ${theme.textSub} hover:text-slate-800 dark:hover:text-white`}>Cancel</button>
-              <button onClick={executeGridBulkPrint} className="flex-[2] py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md bg-orange-600 hover:bg-orange-700 text-white flex justify-center items-center gap-2 cursor-pointer transition-all shadow-orange-600/20"><Printer size={16}/> Generate Print Page</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE (v4.0 ENTERPRISE ZERO-SCROLL SAAS EDITION) */}
-      {viewAssetModal && (() => {
-        const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
-        const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
-            <div className={`rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col border ${theme.modalBody}`}>
-              
-              {/* 🌟 ENTERPRISE COMPACT HEADER (QR + ID + Logistics Chip + Grouped Top-Right Actions) */}
-              <div className={`w-full p-4 sm:p-5 border-b flex flex-col sm:flex-row items-center justify-between gap-4 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/40 border-purple-100'} shrink-0`}>
-                <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
-                  <div className="bg-white p-2 rounded-xl shadow-sm border border-purple-100 shrink-0">
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-12 h-12 sm:w-14 sm:h-14 object-contain" />
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base sm:text-lg font-bold font-mono text-purple-700 dark:text-purple-300 tracking-wider">{liveModalTag}</h3>
-                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                    </div>
-                    <p className={`text-xs font-semibold mt-0.5 ${theme.textSub}`} title={editForm.serial || viewAssetModal.serial_number}>
-                      S/N: <span className="font-mono">{editForm.serial || viewAssetModal.serial_number}</span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* Grouped Actions: Print QR | Edit | Delete | X */}
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-orange-600 hover:bg-orange-700 text-white shadow-sm'}`}>
-                    <Printer size={13} /> <span>Print QR</span>
-                  </button>
-                  {!isEditingAsset && (
-                    <>
-                      <button onClick={() => setIsEditingAsset(true)} className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-100 text-purple-900 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
-                        <Edit2 size={13} /> Edit
-                      </button>
-                      <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200'}`}>
-                        <Trash2 size={13} /> Delete
-                      </button>
-                    </>
-                  )}
-                  <button onClick={() => setViewAssetModal(null)} className={`p-2 rounded-full cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}><X size={16}/></button>
-                </div>
-              </div>
-
-              {/* Right/Bottom Workspace: Ergonomic 1-Page Dense SaaS Grid */}
-              <div className="p-4 sm:p-6 space-y-4 flex-1">
-                {isEditingAsset ? (
-                  <div className="space-y-5 animate-in fade-in duration-200">
-                    <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                      <span className={`text-sm font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400`}>Editing Hardware Record</span>
-                    </div>
-
-                    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
-                      <div>
-                        <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Asset Category *</label>
-                        <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.category} onChange={e => { 
-                          const newCat = e.target.value; 
-                          setEditForm({ 
-                            ...editForm, 
-                            category: newCat, 
-                            asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) 
-                          }); 
-                        }} className="w-full p-3 rounded-xl text-xs font-bold outline-none transition-colors border">
-                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1 text-purple-700 dark:text-purple-400`}>
-                          <span>Asset Tag ID</span>
-                          <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
-                        </label>
-                        <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                      <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border" />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                      <div>
-                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1 ${theme.textSub}`}>
-                          <span>Assets Name</span>
-                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
-                        </label>
-                        <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-semibold outline-none transition-all border" /></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
-                      </div>
-                      <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" />
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {[
-                          "AMD Ryzen 7 7735HS | 16GB RAM | 512GB SSD | Win 11 Home",
-                          "Intel Core i7-12700H (12th Gen) | 16GB RAM | 512GB SSD | RTX 4060 | Win 11",
-                          "Intel Core i5 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
-                          "Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
-                          "AMD Ryzen 7 Pro | 16GB RAM | 512GB SSD | Win 11 Pro"
-                        ].map((preset, pIdx) => (
-                          <button
-                            key={`preset-edit-${pIdx}`}
-                            type="button"
-                            onClick={() => setEditForm({...editForm, system_specs: preset})}
-                            className={`text-[9px] px-2 py-0.5 rounded-md border font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-purple-950/50 border-purple-800/60 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'}`}
-                          >
-                            ⚡ {preset.split('|')[0].trim()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3.5 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Condition</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="New" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Stock Status</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Assigned" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option><option value="In Repair" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Repair</option><option value="Discard" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🗑️ Discard</option></select></div>
-                      <div>
-                        <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Inspection State</label>
-                        <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border">
-                          <option value="Approved" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✅ Approved</option><option value="Re-Inspection" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Re-Inspection</option><option value="Not Approved" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Not Approved</option><option value="Rejected" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>❌ Rejected</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50 border-purple-200'}`}>
-                      <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Re-Assign Holder</label>
-                      <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
-                    </div>
-
-                    <div className="flex gap-3 pt-4">
-                      <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                      <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-orange-600/20 cursor-pointer transition-all">
-                        {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Compact 3-Column Header Specs */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1 text-orange-600 dark:text-orange-400`}>{viewAssetModal.category || 'Laptop'}</p></div>
-                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-xs font-bold mt-1 truncate ${theme.textMain}`} title={viewAssetModal.safe_display_name}>{viewAssetModal.safe_display_name}</p></div>
-                    </div>
-
-                    {/* Compact 3-Column Logistic Specs */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className={`p-3.5 rounded-xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Purchase Date</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
-                      <div className={`p-3.5 rounded-xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Warranty Date</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
-                      <div className={`p-3.5 rounded-xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Inspection Status</p><div className="flex items-center gap-1 mt-1"><span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
-                    </div>
-
-                    {/* 🌟 SYSTEM SPECIFICATIONS ONLINE BLOCK */}
-                    <div className={`p-3.5 rounded-xl border flex items-center gap-3 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
-                      <Cpu size={18} className="text-orange-600 dark:text-orange-400 shrink-0" />
-                      <div className="w-full">
-                        <span className={`text-[9px] font-bold uppercase tracking-widest block ${theme.textSub}`}>System Hardware Configuration / Specifications:</span>
-                        <p className={`text-xs font-semibold mt-0.5 ${theme.textMain}`}>{viewAssetModal.system_specs || 'Standard Business Hardware Configuration'}</p>
-                      </div>
-                    </div>
-
-                    {/* Assigned Holder Box */}
-                    <div className={`p-3.5 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-100 border-purple-300'}`}>
-                      <div>
-                        <span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Assigned Employee Holder:</span>
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center ${theme.iconBgBrand}`}><User size={14}/></div>
-                          <span className={`text-sm font-bold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                         <span className={`text-[8px] font-bold uppercase tracking-widest mb-0.5 ${theme.textSub}`}>EMP CODE</span>
-                         <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-md border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-800 text-purple-300' : 'bg-white border-purple-300 text-purple-950'}`}>{viewAssetModal.emp_code}</span>
-                      </div>
-                    </div>
-
-                    {/* 🌟 OFFICIAL HANDOVER AGREEMENT & COMPLIANCE DOCUMENTS SECTION */}
-                    {(viewAssetModal.assigned_to || viewAssetModal.status === 'Assigned' || viewAssetModal.status === 'Pending Handover') && (
-                      <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50/80 border-emerald-200'}`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-emerald-600 text-white rounded-lg shadow-sm shrink-0">
-                              <FileText size={18} />
-                            </div>
-                            <div>
-                              <h4 className={`text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-emerald-400' : 'text-emerald-900'}`}>Official Handover Agreement</h4>
-                              <p className={`text-[10px] font-semibold ${isDarkMode ? 'text-emerald-200/80' : 'text-emerald-800'}`}>Digitally executed custody document with hardware specs and policies.</p>
-                            </div>
-                          </div>
-
-                          <button 
-                            onClick={() => handleGenerateHandoverPDF(viewAssetModal)}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0"
-                          >
-                            <Download size={14} /> <span>Download PDF</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 🌟 COLLAPSIBLE LIFECYCLE & ACTIVITY HISTORY (ELIMINATES VERTICAL SCROLLBAR!) */}
-                    <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <History size={15} className="text-orange-600 dark:text-orange-400" />
-                          <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
-                        </div>
-                        {assetHistory.length > 1 && (
-                          <button
-                            onClick={() => setShowFullHistory(!showFullHistory)}
-                            className="text-[10px] font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            {showFullHistory ? (
-                              <><span>Show Less</span> <ChevronUp size={12}/></>
-                            ) : (
-                              <><span>Show Full History ({assetHistory.length})</span> <ChevronDown size={12}/></>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                      
-                      {isLoadingHistory ? (
-                        <div className="flex justify-center p-3"><Loader2 className="animate-spin text-orange-600 size-5"/></div>
-                      ) : assetHistory.length === 0 ? (
-                        <p className={`text-xs font-medium italic ${theme.textSub}`}>No history logs found for this asset.</p>
-                      ) : (
-                        <div className="space-y-2.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1.5">
-                          {visibleHistory.map((log, idx) => {
-                            let photosArray: string[] = [];
-                            try {
-                              if (Array.isArray(log.photos)) photosArray = log.photos;
-                              else if (typeof log.photos === 'string') {
-                                const parsed = JSON.parse(log.photos);
-                                if (Array.isArray(parsed)) photosArray = parsed;
-                              }
-                            } catch(e){}
-
-                            return (
-                              <div key={idx} className={`p-3 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200'}`}>
-                                <div className="flex justify-between items-start mb-1.5">
-                                  <div>
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
-                                    <p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-500 font-mono">({log.emp_code})</span></p>
-                                  </div>
-                                  <span className={`text-[9px] font-bold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
-                                </div>
-                                {log.notes && (
-                                  <div className={`mt-1.5 text-xs font-mono p-2.5 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-200/80' : 'bg-purple-50 border-purple-200 text-slate-800'}`}>
-                                    {log.notes}
-                                  </div>
-                                )}
-                                {photosArray.length > 0 && (
-                                  <div className="flex gap-2 mt-2.5 overflow-x-auto custom-scrollbar pb-1">
-                                    {photosArray.map((url, i) => (
-                                      <img key={`hist-photo-${i}`} src={url} alt="Log" className="h-12 w-12 rounded-lg object-cover border border-purple-200/60 shadow-sm" />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 🚀 ADD NEW ASSET MODAL */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border ${theme.modalBody}`}>
-            <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
-              <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-            
-            <form onSubmit={handleSaveNewAsset} className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
-                <div>
-                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                  <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetCategory} onChange={e => {
-                    const newCat = e.target.value;
-                    setNewAssetCategory(newCat);
-                    setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
-                    if (newCat === 'Laptop') {
-                      setNewAssetSpecs('Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
-                    } else if (newCat.includes('Keyboard') || newCat.includes('Mouse')) {
-                      setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
-                    } else {
-                      setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
-                    }
-                  }} className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-colors border">
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-purple-700 dark:text-purple-400`}>
-                    <span>Asset Tag ID</span>
-                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(generate new)</button>
-                  </label>
-                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="e.g. M27370-00105" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border" />
-                </div>
-                <div>
-                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Vendor Source</label>
-                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                <div>
-                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
-                    <span>Assets Name *</span>
-                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
-                  </label>
-                  <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border" /></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
-                </div>
-                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {[
-                    "AMD Ryzen 7 7735HS | 16GB RAM | 512GB SSD | Win 11 Home",
-                    "Intel Core i7-12700H (12th Gen) | 16GB RAM | 512GB SSD | RTX 4060 | Win 11",
-                    "Intel Core i5 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
-                    "Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
-                    "AMD Ryzen 7 Pro | 16GB RAM | 512GB SSD | Win 11 Pro"
-                  ].map((preset, pIdx) => (
-                    <button
-                      key={`preset-add-${pIdx}`}
-                      type="button"
-                      onClick={() => setNewAssetSpecs(preset)}
-                      className={`text-[9px] px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-purple-950/50 border-purple-800/60 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'}`}
-                    >
-                      ⚡ {preset.split('|')[0].trim()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="New" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option></select></div>
-              </div>
-
-              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200'}`}>
-                <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.textSub}`}>Assign to Employee (Optional)</label>
-                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} isDarkMode={isDarkMode} />
-              </div>
-
-              <div className="flex gap-4 pt-6">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-600/20 cursor-pointer transition-all">
-                  {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Register New Asset
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 🚀 BULK UPLOAD MODAL */}
-      {isBulkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in duration-200 ${theme.modalBody}`}>
-            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18} className="text-orange-600"/> Bulk Asset Import</h3>
-              <button onClick={() => setIsBulkModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
-            </div>
-            
-            <div className="space-y-4 text-left">
-              <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border ${isDarkMode ? 'bg-purple-900/30 border-purple-800/60 text-purple-300 hover:bg-purple-900/50' : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-300'}`}>
-                <Download size={16} className="text-orange-600"/> <span>Download CSV Template</span>
-              </button>
-            </div>
-
-            <div className={`p-8 border-2 border-dashed rounded-2xl transition-colors flex flex-col items-center justify-center gap-4 ${isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c] hover:bg-purple-950/30' : 'border-purple-300 bg-purple-50/30 hover:bg-purple-50/60'}`}>
-              <FileSpreadsheet size={48} className="text-orange-600 animate-pulse" />
-              <input type="file" accept=".csv" className={`w-full text-xs font-semibold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-orange-600 file:text-white hover:file:opacity-90' : 'text-slate-700 file:bg-orange-600 file:text-white'}`} />
-            </div>
-
-            <button className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all bg-slate-300 dark:bg-zinc-800 text-white cursor-not-allowed`}>
-              Execute Batch Upload
+        {/* High-Res Photo Lightbox Modal */}
+        {previewPhotoModal && (
+          <div 
+            onClick={() => setPreviewPhotoModal(null)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+          >
+            <button 
+              onClick={() => setPreviewPhotoModal(null)}
+              className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-orange-600 text-white rounded-full flex items-center justify-center transition-all cursor-pointer border border-white/20 hover:scale-110 active:scale-95"
+            >
+              <X size={20} />
             </button>
+            
+            <div className="max-w-6xl w-full h-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
+              <img 
+                src={previewPhotoModal} 
+                alt="Return High-Res Capture" 
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
+      </div>
     </div>
   );
 }
 
-export default function AssetRegistryPageWrapper() {
+export default function AdminAssetReturnsPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-purple-50/30 dark:bg-[#0b0712]"><Loader2 className="w-10 h-10 animate-spin text-orange-600" /></div>}>
-      <AssetRegistryContent />
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 dark:bg-[#0b0712] flex flex-col items-center justify-center gap-4 text-slate-400 transition-colors">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
+        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500 dark:text-purple-300">Loading Return Records...</span>
+      </div>
+    }>
+      <AdminAssetReturnsContent />
     </Suspense>
   );
 }
