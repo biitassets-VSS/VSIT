@@ -7,8 +7,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, AlertCircle, Clock,
-  AlertTriangle, Bell, Monitor, Trash2, ExternalLink,
-  Megaphone, Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
+  AlertTriangle, Bell, Monitor, Megaphone, 
+  Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
   BarChart3, Settings, Cpu
 } from 'lucide-react';
 
@@ -33,7 +33,6 @@ export default function AdminDashboardPage() {
   
   const [loading, setLoading] = useState(true);
   const [adminName, setAdminName] = useState('Admin');
-  const [adminEmail, setAdminEmail] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [authError, setAuthError] = useState('');
   
@@ -131,7 +130,6 @@ export default function AdminDashboardPage() {
       }
 
       setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
-      setAdminEmail(cleanEmail || activeUser.email || 'admin@vsit.com');
 
       const [
         { data: assets }, { data: inspections }, { data: tickets }, staffRes, notifRes
@@ -182,14 +180,13 @@ export default function AdminDashboardPage() {
         else pendingTicketsCount++;
       });
 
-      // 4. NETWORK LOGIC (ONLINE/OFFLINE/DEACTIVATED STRICT LOGIC)
+      // 4. NETWORK LOGIC
       let onlineCount = 0, deactivatedCount = 0;
       staffData.forEach(s => {
         const statusStr = (s.status || '').toLowerCase().trim();
         const roleStr = (s.role || '').toLowerCase().trim();
         const isOnlineBool = s.is_online === true || String(s.is_online).toLowerCase() === 'true';
         
-        // Strict check if staff is deactivated, suspended, banned, or marked inactive in DB
         const isDeactivated = s.is_active === false || 
                               ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => statusStr.includes(k)) ||
                               ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
@@ -200,7 +197,6 @@ export default function AdminDashboardPage() {
           onlineCount++;
         }
       });
-      // Offline is any registered staff who isn't live AND isn't deactivated.
       const offlineCount = staffData.length - onlineCount - deactivatedCount;
 
       if (notifRes.data) setNotifications(notifRes.data);
@@ -210,11 +206,10 @@ export default function AdminDashboardPage() {
         let displayName = log.user_email?.split('@')[0] || 'A user'; 
         if (matchedProfile) displayName = `${matchedProfile.full_name || matchedProfile.name || displayName}`;
         
-        // Activity Status Inference
         const statusText = (log.status || '').toLowerCase();
-        let logTheme = 'text-purple-600 bg-purple-50'; // Processing
-        if (statusText.includes('pending') || statusText === '') logTheme = 'text-orange-500 bg-orange-50'; // Pending
-        if (statusText.includes('resolv') || statusText.includes('approv')) logTheme = 'text-emerald-500 bg-emerald-50'; // Success
+        let logTheme = 'text-[#8B5CF6] bg-[#8B5CF6]/10 border-[#8B5CF6]/20'; 
+        if (statusText.includes('pending') || statusText === '') logTheme = 'text-[#F97316] bg-[#F97316]/10 border-[#F97316]/20';
+        if (statusText.includes('resolv') || statusText.includes('approv')) logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
 
         return { ...log, displayName, logTheme };
       });
@@ -265,27 +260,27 @@ export default function AdminDashboardPage() {
     } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
   };
 
-  if (authError) return (
-    <div className="w-full h-screen flex flex-col items-center justify-center bg-[#F8FAFC]">
-      <AlertTriangle size={48} className="text-rose-500 mb-4" />
-      <h1 className="text-2xl font-bold">Authorization Failed</h1>
-      <button onClick={handleSecureLogout} className="mt-4 px-6 py-2 bg-white border rounded-xl font-bold shadow-sm">Secure Logout</button>
-    </div>
-  );
-
-  if (loading) return (
-    <div className="w-full h-screen flex flex-col items-center justify-center bg-[#F8FAFC]">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#8B5CF6] mb-4"></div>
-      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Loading Enterprise Data...</p>
-    </div>
-  );
-
   const theme = {
-    bg: isDarkMode ? 'bg-zinc-950' : 'bg-[#F8FAFC]',
+    bg: isDarkMode ? 'bg-[#09090b]' : 'bg-[#F8FAFC]',
     card: isDarkMode ? 'bg-[#121212] border-zinc-800' : 'bg-white border-slate-200/70',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
+
+  if (authError) return (
+    <div className={`w-full h-screen flex flex-col items-center justify-center ${theme.bg}`}>
+      <AlertTriangle size={48} className="text-rose-500 mb-4" />
+      <h1 className={`text-2xl font-bold ${theme.text}`}>Authorization Failed</h1>
+      <button onClick={handleSecureLogout} className={`mt-4 px-6 py-2 rounded-xl font-bold shadow-sm border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-slate-200 text-slate-700'}`}>Secure Logout</button>
+    </div>
+  );
+
+  if (loading) return (
+    <div className={`w-full h-screen flex flex-col items-center justify-center ${theme.bg}`}>
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#F97316] mb-4"></div>
+      <p className={`text-xs font-bold uppercase tracking-widest ${theme.subText}`}>Loading Enterprise Data...</p>
+    </div>
+  );
 
   return (
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
@@ -310,10 +305,10 @@ export default function AdminDashboardPage() {
             <button onClick={() => router.push('/admin/settings')} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 hover:-translate-y-0.5 ${isDarkMode ? 'bg-zinc-900 border-[#F97316]/30 text-[#F97316] hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:border-[#F97316]/50 hover:text-[#F97316]'}`}>
               <Settings size={14} /> Settings
             </button>
-            <button className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6] transition-all duration-300 relative shadow-sm group">
+            <button className={`p-2.5 rounded-xl border transition-all duration-300 relative shadow-sm group cursor-default ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6]' : 'bg-white border-slate-200 text-slate-500 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6]'}`}>
               <Bell size={18} className={notifications.length > 0 ? "animate-pulse" : ""} />
               {notifications.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-[#F97316] text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">{notifications.length}</span>
+                <span className={`absolute -top-1.5 -right-1.5 bg-[#F97316] text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>{notifications.length}</span>
               )}
             </button>
           </div>
@@ -323,7 +318,7 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 shrink-0">
           
           {/* INVENTORY */}
-          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
+          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#8B5CF6]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}><Laptop size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
@@ -333,14 +328,14 @@ export default function AdminDashboardPage() {
               <p className={`text-[10px] font-medium ${theme.subText}`}>Total Assets</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Used</span><span className="text-sm font-bold text-slate-500">{stats.usedAssets}</span></div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-sm font-bold text-emerald-500">{stats.inStockAssets}</span></div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-sm font-bold text-[#F97316]">{stats.discardedAssets}</span></div>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Used</span><span className={`text-sm font-bold ${theme.subText}`}>{stats.usedAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-sm font-bold text-emerald-500">{stats.inStockAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-sm font-bold text-[#F97316]">{stats.discardedAssets}</span></div>
             </div>
           </div>
 
-          {/* VERIFICATIONS (Removed Total Column) */}
-          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
+          {/* VERIFICATIONS */}
+          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#F97316]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={18} /> : <ClipboardCheck size={18} />}</div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
@@ -351,12 +346,12 @@ export default function AdminDashboardPage() {
             </div>
             <div className={`grid grid-cols-2 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
-              <div className="flex flex-col border-l pl-3 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
+              <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
-          {/* HELPDESK (Added Resolved, Removed Total Column) */}
-          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
+          {/* HELPDESK */}
+          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#8B5CF6]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}><Ticket size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
@@ -367,13 +362,13 @@ export default function AdminDashboardPage() {
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-sm font-bold text-[#8B5CF6]">{stats.inProcessTickets}</span></div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingTickets > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-sm font-bold text-[#8B5CF6]">{stats.inProcessTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingTickets > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
-          {/* NETWORK (Removed Total, accurate Staff logic) */}
-          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
+          {/* NETWORK */}
+          <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#F97316]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white'}`}><Users size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
@@ -387,11 +382,11 @@ export default function AdminDashboardPage() {
                 <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
                 <span className="text-sm font-bold text-emerald-500">{stats.onlineStaff}</span>
               </div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800">
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
-                <span className="text-sm font-bold text-slate-500">{stats.offlineStaff}</span>
+                <span className={`text-sm font-bold ${theme.subText}`}>{stats.offlineStaff}</span>
               </div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800">
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span>
                 <span className="text-sm font-bold text-rose-500">{stats.deactivatedStaff}</span>
               </div>
@@ -410,7 +405,7 @@ export default function AdminDashboardPage() {
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
                 { title: 'Return Requests', desc: 'Manage hardware returns and physical asset handovers.', icon: LogOut, path: '/admin/returns', color: '#F97316', badge: stats.returnRequests },
                 { title: 'Replacements', desc: 'Process device swap requests and hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: '#8B5CF6', badge: stats.replacementRequests },
-                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: '#8B5CF6', badge: stats.pendingTickets }, // Fixes build error
+                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: '#8B5CF6', badge: stats.pendingTickets },
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: '#F97316', badge: 0 },
                 { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: '#8B5CF6', badge: 0 },
                 { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns, asset matrices, and PDF exports.', icon: BarChart3, path: '/admin/reports', color: '#8B5CF6', badge: 0 },
@@ -420,24 +415,24 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    className={`text-left cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl ${isOrange ? 'hover:shadow-[#F97316]/10 hover:border-[#F97316]/30' : 'hover:shadow-[#8B5CF6]/10 hover:border-[#8B5CF6]/30'}`}
+                    className={`text-left cursor-pointer ${theme.card} p-5 rounded-2xl border shadow-sm flex flex-col transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl ${isOrange ? (isDarkMode ? 'hover:shadow-[#F97316]/10 hover:border-[#F97316]/40' : 'hover:shadow-[#F97316]/10 hover:border-[#F97316]/30') : (isDarkMode ? 'hover:shadow-[#8B5CF6]/10 hover:border-[#8B5CF6]/40' : 'hover:shadow-[#8B5CF6]/10 hover:border-[#8B5CF6]/30')}`}
                   >
                     <div className="flex items-center gap-3 mb-3">
-                      <div className={`relative w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${isOrange ? 'bg-[#fff7ed] text-[#F97316]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}>
+                      <div className={`relative w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${isOrange ? (isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]') : (isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]')}`}>
                         <m.icon size={24} strokeWidth={2.2} />
                         {m.badge > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-rose-500 shadow-sm border-2 border-white">
+                          <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-rose-500 shadow-sm border-2 ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
                             {m.badge}
                           </span>
                         )}
                       </div>
-                      <h4 className="text-sm font-bold tracking-tight text-slate-800">{m.title}</h4>
+                      <h4 className={`text-sm font-bold tracking-tight ${theme.text}`}>{m.title}</h4>
                     </div>
                     
-                    <p className="text-[11px] font-medium leading-relaxed mb-4 text-slate-500 flex-1">{m.desc}</p>
+                    <p className={`text-[11px] font-medium leading-relaxed mb-4 flex-1 ${theme.subText}`}>{m.desc}</p>
                     
                     <div className="mt-auto self-end">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 group-hover:translate-x-1.5 ${isOrange ? 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 group-hover:translate-x-1.5 ${isOrange ? (isDarkMode ? 'bg-[#F97316]/10 text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white') : (isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white')}`}>
                         <ArrowRight size={18} strokeWidth={2.5} />
                       </div>
                     </div>
@@ -465,13 +460,13 @@ export default function AdminDashboardPage() {
                       <div className="pt-0.5">
                         <p className={`text-xs font-bold leading-tight ${theme.text}`}>{log.displayName}</p>
                         <p className={`text-[11px] font-medium mt-0.5 ${theme.subText}`}>Submitted a system request.</p>
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1.5">{timeAgo(log.created_at)}</p>
+                        <p className={`text-[9px] font-bold uppercase tracking-wider mt-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className="mt-4 w-full py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 bg-white text-slate-600 border-slate-200 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6] hover:shadow-sm">
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 w-full py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 hover:shadow-sm hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6] ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                 View Entire Log
               </button>
             </div>
@@ -496,10 +491,19 @@ export default function AdminDashboardPage() {
             <form onSubmit={handleSendBroadcast} className="space-y-4">
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Message Text *</label>
-                <textarea rows={3} required placeholder="Type an announcement to broadcast..." value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} className="w-full p-3 rounded-xl border border-slate-200 outline-none text-sm font-medium transition-all resize-none bg-slate-50 focus:bg-white focus:border-[#8B5CF6]" />
+                <textarea rows={3} required placeholder="Type an announcement to broadcast..." value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} className={`w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-200 focus:bg-zinc-950 focus:border-[#F97316]' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-[#F97316]'}`} />
               </div>
-              <div className="flex gap-2 pt-4 border-t border-slate-100">
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className="flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
+              <div>
+                <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
+                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${isDarkMode ? 'border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-500'}`}>
+                  <ImagePlus size={24} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
+                </label>
+                {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
+              </div>
+              <div className={`flex gap-2 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all ${isDarkMode ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Cancel</button>
                 <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
                   {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
                 </button>
