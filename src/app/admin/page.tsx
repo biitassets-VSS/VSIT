@@ -65,7 +65,7 @@ export default function AdminDashboardPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
-    // 🟢 DYNAMIC THEME OBSERVER
+    // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs with your top Navbar toggle
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
@@ -74,6 +74,7 @@ export default function AdminDashboardPage() {
     
     syncTheme(); // Run on mount
 
+    // Watch for class changes on HTML tag triggered by external Navbar
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
@@ -98,7 +99,7 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    // Real-Time Socket Connection
+    // Real-Time Socket Connection for Instant Updates
     const adminChannel = supabase
       .channel('admin-live-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
@@ -498,20 +499,28 @@ export default function AdminDashboardPage() {
             <form onSubmit={handleSendBroadcast} className="space-y-4">
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Message Text *</label>
-                {/* 🔴 THIS TEXTAREA IS NOW GUARANTEED DARK IN DARK MODE USING PURE TAILWIND CLASSES */}
+                {/* 🔴 THIS TEXTAREA IS NOW FULLY REBUILT WITHOUT TAILWIND 'DARK:' PREFIXES TO PREVENT DESYNC */}
                 <textarea 
                   rows={3} 
                   required 
                   placeholder="Type an announcement to broadcast..." 
                   value={broadcastMessage} 
                   onChange={e => setBroadcastMessage(e.target.value)} 
-                  className="w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none shadow-sm focus:ring-2 focus:ring-[#F97316]/20 bg-white dark:bg-[#121212] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 focus:border-[#F97316] dark:focus:border-[#F97316]" 
+                  className={`w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none shadow-sm focus:ring-2 focus:ring-[#F97316]/20 focus:text-[#F97316] ${
+                    isDarkMode 
+                      ? 'bg-[#18181b] border-zinc-800 text-zinc-200 focus:bg-[#121212] focus:border-[#F97316]' 
+                      : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-[#F97316]'
+                  }`} 
                 />
               </div>
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
-                {/* 🔴 THIS FILE UPLOAD IS NOW GUARANTEED DARK IN DARK MODE USING PURE TAILWIND CLASSES */}
-                <label className="cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors bg-slate-50 dark:bg-[#121212] border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/50 hover:border-[#8B5CF6]/50 dark:hover:border-[#8B5CF6]/50">
+                {/* 🔴 THIS FILE UPLOAD BOX IS NOW FULLY REBUILT WITHOUT TAILWIND 'DARK:' PREFIXES */}
+                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${
+                  isDarkMode 
+                    ? 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:bg-[#121212] hover:border-[#8B5CF6]/50' 
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-[#8B5CF6]/50'
+                }`}>
                   <ImagePlus size={24} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
                   <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
@@ -519,8 +528,12 @@ export default function AdminDashboardPage() {
                 {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
               </div>
               <div className={`flex gap-2 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                {/* 🔴 CANCEL BUTTON FIX */}
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className="flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all shadow-sm bg-white dark:bg-[#18181b] border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800">
+                {/* 🔴 CANCEL BUTTON FIX: GUARANTEED TO MATCH LIGHT/DARK SETTINGS */}
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all shadow-sm ${
+                  isDarkMode 
+                    ? 'bg-[#18181b] border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
                   Cancel
                 </button>
                 <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
