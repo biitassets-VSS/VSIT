@@ -97,7 +97,7 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 }
 
 // ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.0 PRO)
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER
 // ==========================================
 function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
   if (!category.toLowerCase().includes('laptop')) {
@@ -106,7 +106,6 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
 
   const t = textToParse.toLowerCase();
 
-  // 1. Exact Model Detection Rules (100% Accuracy)
   if (t.includes('thinkbook') && (t.includes('16s') || t.includes('r7') || t.includes('7735hs'))) {
     return 'AMD Ryzen 7 7735HS | 16GB DDR5 RAM | 512GB NVMe SSD | Windows 11 Home';
   }
@@ -126,7 +125,6 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
     return 'Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro';
   }
 
-  // 2. Generic Processor Fallbacks
   let cpu = 'Intel Core i5 (vPro Business Edition)';
   if (t.includes('ryzen 7') || t.includes('r7')) cpu = 'AMD Ryzen 7 Pro Series';
   else if (t.includes('ryzen 5') || t.includes('r5')) cpu = 'AMD Ryzen 5 Pro Series';
@@ -266,7 +264,7 @@ function AssetRegistryContent() {
   
   const [assetHistory, setAssetHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [showFullHistory, setShowFullHistory] = useState(false); // 🌟 TOGGLE FOR 1-PAGE ZERO-SCROLL VIEW
+  const [showFullHistory, setShowFullHistory] = useState(false);
 
   const [printConfig, setPrintConfig] = useState({
     pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,      
@@ -318,7 +316,7 @@ function AssetRegistryContent() {
   // 🌟 ASSET HISTORY ENGINE
   useEffect(() => {
     if (viewAssetModal && !isEditingAsset) {
-      setShowFullHistory(false); // Reset to showing only latest activity by default
+      setShowFullHistory(false);
       loadAssetHistory(viewAssetModal.id);
     }
   }, [viewAssetModal, isEditingAsset]);
@@ -385,20 +383,20 @@ function AssetRegistryContent() {
 
   const getStockStatusBadge = (status: string) => {
     const s = safeString(status);
-    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse';
-    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200';
-    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-700 border-rose-200 line-through';
-    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
+    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-800 border-emerald-300';
+    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-800 border-orange-300 animate-pulse';
+    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-800 border-purple-300';
+    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-800 border-rose-300 line-through';
+    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-800 border-amber-300';
     return isDarkMode ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' : 'bg-purple-100/80 text-purple-900 border-purple-300';
   };
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    if (s.includes('return')) return isDarkMode ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' : 'text-purple-700 bg-purple-50 border-purple-200';
-    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
-    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
+    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-300';
+    if (s.includes('return')) return isDarkMode ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' : 'text-purple-800 bg-purple-50 border-purple-300';
+    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-800 bg-rose-50 border-rose-300';
+    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-800 bg-amber-50 border-amber-300';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -1068,12 +1066,12 @@ function AssetRegistryContent() {
                     : 'bg-white text-slate-900 border-slate-300 hover:border-purple-500 dark:bg-[#150f24] dark:text-purple-100 dark:border-purple-900/60 dark:hover:border-purple-500'
                 }`}
               >
-                <option value="All" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">📦 All Stock Statuses</option>
-                <option value="In Stock" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🟢 In Stock (Unassigned)</option>
-                <option value="Assigned" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">👤 Assigned</option>
-                <option value="Pending Handover" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⏳ Pending Handover</option>
-                <option value="In Repair" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🛠️ In Repair</option>
-                <option value="Demo Use" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🧪 Demo Use</option>
+                <option value="All" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 All Stock Statuses</option>
+                <option value="In Stock" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟢 In Stock (Unassigned)</option>
+                <option value="Assigned" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option>
+                <option value="Pending Handover" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⏳ Pending Handover</option>
+                <option value="In Repair" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ In Repair</option>
+                <option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo Use</option>
               </select>
 
               {/* Condition Dropdown */}
@@ -1087,13 +1085,13 @@ function AssetRegistryContent() {
                     : 'bg-white text-slate-900 border-slate-300 hover:border-purple-500 dark:bg-[#150f24] dark:text-purple-100 dark:border-purple-900/60 dark:hover:border-purple-500'
                 }`}
               >
-                <option value="All" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✨ All Conditions</option>
-                <option value="New" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✨ New</option>
-                <option value="Refurbished" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Refurbished</option>
-                <option value="Repaired" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🛠️ Repaired</option>
+                <option value="All" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ All Conditions</option>
+                <option value="New" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option>
+                <option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option>
+                <option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option>
               </select>
 
-              {/* Clear Filters Button */}
+              {/* Clear Filters Button (NO BLACK UI!) */}
               {(statusFilter !== 'All' || conditionFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
                 <button
                   onClick={() => {
@@ -1102,7 +1100,7 @@ function AssetRegistryContent() {
                     setSearchQuery('');
                     setSelectedCategory('All');
                   }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-all duration-200 flex items-center gap-1 cursor-pointer shadow-sm bg-white dark:bg-zinc-900 dark:border-rose-900/50 dark:hover:bg-rose-950/30"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-100/80 border border-rose-200 transition-all duration-200 flex items-center gap-1 cursor-pointer shadow-sm bg-rose-50/80 dark:bg-rose-950/30 dark:border-rose-800/50 dark:text-rose-400"
                 >
                   <FilterX size={14} /> Reset All Filters
                 </button>
@@ -1324,7 +1322,7 @@ function AssetRegistryContent() {
         </div>
       )}
 
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE (v4.0 ENTERPRISE SAAS EDITION - 1-PAGE ZERO SCROLL) */}
+      {/* 🚀 VIEW MODAL & HISTORY ENGINE (v4.0 ENTERPRISE ZERO-SCROLL SAAS EDITION) */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
@@ -1496,7 +1494,7 @@ function AssetRegistryContent() {
                       </div>
                     </div>
 
-                    {/* Assigned Holder Box (Better Horizontal Utilization) */}
+                    {/* Assigned Holder Box */}
                     <div className={`p-3.5 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-100 border-purple-300'}`}>
                       <div>
                         <span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Assigned Employee Holder:</span>
