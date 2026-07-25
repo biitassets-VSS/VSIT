@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   LogOut, ClipboardCheck, Ticket, 
-  Loader2, Bell, X, CheckCircle2, AlertTriangle
+  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -38,16 +38,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
     };
     
     syncTheme(); // Run on mount
 
-    // Watch for class changes on HTML tag triggered by external toggle
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
@@ -154,7 +148,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const theme = {
-    bgApp: isDarkMode ? 'bg-[#09090b]' : 'bg-[#F8FAFC]', 
     bgHeader: isDarkMode ? 'bg-[#121212]' : 'bg-white',
     border: isDarkMode ? 'border-zinc-800' : 'border-slate-200',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800', 
@@ -165,7 +158,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   if (layoutCrash) return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6 font-mono">
+    <div className="flex-1 bg-[#0a0a0a] text-white flex items-center justify-center p-6 font-mono z-50">
       <div className="text-center space-y-4">
         <AlertTriangle size={48} className="text-rose-500 mx-auto" />
         <p className="text-rose-400 max-w-lg">{layoutCrash}</p>
@@ -174,7 +167,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   if (isCheckingAuth) return (
-    <div className={`min-h-screen ${theme.bgApp} flex flex-col items-center justify-center`}>
+    <div className="flex-1 flex flex-col items-center justify-center z-50">
       <Loader2 className="w-10 h-10 text-[#F97316] animate-spin mb-4" />
       <p className={`text-xs font-bold uppercase tracking-widest ${theme.textMuted}`}>Verifying Access...</p>
     </div>
@@ -183,7 +176,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const unreadTotal = notifications.filter(n => !n.is_read).length + liveTicketCount + liveInspCount;
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans antialiased transition-colors duration-300 ${theme.bgApp} ${theme.textMain} relative`}>
+    <div className="flex-1 flex flex-col relative w-full h-full">
       
       {/* 🟢 TOAST NOTIFICATION POPUP */}
       {activeAlert && (
@@ -206,7 +199,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Top Left: Logo */}
         <div className="flex items-center gap-4">
           <Link href="/admin" className="flex items-center cursor-pointer transition-transform hover:scale-105 active:scale-95">
-            {/* 🔴 FILTERS REMOVED: Logo will natively render exactly as uploaded */}
             <img 
               src="/logo.png" 
               alt="Virtual Staffing Solutions" 
@@ -311,12 +303,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      {/* FULL-WIDTH PAGE CONTENT INJECTION */}
-      <main className={`flex-1 overflow-y-auto relative transition-colors duration-300 ${theme.bgApp}`}>
-        <div className={`${theme.textMain} h-full`}>
-          {children}
-        </div>
-      </main>
+      {/* ADMIN DASHBOARD CARDS INJECTION */}
+      <div className="flex-1 w-full h-full relative">
+        {children}
+      </div>
 
     </div>
   );
