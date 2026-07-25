@@ -244,7 +244,7 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // 🌟 EXECUTE VERDICT (FIXED VARIABLE NAME TYPO IN CATCH BLOCK!)
+  // 🌟 EXECUTE VERDICT
   const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
     if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
 
@@ -474,8 +474,8 @@ function AdminInspectionReviewContent() {
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
-                style={{ color: isDarkMode ? '#f3e8ff' : '#0f172a' }}
-                className="w-full pl-12 pr-4 py-3 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all bg-transparent"
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', colorScheme: isDarkMode ? 'dark' : 'light' }}
+                className="w-full pl-12 pr-4 py-3 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all bg-transparent border-0 shadow-none"
               />
             </div>
           </div>
