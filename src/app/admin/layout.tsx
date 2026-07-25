@@ -34,13 +34,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   });
 
   useEffect(() => {
-    // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs Navbar with Dark Mode Toggle
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
     };
-    
-    syncTheme(); // Run on mount
+    syncTheme();
 
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
