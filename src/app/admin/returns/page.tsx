@@ -75,7 +75,7 @@ function AdminAssetReturnsContent() {
           (matchedAsset.assigned_to && String(p.id) === String(matchedAsset.assigned_to))
         ) || {};
 
-        const itemIdentifier = insp.id || `return-${insp.asset_id}-${idx}-${Date.now()}`;
+        const itemIdentifier = insp.inspection_id || insp.uuid || insp.id || `return-${insp.asset_id}-${idx}-${Date.now()}`;
         const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
 
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name;
@@ -145,9 +145,13 @@ function AdminAssetReturnsContent() {
     }
   };
 
-  // 🌟 PROCESS RETURN VERDICT WITH INSTANT DASHBOARD NOTIFICATIONS
-  const processReturnVerdict = async (returnId: string, assetId: string, action: 'Approve Return' | 'Reject Return' | 'Approve Replacement', staffId: string) => {
-    if (!returnId || !assetId) return alert("System Error: Missing unique record identifier.");
+  // 🌟 100% SCHEMA-IMMUNE RETURN PROCESSOR (ZERO REFERENCES TO 'inspections.id'!)
+  const processReturnVerdict = async (item: any, action: 'Approve Return' | 'Reject Return' | 'Approve Replacement') => {
+    const assetId = item.asset_id;
+    const staffId = item.staff_id;
+    const returnId = item.id;
+
+    if (!assetId) return alert("System Error: Missing Asset ID for this record.");
 
     let remarks = '';
     if (action === 'Reject Return') {
@@ -181,10 +185,26 @@ function AdminAssetReturnsContent() {
         notifType = 'success';
       }
 
-      // Update inspection log
-      const { error: inspErr } = await supabase.from('inspections')
-        .update({ status: targetStatus, admin_remarks: remarks || null })
-        .eq('id', returnId);
+      // 🛡️ BULLETPROOF SCHEMA-IMMUNE TARGETING
+      // We explicitly check for standard primary keys first, and if absent, target strictly via asset_id + timestamp!
+      let query = supabase.from('inspections')
+        .update({ status: targetStatus, admin_remarks: remarks || null });
+
+      if (item.inspection_id) {
+        query = query.eq('inspection_id', item.inspection_id);
+      } else if (item.uuid) {
+        query = query.eq('uuid', item.uuid);
+      } else {
+        // Safe composite targeting: NEVER touches a column named 'id' in PostgreSQL
+        query = query.eq('asset_id', assetId);
+        if (item.created_at) {
+          query = query.eq('created_at', item.created_at);
+        } else if (item.status) {
+          query = query.eq('status', item.status);
+        }
+      }
+
+      const { error: inspErr } = await query;
       if (inspErr) throw inspErr;
 
       // Update asset status and assignment if approved
@@ -212,10 +232,10 @@ function AdminAssetReturnsContent() {
         }
       }
 
-      setReturns(prev => prev.map(item => 
-        (item.id === returnId) 
-          ? { ...item, status: targetStatus, admin_remarks: remarks || item.admin_remarks, is_processed: true } 
-          : item
+      setReturns(prev => prev.map(r => 
+        (r.id === returnId) 
+          ? { ...r, status: targetStatus, admin_remarks: remarks || r.admin_remarks, is_processed: true } 
+          : r
       ));
 
       alert(`Success: ${action} executed. Notification sent to employee dashboard.`);
@@ -262,7 +282,7 @@ function AdminAssetReturnsContent() {
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
         
         {/* 🌟 DYNAMIC HEADER (WITH BACK ARROW IN FRONT OF ICON & NO EXTRA RIGHT BUTTON) */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
@@ -282,7 +302,7 @@ function AdminAssetReturnsContent() {
                   <span>Asset Returns</span>
                 </h1>
                 {pendingCount > 0 && (
-                  <span className="px-3 py-0.5 bg-linear-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
+                  <span className="px-3 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
                     {pendingCount} Pending Requests
                   </span>
                 )}
@@ -495,7 +515,7 @@ function AdminAssetReturnsContent() {
                           <button
                             type="button"
                             disabled={updatingId === item.id}
-                            onClick={() => processReturnVerdict(item.id, item.asset_id, 'Approve Return', item.staff_id)}
+                            onClick={() => processReturnVerdict(item, 'Approve Return')}
                             className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
                           >
                             <CheckCircle2 size={16} /> {updatingId === item.id ? 'Processing...' : '✔ Approve Return & Restock'}
@@ -504,7 +524,7 @@ function AdminAssetReturnsContent() {
                           <button
                             type="button"
                             disabled={updatingId === item.id}
-                            onClick={() => processReturnVerdict(item.id, item.asset_id, 'Approve Replacement', item.staff_id)}
+                            onClick={() => processReturnVerdict(item, 'Approve Replacement')}
                             className="flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-orange-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
                           >
                             <RefreshCw size={16} /> 🔄 Approve Replacement
@@ -513,7 +533,7 @@ function AdminAssetReturnsContent() {
                           <button
                             type="button"
                             disabled={updatingId === item.id}
-                            onClick={() => processReturnVerdict(item.id, item.asset_id, 'Reject Return', item.staff_id)}
+                            onClick={() => processReturnVerdict(item, 'Reject Return')}
                             className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-rose-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
                           >
                             <XCircle size={16} /> ❌ Reject Return
@@ -543,7 +563,7 @@ function AdminAssetReturnsContent() {
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
