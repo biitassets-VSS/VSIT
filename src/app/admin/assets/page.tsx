@@ -97,7 +97,7 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 }
 
 // ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.1 PRO)
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.2 PRO)
 // ==========================================
 function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
   if (!category.toLowerCase().includes('laptop')) {
@@ -160,20 +160,20 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
 }
 
 // ==========================================
-// SEARCHABLE STAFF DROPDOWN COMPONENT 
+// 🌟 UPGRADED SEARCHABLE STAFF DROPDOWN (ONLY SHOWS MATCHED NAMES!)
 // ==========================================
-const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Search name or emp code..." }: any) => {
+const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Type employee name or EMP code..." }: any) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const t = {
-    bg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a]' : 'bg-white border-slate-300',
-    text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    menu: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200',
-    hover: isDarkMode ? 'hover:bg-purple-950/40' : 'hover:bg-orange-50',
-    header: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-500' : 'bg-slate-50 border-slate-100 text-slate-500',
+    bg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-white border-slate-300',
+    text: isDarkMode ? 'text-purple-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500',
+    menu: isDarkMode ? 'bg-[#150f24] border-purple-800' : 'bg-white border-slate-200',
+    hover: isDarkMode ? 'hover:bg-purple-900/50' : 'hover:bg-orange-50',
+    header: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 text-purple-300' : 'bg-slate-50 border-slate-100 text-slate-500',
   };
 
   useEffect(() => {
@@ -193,39 +193,67 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = staffList.filter((s: any) => {
-    const str = `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase();
-    return str.includes(query.toLowerCase());
-  });
+  // Filter strictly based on typing
+  const filtered = query.trim().length === 0 
+    ? [] 
+    : staffList.filter((s: any) => {
+        const str = `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase();
+        return str.includes(query.toLowerCase());
+      });
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <div className={`flex items-center w-full p-3 border rounded-xl focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all ${t.bg}`}>
+      <div 
+        style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+        className={`flex items-center w-full p-3 border rounded-xl focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all`}
+      >
         <Search size={14} className={`${t.textSub} mr-2 shrink-0`} />
         <input 
-          type="text" value={open ? query : query || ''} 
-          onChange={e => { setQuery(e.target.value); setOpen(true); onChange(''); }}
-          onFocus={() => setOpen(true)} placeholder={placeholder}
-          className={`w-full text-xs font-semibold outline-none bg-transparent ${t.text}`}
+          type="text" 
+          value={open ? query : query || ''} 
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)} 
+          placeholder={placeholder}
+          style={{ color: isDarkMode ? '#f3e8ff' : '#0f172a' }}
+          className="w-full text-xs font-semibold outline-none bg-transparent"
         />
-        <ChevronDown size={14} className={`${t.textSub} ml-2 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
+        {value && (
+          <X size={14} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-1 shrink-0" onClick={() => { onChange(''); setQuery(''); }} />
+        )}
+        <ChevronDown size={14} className={`${t.textSub} ml-1 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
       </div>
 
       {open && (
-        <div className={`absolute z-50 w-full mt-2 border rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar ${t.menu}`}>
-          <div className={`p-3 text-[11px] font-bold tracking-widest uppercase cursor-pointer border-b ${t.header}`} onClick={() => { onChange(''); setQuery(''); setOpen(false); }}>
-            -- Warehouse Inventory (Unassigned) --
+        <div 
+          style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
+          className="absolute z-50 w-full mt-2 border rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar"
+        >
+          {/* Always provide option to unassign back to stock */}
+          <div 
+            onClick={() => { onChange(''); setQuery(''); setOpen(false); }}
+            className={`p-3 text-[11px] font-bold tracking-widest uppercase cursor-pointer border-b flex items-center gap-1.5 transition-colors ${isDarkMode ? 'border-purple-900/60 text-orange-400 hover:bg-purple-900/40' : 'border-slate-100 text-orange-600 hover:bg-orange-50'}`}
+          >
+            📦 Unassign / Return to Warehouse Stock
           </div>
-          {filtered.length === 0 ? (
-            <div className={`p-4 text-center text-xs font-semibold ${t.textSub}`}>No staff found matching query.</div>
+
+          {query.trim().length === 0 ? (
+            <div className={`p-4 text-center text-xs font-medium italic ${t.textSub}`}>
+              🔍 Type an employee name or EMP code above to search matched staff...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className={`p-4 text-center text-xs font-semibold text-rose-500`}>
+              No matched employee found for "{query}".
+            </div>
           ) : (
             filtered.map((s: any) => (
               <div 
-                key={s.id} className={`p-3.5 text-xs cursor-pointer border-b ${isDarkMode ? 'border-[#27272a]/50' : 'border-slate-50'} flex justify-between items-center transition-colors group ${t.hover}`}
+                key={s.id} 
+                style={{ borderBottomColor: isDarkMode ? '#3b0764' : '#f1f5f9' }}
+                className={`p-3.5 text-xs cursor-pointer border-b flex justify-between items-center transition-colors group ${isDarkMode ? 'hover:bg-purple-900/50 text-purple-100' : 'hover:bg-orange-50 text-slate-800'}`}
                 onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}
               >
-                <span className={`font-semibold group-hover:text-orange-600 dark:group-hover:text-orange-400 ${t.text}`}>{s.full_name || s.name}</span>
-                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md transition-colors ${isDarkMode ? 'bg-[#18181b] text-zinc-400 group-hover:bg-orange-500/20 group-hover:text-orange-300' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-700'}`}>
+                <span className="font-semibold group-hover:text-orange-500 transition-colors">{s.full_name || s.name}</span>
+                <span className={`font-mono text-[10px] px-2 py-0.5 rounded-md font-bold transition-colors ${isDarkMode ? 'bg-purple-950 text-purple-300 group-hover:bg-orange-500/20 group-hover:text-orange-300' : 'bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-700'}`}>
                   {s.emp_code || s.email}
                 </span>
               </div>
@@ -1245,8 +1273,8 @@ function AssetRegistryContent() {
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Paper Size</label>
                   <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all ${theme.inputBg}`}>
-                    <option value="A4" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">A4 (210 x 297mm)</option>
-                    <option value="Letter" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">US Letter (8.5 x 11in)</option>
+                    <option value="A4" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>A4 (210 x 297mm)</option>
+                    <option value="Letter" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>US Letter (8.5 x 11in)</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1335,7 +1363,7 @@ function AssetRegistryContent() {
                             asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) 
                           }); 
                         }} className={`w-full p-3 rounded-xl text-xs font-bold outline-none transition-colors border ${theme.inputBg}`}>
-                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">{cat}</option>)}
+                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
                         </select>
                       </div>
                       <div>
@@ -1396,12 +1424,12 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3.5 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Condition</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🛠️ Repaired</option></select></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Stock Status</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">📦 In Stock</option><option value="Assigned" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">👤 Assigned</option><option value="Demo Use" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🧪 Demo</option><option value="In Repair" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⚠️ Repair</option><option value="Discard" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🗑️ Discard</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Condition</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Stock Status</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Assigned" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option><option value="In Repair" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Repair</option><option value="Discard" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🗑️ Discard</option></select></div>
                       <div>
                         <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Inspection State</label>
                         <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}>
-                          <option value="Approved" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✅ Approved</option><option value="Re-Inspection" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Re-Inspection</option><option value="Not Approved" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⚠️ Not Approved</option><option value="Rejected" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">❌ Rejected</option>
+                          <option value="Approved" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✅ Approved</option><option value="Re-Inspection" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Re-Inspection</option><option value="Not Approved" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Not Approved</option><option value="Rejected" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>❌ Rejected</option>
                         </select>
                       </div>
                     </div>
@@ -1581,7 +1609,7 @@ function AssetRegistryContent() {
                       setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
                     }
                   }} className={`w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-colors border ${theme.inputBg}`}>
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">{cat}</option>)}
+                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1648,8 +1676,8 @@ function AssetRegistryContent() {
               </div>
 
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">📦 In Stock</option><option value="Demo Use" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🧪 Demo</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option></select></div>
               </div>
 
               <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200'}`}>
