@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   LogOut, ClipboardCheck, Ticket, 
-  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu,
-  Megaphone, ImagePlus, Send
+  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -20,6 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [layoutCrash, setLayoutCrash] = useState<string | null>(null);
 
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -29,16 +29,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [liveTicketCount, setLiveTicketCount] = useState(0);
   const [liveInspCount, setLiveInspCount] = useState(0);
   
-  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
-  const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
     name: 'Loading...', email: '...', initials: 'AD'
   });
 
   useEffect(() => {
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+    };
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
     let notifChannel: any;
     let ticketChannel: any;
     let inspChannel: any;
@@ -111,6 +115,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     verifyAdmin();
 
     return () => {
+      observer.disconnect();
       if (notifChannel) supabase.removeChannel(notifChannel);
       if (ticketChannel) supabase.removeChannel(ticketChannel);
       if (inspChannel) supabase.removeChannel(inspChannel);
@@ -140,24 +145,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.replace('/');
   };
 
-  const handleSendBroadcast = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!broadcastMessage.trim() && !broadcastImage) return;
-    setIsBroadcasting(true);
-    
-    try {
-      let finalImageUrl = null;
-      if (broadcastImage) {
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${broadcastImage.name.split('.').pop()}`;
-        const { error: uploadError } = await supabase.storage.from('broadcasts').upload(fileName, broadcastImage);
-        if (uploadError) throw uploadError;
-        finalImageUrl = supabase.storage.from('broadcasts').getPublicUrl(fileName).data.publicUrl;
-      }
-      await supabase.from('broadcasts').insert({ message: broadcastMessage.trim(), created_by: adminProfile.name, image_url: finalImageUrl });
-      await supabase.from('notifications').insert({ title: "System Broadcast", message: broadcastMessage.trim(), is_read: false, type: 'broadcast' });
-      setBroadcastMessage(''); setBroadcastImage(null); setIsBroadcastModalOpen(false);
-      alert("Announcement successfully broadcasted to all staff dashboards!");
-    } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
+  const theme = {
+    bgHeader: isDarkMode ? 'bg-[#121212]' : 'bg-white',
+    border: isDarkMode ? 'border-zinc-800' : 'border-slate-200',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800', 
+    textMuted: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    hoverBg: isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-slate-50',
+    dropdownBg: isDarkMode ? 'bg-[#121212]' : 'bg-white',
+    dropdownHeader: isDarkMode ? 'bg-zinc-900' : 'bg-slate-50',
   };
 
   if (layoutCrash) return (
@@ -172,32 +167,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (isCheckingAuth) return (
     <div className="flex-1 flex flex-col items-center justify-center z-50">
       <Loader2 className="w-10 h-10 text-[#F97316] animate-spin mb-4" />
-      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-zinc-400">Verifying Access...</p>
+      <p className={`text-xs font-bold uppercase tracking-widest ${theme.textMuted}`}>Verifying Access...</p>
     </div>
   );
 
   const unreadTotal = notifications.filter(n => !n.is_read).length + liveTicketCount + liveInspCount;
 
   return (
-    <div className="flex-1 flex flex-col relative w-full h-full bg-[#F8FAFC] dark:bg-[#09090b]">
+    <div className="flex-1 flex flex-col relative w-full h-full">
       
       {/* 🟢 TOAST NOTIFICATION POPUP */}
       {activeAlert && (
-        <div className="fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 bg-white dark:bg-[#121212] border-slate-200 dark:border-zinc-800">
+        <div className={`fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#F97316] animate-pulse ring-4 ring-[#F97316]/20"></span>
               <h4 className="text-[11px] font-bold text-[#F97316] uppercase tracking-widest">{activeAlert.type} ALERT</h4>
             </div>
-            <button onClick={() => setActiveAlert(null)} className="text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"><X size={16}/></button>
+            <button onClick={() => setActiveAlert(null)} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={16}/></button>
           </div>
-          <h3 className="font-semibold text-sm text-slate-800 dark:text-zinc-100">{activeAlert.title}</h3>
-          <p className="text-xs mt-1 leading-relaxed text-slate-500 dark:text-zinc-400">{activeAlert.message}</p>
+          <h3 className={`font-semibold text-sm ${theme.textMain}`}>{activeAlert.title}</h3>
+          <p className={`text-xs mt-1 leading-relaxed ${theme.textMuted}`}>{activeAlert.message}</p>
         </div>
       )}
 
       {/* 🌟 FULL-WIDTH TOP HEADER BAR */}
-      <header className="h-16 flex items-center justify-between px-4 md:px-8 border-b shadow-sm shrink-0 sticky top-0 z-40 transition-colors duration-300 bg-white dark:bg-[#121212] border-slate-200 dark:border-zinc-800">
+      <header className={`h-16 flex items-center justify-between px-4 md:px-8 border-b shadow-sm shrink-0 sticky top-0 z-40 transition-colors duration-300 ${theme.bgHeader} ${theme.border}`}>
         
         {/* Top Left: Logo */}
         <div className="flex items-center gap-4">
@@ -211,23 +206,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         </div>
 
-        {/* Top Right: Buttons & Logout */}
+        {/* Top Right: Bell & Logout */}
         <div className="flex items-center gap-3 ml-auto relative">
           
-          <button onClick={() => setIsBroadcastModalOpen(true)} className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[#8B5CF6]/30">
-            <Megaphone size={14} /> Announcement
-          </button>
-          
-          <button onClick={() => router.push('/admin/settings')} className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 hover:-translate-y-0.5 bg-white dark:bg-zinc-900 border-slate-200 dark:border-[#F97316]/30 text-slate-600 dark:text-[#F97316] hover:border-[#F97316]/50 hover:text-[#F97316] dark:hover:bg-zinc-800">
-            <Settings size={14} /> Settings
-          </button>
-
           {/* Notifications Bell */}
           <div className="relative">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${isNotifOpen ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/30 text-[#8B5CF6]' : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-[#8B5CF6] dark:hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50 dark:hover:border-[#8B5CF6]/50'}`}>
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${isNotifOpen ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/30 text-[#8B5CF6]' : `${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50'}`}`}>
               <Bell size={18} className={unreadTotal > 0 ? 'animate-pulse' : ''} />
               {unreadTotal > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#F97316] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 shadow-sm border-white dark:border-zinc-900">
+                <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#F97316] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
                   {unreadTotal > 9 ? '9+' : unreadTotal}
                 </span>
               )}
@@ -235,49 +222,49 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             {/* Notification Dropdown */}
             {isNotifOpen && (
-              <div className="absolute top-[calc(100%+12px)] right-0 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[80vh] animate-in slide-in-from-top-2 fade-in bg-white dark:bg-[#121212] border-slate-200 dark:border-zinc-800">
-                <div className="p-4 border-b flex justify-between items-center shrink-0 bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-800 dark:text-zinc-100">Notifications</h3>
+              <div className={`absolute top-[calc(100%+12px)] right-0 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[80vh] animate-in slide-in-from-top-2 fade-in ${theme.dropdownBg} ${theme.border}`}>
+                <div className={`p-4 border-b flex justify-between items-center shrink-0 ${theme.dropdownHeader} ${theme.border}`}>
+                  <h3 className={`text-xs font-bold uppercase tracking-widest ${theme.textMain}`}>Notifications</h3>
                   {unreadTotal > 0 && <span className="text-[10px] font-bold text-[#F97316] bg-[#F97316]/10 px-2 py-0.5 rounded-md">{unreadTotal} New</span>}
                 </div>
                 
                 <div className="overflow-y-auto custom-scrollbar flex-1">
                   {(liveTicketCount === 0 && liveInspCount === 0 && notifications.length === 0) ? (
-                    <div className="p-8 text-center space-y-2 text-slate-500 dark:text-zinc-400">
+                    <div className={`p-8 text-center space-y-2 ${theme.textMuted}`}>
                       <CheckCircle2 size={32} className="mx-auto opacity-40" />
                       <p className="text-xs font-bold uppercase tracking-widest">You're all caught up!</p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-zinc-800">
+                    <div className={`divide-y ${isDarkMode ? 'divide-zinc-800' : 'divide-slate-100'}`}>
                       {liveTicketCount > 0 && (
-                        <Link href="/admin/tickets" onClick={() => { setIsNotifOpen(false); setLiveTicketCount(0); }} className="block p-4 transition-colors cursor-pointer group bg-[#f3e8ff]/50 dark:bg-[#8B5CF6]/5 hover:bg-[#f3e8ff] dark:hover:bg-[#8B5CF6]/10">
+                        <Link href="/admin/tickets" onClick={() => { setIsNotifOpen(false); setLiveTicketCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#8B5CF6]/5 hover:bg-[#8B5CF6]/10' : 'bg-[#f3e8ff]/50 hover:bg-[#f3e8ff]'}`}>
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-[#8B5CF6]/20 text-[#8B5CF6] flex items-center justify-center shrink-0"><Ticket size={14}/></div>
                             <div>
                               <h4 className="text-xs font-bold text-[#8B5CF6]">New Tickets Received</h4>
-                              <p className="text-[11px] mt-0.5 text-slate-500 dark:text-zinc-400">Staff members have submitted {liveTicketCount} new support ticket(s).</p>
+                              <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>Staff members have submitted {liveTicketCount} new support ticket(s).</p>
                             </div>
                           </div>
                         </Link>
                       )}
                       {liveInspCount > 0 && (
-                        <Link href="/admin/inspections" onClick={() => { setIsNotifOpen(false); setLiveInspCount(0); }} className="block p-4 transition-colors cursor-pointer group bg-[#fff7ed]/50 dark:bg-[#F97316]/5 hover:bg-[#fff7ed] dark:hover:bg-[#F97316]/10">
+                        <Link href="/admin/inspections" onClick={() => { setIsNotifOpen(false); setLiveInspCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#F97316]/5 hover:bg-[#F97316]/10' : 'bg-[#fff7ed]/50 hover:bg-[#fff7ed]'}`}>
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-[#F97316]/20 text-[#F97316] flex items-center justify-center shrink-0"><ClipboardCheck size={14}/></div>
                             <div>
                               <h4 className="text-xs font-bold text-[#F97316]">New Inspections Submitted</h4>
-                              <p className="text-[11px] mt-0.5 text-slate-500 dark:text-zinc-400">There are {liveInspCount} new hardware audits awaiting your review.</p>
+                              <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>There are {liveInspCount} new hardware audits awaiting your review.</p>
                             </div>
                           </div>
                         </Link>
                       )}
                       
                       {notifications.map(n => (
-                        <div key={n.id} className={`p-4 transition-colors hover:bg-slate-50 dark:hover:bg-zinc-800/50 ${n.is_read ? 'opacity-50' : 'bg-white dark:bg-[#121212]'}`}>
+                        <div key={n.id} className={`p-4 transition-colors ${n.is_read ? 'opacity-50' : theme.dropdownBg} ${theme.hoverBg}`}>
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-100">{n.title}</h4>
-                              <p className="text-[11px] mt-0.5 text-slate-500 dark:text-zinc-400">{n.message}</p>
+                              <h4 className={`text-xs font-bold ${theme.textMain}`}>{n.title}</h4>
+                              <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>{n.message}</p>
                               <span className="text-[10px] text-zinc-500 mt-2 block font-medium">{new Date(n.created_at).toLocaleString()}</span>
                             </div>
                             {!n.is_read && (
@@ -297,13 +284,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="relative group">
             <button 
               onClick={handleLogout}
-              className="p-2.5 rounded-xl border transition-all flex items-center gap-2 cursor-pointer bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:border-rose-200 dark:hover:border-rose-500/30"
+              className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 cursor-pointer ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/30' : 'bg-white border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200'}`}
               title="Secure Logout"
             >
               <LogOut size={18} strokeWidth={2.5} />
             </button>
 
-            <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border pointer-events-none animate-in fade-in zoom-in-95 duration-150 bg-slate-900 dark:bg-[#18181b] border-slate-800 dark:border-zinc-800 text-white">
+            {/* Tooltip visible strictly on hover showing Login User Email and Name */}
+            <div className={`absolute right-0 top-full mt-2 hidden group-hover:flex flex-col p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#18181b] border-zinc-800 text-white' : 'bg-slate-900 border-slate-800 text-white'}`}>
               <span className="text-[9px] font-black uppercase tracking-widest text-[#F97316]">Logged in as</span>
               <span className="text-xs font-bold truncate mt-0.5">{adminProfile.name}</span>
               <span className="text-[11px] font-mono text-slate-400 truncate mt-0.5">{adminProfile.email}</span>
@@ -314,56 +302,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* ADMIN DASHBOARD CARDS INJECTION */}
-      <div className="flex-1 w-full h-full relative text-slate-800 dark:text-zinc-100">
+      <div className="flex-1 w-full h-full relative">
         {children}
       </div>
-
-      {/* 🚀 FIXED TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
-      {isBroadcastModalOpen && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="rounded-2xl max-w-lg w-full p-6 shadow-2xl border space-y-5 animate-in zoom-in-95 duration-300 bg-white dark:bg-[#121212] border-slate-200 dark:border-zinc-800">
-            <div className="flex justify-between items-center pb-4 border-b border-slate-200 dark:border-zinc-800">
-              <h3 className="text-base font-extrabold flex items-center gap-2 uppercase tracking-wide text-slate-800 dark:text-zinc-100">
-                <Megaphone size={20} className="text-[#F97316]" /> Broadcast Announcement
-              </h3>
-              <button onClick={() => setIsBroadcastModalOpen(false)} className="p-2 rounded-full transition-colors hover:scale-110 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/50">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSendBroadcast} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest block mb-2 text-slate-500 dark:text-zinc-400">Message Text *</label>
-                {/* 🔴 PERFECT DARK MODE TEXTAREA */}
-                <textarea 
-                  rows={3} 
-                  required 
-                  placeholder="Type an announcement to broadcast..." 
-                  value={broadcastMessage} 
-                  onChange={e => setBroadcastMessage(e.target.value)} 
-                  className="w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none shadow-sm focus:ring-2 focus:ring-[#F97316]/20 bg-slate-50 dark:bg-[#18181b] border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 focus:bg-white dark:focus:bg-[#121212] focus:border-[#F97316] dark:focus:border-[#F97316]" 
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest block mb-2 text-slate-500 dark:text-zinc-400">Attach Graphic / Flyer (Optional)</label>
-                {/* 🔴 PERFECT DARK MODE FILE UPLOAD */}
-                <label className="cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-[#18181b] hover:bg-white dark:hover:bg-[#121212] text-slate-500 dark:text-zinc-400 hover:border-[#8B5CF6]/50 dark:hover:border-[#8B5CF6]/50">
-                  <ImagePlus size={24} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
-                </label>
-                {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
-              </div>
-              <div className="flex gap-2 pt-4 border-t border-slate-200 dark:border-zinc-800">
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className="flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all shadow-sm bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800">Cancel</button>
-                <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
-                  {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );
