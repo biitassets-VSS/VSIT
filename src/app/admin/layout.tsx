@@ -5,9 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   LogOut, ClipboardCheck, Ticket, 
-  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu,
-  Megaphone, ImagePlus, Send,
-  Settings
+  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -31,23 +29,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [liveTicketCount, setLiveTicketCount] = useState(0);
   const [liveInspCount, setLiveInspCount] = useState(0);
   
-  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
-  const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
     name: 'Loading...', email: '...', initials: 'AD'
   });
 
   useEffect(() => {
-    // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs Navbar with Dark Mode Toggle
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
     };
-    
-    syncTheme(); // Run on mount
+    syncTheme();
 
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
@@ -154,26 +145,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.replace('/');
   };
 
-  const handleSendBroadcast = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!broadcastMessage.trim() && !broadcastImage) return;
-    setIsBroadcasting(true);
-    
-    try {
-      let finalImageUrl = null;
-      if (broadcastImage) {
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${broadcastImage.name.split('.').pop()}`;
-        const { error: uploadError } = await supabase.storage.from('broadcasts').upload(fileName, broadcastImage);
-        if (uploadError) throw uploadError;
-        finalImageUrl = supabase.storage.from('broadcasts').getPublicUrl(fileName).data.publicUrl;
-      }
-      await supabase.from('broadcasts').insert({ message: broadcastMessage.trim(), created_by: adminProfile.name, image_url: finalImageUrl });
-      await supabase.from('notifications').insert({ title: "System Broadcast", message: broadcastMessage.trim(), is_read: false, type: 'broadcast' });
-      setBroadcastMessage(''); setBroadcastImage(null); setIsBroadcastModalOpen(false);
-      alert("Announcement successfully broadcasted to all staff dashboards!");
-    } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
-  };
-
   const theme = {
     bgHeader: isDarkMode ? 'bg-[#121212]' : 'bg-white',
     border: isDarkMode ? 'border-zinc-800' : 'border-slate-200',
@@ -235,17 +206,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         </div>
 
-        {/* Top Right: Buttons & Logout */}
+        {/* Top Right: Bell & Logout */}
         <div className="flex items-center gap-3 ml-auto relative">
           
-          <button onClick={() => setIsBroadcastModalOpen(true)} className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[#8B5CF6]/30">
-            <Megaphone size={14} /> Announcement
-          </button>
-          
-          <button onClick={() => router.push('/admin/settings')} className={`hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 hover:-translate-y-0.5 ${isDarkMode ? 'bg-zinc-900 border-[#F97316]/30 text-[#F97316] hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:border-[#F97316]/50 hover:text-[#F97316]'}`}>
-            <Settings size={14} /> Settings
-          </button>
-
           {/* Notifications Bell */}
           <div className="relative">
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${isNotifOpen ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/30 text-[#8B5CF6]' : `${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50'}`}`}>
@@ -327,6 +290,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <LogOut size={18} strokeWidth={2.5} />
             </button>
 
+            {/* Tooltip visible strictly on hover showing Login User Email and Name */}
             <div className={`absolute right-0 top-full mt-2 hidden group-hover:flex flex-col p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#18181b] border-zinc-800 text-white' : 'bg-slate-900 border-slate-800 text-white'}`}>
               <span className="text-[9px] font-black uppercase tracking-widest text-[#F97316]">Logged in as</span>
               <span className="text-xs font-bold truncate mt-0.5">{adminProfile.name}</span>
@@ -341,65 +305,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex-1 w-full h-full relative">
         {children}
       </div>
-
-      {/* 🚀 FIXED TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
-      {isBroadcastModalOpen && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className={`rounded-2xl max-w-lg w-full p-6 shadow-2xl border space-y-5 animate-in zoom-in-95 duration-300 ${theme.dropdownBg} ${theme.border}`}>
-            <div className={`flex justify-between items-center pb-4 border-b ${theme.border}`}>
-              <h3 className={`text-base font-extrabold flex items-center gap-2 uppercase tracking-wide ${theme.textMain}`}>
-                <Megaphone size={20} className="text-[#F97316]" /> Broadcast Announcement
-              </h3>
-              <button onClick={() => setIsBroadcastModalOpen(false)} className={`p-2 rounded-full transition-colors hover:scale-110 ${theme.textMuted} ${theme.hoverBg}`}>
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSendBroadcast} className="space-y-4">
-              <div>
-                <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.textMuted}`}>Message Text *</label>
-                {/* 🔴 THIS TEXTAREA NOW CORRECTLY TURNS DARK (#18181b / #121212) IN DARK MODE */}
-                <textarea 
-                  rows={3} 
-                  required 
-                  placeholder="Type an announcement to broadcast..." 
-                  value={broadcastMessage} 
-                  onChange={e => setBroadcastMessage(e.target.value)} 
-                  className={`w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none shadow-sm focus:ring-2 focus:ring-[#F97316]/20 ${
-                    isDarkMode 
-                      ? 'bg-[#18181b] border-zinc-700 text-zinc-200 focus:bg-[#121212] focus:border-[#F97316]' 
-                      : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-[#F97316]'
-                  }`} 
-                />
-              </div>
-              <div>
-                <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.textMuted}`}>Attach Graphic / Flyer (Optional)</label>
-                {/* 🔴 THIS FILE UPLOAD BOX NOW CORRECTLY TURNS DARK IN DARK MODE */}
-                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${
-                  isDarkMode 
-                    ? 'border-zinc-700 bg-[#18181b] hover:bg-[#121212] text-zinc-400 hover:border-[#8B5CF6]/50' 
-                    : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-500 hover:border-[#8B5CF6]/50'
-                }`}>
-                  <ImagePlus size={24} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
-                </label>
-                {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
-              </div>
-              <div className={`flex gap-2 pt-4 border-t ${theme.border}`}>
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all shadow-sm ${
-                  isDarkMode 
-                    ? 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800' 
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}>Cancel</button>
-                <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
-                  {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );
