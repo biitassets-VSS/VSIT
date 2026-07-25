@@ -10,7 +10,8 @@ import {
   Headphones, SlidersHorizontal, ChevronDown, CheckCircle2, 
   Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
   Keyboard, RectangleHorizontal, Monitor, Sparkles, History,
-  Filter, FilterX, ShieldCheck, FileText, Cpu, CheckCircle, Zap, ShieldAlert, Image as ImageIcon
+  Filter, FilterX, ShieldCheck, FileText, Cpu, CheckCircle, Zap, ShieldAlert, Image as ImageIcon,
+  ChevronUp, ExternalLink
 } from 'lucide-react';
 
 // ==========================================
@@ -31,7 +32,7 @@ const ASSET_CATEGORIES = [
 // ==========================================
 // 🎨 DYNAMIC ICON MAPPER HELPER
 // ==========================================
-function getCategoryIcon(category: string, size = 20) {
+function getCategoryIcon(category: string, size = 18) {
   const cat = String(category || '').toLowerCase();
   if (cat.includes('laptop')) return <Laptop size={size} />;
   if (cat.includes('stand')) return <Monitor size={size} />;
@@ -96,7 +97,7 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 }
 
 // ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v3.8 ULTIMATE)
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.0 PRO)
 // ==========================================
 function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
   if (!category.toLowerCase().includes('laptop')) {
@@ -265,6 +266,7 @@ function AssetRegistryContent() {
   
   const [assetHistory, setAssetHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [showFullHistory, setShowFullHistory] = useState(false); // 🌟 TOGGLE FOR 1-PAGE ZERO-SCROLL VIEW
 
   const [printConfig, setPrintConfig] = useState({
     pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4,      
@@ -316,6 +318,7 @@ function AssetRegistryContent() {
   // 🌟 ASSET HISTORY ENGINE
   useEffect(() => {
     if (viewAssetModal && !isEditingAsset) {
+      setShowFullHistory(false); // Reset to showing only latest activity by default
       loadAssetHistory(viewAssetModal.id);
     }
   }, [viewAssetModal, isEditingAsset]);
@@ -382,20 +385,20 @@ function AssetRegistryContent() {
 
   const getStockStatusBadge = (status: string) => {
     const s = safeString(status);
-    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-800 border-emerald-300';
-    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-800 border-orange-300 animate-pulse';
-    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-800 border-purple-300';
-    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-800 border-rose-300 line-through';
-    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-800 border-amber-300';
+    if (s.includes('Assigned')) return isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (s.includes('Repair')) return isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse' : 'bg-orange-50 text-orange-700 border-orange-200 animate-pulse';
+    if (s.includes('Demo')) return isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200';
+    if (s.includes('Discard')) return isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 line-through' : 'bg-rose-50 text-rose-700 border-rose-200 line-through';
+    if (s.includes('Pending')) return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
     return isDarkMode ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' : 'bg-purple-100/80 text-purple-900 border-purple-300';
   };
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-300';
-    if (s.includes('return')) return isDarkMode ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' : 'text-purple-800 bg-purple-50 border-purple-300';
-    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-800 bg-rose-50 border-rose-300';
-    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-800 bg-amber-50 border-amber-300';
+    if (s.includes('approved')) return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
+    if (s.includes('return')) return isDarkMode ? 'text-purple-400 bg-purple-500/10 border-purple-500/20' : 'text-purple-700 bg-purple-50 border-purple-200';
+    if (s.includes('rejected')) return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
+    return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -1321,57 +1324,53 @@ function AssetRegistryContent() {
         </div>
       )}
 
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE (v3.8 ULTIMATE 1-PAGE ZERO-SCROLL ERGONOMIC REDESIGN) */}
+      {/* 🚀 VIEW MODAL & HISTORY ENGINE (v4.0 ENTERPRISE SAAS EDITION - 1-PAGE ZERO SCROLL) */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
+        const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
-            <div className={`rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col border ${theme.modalBody}`}>
+            <div className={`rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col border ${theme.modalBody}`}>
               
-              {/* 🌟 ULTRA-COMPACT HORIZONTAL IDENTITY HEADER CARD (28%-72% split on desktop) */}
-              <div className={`w-full p-4 sm:p-5 border-b flex flex-col sm:flex-row items-center justify-between gap-4 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-100'} shrink-0`}>
-                <div className="flex items-center gap-4 sm:gap-5 w-full sm:w-auto justify-between sm:justify-start">
+              {/* 🌟 ENTERPRISE COMPACT HEADER (QR + ID + Logistics Chip + Grouped Top-Right Actions) */}
+              <div className={`w-full p-4 sm:p-5 border-b flex flex-col sm:flex-row items-center justify-between gap-4 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/40 border-purple-100'} shrink-0`}>
+                <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
                   <div className="bg-white p-2 rounded-xl shadow-sm border border-purple-100 shrink-0">
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-14 h-14 sm:w-16 sm:h-16 object-contain" />
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-12 h-12 sm:w-14 sm:h-14 object-contain" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">Hardware Identity</span>
-                    <h3 className="text-lg sm:text-xl font-black font-mono text-purple-900 dark:text-purple-200 tracking-wider">{liveModalTag}</h3>
-                    <p className={`text-xs font-bold mt-0.5 ${theme.textSub}`} title={editForm.serial || viewAssetModal.serial_number}>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base sm:text-lg font-bold font-mono text-purple-700 dark:text-purple-300 tracking-wider">{liveModalTag}</h3>
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-widest border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
+                    </div>
+                    <p className={`text-xs font-semibold mt-0.5 ${theme.textSub}`} title={editForm.serial || viewAssetModal.serial_number}>
                       S/N: <span className="font-mono">{editForm.serial || viewAssetModal.serial_number}</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex justify-center items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20'}`}>
-                    <Printer size={14} /> <span>Print QR</span>
+                {/* Grouped Actions: Print QR | Edit | Delete | X */}
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm'}`}>
+                    <Printer size={13} /> <span>Print QR</span>
                   </button>
-                  <button onClick={() => setViewAssetModal(null)} className={`p-2 rounded-full cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-800'}`}><X size={18}/></button>
+                  {!isEditingAsset && (
+                    <>
+                      <button onClick={() => setIsEditingAsset(true)} className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-100 text-purple-900 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
+                        <Edit2 size={13} /> Edit
+                      </button>
+                      <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200'}`}>
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </>
+                  )}
+                  <button onClick={() => setViewAssetModal(null)} className={`p-2 rounded-full cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}><X size={16}/></button>
                 </div>
               </div>
 
-              {/* Right/Bottom Workspace: Compact 1-Page Dense Grid Layout */}
-              <div className="p-4 sm:p-6 space-y-5 flex-1">
-                <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 border-b gap-3 ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Logistics State:</span>
-                    <span className={`px-3 py-1 rounded-lg font-bold text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                  </div>
-
-                  {!isEditingAsset && (
-                    <div className="flex gap-2 sm:ml-auto">
-                      <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20' : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200'}`}>
-                        <Trash2 size={13} /> Delete
-                      </button>
-                      <button onClick={() => setIsEditingAsset(true)} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-100 text-purple-900 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
-                        <Edit2 size={13} /> Edit
-                      </button>
-                    </div>
-                  )}
-                </div>
-
+              {/* Right/Bottom Workspace: Ergonomic 1-Page Dense SaaS Grid */}
+              <div className="p-4 sm:p-6 space-y-4 flex-1">
                 {isEditingAsset ? (
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
@@ -1474,18 +1473,18 @@ function AssetRegistryContent() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Compact 4-Column Header Specs */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className={`p-3 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1 text-purple-700 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
-                      <div className={`p-3 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                      <div className={`p-3 rounded-xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-xs font-bold mt-1 truncate ${theme.textMain}`} title={viewAssetModal.safe_display_name}>{viewAssetModal.safe_display_name}</p></div>
+                    {/* Compact 3-Column Header Specs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1 text-purple-700 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
+                      <div className={`p-3.5 rounded-xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-xs font-bold mt-1 truncate ${theme.textMain}`} title={viewAssetModal.safe_display_name}>{viewAssetModal.safe_display_name}</p></div>
                     </div>
 
                     {/* Compact 3-Column Logistic Specs */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Purchase Date</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
-                      <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Warranty Date</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
-                      <div className={`p-3 rounded-xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Inspection Status</p><div className="flex items-center gap-1 mt-1"><span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
+                      <div className={`p-3.5 rounded-xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Purchase Date</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
+                      <div className={`p-3.5 rounded-xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Warranty Date</p><p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
+                      <div className={`p-3.5 rounded-xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Inspection Status</p><div className="flex items-center gap-1 mt-1"><span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
                     </div>
 
                     {/* 🌟 SYSTEM SPECIFICATIONS ONLINE BLOCK */}
@@ -1497,7 +1496,7 @@ function AssetRegistryContent() {
                       </div>
                     </div>
 
-                    {/* Assigned Holder Box */}
+                    {/* Assigned Holder Box (Better Horizontal Utilization) */}
                     <div className={`p-3.5 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-100 border-purple-300'}`}>
                       <div>
                         <span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Assigned Employee Holder:</span>
@@ -1536,11 +1535,25 @@ function AssetRegistryContent() {
                       </div>
                     )}
 
-                    {/* 🌟 LIFECYCLE & ACTIVITY HISTORY */}
+                    {/* 🌟 COLLAPSIBLE LIFECYCLE & ACTIVITY HISTORY (ELIMINATES VERTICAL SCROLLBAR!) */}
                     <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <History size={15} className="text-purple-700 dark:text-purple-400" />
-                        <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <History size={15} className="text-purple-700 dark:text-purple-400" />
+                          <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
+                        </div>
+                        {assetHistory.length > 1 && (
+                          <button
+                            onClick={() => setShowFullHistory(!showFullHistory)}
+                            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            {showFullHistory ? (
+                              <><span>Show Less</span> <ChevronUp size={12}/></>
+                            ) : (
+                              <><span>Show Full History ({assetHistory.length})</span> <ChevronDown size={12}/></>
+                            )}
+                          </button>
+                        )}
                       </div>
                       
                       {isLoadingHistory ? (
@@ -1549,7 +1562,7 @@ function AssetRegistryContent() {
                         <p className={`text-xs font-medium italic ${theme.textSub}`}>No history logs found for this asset.</p>
                       ) : (
                         <div className="space-y-2.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1.5">
-                          {assetHistory.map((log, idx) => {
+                          {visibleHistory.map((log, idx) => {
                             let photosArray: string[] = [];
                             try {
                               if (Array.isArray(log.photos)) photosArray = log.photos;
