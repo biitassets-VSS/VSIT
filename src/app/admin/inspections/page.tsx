@@ -214,7 +214,7 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // 🌟 ONE-CLICK DIRECT STAFF AUDIT REMINDER & RE-INSPECTION ALERT ENGINE (FIXED NOT NULL TYPE ERROR!)
+  // 🌟 ONE-CLICK DIRECT STAFF AUDIT REMINDER & RE-INSPECTION ALERT ENGINE
   const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, isReInspection: boolean = false) => {
     if (!staffId || staffId.includes('ARCHIVED') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN')) {
       return alert("Cannot send alert: No valid employee profile ID attached to this record.");
@@ -227,15 +227,13 @@ function AdminInspectionReviewContent() {
         ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
         : `Please submit your scheduled visual inspection photos for ${assetName} (${tagId}) via your staff portal dashboard.`;
 
-      // 🛡️ INCLUDED TYPE AND BOTH USER_ID / TARGET_USER COLUMNS TO PREVENT DATABASE CONSTRAINTS
-      const { error } = await supabase.from('notifications').insert({
-        user_id: staffId,
+      const { error } = await supabase.from('notifications').insert([{
         target_user: staffId,
         title: title,
         message: message,
         is_read: false,
         type: isReInspection ? 'warning' : 'alert'
-      });
+      }]);
 
       if (error) throw error;
       alert(`✔ Success: Immediate notification push sent directly to employee dashboard!`);
@@ -246,7 +244,7 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // 🌟 EXECUTE VERDICT (FIXED NOT NULL TYPE ERROR ON NOTIFICATIONS!)
+  // 🌟 EXECUTE VERDICT (FIXED VARIABLE NAME TYPO IN CATCH BLOCK!)
   const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
     if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
 
@@ -285,16 +283,18 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      // 🛡️ INCLUDED TYPE AND BOTH USER_ID / TARGET_USER COLUMNS TO PREVENT DATABASE CONSTRAINTS
       if (staffId && !staffId.includes('ARCHIVED') && !staffId.includes('NO-EMP-RECORD') && !staffId.includes('ADMIN')) {
-        await supabase.from('notifications').insert({
-          user_id: staffId,
-          target_user: staffId,
-          title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ ${verdict} Action Required`,
-          message: verdict === 'Approved' ? `Your recent hardware audit has been approved.` : `Audit returned: ${remarks}`,
-          is_read: false,
-          type: verdict === 'Approved' ? 'success' : 'warning'
-        });
+        try {
+          await supabase.from('notifications').insert([{
+            target_user: staffId,
+            title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ ${verdict} Action Required`,
+            message: verdict === 'Approved' ? `Your recent hardware audit has been approved.` : `Audit returned: ${remarks}`,
+            is_read: false,
+            type: verdict === 'Approved' ? 'success' : 'warning'
+          }]);
+        } catch (notifError) {
+          console.warn("Non-fatal notification error:", notifError);
+        }
       }
 
       setInspections(prev => prev.map(item => 
