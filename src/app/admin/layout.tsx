@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { 
   LogOut, ClipboardCheck, Ticket, 
   Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu,
-  Megaphone, ImagePlus, Send, Settings
+  Megaphone, ImagePlus, Send
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
