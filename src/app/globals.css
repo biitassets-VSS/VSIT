@@ -1,56 +1,147 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+/* ==========================================================================
+   🌟 1. GLOBAL LIGHT MODE TOKENS (Default Theme)
+   ========================================================================== */
 :root {
-  /* Existing Variables */
-  --background: #F8F9FA;
-  --foreground: #111827; 
-  --input-bg: #ffffff;
-  --input-text: #111827;
-  --input-placeholder: #9CA3AF;
+  /* Core Surfaces & Backgrounds */
+  --background: #f8fafc;          /* Slate 50 - Clean, crisp workspace background */
+  --foreground: #0f172a;          /* Slate 900 - High contrast readable dark text */
+  --surface: #ffffff;             /* Pure white card backgrounds */
+  --surface-border: #e2e8f0;      /* Subtle Slate 200 borders */
+  --text-muted: #64748b;          /* Slate 500 - Secondary labels and icons */
 
-  /* Your New Brand Variables */
-  --brand-default: #008b74;
-  --brand-hover: #00705d;
-  --brand-light: #e6f4f1;
-  --brand-muted: #80c5ba;
+  /* 🎨 Primary Brand: Light Orange */
+  --primary: #ea580c;             /* Orange 600 - Action buttons, active tabs, highlights */
+  --primary-hover: #c2410c;       /* Orange 700 - Hover states */
+  --primary-light: #ffedd5;       /* Orange 100 - Soft badges and tinted backgrounds */
+  --primary-text: #ffffff;        /* High contrast text on primary buttons */
+
+  /* 🎨 Secondary Brand: Rich Purple */
+  --secondary: #6b21a8;           /* Purple 800 - Borders, secondary accents, icons */
+  --secondary-hover: #581c87;     /* Purple 900 - Hover states */
+  --secondary-light: #f3e8ff;     /* Purple 100 - Subtle purple tints and card headers */
+  --secondary-text: #3b0764;      /* Deep purple readable text */
+
+  /* 🛡️ Adaptive Form Controls & Input Boxes (No More Hardcoded White!) */
+  --input-bg: #ffffff;            /* Clean white inputs in light mode */
+  --input-text: #0f172a;          /* Dark readable typed text */
+  --input-border: #cbd5e1;        /* Slate 300 input outlines */
+  --input-placeholder: #94a3b8;   /* Slate 400 placeholder text */
+  --input-focus: #ea580c;         /* Orange primary focus ring */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  
-  /* Map Brand Colors to Tailwind Classes so you can type 'bg-brand' */
-  --color-brand: var(--brand-default);
-  --color-brand-hover: var(--brand-hover);
-  --color-brand-light: var(--brand-light);
-  --color-brand-muted: var(--brand-muted);
-
-  --font-sans: 'Inter', var(--font-geist-sans), sans-serif;
-  --font-mono: var(--font-geist-mono);
-}
-
-/* You've smartly locked dark mode to stay light mode here */
+/* ==========================================================================
+   🌙 2. GLOBAL DARK MODE TOKENS (Activated via .dark class or OS preference)
+   ========================================================================== */
+.dark,
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #F8F9FA;
-    --foreground: #111827;
+    /* Core Surfaces & Backgrounds */
+    --background: #0b0712;        /* Deep purple-black workspace background */
+    --foreground: #f3e8ff;        /* Purple 100 - Bright, readable light text */
+    --surface: #150f24;           /* Elevated dark purple card surfaces */
+    --surface-border: #3b0764;    /* Purple 900/60 subtle card borders */
+    --text-muted: #c4b5fd;        /* Purple 300/70 - Soft secondary text */
+
+    /* 🎨 Primary Brand: Light Orange (Brightened for dark background readability) */
+    --primary: #fb923c;           /* Orange 400 - Glowing primary actions in dark mode */
+    --primary-hover: #f97316;     /* Orange 500 - Hover states */
+    --primary-light: #431407;     /* Orange 950 - Dark tinted orange badges */
+    --primary-text: #0b0712;      /* Deep dark text on bright orange buttons */
+
+    /* 🎨 Secondary Brand: Rich Purple (Brightened accents) */
+    --secondary: #a855f7;         /* Purple 400 - Vibrant purple accents */
+    --secondary-hover: #c084fc;   /* Purple 300 - Hover states */
+    --secondary-light: #1e1b4b;   /* Indigo/Purple 950 - Deep secondary containers */
+    --secondary-text: #e9d5ff;    /* Light purple readable text */
+
+    /* 🛡️ Adaptive Form Controls & Input Boxes (100% Dark Mode Compatible) */
+    --input-bg: #130d24;          /* Deep purple-black input background */
+    --input-text: #f3e8ff;        /* Crisp, bright light-purple typed text */
+    --input-border: #581c87;      /* Purple 800 input boundaries */
+    --input-placeholder: #7c3aed; /* Purple 600 placeholder text */
+    --input-focus: #fb923c;       /* Glowing orange focus ring */
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', var(--font-geist-sans), Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+/* ==========================================================================
+   ⚡ 3. TAILWIND V4 INLINE THEME MAPPING
+   ========================================================================== */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-border: var(--surface-border);
+
+  /* Map custom variables to Tailwind utility names */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-primary-text: var(--primary-text);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-light: var(--secondary-light);
+  --color-secondary-text: var(--secondary-text);
+
+  --color-input-bg: var(--input-bg);
+  --color-input-text: var(--input-text);
+  --color-input-border: var(--input-border);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ==========================================================================
+   🧱 4. BASE ELEMENT STYLING & ADAPTIVE FORM RESETS
+   ========================================================================== */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Globally protect all input boxes, dropdowns, and search bars */
 input, textarea, select {
-  color: var(--input-text) !important;
   background-color: var(--input-bg) !important;
+  color: var(--input-text) !important;
+  border-color: var(--input-border) !important;
+  transition: all 0.2s ease;
 }
 
 input::placeholder, textarea::placeholder {
   color: var(--input-placeholder) !important;
-  opacity: 1; 
+  opacity: 1;
+}
+
+/* Ensure browser auto-fill doesn't force white boxes in dark mode */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--input-text);
+  -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Global scrollbar styling for a sleek enterprise look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }
