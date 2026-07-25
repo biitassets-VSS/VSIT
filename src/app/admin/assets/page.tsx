@@ -75,7 +75,7 @@ function AdminAssetReturnsContent() {
           (matchedAsset.assigned_to && String(p.id) === String(matchedAsset.assigned_to))
         ) || {};
 
-        const itemIdentifier = insp.id || `return-${insp.asset_id}-${idx}-${Date.now()}`;
+        const itemIdentifier = insp.id || insp.inspection_id || insp.uuid || `return-${insp.asset_id}-${idx}-${Date.now()}`;
         const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
 
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name;
@@ -145,7 +145,7 @@ function AdminAssetReturnsContent() {
     }
   };
 
-  // 🌟 PROCESS RETURN VERDICT WITH SCHEMA-IMMUNE COMPOSITE TARGETING (NO 'id' COLUMN NEEDED!)
+  // 🌟 100% SCHEMA-IMMUNE RETURN PROCESSOR (NEVER ASSUMES 'inspections.id' EXISTS!)
   const processReturnVerdict = async (item: any, action: 'Approve Return' | 'Reject Return' | 'Approve Replacement') => {
     const assetId = item.asset_id;
     const staffId = item.staff_id;
@@ -185,15 +185,24 @@ function AdminAssetReturnsContent() {
         notifType = 'success';
       }
 
-      // 🛡️ BULLETPROOF NO-ID SCHEMA TARGETING: Target by asset_id + created_at (or status) instead of 'id'
+      // 🛡️ BULLETPROOF SCHEMA-IMMUNE TARGETING: Safely match whatever column exists in your DB!
       let query = supabase.from('inspections')
-        .update({ status: targetStatus, admin_remarks: remarks || null })
-        .eq('asset_id', assetId);
+        .update({ status: targetStatus, admin_remarks: remarks || null });
 
-      if (item.created_at) {
-        query = query.eq('created_at', item.created_at);
-      } else if (item.status) {
-        query = query.eq('status', item.status);
+      if (item.inspection_id) {
+        query = query.eq('inspection_id', item.inspection_id);
+      } else if (item.uuid) {
+        query = query.eq('uuid', item.uuid);
+      } else if (item.id && !String(item.id).startsWith('return-') && !String(item.id).startsWith('insp-') && !String(item.id).startsWith('missing-')) {
+        query = query.eq('id', item.id);
+      } else {
+        // Fallback: strictly target by asset_id + timestamp (requires NO primary key ID column!)
+        query = query.eq('asset_id', assetId);
+        if (item.created_at) {
+          query = query.eq('created_at', item.created_at);
+        } else if (item.status) {
+          query = query.eq('status', item.status);
+        }
       }
 
       const { error: inspErr } = await query;
@@ -209,7 +218,7 @@ function AdminAssetReturnsContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      // 🌟 PUSH ACTIVE NOTIFICATION TO STAFF DASHBOARD (STRICT SCHEMA COMPATIBILITY)
+      // 🌟 PUSH ACTIVE NOTIFICATION TO STAFF DASHBOARD
       if (staffId && !staffId.includes('EMP-UNKNOWN') && !staffId.includes('ADMIN')) {
         try {
           await supabase.from('notifications').insert([{
