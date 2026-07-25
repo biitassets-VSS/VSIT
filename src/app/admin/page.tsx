@@ -65,7 +65,7 @@ export default function AdminDashboardPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
-    // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs with your top Navbar toggle
+    // 🟢 DYNAMIC THEME OBSERVER
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
@@ -74,7 +74,6 @@ export default function AdminDashboardPage() {
     
     syncTheme(); // Run on mount
 
-    // Watch for class changes on HTML tag triggered by external Navbar
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
@@ -99,7 +98,7 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    // Real-Time Socket Connection for Instant Updates
+    // Real-Time Socket Connection
     const adminChannel = supabase
       .channel('admin-live-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
@@ -318,7 +317,9 @@ export default function AdminDashboardPage() {
             <button className={`p-2.5 rounded-xl border transition-all duration-300 relative shadow-sm group cursor-default ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6]' : 'bg-white border-slate-200 text-slate-500 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6]'}`}>
               <Bell size={18} className={notifications.length > 0 ? "animate-pulse" : ""} />
               {notifications.length > 0 && (
-                <span className={`absolute -top-1.5 -right-1.5 bg-[#F97316] text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>{notifications.length}</span>
+                <span className={`absolute -top-1.5 -right-1.5 bg-[#F97316] text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
+                  {notifications.length}
+                </span>
               )}
             </button>
           </div>
@@ -327,7 +328,6 @@ export default function AdminDashboardPage() {
         {/* 📊 THUMBNAIL CARDS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 shrink-0">
           
-          {/* INVENTORY */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#8B5CF6]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}><Laptop size={18} /></div>
@@ -344,7 +344,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* VERIFICATIONS */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#F97316]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={18} /> : <ClipboardCheck size={18} />}</div>
@@ -360,7 +359,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* HELPDESK */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#8B5CF6]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}><Ticket size={18} /></div>
@@ -377,7 +375,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* NETWORK */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#F97316]/10 group ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white'}`}><Users size={18} /></div>
@@ -485,7 +482,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* 🚀 TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
+      {/* 🚀 FIXED TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
       {isBroadcastModalOpen && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className={`rounded-2xl max-w-lg w-full p-6 shadow-2xl border space-y-5 animate-in zoom-in-95 duration-300 ${theme.card}`}>
@@ -501,11 +498,20 @@ export default function AdminDashboardPage() {
             <form onSubmit={handleSendBroadcast} className="space-y-4">
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Message Text *</label>
-                <textarea rows={3} required placeholder="Type an announcement to broadcast..." value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} className={`w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none ${isDarkMode ? 'bg-[#121212] border-zinc-800 text-zinc-200 focus:border-[#F97316]' : 'bg-white border-slate-200 text-slate-800 focus:border-[#F97316] shadow-sm'}`} />
+                {/* 🔴 THIS TEXTAREA IS NOW GUARANTEED DARK IN DARK MODE USING PURE TAILWIND CLASSES */}
+                <textarea 
+                  rows={3} 
+                  required 
+                  placeholder="Type an announcement to broadcast..." 
+                  value={broadcastMessage} 
+                  onChange={e => setBroadcastMessage(e.target.value)} 
+                  className="w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none shadow-sm focus:ring-2 focus:ring-[#F97316]/20 bg-white dark:bg-[#121212] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200 focus:border-[#F97316] dark:focus:border-[#F97316]" 
+                />
               </div>
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
-                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${isDarkMode ? 'border-zinc-800 bg-[#121212] hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-500'}`}>
+                {/* 🔴 THIS FILE UPLOAD IS NOW GUARANTEED DARK IN DARK MODE USING PURE TAILWIND CLASSES */}
+                <label className="cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors bg-slate-50 dark:bg-[#121212] border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/50 hover:border-[#8B5CF6]/50 dark:hover:border-[#8B5CF6]/50">
                   <ImagePlus size={24} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
                   <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
@@ -513,7 +519,10 @@ export default function AdminDashboardPage() {
                 {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
               </div>
               <div className={`flex gap-2 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all ${isDarkMode ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'}`}>Cancel</button>
+                {/* 🔴 CANCEL BUTTON FIX */}
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className="flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all shadow-sm bg-white dark:bg-[#18181b] border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800">
+                  Cancel
+                </button>
                 <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
                   {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
                 </button>
