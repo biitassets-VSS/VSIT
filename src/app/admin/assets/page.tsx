@@ -97,7 +97,7 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 }
 
 // ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v4.4 PRO)
 // ==========================================
 function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
   if (!category.toLowerCase().includes('laptop')) {
@@ -158,21 +158,12 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
 }
 
 // ==========================================
-// 🌟 UPGRADED SEARCHABLE STAFF DROPDOWN (ONLY SHOWS MATCHED NAMES!)
+// 🌟 UPGRADED SEARCHABLE STAFF DROPDOWN (100% DARK/LIGHT ADAPTIVE)
 // ==========================================
 const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Type employee name or EMP code..." }: any) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-
-  const t = {
-    bg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-white border-slate-300',
-    text: isDarkMode ? 'text-purple-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500',
-    menu: isDarkMode ? 'bg-[#150f24] border-purple-800' : 'bg-white border-slate-200',
-    hover: isDarkMode ? 'hover:bg-purple-900/50' : 'hover:bg-orange-50',
-    header: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 text-purple-300' : 'bg-slate-50 border-slate-100 text-slate-500',
-  };
 
   useEffect(() => {
     if (value) {
@@ -201,10 +192,10 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
   return (
     <div className="relative" ref={wrapperRef}>
       <div 
-        style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-        className={`flex items-center w-full p-3 border rounded-xl focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all`}
+        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+        className="flex items-center w-full p-3 border rounded-xl focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all"
       >
-        <Search size={14} className={`${t.textSub} mr-2 shrink-0`} />
+        <Search size={14} className={`${isDarkMode ? 'text-purple-300' : 'text-slate-500'} mr-2 shrink-0`} />
         <input 
           type="text" 
           value={open ? query : query || ''} 
@@ -217,12 +208,12 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
         {value && (
           <X size={14} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-1 shrink-0" onClick={() => { onChange(''); setQuery(''); }} />
         )}
-        <ChevronDown size={14} className={`${t.textSub} ml-1 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
+        <ChevronDown size={14} className={`${isDarkMode ? 'text-purple-300' : 'text-slate-500'} ml-1 shrink-0 cursor-pointer`} onClick={() => setOpen(!open)} />
       </div>
 
       {open && (
         <div 
-          style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
+          style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
           className="absolute z-50 w-full mt-2 border rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar"
         >
           <div 
@@ -233,11 +224,11 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
           </div>
 
           {query.trim().length === 0 ? (
-            <div className={`p-4 text-center text-xs font-medium italic ${t.textSub}`}>
+            <div className={`p-4 text-center text-xs font-medium italic ${isDarkMode ? 'text-purple-300/70' : 'text-slate-500'}`}>
               🔍 Type an employee name or EMP code above to search matched staff...
             </div>
           ) : filtered.length === 0 ? (
-            <div className={`p-4 text-center text-xs font-semibold text-rose-500`}>
+            <div className="p-4 text-center text-xs font-semibold text-rose-500">
               No matched employee found for "{query}".
             </div>
           ) : (
@@ -317,13 +308,29 @@ function AssetRegistryContent() {
   const [editForm, setEditForm] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // 🌟 REAL-TIME GLOBAL THEME LISTENER (FIXES LOGO / TOP BAR SYNC!)
   useEffect(() => {
-    const savedTheme = localStorage.getItem('vsit_theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
+    const checkTheme = () => {
+      const savedTheme = localStorage.getItem('vsit_theme');
+      const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+
+    checkTheme();
+    window.addEventListener('storage', checkTheme);
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
     fetchRegistryData();
+    return () => {
+      window.removeEventListener('storage', checkTheme);
+      observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -970,12 +977,12 @@ function AssetRegistryContent() {
     }
   };
 
+  // 🌟 ENTERPRISE ADAPTIVE THEME DICTIONARY (FULLY BOUND TO ISDARKMODE)
   const theme = {
     bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
     card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
     textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
     textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
-    inputBg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 focus:border-orange-500 text-purple-100 placeholder-purple-400/50' : 'bg-slate-50 border-slate-200 focus:border-orange-600 text-slate-900 placeholder-slate-400 font-medium',
     cardHover: isDarkMode ? 'hover:border-orange-500/70 hover:bg-[#1c1430] hover:shadow-xl hover:-translate-y-1' : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1',
     modalBody: isDarkMode ? 'bg-[#150f24] border-purple-900/60' : 'bg-white border-slate-200',
     modalHeader: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-slate-50/80 border-slate-200/80',
@@ -1065,7 +1072,7 @@ function AssetRegistryContent() {
 
             {/* 🌟 100% ADAPTIVE SEARCH BAR (ZERO WHITE BOX IN DARK MODE!) */}
             <div 
-              style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
+              style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
               className="flex-1 p-2 sm:p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 hover:border-orange-300"
             >
               <div className="relative w-full">
@@ -1082,16 +1089,16 @@ function AssetRegistryContent() {
             </div>
           </div>
 
-          {/* 🌟 SINGLE-ROW COMPACT FILTER BAR (NO BLACK UI, ROSE RESET BUTTON, LIGHT ORANGE COUNT) */}
+          {/* 🌟 SINGLE-ROW COMPACT FILTER BAR (100% ADAPTIVE, ROSE RESET BUTTON, LIGHT ORANGE COUNT) */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t sm:border-t-0 border-slate-200 dark:border-purple-900/30">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto custom-scrollbar">
               <span className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${theme.textSub}`}>
                 <Filter size={13} className="text-orange-600 dark:text-orange-400" /> Filter:
               </span>
               
-              {/* Status Dropdown (100% Adaptive in Dark Mode) */}
+              {/* Status Dropdown */}
               <select
-                style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
                 className={`text-[11px] sm:text-xs font-bold py-1.5 px-2.5 rounded-lg border transition-all duration-200 cursor-pointer outline-none shrink-0 ${
@@ -1100,17 +1107,17 @@ function AssetRegistryContent() {
                     : 'hover:border-orange-500'
                 }`}
               >
-                <option value="All" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 All Stock Statuses</option>
-                <option value="In Stock" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟢 In Stock (Unassigned)</option>
-                <option value="Assigned" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option>
-                <option value="Pending Handover" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⏳ Pending Handover</option>
-                <option value="In Repair" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ In Repair</option>
-                <option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo Use</option>
+                <option value="All" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 All Stock Statuses</option>
+                <option value="In Stock" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟢 In Stock (Unassigned)</option>
+                <option value="Assigned" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option>
+                <option value="Pending Handover" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⏳ Pending Handover</option>
+                <option value="In Repair" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ In Repair</option>
+                <option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo Use</option>
               </select>
 
               {/* Condition Dropdown */}
               <select
-                style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
                 value={conditionFilter}
                 onChange={e => setConditionFilter(e.target.value)}
                 className={`text-[11px] sm:text-xs font-bold py-1.5 px-2.5 rounded-lg border transition-all duration-200 cursor-pointer outline-none shrink-0 ${
@@ -1119,10 +1126,10 @@ function AssetRegistryContent() {
                     : 'hover:border-purple-500'
                 }`}
               >
-                <option value="All" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ All Conditions</option>
-                <option value="New" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option>
-                <option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option>
-                <option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option>
+                <option value="All" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ All Conditions</option>
+                <option value="New" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option>
+                <option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option>
+                <option value="Repaired" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option>
               </select>
 
               {/* High-Contrast Rose Reset Button (No Black UI) */}
@@ -1276,21 +1283,21 @@ function AssetRegistryContent() {
                 <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}>Sheet Formatting</h4>
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Paper Size</label>
-                  <select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all">
-                    <option value="A4" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>A4 (210 x 297mm)</option>
-                    <option value="Letter" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>US Letter (8.5 x 11in)</option>
+                  <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all">
+                    <option value="A4" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>A4 (210 x 297mm)</option>
+                    <option value="Letter" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>US Letter (8.5 x 11in)</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
                 </div>
               </div>
               <div className="space-y-4">
                 <h4 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}>Label Dimensions</h4>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
+                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Sticker Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-bold outline-none border transition-all" /></div>
                 </div>
               </div>
             </div>
@@ -1359,7 +1366,7 @@ function AssetRegistryContent() {
                     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
                       <div>
                         <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Asset Category *</label>
-                        <select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.category} onChange={e => { 
+                        <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.category} onChange={e => { 
                           const newCat = e.target.value; 
                           setEditForm({ 
                             ...editForm, 
@@ -1367,7 +1374,7 @@ function AssetRegistryContent() {
                             asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) 
                           }); 
                         }} className="w-full p-3 rounded-xl text-xs font-bold outline-none transition-colors border">
-                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
+                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
                         </select>
                       </div>
                       <div>
@@ -1375,30 +1382,30 @@ function AssetRegistryContent() {
                           <span>Asset Tag ID</span>
                           <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
                         </label>
-                        <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border" />
+                        <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border" />
                       </div>
                     </div>
 
                     <div>
                       <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                      <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border" />
+                      <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border" />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
                       <div>
                         <label className={`text-[10px] font-bold uppercase flex justify-between mb-1 ${theme.textSub}`}>
                           <span>Assets Name</span>
                           <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
                         </label>
-                        <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" />
+                        <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-semibold outline-none transition-all border" /></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-mono font-semibold outline-none transition-all border" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
                     </div>
 
                     <div className="space-y-1.5">
@@ -1406,7 +1413,7 @@ function AssetRegistryContent() {
                         <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
                         <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
                       </div>
-                      <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" />
+                      <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border" />
                       <div className="flex flex-wrap gap-1 pt-1">
                         {[
                           "AMD Ryzen 7 7735HS | 16GB RAM | 512GB SSD | Win 11 Home",
@@ -1428,12 +1435,12 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3.5 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Condition</label><select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="New" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Stock Status</label><select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Assigned" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option><option value="In Repair" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Repair</option><option value="Discard" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🗑️ Discard</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Condition</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="New" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Stock Status</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Assigned" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>👤 Assigned</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option><option value="In Repair" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Repair</option><option value="Discard" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🗑️ Discard</option></select></div>
                       <div>
                         <label className={`text-[10px] font-bold uppercase block mb-1 ${theme.textSub}`}>Inspection State</label>
-                        <select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border">
-                          <option value="Approved" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✅ Approved</option><option value="Re-Inspection" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Re-Inspection</option><option value="Not Approved" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Not Approved</option><option value="Rejected" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>❌ Rejected</option>
+                        <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className="w-full p-3 rounded-xl text-xs font-semibold outline-none transition-all border">
+                          <option value="Approved" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✅ Approved</option><option value="Re-Inspection" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Re-Inspection</option><option value="Not Approved" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>⚠️ Not Approved</option><option value="Rejected" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>❌ Rejected</option>
                         </select>
                       </div>
                     </div>
@@ -1601,7 +1608,7 @@ function AssetRegistryContent() {
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                  <select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetCategory} onChange={e => {
+                  <select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetCategory} onChange={e => {
                     const newCat = e.target.value;
                     setNewAssetCategory(newCat);
                     setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
@@ -1613,7 +1620,7 @@ function AssetRegistryContent() {
                       setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
                     }
                   }} className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-colors border">
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
+                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1621,36 +1628,36 @@ function AssetRegistryContent() {
                     <span>Asset Tag ID</span>
                     <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(generate new)</button>
                   </label>
-                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border" />
+                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="e.g. M27370-00105" style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border" />
+                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="e.g. M27370-00105" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border" />
                 </div>
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Vendor Source</label>
-                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
+                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
                 <div>
                   <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
                     <span>Assets Name *</span>
                     <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
                   </label>
-                  <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
+                  <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border" /></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" /></div>
               </div>
 
               <div className="space-y-2">
@@ -1658,7 +1665,7 @@ function AssetRegistryContent() {
                   <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
                   <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
                 </div>
-                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
+                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border" />
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {[
                     "AMD Ryzen 7 7735HS | 16GB RAM | 512GB SSD | Win 11 Home",
@@ -1680,8 +1687,8 @@ function AssetRegistryContent() {
               </div>
 
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="New" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ backgroundColor: isDarkMode ? '#0f0a1c' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#150f24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="New" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>✨ New</option><option value="Refurbished" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔄 Refurbished</option><option value="Repaired" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🛠️ Repaired</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }} value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className="w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border"><option value="In Stock (Unassigned)" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>📦 In Stock</option><option value="Demo Use" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🧪 Demo</option></select></div>
               </div>
 
               <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200'}`}>
