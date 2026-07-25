@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { 
   LogOut, ClipboardCheck, Ticket, 
-  Loader2, Bell, X, CheckCircle2
+  Loader2, Bell, X, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -16,7 +16,6 @@ interface AdminProfile {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
   const router = useRouter();
   
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -35,15 +34,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   });
 
   useEffect(() => {
-    // Check theme on mount
-    const savedTheme = localStorage.getItem('vsit_theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    } else {
-      setIsDarkMode(false);
-      document.documentElement.classList.remove('dark');
-    }
+    // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs Navbar with Dark Mode Toggle
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    
+    syncTheme(); // Run on mount
+
+    // Watch for class changes on HTML tag triggered by external toggle
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     let notifChannel: any;
     let ticketChannel: any;
@@ -117,6 +123,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     verifyAdmin();
 
     return () => {
+      observer.disconnect();
       if (notifChannel) supabase.removeChannel(notifChannel);
       if (ticketChannel) supabase.removeChannel(ticketChannel);
       if (inspChannel) supabase.removeChannel(inspChannel);
@@ -147,33 +154,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const theme = {
-    bgApp: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50', 
-    bgHeader: isDarkMode ? 'bg-[#121212]/90' : 'bg-white/90',
-    border: isDarkMode ? 'border-[#27272a]' : 'border-slate-200',
+    bgApp: isDarkMode ? 'bg-[#09090b]' : 'bg-[#F8FAFC]', 
+    bgHeader: isDarkMode ? 'bg-[#121212]' : 'bg-white',
+    border: isDarkMode ? 'border-zinc-800' : 'border-slate-200',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800', 
     textMuted: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    hoverBg: isDarkMode ? 'hover:bg-[#1e1e24]' : 'hover:bg-slate-50',
-    dropdownBg: isDarkMode ? 'bg-[#18181b]' : 'bg-white',
-    dropdownHeader: isDarkMode ? 'bg-[#121212]' : 'bg-slate-50',
+    hoverBg: isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-slate-50',
+    dropdownBg: isDarkMode ? 'bg-[#121212]' : 'bg-white',
+    dropdownHeader: isDarkMode ? 'bg-zinc-900' : 'bg-slate-50',
   };
 
   if (layoutCrash) return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6 font-mono"><p className="text-red-400 max-w-lg">{layoutCrash}</p></div>
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6 font-mono">
+      <div className="text-center space-y-4">
+        <AlertTriangle size={48} className="text-rose-500 mx-auto" />
+        <p className="text-rose-400 max-w-lg">{layoutCrash}</p>
+      </div>
+    </div>
   );
 
-  if (isCheckingAuth) return <div className={`min-h-screen ${theme.bgApp} flex items-center justify-center`}><Loader2 className="w-8 h-8 text-orange-400 animate-spin" /></div>;
+  if (isCheckingAuth) return (
+    <div className={`min-h-screen ${theme.bgApp} flex flex-col items-center justify-center`}>
+      <Loader2 className="w-10 h-10 text-[#F97316] animate-spin mb-4" />
+      <p className={`text-xs font-bold uppercase tracking-widest ${theme.textMuted}`}>Verifying Access...</p>
+    </div>
+  );
 
   const unreadTotal = notifications.filter(n => !n.is_read).length + liveTicketCount + liveInspCount;
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans antialiased transition-colors duration-500 ${theme.bgApp} ${theme.textMain} relative`}>
+    <div className={`min-h-screen flex flex-col font-sans antialiased transition-colors duration-300 ${theme.bgApp} ${theme.textMain} relative`}>
       
+      {/* 🟢 TOAST NOTIFICATION POPUP */}
       {activeAlert && (
         <div className={`fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse ring-4 ring-purple-500/20"></span>
-              <h4 className="text-[11px] font-bold text-purple-500 uppercase tracking-widest">{activeAlert.type} ALERT</h4>
+              <span className="w-2 h-2 rounded-full bg-[#F97316] animate-pulse ring-4 ring-[#F97316]/20"></span>
+              <h4 className="text-[11px] font-bold text-[#F97316] uppercase tracking-widest">{activeAlert.type} ALERT</h4>
             </div>
             <button onClick={() => setActiveAlert(null)} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={16}/></button>
           </div>
@@ -182,63 +200,69 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* 🌟 FULL-WIDTH TOP HEADER BAR (No Sidebar) */}
-      <header className={`h-16 backdrop-blur-md border-b flex items-center justify-between px-6 md:px-8 shadow-sm shrink-0 sticky top-0 z-40 transition-colors duration-500 ${theme.bgHeader} ${theme.border}`}>
+      {/* 🌟 FULL-WIDTH TOP HEADER BAR */}
+      <header className={`h-16 flex items-center justify-between px-4 md:px-8 border-b shadow-sm shrink-0 sticky top-0 z-40 transition-colors duration-300 ${theme.bgHeader} ${theme.border}`}>
         
         {/* Top Left: Logo */}
         <div className="flex items-center gap-4">
-          <Link href="/admin" className="flex items-center gap-2 cursor-pointer">
+          <Link href="/admin" className="flex items-center cursor-pointer transition-transform hover:scale-105 active:scale-95">
+            {/* 🔴 FILTERS REMOVED: Logo will natively render exactly as uploaded */}
             <img 
               src="/logo.png" 
-              alt="Logo" 
-              className={`h-8 w-auto object-contain ${isDarkMode ? 'brightness-200 grayscale-[20%]' : ''}`} 
+              alt="Virtual Staffing Solutions" 
+              className="h-8 w-auto object-contain" 
               onError={(e) => { e.currentTarget.style.display = 'none'; }} 
             />
           </Link>
         </div>
 
-        {/* Top Right: Bell & Smart Hover Logout (No Dark Mode Icon) */}
+        {/* Top Right: Bell & Logout */}
         <div className="flex items-center gap-3 ml-auto relative">
           
           {/* Notifications Bell */}
           <div className="relative">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-colors cursor-pointer ${isNotifOpen ? 'bg-purple-500/10 border-purple-500/30 text-purple-500' : `${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-[#27272a]' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500'}`}`}>
-              <Bell size={20} className={unreadTotal > 0 ? 'animate-[wiggle_1s_ease-in-out_infinite]' : ''} />
-              {unreadTotal > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full shadow-sm">{unreadTotal > 9 ? '9+' : unreadTotal}</span>}
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${isNotifOpen ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/30 text-[#8B5CF6]' : `${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50'}`}`}>
+              <Bell size={18} className={unreadTotal > 0 ? 'animate-pulse' : ''} />
+              {unreadTotal > 0 && (
+                <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#F97316] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
+                  {unreadTotal > 9 ? '9+' : unreadTotal}
+                </span>
+              )}
             </button>
 
+            {/* Notification Dropdown */}
             {isNotifOpen && (
               <div className={`absolute top-[calc(100%+12px)] right-0 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[80vh] animate-in slide-in-from-top-2 fade-in ${theme.dropdownBg} ${theme.border}`}>
                 <div className={`p-4 border-b flex justify-between items-center shrink-0 ${theme.dropdownHeader} ${theme.border}`}>
-                  <h3 className={`text-xs font-semibold uppercase tracking-wider ${theme.textMain}`}>Notifications</h3>
-                  {unreadTotal > 0 && <span className="text-[10px] font-medium text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-md">{unreadTotal} New</span>}
+                  <h3 className={`text-xs font-bold uppercase tracking-widest ${theme.textMain}`}>Notifications</h3>
+                  {unreadTotal > 0 && <span className="text-[10px] font-bold text-[#F97316] bg-[#F97316]/10 px-2 py-0.5 rounded-md">{unreadTotal} New</span>}
                 </div>
                 
                 <div className="overflow-y-auto custom-scrollbar flex-1">
                   {(liveTicketCount === 0 && liveInspCount === 0 && notifications.length === 0) ? (
                     <div className={`p-8 text-center space-y-2 ${theme.textMuted}`}>
                       <CheckCircle2 size={32} className="mx-auto opacity-40" />
-                      <p className="text-xs font-medium uppercase tracking-widest">You're all caught up!</p>
+                      <p className="text-xs font-bold uppercase tracking-widest">You're all caught up!</p>
                     </div>
                   ) : (
-                    <div className={`divide-y ${isDarkMode ? 'divide-[#27272a]' : 'divide-slate-100'}`}>
+                    <div className={`divide-y ${isDarkMode ? 'divide-zinc-800' : 'divide-slate-100'}`}>
                       {liveTicketCount > 0 && (
-                        <Link href="/admin/tickets" onClick={() => { setIsNotifOpen(false); setLiveTicketCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-purple-500/10 hover:bg-purple-500/20' : 'bg-purple-50/50 hover:bg-purple-50'}`}>
+                        <Link href="/admin/tickets" onClick={() => { setIsNotifOpen(false); setLiveTicketCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#8B5CF6]/5 hover:bg-[#8B5CF6]/10' : 'bg-[#f3e8ff]/50 hover:bg-[#f3e8ff]'}`}>
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-purple-500/20 text-purple-500 flex items-center justify-center shrink-0"><Ticket size={14}/></div>
+                            <div className="w-8 h-8 rounded-full bg-[#8B5CF6]/20 text-[#8B5CF6] flex items-center justify-center shrink-0"><Ticket size={14}/></div>
                             <div>
-                              <h4 className="text-xs font-semibold text-purple-500">New Tickets Received</h4>
+                              <h4 className="text-xs font-bold text-[#8B5CF6]">New Tickets Received</h4>
                               <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>Staff members have submitted {liveTicketCount} new support ticket(s).</p>
                             </div>
                           </div>
                         </Link>
                       )}
                       {liveInspCount > 0 && (
-                        <Link href="/admin/inspections" onClick={() => { setIsNotifOpen(false); setLiveInspCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-amber-500/10 hover:bg-amber-500/20' : 'bg-amber-50/50 hover:bg-amber-50'}`}>
+                        <Link href="/admin/inspections" onClick={() => { setIsNotifOpen(false); setLiveInspCount(0); }} className={`block p-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#F97316]/5 hover:bg-[#F97316]/10' : 'bg-[#fff7ed]/50 hover:bg-[#fff7ed]'}`}>
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0"><ClipboardCheck size={14}/></div>
+                            <div className="w-8 h-8 rounded-full bg-[#F97316]/20 text-[#F97316] flex items-center justify-center shrink-0"><ClipboardCheck size={14}/></div>
                             <div>
-                              <h4 className="text-xs font-semibold text-amber-500">New Inspections Submitted</h4>
+                              <h4 className="text-xs font-bold text-[#F97316]">New Inspections Submitted</h4>
                               <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>There are {liveInspCount} new hardware audits awaiting your review.</p>
                             </div>
                           </div>
@@ -249,12 +273,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         <div key={n.id} className={`p-4 transition-colors ${n.is_read ? 'opacity-50' : theme.dropdownBg} ${theme.hoverBg}`}>
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <h4 className={`text-xs font-semibold ${theme.textMain}`}>{n.title}</h4>
+                              <h4 className={`text-xs font-bold ${theme.textMain}`}>{n.title}</h4>
                               <p className={`text-[11px] mt-0.5 ${theme.textMuted}`}>{n.message}</p>
-                              <span className="text-[10px] text-zinc-500 mt-2 block">{new Date(n.created_at).toLocaleString()}</span>
+                              <span className="text-[10px] text-zinc-500 mt-2 block font-medium">{new Date(n.created_at).toLocaleString()}</span>
                             </div>
                             {!n.is_read && (
-                              <button onClick={() => markAsRead(n.id)} className="w-2 h-2 bg-purple-500 rounded-full shrink-0 shadow-sm shadow-purple-500/50 cursor-pointer hover:scale-150 transition-transform" title="Mark as read" />
+                              <button onClick={() => markAsRead(n.id)} className="w-2 h-2 bg-[#8B5CF6] rounded-full shrink-0 shadow-sm shadow-[#8B5CF6]/50 cursor-pointer hover:scale-150 transition-transform" title="Mark as read" />
                             )}
                           </div>
                         </div>
@@ -266,19 +290,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )}
           </div>
 
-          {/* 🌟 SMART HOVER LOGOUT BUTTON */}
+          {/* SMART HOVER LOGOUT BUTTON */}
           <div className="relative group">
             <button 
               onClick={handleLogout}
-              className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 cursor-pointer ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30' : 'bg-white border-slate-200 text-rose-600 hover:bg-rose-50 hover:border-rose-200'}`}
+              className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 cursor-pointer ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/30' : 'bg-white border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200'}`}
               title="Secure Logout"
             >
-              <LogOut size={20} />
+              <LogOut size={18} strokeWidth={2.5} />
             </button>
 
             {/* Tooltip visible strictly on hover showing Login User Email and Name */}
-            <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border border-slate-700 pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-              <span className="text-[9px] font-black uppercase tracking-widest text-orange-400">Logged in as</span>
+            <div className={`absolute right-0 top-full mt-2 hidden group-hover:flex flex-col p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#18181b] border-zinc-800 text-white' : 'bg-slate-900 border-slate-800 text-white'}`}>
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#F97316]">Logged in as</span>
               <span className="text-xs font-bold truncate mt-0.5">{adminProfile.name}</span>
               <span className="text-[11px] font-mono text-slate-400 truncate mt-0.5">{adminProfile.email}</span>
             </div>
@@ -288,7 +312,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* FULL-WIDTH PAGE CONTENT INJECTION */}
-      <main className={`flex-1 overflow-y-auto relative transition-colors duration-500 ${theme.bgApp}`}>
+      <main className={`flex-1 overflow-y-auto relative transition-colors duration-300 ${theme.bgApp}`}>
         <div className={`${theme.textMain} h-full`}>
           {children}
         </div>

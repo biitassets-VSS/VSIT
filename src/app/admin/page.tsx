@@ -65,16 +65,26 @@ export default function AdminDashboardPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('vsit_theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
+    // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs with your top Navbar toggle
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
+    };
+    
+    syncTheme(); // Run on mount
+
+    // Watch for class changes on HTML tag triggered by external Navbar
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
     loadAdminData();
     
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+
+    return () => observer.disconnect();
   }, []);
 
   const triggerDesktopAlert = (title: string, body: string) => {
@@ -491,11 +501,11 @@ export default function AdminDashboardPage() {
             <form onSubmit={handleSendBroadcast} className="space-y-4">
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Message Text *</label>
-                <textarea rows={3} required placeholder="Type an announcement to broadcast..." value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} className={`w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-200 focus:bg-zinc-950 focus:border-[#F97316]' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-[#F97316]'}`} />
+                <textarea rows={3} required placeholder="Type an announcement to broadcast..." value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} className={`w-full p-3 rounded-xl border outline-none text-sm font-medium transition-all resize-none ${isDarkMode ? 'bg-[#121212] border-zinc-800 text-zinc-200 focus:border-[#F97316]' : 'bg-white border-slate-200 text-slate-800 focus:border-[#F97316] shadow-sm'}`} />
               </div>
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
-                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${isDarkMode ? 'border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-500'}`}>
+                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${isDarkMode ? 'border-zinc-800 bg-[#121212] hover:bg-zinc-800 text-zinc-400' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-500'}`}>
                   <ImagePlus size={24} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
                   <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
@@ -503,7 +513,7 @@ export default function AdminDashboardPage() {
                 {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
               </div>
               <div className={`flex gap-2 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all ${isDarkMode ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Cancel</button>
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all ${isDarkMode ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'}`}>Cancel</button>
                 <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
                   {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
                 </button>
