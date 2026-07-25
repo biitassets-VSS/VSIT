@@ -383,7 +383,7 @@ function AdminInspectionReviewContent() {
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
         
         {/* Dynamic Header */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
@@ -398,7 +398,7 @@ function AdminInspectionReviewContent() {
                   <span>Inspection Command Center</span>
                 </h1>
                 {pendingCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
+                  <span className="px-3 py-1 bg-linear-to-r from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
                     {pendingCount} Action Required
                   </span>
                 )}
@@ -506,7 +506,7 @@ function AdminInspectionReviewContent() {
                   id={`inspection-${item.id}`}
                   className={`p-6 md:p-8 rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.card} ${
                     isHighlighted 
-                      ? (isDarkMode ? '!border-orange-500 ring-4 ring-orange-500/20 !bg-purple-950/40' : '!border-orange-500 ring-4 ring-orange-500/20 !bg-orange-50/20') 
+                      ? (isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-purple-950/40!' : 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-50/20!') 
                       : (isPending && item.is_submission && !item.is_admin_action) 
                         ? (isDarkMode ? 'border-orange-500/50 shadow-orange-600/10' : 'border-orange-300 shadow-orange-600/5') 
                         : theme.cardHover
@@ -607,7 +607,7 @@ function AdminInspectionReviewContent() {
                         onClick={() => sendStaffAuditReminder(item.staff_id, item.asset_name, item.asset_tag, item.status === 'Re-Inspection')}
                         className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 ${
                           item.status === 'Re-Inspection'
-                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/20'
+                            ? 'bg-linear-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/20'
                             : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20'
                         }`}
                       >
@@ -744,7 +744,7 @@ function AdminInspectionReviewContent() {
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
