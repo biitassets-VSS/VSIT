@@ -96,7 +96,7 @@ function generateCategoryPrefix(category: string, existingTagId?: string) {
 }
 
 // ==========================================
-// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v3.6 PRO)
+// 🧠 SMART HARDWARE SPECIFICATION AUTO-PARSER (v3.7 PRO)
 // ==========================================
 function autoDetectSpecs(textToParse: string, category: string, fallback?: string) {
   if (!category.toLowerCase().includes('laptop')) {
@@ -105,7 +105,7 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
 
   const t = textToParse.toLowerCase();
 
-  // 1. Exact Model Detection Rules (Prevents Wrong Agreement Specs)
+  // 1. Exact Model Detection Rules
   if (t.includes('fx507zv') || t.includes('tuf gaming') || t.includes('12700h')) {
     return 'Intel Core i7-12700H (12th Gen) | 16GB DDR4 RAM | 512GB PCIe 4.0 SSD | RTX 4060 8GB | Win 11';
   }
@@ -408,7 +408,7 @@ function AssetRegistryContent() {
     });
   };
 
-  // 🌟 OFFICIAL HANDOVER AGREEMENT GENERATOR WITH INSPECTION PHOTOS & CRYPTOGRAPHIC PROOF STAMP
+  // 🌟 OFFICIAL HANDOVER AGREEMENT GENERATOR WITH UPDATED TERMS & INSPECTION EVIDENCE
   const handleGenerateHandoverPDF = (asset: any) => {
     const printWindow = window.open('', '_blank', 'width=900,height=1100');
     if (!printWindow) return alert("Please allow pop-ups to view and download the official Handover Agreement.");
@@ -460,9 +460,9 @@ function AssetRegistryContent() {
             .value { font-size: 14px; font-weight: 700; color: #0f172a; }
             .specs-box { background: #fff7ed; border: 1px solid #fed7aa; padding: 15px; border-radius: 8px; color: #9a3412; font-weight: 700; font-size: 13px; margin-top: 5px; }
             .notes-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; color: #334155; font-size: 12px; font-family: monospace; margin-top: 5px; }
-            .terms { font-size: 12px; color: #475569; background: #f1f5f9; padding: 20px; border-radius: 8px; margin-top: 30px; }
+            .terms { font-size: 12px; color: #334155; background: #f1f5f9; padding: 22px; border-radius: 8px; margin-top: 30px; border: 1px solid #cbd5e1; }
             .terms ul { margin: 10px 0 0 0; padding-left: 20px; }
-            .terms li { margin-bottom: 8px; }
+            .terms li { margin-bottom: 10px; }
             .signature-area { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
             .sig-box { border: 1px solid #cbd5e1; padding: 20px; border-radius: 8px; background: #fff; }
             .sig-line { border-top: 2px solid #0f172a; padding-top: 8px; font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 35px; }
@@ -520,11 +520,13 @@ function AssetRegistryContent() {
 
           <div class="terms">
             <strong style="color: #0f172a; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">Terms of Asset Custody & Compliance:</strong>
+            <p style="margin: 8px 0 0 0; font-weight: 600;">I acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
             <ul>
-              <li>The employee acknowledges receipt of the specified IT hardware in full working order and stated condition.</li>
-              <li>This device is the exclusive property of Virtual Staffing Solutions and is provided strictly for authorized professional use.</li>
-              <li>The custodian agrees to safeguard the asset against physical damage, unauthorized software modifications, or third-party access.</li>
-              <li>In the event of resignation, termination, or administrative recall, the employee agrees to surrender the equipment immediately along with all accompanying accessories.</li>
+              <li><strong>Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
+              <li><strong>Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
+              <li><strong>Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months. On your Dashboard, the Device Audit Button will activate 4 days before the due date.</li>
+              <li><strong>Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
+              <li><strong>Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management. Gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
             </ul>
           </div>
 
@@ -560,7 +562,7 @@ function AssetRegistryContent() {
     printWindow.document.close();
   };
 
-  // 🌟 RESILIENT SAVE ENGINE (HANDLES MISSING SYSTEM_SPECS COLUMN WITHOUT CRASHING)
+  // 🌟 RESILIENT SAVE ENGINE
   const handleSaveNewAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAssetName || !newAssetSerial) return alert("Assets Name and Serial Number are required.");
@@ -1315,287 +1317,275 @@ function AssetRegistryContent() {
         </div>
       )}
 
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE (UPGRADED WITH COMPACT MOBILE & DESKTOP LAYOUT) */}
+      {/* 🚀 VIEW MODAL & HISTORY ENGINE (v3.7 ERGONOMIC HORIZONTAL IDENTITY CARD REDESIGN) */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
-            <div className={`rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-y-auto md:overflow-hidden shadow-2xl flex flex-col md:flex-row border ${theme.modalBody}`}>
+            <div className={`rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col border ${theme.modalBody}`}>
               
-              {/* Left Column: COMPACT QR Matrix Design */}
-              <div className={`w-full md:w-[30%] p-5 md:p-6 flex flex-col items-center border-b md:border-b-0 md:border-r ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-100'} relative shrink-0`}>
-                <div className="w-full flex justify-between items-center md:hidden mb-2">
-                  <h3 className="text-lg font-black tracking-widest uppercase text-purple-800 dark:text-purple-300">VSS</h3>
-                  <button onClick={() => setViewAssetModal(null)} className={`p-2 rounded-full shadow-sm ${isDarkMode ? 'bg-[#18181b] text-zinc-400' : 'bg-white text-slate-500'}`}><X size={16}/></button>
+              {/* 🌟 NEW COMPACT HORIZONTAL IDENTITY HEADER CARD (Replaces Tall Left Column) */}
+              <div className={`w-full p-4 sm:p-6 border-b flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-100'} shrink-0`}>
+                <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-start">
+                  <div className="bg-white p-2 sm:p-3 rounded-2xl shadow-sm border border-purple-100 shrink-0">
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-16 h-16 sm:w-20 sm:h-20 object-contain" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-purple-600 dark:text-purple-400">Hardware Identity</span>
+                    <h3 className="text-xl sm:text-2xl font-black font-mono text-purple-900 dark:text-purple-200 tracking-wider">{liveModalTag}</h3>
+                    <p className={`text-xs sm:text-sm font-bold mt-0.5 ${theme.textSub}`} title={editForm.serial || viewAssetModal.serial_number}>
+                      S/N: <span className="font-mono">{editForm.serial || viewAssetModal.serial_number}</span>
+                    </p>
+                  </div>
                 </div>
 
-                <h3 className={`hidden md:block text-2xl font-black tracking-widest uppercase mb-4 mt-2 text-purple-800 dark:text-purple-300`}>VSS</h3>
-                
-                <div className="bg-white p-3 md:p-4 rounded-2xl md:rounded-[1.5rem] shadow-md border border-purple-100 mb-4 relative group">
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 object-contain" />
-                </div>
-
-                <div className={`text-base sm:text-lg md:text-xl font-extrabold tracking-widest mb-1 text-purple-700 dark:text-purple-400 font-mono`}>
-                  {liveModalTag}
-                </div>
-                
-                <p className={`text-xs md:text-xs font-bold tracking-wide ${theme.textSub} mb-4 md:mb-6 text-center truncate px-2 w-full`} title={editForm.serial || viewAssetModal.serial_number}>
-                  S/N: {editForm.serial || viewAssetModal.serial_number}
-                </p>
-
-                <div className="flex w-full gap-2 mt-auto">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 py-3 md:py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest flex justify-center items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20'}`}>
-                    <Printer size={16} /> Print Sticker
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`flex-1 sm:flex-none px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider flex justify-center items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-800' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20'}`}>
+                    <Printer size={15} /> <span>Print Sticker</span>
                   </button>
+                  <button onClick={() => setViewAssetModal(null)} className={`p-2.5 rounded-full cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-800'}`}><X size={18}/></button>
                 </div>
               </div>
 
-              {/* Right Column: Editor Workspace & History Log */}
-              <div className={`w-full md:w-[70%] flex flex-col overflow-y-auto custom-scrollbar relative ${theme.modalBody}`}>
-                <div className="p-5 sm:p-6 md:p-8 space-y-6">
-                  
-                  {/* 🌟 FIXED HEADER: CLOSE BUTTON ALIGNED CLEANLY */}
-                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b gap-4 ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Logistics State:</span>
-                      <span className={`px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 sm:ml-auto">
-                      {!isEditingAsset && (
-                        <>
-                          <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20' : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200'}`}>
-                            <Trash2 size={13} /> Delete
-                          </button>
-                          <button onClick={() => setIsEditingAsset(true)} className={`px-3.5 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-100 text-purple-900 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
-                            <Edit2 size={13} /> Edit
-                          </button>
-                        </>
-                      )}
-                      <button onClick={() => setViewAssetModal(null)} className={`hidden md:flex p-2 rounded-full cursor-pointer transition-colors ${isDarkMode ? 'bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-white' : 'bg-purple-50 hover:bg-purple-100 text-purple-800'}`}><X size={16}/></button>
-                    </div>
+              {/* Right/Bottom Workspace: Ergonomic Details & History Log */}
+              <div className="p-5 sm:p-6 md:p-8 space-y-6 md:space-y-8 flex-1">
+                <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b gap-4 ${isDarkMode ? 'border-purple-900/50' : 'border-purple-100'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Logistics State:</span>
+                    <span className={`px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider border ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
                   </div>
 
-                  {isEditingAsset ? (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                      <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                        <span className={`text-sm font-bold uppercase tracking-widest text-purple-800 dark:text-purple-300`}>Editing Hardware Record</span>
-                      </div>
-
-                      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
-                        <div>
-                          <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
-                          <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.category} onChange={e => { 
-                            const newCat = e.target.value; 
-                            setEditForm({ 
-                              ...editForm, 
-                              category: newCat, 
-                              asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) 
-                            }); 
-                          }} className={`w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-colors border ${theme.inputBg}`}>
-                            {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">{cat}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-purple-700 dark:text-purple-400`}>
-                            <span>Asset Tag ID</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
-                          </label>
-                          <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-500/50 text-purple-400 focus:border-purple-400' : 'bg-white border-purple-300 text-purple-700 focus:border-purple-500'}`} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                        <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div>
-                          <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
-                            <span>Assets Name</span>
-                            <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
-                          </label>
-                          <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
-                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
-                        </div>
-                        <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {[
-                            "Intel Core i7-12700H (12th Gen) | 16GB DDR4 RAM | 512GB SSD | RTX 4060 | Win 11",
-                            "Intel Core i5 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
-                            "Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
-                            "AMD Ryzen 7 Pro | 16GB RAM | 512GB SSD | Win 11 Pro",
-                            "Intel Core Ultra 7 | 32GB RAM | 1TB SSD | Win 11 Pro"
-                          ].map((preset, pIdx) => (
-                            <button
-                              key={`preset-edit-${pIdx}`}
-                              type="button"
-                              onClick={() => setEditForm({...editForm, system_specs: preset})}
-                              className={`text-[9px] px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-purple-950/50 border-purple-800/60 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'}`}
-                            >
-                              ⚡ {preset.split('|')[0].trim()}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🛠️ Repaired</option></select></div>
-                        <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">📦 In Stock</option><option value="Assigned" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">👤 Assigned</option><option value="Demo Use" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🧪 Demo</option><option value="In Repair" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⚠️ Repair</option><option value="Discard" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🗑️ Discard</option></select></div>
-                        <div>
-                          <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Inspection State</label>
-                          <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}>
-                            <option value="Approved" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✅ Approved</option><option value="Re-Inspection" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Re-Inspection</option><option value="Not Approved" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⚠️ Not Approved</option><option value="Rejected" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">❌ Rejected</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50 border-purple-200'}`}>
-                        <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
-                        <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
-                      </div>
-
-                      <div className="flex gap-4 pt-6">
-                        <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                        <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 cursor-pointer transition-all">
-                          {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-purple-800 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Serial Number (Laptop - Charger)</p><p className={`text-sm font-mono font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-sm font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                        <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-sm font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.safe_display_name}</p></div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Purchase Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
-                        <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Warranty Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
-                        <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Inspection Status</p><div className="flex items-center gap-1.5 mt-1.5"><span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
-                      </div>
-
-                      {/* 🌟 SYSTEM SPECIFICATIONS ONLINE BLOCK */}
-                      <div className={`p-4.5 rounded-2xl border flex items-start gap-3.5 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
-                        <Cpu size={20} className="text-purple-700 dark:text-purple-400 shrink-0 mt-0.5" />
-                        <div className="w-full">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>System Hardware Configuration / Specifications:</span>
-                          <p className={`text-xs md:text-sm font-semibold leading-relaxed ${theme.textMain}`}>{viewAssetModal.system_specs || 'Standard Business Hardware Configuration'}</p>
-                        </div>
-                      </div>
-
-                      <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-100 border-purple-300'}`}>
-                        <div>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${theme.iconBgBrand}`}><User size={16}/></div>
-                            <span className={`text-base font-bold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                           <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
-                           <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-800 text-purple-300' : 'bg-white border-purple-300 text-purple-950'}`}>{viewAssetModal.emp_code}</span>
-                        </div>
-                      </div>
-
-                      {/* 🌟 OFFICIAL HANDOVER AGREEMENT & COMPLIANCE DOCUMENTS SECTION */}
-                      {(viewAssetModal.assigned_to || viewAssetModal.status === 'Assigned' || viewAssetModal.status === 'Pending Handover') && (
-                        <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50/80 border-emerald-200'}`}>
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-start gap-3.5">
-                              <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-sm shrink-0">
-                                <FileText size={20} />
-                              </div>
-                              <div>
-                                <h4 className={`text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-emerald-400' : 'text-emerald-900'}`}>Official Handover Agreement</h4>
-                                <p className={`text-[11px] font-semibold mt-0.5 ${isDarkMode ? 'text-emerald-200/80' : 'text-emerald-800'}`}>Digitally executed custody document with hardware specs, visual inspection audit photos, and usage policies.</p>
-                              </div>
-                            </div>
-
-                            <button 
-                              onClick={() => handleGenerateHandoverPDF(viewAssetModal)}
-                              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0"
-                            >
-                              <Download size={15} /> <span>View / Download PDF</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 🌟 LIFECYCLE & ACTIVITY HISTORY */}
-                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
-                        <div className="flex items-center gap-2 mb-4">
-                          <History size={16} className="text-purple-700 dark:text-purple-400" />
-                          <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
-                        </div>
-                        
-                        {isLoadingHistory ? (
-                          <div className="flex justify-center p-4"><Loader2 className="animate-spin text-purple-600"/></div>
-                        ) : assetHistory.length === 0 ? (
-                          <p className={`text-xs font-medium italic ${theme.textSub}`}>No history logs found for this asset.</p>
-                        ) : (
-                          <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                            {assetHistory.map((log, idx) => {
-                              let photosArray: string[] = [];
-                              try {
-                                if (Array.isArray(log.photos)) photosArray = log.photos;
-                                else if (typeof log.photos === 'string') {
-                                  const parsed = JSON.parse(log.photos);
-                                  if (Array.isArray(parsed)) photosArray = parsed;
-                                }
-                              } catch(e){}
-
-                              return (
-                                <div key={idx} className={`p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200'}`}>
-                                  <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
-                                      <p className={`text-xs font-bold mt-2 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-500 font-mono">({log.emp_code})</span></p>
-                                    </div>
-                                    <span className={`text-[10px] font-bold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
-                                  </div>
-                                  {log.notes && (
-                                    <div className={`mt-2 text-xs font-mono p-3 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-200/80' : 'bg-purple-50 border-purple-200 text-slate-800'}`}>
-                                      {log.notes}
-                                    </div>
-                                  )}
-                                  {photosArray.length > 0 && (
-                                    <div className="flex gap-2 mt-3 overflow-x-auto custom-scrollbar pb-2">
-                                      {photosArray.map((url, i) => (
-                                        <img key={`hist-photo-${i}`} src={url} alt="Log" className="h-16 w-16 rounded-lg object-cover border border-purple-200/60 shadow-sm" />
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
+                  {!isEditingAsset && (
+                    <div className="flex gap-2 sm:ml-auto">
+                      <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20' : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200'}`}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                      <button onClick={() => setIsEditingAsset(true)} className={`px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 cursor-pointer transition-colors ${isDarkMode ? 'bg-purple-900/40 text-purple-300 hover:bg-purple-700 hover:text-white border border-purple-800/50' : 'bg-purple-100 text-purple-900 hover:bg-purple-700 hover:text-white border border-purple-200'}`}>
+                        <Edit2 size={14} /> Edit
+                      </button>
                     </div>
                   )}
                 </div>
+
+                {isEditingAsset ? (
+                  <div className="space-y-6 animate-in fade-in duration-200">
+                    <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
+                      <span className={`text-sm font-bold uppercase tracking-widest text-purple-800 dark:text-purple-300`}>Editing Hardware Record</span>
+                    </div>
+
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/50 border-purple-200/70'}`}>
+                      <div>
+                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
+                        <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.category} onChange={e => { 
+                          const newCat = e.target.value; 
+                          setEditForm({ 
+                            ...editForm, 
+                            category: newCat, 
+                            asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) 
+                          }); 
+                        }} className={`w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-colors border ${theme.inputBg}`}>
+                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">{cat}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-purple-700 dark:text-purple-400`}>
+                          <span>Asset Tag ID</span>
+                          <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
+                        </label>
+                        <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-colors border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-500/50 text-purple-400 focus:border-purple-400' : 'bg-white border-purple-300 text-purple-700 focus:border-purple-500'}`} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
+                      <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" className={`w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none uppercase transition-all border ${theme.inputBg}`} />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                      <div>
+                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
+                          <span>Assets Name</span>
+                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
+                        </label>
+                        <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-mono font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} /></div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
+                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                      </div>
+                      <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`} />
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {[
+                          "Intel Core i7-12700H (12th Gen) | 16GB DDR4 RAM | 512GB SSD | RTX 4060 | Win 11",
+                          "Intel Core i5 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
+                          "Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro",
+                          "AMD Ryzen 7 Pro | 16GB RAM | 512GB SSD | Win 11 Pro",
+                          "Intel Core Ultra 7 | 32GB RAM | 1TB SSD | Win 11 Pro"
+                        ].map((preset, pIdx) => (
+                          <button
+                            key={`preset-edit-${pIdx}`}
+                            type="button"
+                            onClick={() => setEditForm({...editForm, system_specs: preset})}
+                            className={`text-[9px] px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-purple-950/50 border-purple-800/60 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'}`}
+                          >
+                            ⚡ {preset.split('|')[0].trim()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-purple-900/50' : 'border-purple-200'}`}>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="New" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🛠️ Repaired</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">📦 In Stock</option><option value="Assigned" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">👤 Assigned</option><option value="Demo Use" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🧪 Demo</option><option value="In Repair" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⚠️ Repair</option><option value="Discard" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🗑️ Discard</option></select></div>
+                      <div>
+                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Inspection State</label>
+                        <select style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 rounded-xl text-xs font-semibold outline-none transition-all border ${theme.inputBg}`}>
+                          <option value="Approved" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">✅ Approved</option><option value="Re-Inspection" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">🔄 Re-Inspection</option><option value="Not Approved" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">⚠️ Not Approved</option><option value="Rejected" className="bg-white text-slate-900 font-medium dark:bg-zinc-900 dark:text-white">❌ Rejected</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50 border-purple-200'}`}>
+                      <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
+                      <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={isDarkMode} />
+                    </div>
+
+                    <div className="flex gap-4 pt-6">
+                      <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors border ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-purple-900/30' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
+                      <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 cursor-pointer transition-all">
+                        {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-purple-800 dark:text-purple-300`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                      <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Serial Number (Laptop SN - Charger SN)</p><p className={`text-sm font-mono font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.serial_number || 'N/A'}</p></div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      <div className={`p-4 rounded-2xl border ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-sm font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
+                      <div className={`p-4 rounded-2xl border sm:col-span-2 ${theme.modalHeader}`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-sm font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.safe_display_name}</p></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Purchase Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
+                      <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Warranty Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
+                      <div className={`p-4 rounded-2xl border flex flex-col justify-center ${isDarkMode ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/40 border-purple-100/70'}`}><p className={`text-[9px] font-bold uppercase tracking-widest text-purple-700 dark:text-purple-400`}>Inspection Status</p><div className="flex items-center gap-1.5 mt-1.5"><span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
+                    </div>
+
+                    {/* 🌟 SYSTEM SPECIFICATIONS ONLINE BLOCK */}
+                    <div className={`p-4.5 rounded-2xl border flex items-start gap-3.5 ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
+                      <Cpu size={20} className="text-purple-700 dark:text-purple-400 shrink-0 mt-0.5" />
+                      <div className="w-full">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>System Hardware Configuration / Specifications:</span>
+                        <p className={`text-xs md:text-sm font-semibold leading-relaxed ${theme.textMain}`}>{viewAssetModal.system_specs || 'Standard Business Hardware Configuration'}</p>
+                      </div>
+                    </div>
+
+                    <div className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-100 border-purple-300'}`}>
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${theme.iconBgBrand}`}><User size={16}/></div>
+                          <span className={`text-base font-bold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                         <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
+                         <span className={`text-sm font-mono font-bold px-3 py-1 rounded-lg border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-800 text-purple-300' : 'bg-white border-purple-300 text-purple-950'}`}>{viewAssetModal.emp_code}</span>
+                      </div>
+                    </div>
+
+                    {/* 🌟 OFFICIAL HANDOVER AGREEMENT & COMPLIANCE DOCUMENTS SECTION WITH UPDATED CORPORATE TERMS */}
+                    {(viewAssetModal.assigned_to || viewAssetModal.status === 'Assigned' || viewAssetModal.status === 'Pending Handover') && (
+                      <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-emerald-50/80 border-emerald-200'}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start gap-3.5">
+                            <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-sm shrink-0">
+                              <FileText size={20} />
+                            </div>
+                            <div>
+                              <h4 className={`text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-emerald-400' : 'text-emerald-900'}`}>Official Handover Agreement</h4>
+                              <p className={`text-[11px] font-semibold mt-0.5 ${isDarkMode ? 'text-emerald-200/80' : 'text-emerald-800'}`}>Digitally executed custody document with hardware specs, visual inspection audit photos, and usage policies.</p>
+                            </div>
+                          </div>
+
+                          <button 
+                            onClick={() => handleGenerateHandoverPDF(viewAssetModal)}
+                            className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0"
+                          >
+                            <Download size={15} /> <span>View / Download PDF</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 🌟 LIFECYCLE & ACTIVITY HISTORY */}
+                    <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50/70 border-purple-200'}`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <History size={16} className="text-purple-700 dark:text-purple-400" />
+                        <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
+                      </div>
+                      
+                      {isLoadingHistory ? (
+                        <div className="flex justify-center p-4"><Loader2 className="animate-spin text-purple-600"/></div>
+                      ) : assetHistory.length === 0 ? (
+                        <p className={`text-xs font-medium italic ${theme.textSub}`}>No history logs found for this asset.</p>
+                      ) : (
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                          {assetHistory.map((log, idx) => {
+                            let photosArray: string[] = [];
+                            try {
+                              if (Array.isArray(log.photos)) photosArray = log.photos;
+                              else if (typeof log.photos === 'string') {
+                                const parsed = JSON.parse(log.photos);
+                                if (Array.isArray(parsed)) photosArray = parsed;
+                              }
+                            } catch(e){}
+
+                            return (
+                              <div key={idx} className={`p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200'}`}>
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
+                                    <p className={`text-xs font-bold mt-2 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-500 font-mono">({log.emp_code})</span></p>
+                                  </div>
+                                  <span className={`text-[10px] font-bold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
+                                </div>
+                                {log.notes && (
+                                  <div className={`mt-2 text-xs font-mono p-3 rounded-lg border whitespace-pre-wrap ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-200/80' : 'bg-purple-50 border-purple-200 text-slate-800'}`}>
+                                    {log.notes}
+                                  </div>
+                                )}
+                                {photosArray.length > 0 && (
+                                  <div className="flex gap-2 mt-3 overflow-x-auto custom-scrollbar pb-2">
+                                    {photosArray.map((url, i) => (
+                                      <img key={`hist-photo-${i}`} src={url} alt="Log" className="h-16 w-16 rounded-lg object-cover border border-purple-200/60 shadow-sm" />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                )}
               </div>
 
             </div>
