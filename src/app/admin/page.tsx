@@ -51,6 +51,7 @@ export default function AdminDashboardPage() {
     resolvedInspections: 0,
     pendingInspections: 0,
     totalTickets: 0,
+    resolvedTickets: 0,
     pendingTickets: 0,
     inProcessTickets: 0,
     totalStaff: 0,
@@ -173,22 +174,33 @@ export default function AdminDashboardPage() {
       });
 
       // 3. TICKETS LOGIC
-      let pendingTicketsCount = 0, inProcessTicketsCount = 0;
+      let pendingTicketsCount = 0, inProcessTicketsCount = 0, resolvedTicketsCount = 0;
       tktData.forEach(t => {
         const s = (t.status || '').toLowerCase().trim();
-        if (['process', 'progress', 'repair', 'active'].some(k => s.includes(k))) inProcessTicketsCount++;
+        if (['resolv', 'clos', 'complet', 'done'].some(k => s.includes(k))) resolvedTicketsCount++;
+        else if (['process', 'progress', 'repair', 'active'].some(k => s.includes(k))) inProcessTicketsCount++;
         else pendingTicketsCount++;
       });
 
-      // 4. NETWORK LOGIC (ONLINE/OFFLINE/DEACTIVATED)
+      // 4. NETWORK LOGIC (ONLINE/OFFLINE/DEACTIVATED STRICT LOGIC)
       let onlineCount = 0, deactivatedCount = 0;
       staffData.forEach(s => {
         const statusStr = (s.status || '').toLowerCase().trim();
+        const roleStr = (s.role || '').toLowerCase().trim();
         const isOnlineBool = s.is_online === true || String(s.is_online).toLowerCase() === 'true';
         
-        if (['deactivat', 'suspend', 'ban', 'block'].some(k => statusStr.includes(k))) deactivatedCount++;
-        else if (isOnlineBool || statusStr === 'online' || statusStr === 'live') onlineCount++;
+        // Strict check if staff is deactivated, suspended, banned, or marked inactive in DB
+        const isDeactivated = s.is_active === false || 
+                              ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => statusStr.includes(k)) ||
+                              ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
+
+        if (isDeactivated) {
+          deactivatedCount++;
+        } else if (isOnlineBool || statusStr === 'online' || statusStr === 'live') {
+          onlineCount++;
+        }
       });
+      // Offline is any registered staff who isn't live AND isn't deactivated.
       const offlineCount = staffData.length - onlineCount - deactivatedCount;
 
       if (notifRes.data) setNotifications(notifRes.data);
@@ -216,6 +228,7 @@ export default function AdminDashboardPage() {
         resolvedInspections: resolvedCount,
         pendingInspections: pendingCount,
         totalTickets: tktData.length,
+        resolvedTickets: resolvedTicketsCount,
         pendingTickets: pendingTicketsCount,
         inProcessTickets: inProcessTicketsCount,
         totalStaff: staffData.length,
@@ -278,10 +291,9 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
       <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-4 lg:p-6 gap-4 lg:gap-5 overflow-y-auto custom-scrollbar">
         
-        {/* 🌟 1. REDUCED HEIGHT COMPACT HEADER */}
+        {/* 🌟 HEADER */}
         <div className={`${theme.card} rounded-2xl p-3 sm:p-4 border flex flex-col md:flex-row justify-between md:items-center gap-4 shrink-0 shadow-sm transition-all`}>
           <Link href="/admin" className="flex items-center gap-4 group">
-            {/* Reduced icon container size (w-12), Light Orange border theme */}
             <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md ${isDarkMode ? 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]' : 'bg-[#fff7ed] border-[#fed7aa] text-[#F97316]'}`}>
               <Cpu className="w-6 h-6" strokeWidth={2} />
             </div>
@@ -307,7 +319,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 📊 2. THUMBNAIL CARDS (Reduced Padding, Updated Color Logic) */}
+        {/* 📊 THUMBNAIL CARDS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 shrink-0">
           
           {/* INVENTORY */}
@@ -327,7 +339,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* VERIFICATIONS */}
+          {/* VERIFICATIONS (Removed Total Column) */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={18} /> : <ClipboardCheck size={18} />}</div>
@@ -337,14 +349,13 @@ export default function AdminDashboardPage() {
               <h2 className="text-3xl font-black text-[#F97316] leading-tight">{stats.totalVerifications}</h2>
               <p className={`text-[10px] font-medium ${theme.subText}`}>Total Requests</p>
             </div>
-            <div className={`grid grid-cols-3 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Total</span><span className={`text-sm font-bold ${theme.text}`}>{stats.totalVerifications}</span></div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
-              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
+            <div className={`grid grid-cols-2 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
+              <div className="flex flex-col border-l pl-3 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
-          {/* HELPDESK */}
+          {/* HELPDESK (Added Resolved, Removed Total Column) */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}><Ticket size={18} /></div>
@@ -355,13 +366,13 @@ export default function AdminDashboardPage() {
               <p className={`text-[10px] font-medium ${theme.subText}`}>Total Tickets</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Total</span><span className={`text-sm font-bold ${theme.text}`}>{stats.totalTickets}</span></div>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
               <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-sm font-bold text-[#8B5CF6]">{stats.inProcessTickets}</span></div>
               <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingTickets > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
-          {/* NETWORK (Live DB Status Update) */}
+          {/* NETWORK (Removed Total, accurate Staff logic) */}
           <div className={`${theme.card} p-4 rounded-2xl border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 group`}>
             <div className="flex justify-between items-start mb-2">
               <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white'}`}><Users size={18} /></div>
@@ -371,16 +382,24 @@ export default function AdminDashboardPage() {
               <h2 className="text-3xl font-black text-[#F97316] leading-tight">{stats.totalStaff}</h2>
               <p className={`text-[10px] font-medium ${theme.subText}`}>Total Staff</p>
             </div>
-            <div className={`grid grid-cols-4 gap-1 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Total</span><span className="text-sm font-bold text-[#8B5CF6]">{stats.totalStaff}</span></div>
-              <div className="flex flex-col border-l pl-1 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span><span className="text-sm font-bold text-emerald-500">{stats.onlineStaff}</span></div>
-              <div className="flex flex-col border-l pl-1 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span><span className="text-sm font-bold text-slate-500">{stats.offlineStaff}</span></div>
-              <div className="flex flex-col border-l pl-1 border-slate-100 dark:border-zinc-800"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span><span className="text-sm font-bold text-rose-500">{stats.deactivatedStaff}</span></div>
+            <div className={`grid grid-cols-3 gap-2 mt-4 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div className="flex flex-col">
+                <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
+                <span className="text-sm font-bold text-emerald-500">{stats.onlineStaff}</span>
+              </div>
+              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800">
+                <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
+                <span className="text-sm font-bold text-slate-500">{stats.offlineStaff}</span>
+              </div>
+              <div className="flex flex-col border-l pl-2 border-slate-100 dark:border-zinc-800">
+                <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span>
+                <span className="text-sm font-bold text-rose-500">{stats.deactivatedStaff}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* 🟢 3. SYSTEM MODULES & 5. LIVE ACTIVITY LOG */}
+        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG */}
         <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-5 min-h-0 pb-4 lg:pb-0">
           
           <div className="w-full lg:w-[72%] flex flex-col gap-3">
@@ -391,7 +410,7 @@ export default function AdminDashboardPage() {
                 { title: 'Asset Registry', desc: 'Manage full hardware lifecycle, assignments, and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
                 { title: 'Return Requests', desc: 'Manage hardware returns and physical asset handovers.', icon: LogOut, path: '/admin/returns', color: '#F97316', badge: stats.returnRequests },
                 { title: 'Replacements', desc: 'Process device swap requests and hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: '#8B5CF6', badge: stats.replacementRequests },
-                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: '#8B5CF6', badge: stats.pendingTickets },
+                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair requests.', icon: Ticket, path: '/admin/tickets', color: '#8B5CF6', badge: stats.pendingTickets }, // Fixes build error
                 { title: 'Staff Directory', desc: 'Manage employee access codes and profile data.', icon: Users, path: '/admin/staff', color: '#F97316', badge: 0 },
                 { title: 'Remote Access', desc: 'View and control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: '#8B5CF6', badge: 0 },
                 { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns, asset matrices, and PDF exports.', icon: BarChart3, path: '/admin/reports', color: '#8B5CF6', badge: 0 },
@@ -403,7 +422,6 @@ export default function AdminDashboardPage() {
                     onClick={() => router.push(m.path)} 
                     className={`text-left cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col transition-all duration-300 group hover:-translate-y-1.5 hover:shadow-xl ${isOrange ? 'hover:shadow-[#F97316]/10 hover:border-[#F97316]/30' : 'hover:shadow-[#8B5CF6]/10 hover:border-[#8B5CF6]/30'}`}
                   >
-                    {/* Increased Icon Size by 30% */}
                     <div className="flex items-center gap-3 mb-3">
                       <div className={`relative w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${isOrange ? 'bg-[#fff7ed] text-[#F97316]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}>
                         <m.icon size={24} strokeWidth={2.2} />
@@ -418,7 +436,6 @@ export default function AdminDashboardPage() {
                     
                     <p className="text-[11px] font-medium leading-relaxed mb-4 text-slate-500 flex-1">{m.desc}</p>
                     
-                    {/* Increased Arrow Button Size by 25% + Slide Animation */}
                     <div className="mt-auto self-end">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 group-hover:translate-x-1.5 ${isOrange ? 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}>
                         <ArrowRight size={18} strokeWidth={2.5} />
@@ -442,7 +459,6 @@ export default function AdminDashboardPage() {
                 <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                   {recentActivity.map((log: any, i: number) => (
                     <div key={i} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                      {/* Dynamic Color based on Status parsing logic */}
                       <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
                         <Clock size={14} />
                       </div>
@@ -484,7 +500,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="flex gap-2 pt-4 border-t border-slate-100">
                 <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className="flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
-                <button disabled={isBroadcasting || (!broadcastMessage.trim() && !broadcastImage)} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
+                <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-sm">
                   {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
                 </button>
               </div>
