@@ -8,7 +8,7 @@ import {
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
-  ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert
+  ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert, Check
 } from 'lucide-react';
 
 // 🌟 SMART AUDIT WINDOW ENGINE
