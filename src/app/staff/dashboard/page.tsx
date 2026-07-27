@@ -20,7 +20,7 @@ interface StaffProfile {
   department?: string;
 }
 
-// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT WITH ADMIN)
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT)
 const getChannelTopic = (staff: any) => {
   const code = (staff?.emp_code || staff?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const email = (staff?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -32,6 +32,7 @@ const getChannelTopic = (staff: any) => {
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:openrelay.metered.ca:80' },
   { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
@@ -114,7 +115,7 @@ export default function StaffDashboardPage() {
         supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle(),
         supabase.from('assets').select('*'),
         supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(5),
-        supabase.from('notifications').select('*').eq('is_read', false).order('created_at', { ascending: false }).limit(30)
+        supabase.from('notifications').select('*').eq('is_read', false).order('created_at', { ascending: false }).limit(20)
       ]);
 
       let currentProf: StaffProfile;
@@ -138,27 +139,12 @@ export default function StaffDashboardPage() {
       const myTickets = (userTickets || []).filter(t => t.user_email === cleanEmail || t.user_id === currentProf.id);
       setTickets(myTickets);
 
-      // 🌟 SMART DEDUPLICATION: Collapses multiple duplicate alerts into single cards
-      const rawAlerts = (userAlerts || []).filter(n => 
+      const myAlerts = (userAlerts || []).filter(n => 
         (n.target_user === currentProf.id || n.target_role === 'staff' || !n.target_user) && !n.is_read
       );
-      
-      const uniqueAlerts: any[] = [];
-      const seenTitles = new Set<string>();
-      rawAlerts.forEach(a => {
-        const key = `${a.title}_${a.message}`;
-        if (!seenTitles.has(key)) {
-          seenTitles.add(key);
-          uniqueAlerts.push(a);
-        } else {
-          // Silently clean up duplicate database rows in background
-          supabase.from('notifications').delete().eq('id', a.id).then(() => {});
-        }
-      });
+      setAlerts(myAlerts);
 
-      setAlerts(uniqueAlerts);
-
-      const pendingShareAlert = uniqueAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
+      const pendingShareAlert = myAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
       if (pendingShareAlert && !isStreaming) {
         setIncomingRequest({
           adminName: 'IT Support Commander',
@@ -177,19 +163,18 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 📡 SETUP LIVE SIGNALING WITH DYNAMIC INSTANCE TOKEN (ZERO LINTER / RUNTIME ERRORS)
+  // 📡 SETUP LIVE SIGNALING WITH DETERMINISTIC CHANNEL KEY
   const setupSignalingListener = (userId: string, currentProf: any) => {
     if (!userId) return;
     if (activeSignalingUserIdRef.current === userId) return;
     activeSignalingUserIdRef.current = userId;
 
     const sigTopic = `webrtc_signaling_${userId}`;
-    // 🌟 ROOT CAUSE FIX: Dynamic unique topic token prevents "cannot add postgres_changes" errors!
-    const notifTopic = `staff_notif_popup_${userId}_${Date.now()}`;
+    const notifTopic = `staff_notif_popup_${userId}`;
     const targetChannelId = getChannelTopic(currentProf);
 
     supabase.getChannels().forEach(ch => {
-      if (ch.topic.includes(sigTopic) || ch.topic.includes(`staff_notif_popup_${userId}`)) {
+      if (ch.topic.includes(sigTopic) || ch.topic.includes(notifTopic) || ch.topic.includes(targetChannelId)) {
         supabase.removeChannel(ch);
       }
     });
@@ -210,7 +195,7 @@ export default function StaffDashboardPage() {
         const newNotif = payload.new;
         if (!newNotif.is_read) {
           setAlerts(prev => {
-            if (prev.some(a => a.id === newNotif.id || (a.title === newNotif.title && a.message === newNotif.message))) return prev;
+            if (prev.some(a => a.id === newNotif.id)) return prev;
             return [newNotif, ...prev];
           });
         }
@@ -328,14 +313,13 @@ export default function StaffDashboardPage() {
       if (incomingRequest?.alertId === id) setIncomingRequest(null);
       try {
         await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-        await supabase.from('notifications').delete().eq('id', id);
+        toast.success("Alert dismissed.");
       } catch (err) {
         console.error("Error updating notification:", err);
       }
     } else {
       setIncomingRequest(null);
     }
-    toast.success("Alert dismissed.");
   };
 
   const dismissAllAlerts = async () => {
@@ -345,8 +329,7 @@ export default function StaffDashboardPage() {
     if (ids.length > 0) {
       try {
         await supabase.from('notifications').update({ is_read: true }).in('id', ids);
-        await supabase.from('notifications').delete().in('id', ids);
-        toast.success("All action alerts cleared permanently!");
+        toast.success("All action alerts cleared!");
       } catch (err) {
         console.error("Error clearing notifications:", err);
       }
@@ -466,7 +449,7 @@ export default function StaffDashboardPage() {
           </button>
         </div>
 
-        {/* 🌟 ACTION ALERTS BOX WITH GUARANTEED ACCEPT BUTTON & CLEANUP TOOL */}
+        {/* 🌟 ACTION ALERTS BOX WITH DYNAMIC ACCEPT & CLEAR ALL BUTTONS */}
         <div className="space-y-3 animate-in fade-in duration-300">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -517,7 +500,6 @@ export default function StaffDashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-                      {/* 🟢 UNCONDITIONAL ACCEPT & SHARE BUTTON FOR SUPPORT ALERTS */}
                       {isRemoteShareAlert && !isStreaming && (
                         <button
                           type="button"
@@ -549,33 +531,19 @@ export default function StaffDashboardPage() {
           )}
         </div>
 
-        {/* 🌟 QUICK ACTION GRID WITH DYNAMIC "TEAM SCREEN" LIVE REQUEST BADGE */}
+        {/* QUICK ACTION GRID */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-2">
           {[
-            { title: 'Raise Ticket', desc: 'IT failure & support', icon: <Ticket size={20} />, path: '/staff/dashboard/tickets/new', color: 'purple', badge: null },
-            { title: 'Device Audit', desc: 'Hardware inspections', icon: <Lock size={20} />, path: '/staff/dashboard/inspections', color: 'slate', badge: null },
-            { title: 'Request Gear', desc: 'New equipment order', icon: <PlusCircle size={20} />, path: '/staff/dashboard/requests', color: 'emerald', badge: null },
-            { 
-              title: 'Team Screen', 
-              desc: 'Remote IT support hub', 
-              icon: <Monitor size={20} />, 
-              path: '/staff/dashboard/remote', 
-              color: 'orange',
-              badge: (incomingRequest || alerts.some(a => a.title?.includes('Screen Share'))) ? '🚨 Live Request' : null
-            }
+            { title: 'Raise Ticket', desc: 'IT failure & support', icon: <Ticket size={20} />, path: '/staff/dashboard/tickets/new', color: 'purple' },
+            { title: 'Device Audit', desc: 'Hardware inspections', icon: <Lock size={20} />, path: '/staff/dashboard/inspections', color: 'slate' },
+            { title: 'Request Gear', desc: 'New equipment order', icon: <PlusCircle size={20} />, path: '/staff/dashboard/requests', color: 'emerald' },
+            { title: 'Team Screen', desc: 'Remote IT support hub', icon: <Monitor size={20} />, path: '/staff/dashboard/remote', color: 'orange' }
           ].map((item, idx) => (
             <button
               key={idx}
               onClick={() => router.push(item.path)}
-              className={`relative p-4 sm:p-5 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all duration-200 cursor-pointer ${theme.card} hover:-translate-y-1 hover:shadow-lg hover:border-orange-500 group`}
+              className={`p-4 sm:p-5 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all duration-200 cursor-pointer ${theme.card} hover:-translate-y-1 hover:shadow-lg hover:border-orange-500 group`}
             >
-              {/* 🚨 DYNAMIC BADGE ON TEAM SCREEN THUMBNAIL */}
-              {item.badge && (
-                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-600 text-white shadow-md animate-bounce">
-                  {item.badge}
-                </span>
-              )}
-
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
                 item.color === 'orange' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' :
                 item.color === 'purple' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300' :
