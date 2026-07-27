@@ -40,11 +40,9 @@ export default function AdminRemotePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  
-  // 🌟 DIRECTORY FILTER STATE
   const [filterOnlineOnly, setFilterOnlineOnly] = useState(false);
   
-  // 🌟 NATIVE WEBRTC & REMOTE CONTROL STATE
+  // 🌟 NATIVE WEBRTC RECEIVER STATE
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'requesting' | 'connected' | 'controlling'>('idle');
   const [isControlling, setIsControlling] = useState(false);
   const [viewerTab, setViewerTab] = useState<'live_stream' | 'diagnostics' | 'security_logs'>('live_stream');
@@ -55,9 +53,7 @@ export default function AdminRemotePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
-  const channelIdRef = useRef<string>('');
 
-  // 🌟 REAL-TIME GLOBAL THEME LISTENER
   useEffect(() => {
     const checkTheme = () => {
       const savedTheme = localStorage.getItem('vsit_theme');
@@ -131,7 +127,6 @@ export default function AdminRemotePage() {
           };
         });
 
-        // 🌟 SORT ONLINE USERS TO THE TOP OF THE DIRECTORY BY DEFAULT
         enhancedStaff.sort((a, b) => {
           const aOnline = a.is_online || a.status?.toLowerCase() === 'online' || a.status?.toLowerCase() === 'active';
           const bOnline = b.is_online || b.status?.toLowerCase() === 'online' || b.status?.toLowerCase() === 'active';
@@ -159,15 +154,16 @@ export default function AdminRemotePage() {
     setIsControlling(false);
   };
 
-  // 📡 INITIATE WEBRTC SIGNALING HANDSHAKE & STREAM RECEIVER
+  // 📡 INITIATE WEBRTC SIGNALING (WITH DETERMINISTIC CHANNEL ID)
   const requestLiveScreenShare = async () => {
     if (!activeSession || !activeSession.id) return;
     setIsSendingPing(true);
     setSessionStatus('requesting');
 
     try {
-      const channelId = `session_${activeSession.id}_${Date.now()}`;
-      channelIdRef.current = channelId;
+      // 🌟 DETERMINISTIC GUARANTEED CHANNEL NAME (NO RANDOM TIMESTAMPS)
+      const targetChannelId = `flex_webrtc_stream_${activeSession.id}`;
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
 
       const peer = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
@@ -182,7 +178,7 @@ export default function AdminRemotePage() {
         }
       };
 
-      const sessionChannel = supabase.channel(channelId);
+      const sessionChannel = supabase.channel(targetChannelId);
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
@@ -192,6 +188,7 @@ export default function AdminRemotePage() {
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
+        toast("⚡ Received SDP Offer from Staff... Creating Answer", { icon: '🔄', duration: 3000 });
         await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
@@ -205,16 +202,18 @@ export default function AdminRemotePage() {
         toast.error("Employee stopped sharing their screen.");
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await supabase.channel(`webrtc_signaling_${activeSession.id}`).send({
+          // Send signaling request to staff over deterministic channel
+          await sessionChannel.send({
             type: 'broadcast',
             event: 'request_screen_share',
             payload: {
               adminName: adminProfile.name,
               adminCode: adminProfile.emp_code,
-              channelId: channelId
+              channelId: targetChannelId
             }
           });
 
+          // Insert database notification as reliable fallback
           await supabase.from('notifications').insert([{
             target_user: activeSession.id,
             title: '📡 Live Screen Share Request',
@@ -275,7 +274,6 @@ export default function AdminRemotePage() {
     });
   };
 
-  // 🌟 SMART SEARCH & ONLINE FILTER
   const filteredStaff = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return staffList.filter(s => {
@@ -314,7 +312,6 @@ export default function AdminRemotePage() {
     <div className={`h-screen max-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased flex flex-col overflow-hidden`}>
       <Toaster position="top-right" />
       
-      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER (STRICT HEIGHT LOCK) */}
       <div className="w-full max-w-400 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
         
         {/* COMPACT STANDARDIZED HEADER */}
@@ -345,10 +342,10 @@ export default function AdminRemotePage() {
           </button>
         </div>
 
-        {/* 🌟 MAIN WORKSPACE: DIRECTORY + LIVE STREAM CONSOLE (LOCKED HEIGHT) */}
+        {/* MAIN WORKSPACE: DIRECTORY + LIVE STREAM CONSOLE */}
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
           
-          {/* LEFT: COMPACT STAFF DIRECTORY WITH FILTER PILLS */}
+          {/* LEFT: COMPACT STAFF DIRECTORY */}
           {isSidebarOpen && (
             <div className={`w-full lg:w-80 rounded-2xl border shadow-sm flex flex-col shrink-0 overflow-hidden transition-all duration-300 max-h-75 lg:max-h-full ${theme.card}`}>
               <div className={`p-3 border-b space-y-2.5 shrink-0 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/60'}`}>
@@ -364,7 +361,6 @@ export default function AdminRemotePage() {
                   />
                 </div>
 
-                {/* Filter Pills */}
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setFilterOnlineOnly(false)}
@@ -386,7 +382,6 @@ export default function AdminRemotePage() {
                 </div>
               </div>
 
-              {/* Scrollable Compact List Container */}
               <div className="flex-1 overflow-y-auto p-2.5 space-y-1 custom-scrollbar min-h-0">
                 {filteredStaff.length === 0 ? (
                   <div className={`text-center p-6 text-xs font-bold ${theme.textSub}`}>No matching computers found.</div>
@@ -514,14 +509,14 @@ export default function AdminRemotePage() {
                   ))}
                 </div>
 
-                {/* 🌟 TAB CONTENT AREA (LOCKED HEIGHT WITH INTERNAL SCROLL) */}
+                {/* 🌟 TAB CONTENT AREA */}
                 <div className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar flex flex-col min-h-0">
                   
                   {/* Sub-Tab 1: LIVE WEBRTC VIEWPORT & MANDATORY WATERMARK OVERLAY */}
                   {viewerTab === 'live_stream' && (
                     <div className="flex-1 flex flex-col gap-3 min-h-0">
                       
-                      {/* 🌟 THE IN-BROWSER LIVE VIEWPORT (CLAMPED ASPECT RATIO) */}
+                      {/* 🌟 THE IN-BROWSER LIVE VIEWPORT */}
                       <div 
                         onClick={handleViewportClick}
                         className={`relative flex-1 w-full rounded-2xl overflow-hidden border-2 flex flex-col items-center justify-center min-h-0 max-h-125 transition-all select-none ${
