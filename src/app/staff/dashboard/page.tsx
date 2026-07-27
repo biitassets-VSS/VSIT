@@ -1,23 +1,613 @@
-import React from 'react';
-import StaffDashboardClient from './StaffDashboardClient';
+'use client';
 
-// Force Next.js and Vercel to completely skip the build-cache
-// and fetch live, real-time metrics on every view.
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import toast, { Toaster } from 'react-hot-toast';
+import { 
+  Monitor, Loader2, ShieldCheck, Check, X, Radio, Laptop, 
+  ShieldAlert, Wifi, CheckCircle2, AlertTriangle, ExternalLink, 
+  StopCircle, Ticket, Lock, PlusCircle, RefreshCw, Bell, Power,
+  ChevronRight, Cpu, HardDrive, UserCheck
+} from 'lucide-react';
+
+interface StaffProfile {
+  id: string;
+  name?: string;
+  full_name?: string;
+  email: string;
+  emp_code?: string;
+  department?: string;
+}
 
 export default function StaffDashboardPage() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 font-sans">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">My Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Welcome back! Track your assigned hardware and submit active asset inspections.
-        </p>
-      </div>
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<StaffProfile | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [hardwareUnits, setHardwareUnits] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-      {/* Renders your crash-proof real-time metrics container */}
-      <StaffDashboardClient initialAssets={[]} />
+  // 🌟 INTERACTIVE WEBRTC POPUP & STREAMING STATE
+  const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string; alertId?: string } | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  
+  // WebRTC Peer & Media Stream References
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<any>(null);
+
+  // 🌟 REAL-TIME GLOBAL THEME LISTENER
+  useEffect(() => {
+    const checkTheme = () => {
+      const savedTheme = localStorage.getItem('vsit_theme');
+      const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+
+    checkTheme();
+    window.addEventListener('storage', checkTheme);
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    loadDashboardData();
+    return () => {
+      window.removeEventListener('storage', checkTheme);
+      observer.disconnect();
+      stopScreenSharing();
+    };
+  }, []);
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      const rawSession = localStorage.getItem('vsit_staff_session') || 
+                         localStorage.getItem('vsit_admin_session') || 
+                         localStorage.getItem('user');
+
+      if (!rawSession) {
+        toast.error("No active session found. Redirecting...");
+        router.push('/');
+        return;
+      }
+
+      let activeUser: any = {};
+      try { activeUser = JSON.parse(rawSession); } 
+      catch (e) { activeUser = { email: rawSession }; }
+
+      const cleanEmail = (activeUser.email || '').toLowerCase().trim();
+
+      // Fetch Profile, Assigned Hardware, Tickets, and Notifications
+      const [{ data: userProfile }, { data: assets }, { data: userTickets }, { data: userAlerts }] = await Promise.all([
+        supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle(),
+        supabase.from('assets').select('*'),
+        supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(10)
+      ]);
+
+      let currentProf: StaffProfile;
+      if (userProfile) {
+        currentProf = userProfile;
+      } else {
+        currentProf = {
+          id: 'temp-' + Date.now(),
+          full_name: activeUser.name || activeUser.full_name || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          emp_code: activeUser.emp_code || 'EMP-9857',
+          department: activeUser.department || 'Migration'
+        };
+      }
+
+      setProfile(currentProf);
+
+      // Filter assigned assets
+      const myAssets = (assets || []).filter(a => a.assigned_to === currentProf.id || a.assigned_to === currentProf.email);
+      setHardwareUnits(myAssets);
+
+      // Filter tickets
+      const myTickets = (userTickets || []).filter(t => t.user_email === cleanEmail || t.user_id === currentProf.id);
+      setTickets(myTickets);
+
+      // Filter & process alerts
+      const myAlerts = (userAlerts || []).filter(n => n.target_user === currentProf.id || n.target_role === 'staff' || !n.target_user);
+      setAlerts(myAlerts);
+
+      // Check if any existing unread alert is a screen share request
+      const pendingShareAlert = myAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
+      if (pendingShareAlert && !isStreaming) {
+        setIncomingRequest({
+          adminName: 'IT Support Commander',
+          adminCode: 'EMP-ADMIN',
+          channelId: `session_${currentProf.id}_${Date.now()}`,
+          alertId: pendingShareAlert.id
+        });
+      }
+
+      setupSignalingListener(currentProf.id);
+
+    } catch (error: any) {
+      toast.error(`Error syncing dashboard: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 📡 SETUP LIVE SIGNALING & DATABASE NOTIFICATION LISTENER FOR INSTANT POPUP
+  const setupSignalingListener = (userId: string) => {
+    if (!userId) return;
+
+    // 1. Listen for WebRTC Signaling Pulses from Admin Commander
+    const signalingChannel = supabase.channel(`webrtc_signaling_${userId}`)
+      .on('broadcast', { event: 'request_screen_share' }, (payload) => {
+        setIncomingRequest({
+          adminName: payload.payload.adminName || 'IT Administrator',
+          adminCode: payload.payload.adminCode || 'EMP-ADMIN',
+          channelId: payload.payload.channelId || `session_${userId}_${Date.now()}`
+        });
+        toast("⚠️ IT Admin requested live screen sharing!", { icon: '📡', duration: 8000 });
+      })
+      .subscribe();
+
+    // 2. Listen for Real-time Database Notification Inserts
+    const dbNotifChannel = supabase.channel(`staff_notif_popup_${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
+        const newNotif = payload.new;
+        setAlerts(prev => [newNotif, ...prev]);
+        if (newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
+          setIncomingRequest({
+            adminName: 'IT Support Commander',
+            adminCode: 'EMP-ADMIN',
+            channelId: `session_${userId}_${Date.now()}`,
+            alertId: newNotif.id
+          });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(signalingChannel);
+      supabase.removeChannel(dbNotifChannel);
+    };
+  };
+
+  // 🚀 START WEBRTC SCREEN SHARE
+  const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
+    const targetChannelId = manualChannelId || incomingRequest?.channelId || `session_${profile?.id || 'staff'}_${Date.now()}`;
+    setIsConnecting(true);
+
+    try {
+      // 🌟 TS(2353) FIX: Safely cast mediaDevices to allow modern cursor constraints
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
+        audio: false
+      });
+
+      streamRef.current = stream;
+
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenSharing();
+        toast.error("Screen sharing stopped.");
+      };
+
+      const peer = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+      });
+      peerRef.current = peer;
+
+      stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
+
+      const sessionChannel = supabase.channel(targetChannelId);
+      channelRef.current = sessionChannel;
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
+        }
+      };
+
+      sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
+        if (peer.signalingState === 'have-local-offer') {
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
+          setIsConnecting(false);
+          setIsStreaming(true);
+          setIncomingRequest(null);
+          toast.success("🟢 Live WebRTC Screen Share Established!");
+          if (alertIdToDismiss) dismissAlert(alertIdToDismiss);
+        }
+      }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
+        if (peer.remoteDescription && payload.payload.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        }
+      }).on('broadcast', { event: 'terminate_session' }, () => {
+        stopScreenSharing();
+        toast("🛑 IT Admin ended the remote support session.", { icon: 'ℹ️' });
+      }).subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          const offer = await peer.createOffer();
+          await peer.setLocalDescription(offer);
+          sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+        }
+      });
+
+    } catch (err: any) {
+      toast.error(`Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
+      setIsConnecting(false);
+    }
+  };
+
+  const stopScreenSharing = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+      streamRef.current = null;
+    }
+    if (peerRef.current) {
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    if (channelRef.current) {
+      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setIsStreaming(false);
+    setIsConnecting(false);
+    setIncomingRequest(null);
+  };
+
+  const dismissAlert = async (id: string) => {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    setAlerts(prev => prev.filter(a => a.id !== id));
+    if (incomingRequest?.alertId === id) {
+      setIncomingRequest(null);
+    }
+    toast.success("Alert dismissed.");
+  };
+
+  const handleManualSync = () => {
+    setIsSyncing(true);
+    loadDashboardData().then(() => {
+      setIsSyncing(false);
+      toast.success("✔ Live feeds synchronized!");
+    });
+  };
+
+  const theme = {
+    bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
+    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
+    cardInner: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200',
+    textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500',
+    divider: isDarkMode ? 'border-purple-900/40' : 'border-slate-100',
+  };
+
+  if (loading) return (
+    <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center gap-4 transition-colors`}>
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
+      <p className={`text-xs font-bold uppercase tracking-widest ${theme.textSub}`}>Syncing Staff Workspace...</p>
+    </div>
+  );
+
+  return (
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col relative`}>
+      <Toaster position="top-right" />
+      
+      {/* 🔴 ACTIVE STREAMING FLOATING BADGE WITH INSTANT KILL-SWITCH */}
+      {isStreaming && (
+        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
+          <div className="flex items-center gap-3">
+            <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+            <div>
+              <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
+              <p className="text-[11px] text-zinc-300">IT Support is actively monitoring your workspace.</p>
+            </div>
+          </div>
+          <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
+            <StopCircle size={15} /> <span>Stop Sharing</span>
+          </button>
+        </div>
+      )}
+
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
+      {incomingRequest && !isStreaming && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#150f24] border-2 border-orange-500 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner animate-bounce">
+              <Monitor size={32} />
+            </div>
+            
+            <div className="text-center space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900 dark:text-purple-50">Live IT Support Access Requested</h3>
+              <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-purple-300/70">
+                <strong className="text-slate-900 dark:text-white font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen for live troubleshooting.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30 text-xs font-semibold text-orange-800 dark:text-orange-300 flex items-center gap-3">
+              <ShieldAlert size={22} className="shrink-0 text-orange-600 dark:text-orange-400" />
+              <span>When prompted by your browser, select <strong className="underline">"Entire Screen"</strong> or your active window to establish the connection.</span>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => {
+                  if (incomingRequest?.alertId) dismissAlert(incomingRequest.alertId);
+                  else setIncomingRequest(null);
+                }} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-purple-900/50 text-xs font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+              >
+                Decline
+              </button>
+              <button 
+                onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95"
+              >
+                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
+      <div className="w-full max-w-350 px-3 sm:px-6 lg:px-10 mx-auto space-y-6 pt-4 flex-1 flex flex-col">
+        
+        {/* STANDARDIZED WELCOME BANNER */}
+        <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300`}>
+          <div className="space-y-1 min-w-0">
+            <h1 className={`text-xl sm:text-3xl font-black tracking-tight truncate ${theme.textMain} flex items-center gap-2`}>
+              <span>Welcome back, {profile?.full_name || profile?.name || 'Staff Member'}</span>
+              <span className="animate-bounce">👋</span>
+            </h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-widest bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20">
+                ID: {profile?.emp_code || 'EMP-9857'}
+              </span>
+              <span className={`text-xs font-semibold truncate ${theme.textSub}`}>{profile?.email}</span>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm shrink-0 hover:border-orange-500 hover:text-orange-600 ${theme.cardInner} ${theme.textMain} disabled:opacity-50`}
+          >
+            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+            <span>Sync Feeds</span>
+          </button>
+        </div>
+
+        {/* 🌟 ACTION ALERTS BOX WITH DYNAMIC ACCEPT BUTTON */}
+        <div className="space-y-3 animate-in fade-in duration-300">
+          <div className="flex items-center gap-2">
+            <Bell size={16} className="text-orange-600 dark:text-orange-400 animate-pulse" />
+            <h2 className={`text-xs font-black uppercase tracking-widest ${theme.textSub}`}>Action Alerts ({alerts.length})</h2>
+          </div>
+
+          {alerts.length === 0 ? (
+            <div className={`p-6 rounded-2xl border text-center text-xs font-bold ${theme.cardInner} ${theme.textSub}`}>
+              <CheckCircle2 size={24} className="mx-auto mb-1.5 text-emerald-500 opacity-60" />
+              <span>No pending action alerts. You are all caught up!</span>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {alerts.map((alert) => {
+                // Check if this alert is requesting remote screen share
+                const isRemoteShareAlert = alert.title?.includes('Screen Share') || alert.title?.includes('Remote Support') || alert.message?.includes('screen access');
+
+                return (
+                  <div 
+                    key={alert.id}
+                    className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                      isRemoteShareAlert 
+                        ? 'bg-orange-500/10 border-orange-500/40 shadow-md ring-1 ring-orange-500/20' 
+                        : `${theme.cardInner} ${theme.divider}`
+                    }`}
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${isRemoteShareAlert ? 'bg-orange-600 text-white animate-bounce' : 'bg-purple-500/10 text-purple-600 dark:text-purple-300'}`}>
+                        {isRemoteShareAlert ? <Monitor size={18} /> : <AlertTriangle size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className={`text-sm font-black truncate ${isRemoteShareAlert ? 'text-orange-600 dark:text-orange-400' : theme.textMain}`}>
+                          {alert.title || 'System Notification'}
+                        </h3>
+                        <p className={`text-xs font-medium mt-0.5 leading-relaxed ${theme.textSub}`}>
+                          {alert.message}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+                      {/* 🟢 THE RESTORED INTERACTIVE ACCEPT & SHARE BUTTON */}
+                      {isRemoteShareAlert && !isStreaming && (
+                        <button
+                          type="button"
+                          disabled={isConnecting}
+                          onClick={() => startScreenShare(`session_${profile?.id}_${Date.now()}`, alert.id)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer animate-pulse active:scale-95 disabled:opacity-50"
+                        >
+                          {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                          <span>Accept & Share</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => dismissAlert(alert.id)}
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                          isRemoteShareAlert 
+                            ? 'bg-white/80 dark:bg-[#150f24] border-orange-200 dark:border-orange-500/30 text-orange-800 dark:text-orange-300 hover:bg-orange-100' 
+                            : `${theme.card} ${theme.textSub} hover:border-orange-500 hover:text-orange-600`
+                        }`}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 🌟 QUICK ACTION GRID */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-2">
+          {[
+            { title: 'Raise Ticket', desc: 'IT failure & support', icon: <Ticket size={20} />, path: '/staff/dashboard/tickets/new', color: 'purple' },
+            { title: 'Device Audit', desc: 'Hardware inspections', icon: <Lock size={20} />, path: '/staff/dashboard/inspections', color: 'slate' },
+            { title: 'Request Gear', desc: 'New equipment order', icon: <PlusCircle size={20} />, path: '/staff/dashboard/requests', color: 'emerald' },
+            { title: 'Team Screen', desc: 'Remote IT support hub', icon: <Monitor size={20} />, path: '/staff/dashboard/remote', color: 'orange' }
+          ].map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => router.push(item.path)}
+              className={`p-4 sm:p-5 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all duration-200 cursor-pointer ${theme.card} hover:-translate-y-1 hover:shadow-lg hover:border-orange-500 group`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                item.color === 'orange' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' :
+                item.color === 'purple' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300' :
+                item.color === 'emerald' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                'bg-slate-500/10 text-slate-600 dark:text-zinc-400'
+              }`}>
+                {item.icon}
+              </div>
+              <div>
+                <h3 className={`text-xs sm:text-sm font-black group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors ${theme.textMain}`}>{item.title}</h3>
+                <p className={`text-[11px] font-medium mt-0.5 truncate ${theme.textSub}`}>{item.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* 🌟 STAT COUNTERS */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assigned Hardware</span>
+              <h3 className={`text-2xl sm:text-3xl font-black mt-1 ${theme.textMain}`}>{hardwareUnits.length}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold">
+              <Laptop size={24} />
+            </div>
+          </div>
+
+          <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Action Required</span>
+              <h3 className="text-2xl sm:text-3xl font-black mt-1 text-orange-600 dark:text-orange-400">{alerts.length}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold">
+              <AlertTriangle size={24} />
+            </div>
+          </div>
+
+          <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Open Tickets</span>
+              <h3 className="text-2xl sm:text-3xl font-black mt-1 text-emerald-600 dark:text-emerald-400">
+                {tickets.filter(t => !t.status?.toLowerCase().includes('resolv') && !t.status?.toLowerCase().includes('clos')).length}
+              </h3>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <Ticket size={24} />
+            </div>
+          </div>
+        </div>
+
+        {/* 🌟 HARDWARE & TICKETS SPLIT VIEW */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+          
+          {/* Hardware Units List */}
+          <div className={`rounded-3xl border shadow-sm overflow-hidden flex flex-col ${theme.card}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/60'}`}>
+              <div className="flex items-center gap-2">
+                <Laptop size={18} className="text-purple-600 dark:text-purple-300" />
+                <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>My Hardware Units</h3>
+              </div>
+              <span className="text-[11px] font-bold text-purple-600 dark:text-purple-300">{hardwareUnits.length} Total</span>
+            </div>
+
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto custom-scrollbar max-h-95">
+              {hardwareUnits.length === 0 ? (
+                <div className={`text-center py-12 text-xs font-bold ${theme.textSub}`}>No hardware assets currently assigned.</div>
+              ) : (
+                hardwareUnits.map((asset) => (
+                  <div key={asset.id} className={`p-4 rounded-2xl border space-y-3 ${theme.cardInner}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className={`text-sm font-black ${theme.textMain}`}>{asset.name || 'Unnamed Asset'}</h4>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        {asset.status || 'Approved'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/50 dark:border-purple-900/30 text-[11px]">
+                      <div>
+                        <span className={`block font-bold text-[9px] uppercase ${theme.textSub}`}>Tag ID</span>
+                        <span className="font-mono font-bold text-orange-600 dark:text-orange-400">{asset.asset_tag || asset.tag_id || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className={`block font-bold text-[9px] uppercase ${theme.textSub}`}>Serial S/N</span>
+                        <span className="font-mono font-bold truncate block" title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Service Tickets List */}
+          <div className={`rounded-3xl border shadow-sm overflow-hidden flex flex-col ${theme.card}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/60'}`}>
+              <div className="flex items-center gap-2">
+                <Ticket size={18} className="text-orange-600 dark:text-orange-400" />
+                <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>My Service Tickets</h3>
+              </div>
+              <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400">{tickets.length} Raised</span>
+            </div>
+
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto custom-scrollbar max-h-95">
+              {tickets.length === 0 ? (
+                <div className={`text-center py-12 text-xs font-bold ${theme.textSub}`}>No service tickets submitted.</div>
+              ) : (
+                tickets.map((t) => {
+                  const isResolved = t.status?.toLowerCase().includes('resolv') || t.status?.toLowerCase().includes('clos');
+                  return (
+                    <div key={t.id} className={`p-4 rounded-2xl border space-y-2.5 ${theme.cardInner}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className={`text-sm font-bold truncate ${theme.textMain}`}>{t.title || 'Support Request'}</h4>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border shrink-0 ${
+                          isResolved ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
+                          {t.status || 'Pending'}
+                        </span>
+                      </div>
+                      <p className={`text-xs leading-relaxed line-clamp-2 ${theme.textSub}`}>{t.description || t.message || 'No description provided.'}</p>
+                      <div className="pt-2 border-t border-slate-200/50 dark:border-purple-900/30 flex justify-between items-center text-[10px] font-mono text-zinc-400">
+                        <span>Submitted: {new Date(t.created_at).toLocaleDateString()}</span>
+                        <span className="text-purple-600 dark:text-purple-300 font-bold uppercase">{t.category || 'Hardware'}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+        </div>
+
+      </div>
     </div>
   );
 }
