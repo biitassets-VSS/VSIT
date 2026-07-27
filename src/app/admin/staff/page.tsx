@@ -38,7 +38,7 @@ function AdminStaffDirectoryContent() {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // 🌟 REAL-TIME GLOBAL THEME LISTENER (FIXES WHITE SEARCH BAR & NAVBAR SYNC!)
+  // 🌟 REAL-TIME GLOBAL THEME LISTENER
   useEffect(() => {
     const checkTheme = () => {
       const savedTheme = localStorage.getItem('vsit_theme');
@@ -340,11 +340,11 @@ function AdminStaffDirectoryContent() {
            s.emp_code?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
   });
 
-  // 🌟 PREMIUM BRAND THEME DICTIONARY
+  // 🌟 PREMIUM BRAND THEME DICTIONARY (WITH BALANCED PURPLE & ORANGE HARMONY)
   const theme = {
     bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
-    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
-    cardHover: isDarkMode ? 'hover:border-orange-500/60 hover:bg-[#1c1430]' : 'hover:border-orange-400 hover:shadow-lg hover:-translate-y-1',
+    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200/80',
+    cardHover: isDarkMode ? 'hover:border-orange-500/60 hover:bg-[#1c1430]' : 'hover:border-orange-500 hover:shadow-lg hover:-translate-y-1',
     textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
     textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
     inputBg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 focus:border-orange-500 text-purple-100 placeholder-purple-400/50' : 'bg-slate-50 border-slate-200 focus:border-orange-600 text-slate-900 placeholder-slate-400 font-medium',
@@ -379,7 +379,7 @@ function AdminStaffDirectoryContent() {
             </div>
           </div>
 
-          {/* 🌟 MOBILE-OPTIMIZED BUTTON GRID (BULK UPLOAD & ADD NEW HIRE) */}
+          {/* 🌟 MOBILE-OPTIMIZED 2-COLUMN BUTTON GRID (BULK UPLOAD & ADD NEW HIRE) */}
           <div className="grid grid-cols-2 sm:flex items-center gap-2.5 sm:gap-3 w-full md:w-auto">
             <button 
               onClick={() => setIsBulkModalOpen(true)} 
@@ -414,7 +414,7 @@ function AdminStaffDirectoryContent() {
           </div>
         </div>
 
-        {/* 🌟 STAFF DIRECTORY GRID (DECREASED CARD HEIGHTS FOR ERGONOMIC SAAS VIEW) */}
+        {/* 🌟 STAFF DIRECTORY GRID (DECREASED CARD HEIGHTS & RICH PURPLE/ORANGE HARMONY) */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
             <div className={`animate-spin rounded-full h-10 w-10 border-b-2 ${isDarkMode ? 'border-orange-400' : 'border-orange-600'}`}></div>
@@ -440,14 +440,14 @@ function AdminStaffDirectoryContent() {
                   }`}
                 >
                   {/* Card Top: Compact Avatar & Header */}
-                  <div className={`p-4 sm:p-5 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
+                  <div className={`p-4 sm:p-5 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-purple-100'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-base shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-105 ${
                           isActive 
                             ? (isAdmin 
-                                ? (isDarkMode ? 'bg-purple-500/10 text-purple-300 border border-purple-500/20' : 'bg-purple-100 text-purple-700 border border-purple-200') 
-                                : (isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-600 border border-orange-200')) 
+                                ? (isDarkMode ? 'bg-purple-500/10 text-purple-300 border border-purple-500/20' : 'bg-purple-100 text-purple-800 border border-purple-200') 
+                                : (isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200')) 
                             : (isDarkMode ? 'bg-zinc-900 text-zinc-600 border border-zinc-800' : 'bg-slate-100 text-slate-400 border border-slate-200')
                         }`}>
                           <span className="relative z-10">{user.full_name?.charAt(0) || <UserCheck size={18} />}</span>
@@ -471,7 +471,7 @@ function AdminStaffDirectoryContent() {
                       <button 
                         type="button"
                         onClick={() => handleOpenEdit(user)} 
-                        className={`p-2 rounded-xl transition-all duration-200 cursor-pointer border hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-orange-600 hover:text-white hover:border-orange-600' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-2xs'}`}
+                        className={`p-2 rounded-xl transition-all duration-200 cursor-pointer border hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-orange-600 hover:text-white hover:border-orange-600' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-2xs'}`}
                         title="Edit Employee Dossier"
                       >
                         <Edit2 size={14} />
@@ -479,10 +479,10 @@ function AdminStaffDirectoryContent() {
                     </div>
                   </div>
 
-                  {/* Card Middle: Compact Details (Decreased Padding & Tight Spacing) */}
-                  <div className={`p-4 sm:p-5 space-y-2 sm:space-y-2.5 flex-1 ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/50'}`}>
+                  {/* Card Middle: Compact Details (Decreased Padding & Rich Purple/Orange Harmony) */}
+                  <div className={`p-4 sm:p-5 space-y-2 sm:space-y-2.5 flex-1 ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-purple-50/20'}`}>
                     
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${isDarkMode ? 'bg-[#150f24] border-purple-900/50' : 'bg-white border-purple-100'} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
                         <Hash size={13} className={isDarkMode ? "text-orange-400" : "text-orange-600"} />
                         <span className="font-bold text-[9px] uppercase tracking-widest">EMP CODE</span>
@@ -491,23 +491,23 @@ function AdminStaffDirectoryContent() {
                         <span className={`font-mono font-extrabold text-xs ${theme.textMain}`}>{user.emp_code || 'NO-EMP-CODE'}</span>
                         <span className={`text-[8px] px-2 py-0.5 rounded-md font-bold uppercase tracking-widest shadow-2xs ${
                           isAdmin 
-                            ? (isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-purple-100 text-purple-700 border border-purple-200') 
-                            : (isDarkMode ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200')
+                            ? (isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-purple-100 text-purple-800 border border-purple-200') 
+                            : (isDarkMode ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-orange-100 text-orange-800 border border-orange-200')
                         }`}>
                           {user.role || 'Staff'}
                         </span>
                       </div>
                     </div>
 
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${isDarkMode ? 'bg-[#150f24] border-purple-900/50' : 'bg-white border-purple-100'} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
-                        <Mail size={13} />
+                        <Mail size={13} className="text-purple-600 dark:text-purple-400" />
                         <span className="font-bold text-[9px] uppercase tracking-widest">Email</span>
                       </div>
                       <span className={`font-semibold text-[11px] truncate max-w-37.5 ${theme.textMain}`} title={user.email}>{user.email}</span>
                     </div>
 
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${theme.card} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${isDarkMode ? 'bg-[#150f24] border-purple-900/50' : 'bg-white border-purple-100'} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
                         <KeyRound size={13} className={isDarkMode ? "text-orange-400" : "text-orange-600"}/>
                         <span className="font-bold text-[9px] uppercase tracking-widest">Login Auth</span>
@@ -523,7 +523,7 @@ function AdminStaffDirectoryContent() {
                   </div>
 
                   {/* Card Bottom: Compact Footer */}
-                  <div className={`p-3.5 sm:p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-slate-100/60 border-slate-200'}`}>
+                  <div className={`p-3.5 sm:p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-purple-50/40 border-purple-100'}`}>
                     <div className="flex items-center gap-1.5">
                       <Package size={13} className={theme.textSub} />
                       <div className="flex flex-col">
