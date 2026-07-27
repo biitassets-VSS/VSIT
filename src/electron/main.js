@@ -1,7 +1,10 @@
 // electron/main.js
 const { app, BrowserWindow, ipcMain, desktopCapturer } = require('electron');
 const path = require('path');
-const { mouse, keyboard, Button, Point } = require('@nut-tree/nut-js');
+const { exec } = require('child_process'); // Required to execute Windows OS commands
+
+// 🌟 Using the FREE community fork of nut.js
+const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
 let mainWindow;
 
@@ -21,7 +24,6 @@ function createWindow() {
   mainWindow.loadURL('https://your-virtual-portal.com/staff');
 
   // 🌟 MAGIC TRICK: Auto-Accept Screen Share!
-  // This prevents the browser from asking the staff "Which screen do you want to share?"
   mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
       callback({ video: sources[0], audio: 'loopback' }); // Silently grabs Screen 1
@@ -52,4 +54,30 @@ ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
 // 2. Physically type on the keyboard
 ipcMain.on('remote-type', async (event, { text }) => {
   await keyboard.type(text);
+});
+
+// 3. Execute Native Windows OS Commands (Lock, Cache, Explorer)
+ipcMain.on('system-command', async (event, { command }) => {
+  try {
+    if (command === 'refresh_app') {
+      if (mainWindow) mainWindow.webContents.reloadIgnoringCache();
+    } 
+    else if (command === 'clear_cache') {
+      if (mainWindow) {
+        await mainWindow.webContents.session.clearCache();
+        await mainWindow.webContents.session.clearStorageData();
+        mainWindow.webContents.reload();
+      }
+    } 
+    else if (command === 'lock_windows') {
+      // Natively locks the Windows Workstation
+      exec('rundll32.exe user32.dll,LockWorkStation');
+    } 
+    else if (command === 'open_explorer') {
+      // Natively opens the Windows File Explorer
+      exec('explorer.exe');
+    }
+  } catch (err) {
+    console.error("Failed to execute OS command:", err);
+  }
 });

@@ -421,6 +421,14 @@ export default function StaffDashboardPage() {
            (window as any).electronAPI.sendRemoteType(text);
          }
       })
+
+      // 🌟 REMOTE CONTROL: SYSTEM COMMANDS (Lock PC, Clear Cache, Refresh)
+      .on('broadcast', { event: 'admin_system_command' }, (payload) => {
+         const { command } = payload.payload;
+         if (typeof window !== 'undefined' && (window as any).electronAPI) {
+           (window as any).electronAPI.sendSystemCommand(command);
+         }
+      })
       
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -640,7 +648,7 @@ export default function StaffDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
-      <div className="fixed top-24 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed top-24 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map(t => (
           <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0"><Bell size={18} className="animate-pulse" /></div>
@@ -656,7 +664,7 @@ export default function StaffDashboardPage() {
           {/* 🎯 Admin Laser Pointer Overlay */}
           {adminPing && (
             <div 
-              className="fixed z-99999 pointer-events-none flex items-center justify-center"
+              className="fixed z-[99999] pointer-events-none flex items-center justify-center"
               style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}
             >
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
@@ -665,7 +673,7 @@ export default function StaffDashboardPage() {
           )}
 
           {/* 💬 Bottom Right Session Controls (Chat + Stop) */}
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {showChat && (
               <div className="w-80 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 overflow-hidden flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4">
@@ -729,7 +737,7 @@ export default function StaffDashboardPage() {
 
       {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce">
               <Monitor size={32} />
@@ -1133,7 +1141,7 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-9999 flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
