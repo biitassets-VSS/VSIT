@@ -32,6 +32,25 @@ interface AdminProfile {
   emp_code: string;
 }
 
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT)
+const getChannelTopic = (staff: any) => {
+  const code = (staff?.emp_code || staff?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const email = (staff?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const id = (staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `vsit_rtc_${code || email || id || 'default'}`;
+};
+
+// 🌟 ENTERPRISE ICE SERVERS WITH STUN + TURN TCP/UDP RELAYS
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+];
+
 export default function AdminRemotePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -154,31 +173,31 @@ export default function AdminRemotePage() {
     setIsControlling(false);
   };
 
-  // 📡 INITIATE WEBRTC SIGNALING (WITH DETERMINISTIC CHANNEL ID)
+  // 📡 INITIATE WEBRTC SIGNALING WITH TURN RELAYS & GUARANTEED TOPIC
   const requestLiveScreenShare = async () => {
-    if (!activeSession || !activeSession.id) return;
+    if (!activeSession) return;
     setIsSendingPing(true);
     setSessionStatus('requesting');
 
     try {
-      // 🌟 DETERMINISTIC GUARANTEED CHANNEL NAME (NO RANDOM TIMESTAMPS)
-      const targetChannelId = `flex_webrtc_stream_${activeSession.id}`;
+      const targetChannelId = getChannelTopic(activeSession);
       if (channelRef.current) supabase.removeChannel(channelRef.current);
 
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
-      });
+      toast(`📡 Establishing connection on topic: [${targetChannelId}]`, { icon: '🔍', duration: 4000 });
+
+      const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
       peer.ontrack = (event) => {
         if (videoRef.current && event.streams[0]) {
           videoRef.current.srcObject = event.streams[0];
+          videoRef.current.play().catch(() => {});
           setSessionStatus('connected');
-          toast.success("🟢 Live Video Stream Established!");
+          toast.success("🟢 Live Video Stream Established & Playing!");
         }
       };
 
-      const sessionChannel = supabase.channel(targetChannelId);
+      const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
@@ -188,13 +207,14 @@ export default function AdminRemotePage() {
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
-        toast("⚡ Received SDP Offer from Staff... Creating Answer", { icon: '🔄', duration: 3000 });
+        toast("⚡ Received SDP Offer from Staff... Generating Answer", { icon: '🔄', duration: 4000 });
         await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
-        sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
+        await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
+        toast("📤 Transmitted SDP Answer to Staff!", { icon: '📡', duration: 3000 });
       }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload.candidate) {
+        if (peer.remoteDescription && payload.payload?.candidate) {
           await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
         }
       }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
@@ -202,7 +222,6 @@ export default function AdminRemotePage() {
         toast.error("Employee stopped sharing their screen.");
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          // Send signaling request to staff over deterministic channel
           await sessionChannel.send({
             type: 'broadcast',
             event: 'request_screen_share',
@@ -213,7 +232,6 @@ export default function AdminRemotePage() {
             }
           });
 
-          // Insert database notification as reliable fallback
           await supabase.from('notifications').insert([{
             target_user: activeSession.id,
             title: '📡 Live Screen Share Request',
@@ -222,7 +240,7 @@ export default function AdminRemotePage() {
             type: 'warning'
           }]);
 
-          toast.success(`📡 WebRTC signaling pulse sent to ${activeSession.full_name || 'Staff'}'s screen!`);
+          toast.success(`📡 Signaling prompt dispatched to ${activeSession.full_name || 'Staff'}!`);
         }
       });
 
@@ -312,7 +330,7 @@ export default function AdminRemotePage() {
     <div className={`h-screen max-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased flex flex-col overflow-hidden`}>
       <Toaster position="top-right" />
       
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
+      <div className="w-full max-w-350 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
         
         {/* COMPACT STANDARDIZED HEADER */}
         <div className={`${theme.card} rounded-2xl p-3 sm:p-4 border shadow-sm flex items-center justify-between gap-4 shrink-0 transition-all duration-300`}>
