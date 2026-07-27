@@ -103,7 +103,6 @@ export default function AdminRemotePage() {
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-    // Track fullscreen changes native to browser
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
@@ -119,7 +118,28 @@ export default function AdminRemotePage() {
     };
   }, []);
 
-  // Auto-scroll chat
+  // 🌟 KEYBOARD PASSTHROUGH ENGINE
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isControlling || !channelRef.current) return;
+      
+      // Do not capture keyboard input if the Admin is typing in the chat or search box
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      e.preventDefault(); // Prevent scrolling when pressing space/arrows
+
+      // Transmit the exact keystroke to the Electron Desktop App
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'admin_keyboard_input',
+        payload: { text: e.key }
+      });
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isControlling]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
@@ -200,7 +220,6 @@ export default function AdminRemotePage() {
     setChatMessages([]);
   };
 
-  // 📡 INITIATE WEBRTC SIGNALING WITH TURN RELAYS & GUARANTEED TOPIC
   const requestLiveScreenShare = async () => {
     if (!activeSession) return;
     setIsSendingPing(true);
@@ -249,7 +268,6 @@ export default function AdminRemotePage() {
         terminateSession();
         toast.error("Employee stopped sharing their screen.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
-        // Handle incoming chat messages from staff
         setChatMessages(prev => [...prev, {
           sender: payload.payload.sender || 'Staff',
           text: payload.payload.text,
@@ -295,7 +313,7 @@ export default function AdminRemotePage() {
     const nextState = !isControlling;
     setIsControlling(nextState);
     setSessionStatus(nextState ? 'controlling' : 'connected');
-    toast.success(nextState ? "🎮 Remote Mouse & Click Injection ENABLED!" : "👁️ Switched to View-Only Mode.");
+    toast.success(nextState ? "🎮 Remote Mouse & Keyboard Injection ENABLED!" : "👁️ Switched to View-Only Mode.");
   };
 
   const toggleFullScreen = () => {
@@ -332,7 +350,6 @@ export default function AdminRemotePage() {
     const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
     const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
     
-    // Simulate sending pointer coordinates to Staff side
     if (channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
@@ -340,12 +357,22 @@ export default function AdminRemotePage() {
         payload: { x, y }
       });
     }
+  };
 
-    toast(`🖱️ Click pulse sent to target at X:${x}% Y:${y}%`, {
-      icon: '⚡',
-      style: { background: isDarkMode ? '#18181b' : '#333', color: '#fff', fontSize: '11px' },
-      duration: 1200
+  // 🌟 NEW: REMOTE SYSTEM COMMAND DISPATCHER
+  const dispatchSystemCommand = (commandType: string) => {
+    if (!channelRef.current) {
+      return toast.error("No active connection to execute commands.");
+    }
+    
+    // Depending on the command, you will write the matching implementation in electron/main.js
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'admin_system_command',
+      payload: { command: commandType }
     });
+    
+    toast.success(`OS Command dispatched: [${commandType.toUpperCase()}]`);
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
@@ -354,7 +381,6 @@ export default function AdminRemotePage() {
     
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Add to local state
     setChatMessages(prev => [...prev, {
       sender: 'Me (Admin)',
       text: chatInput,
@@ -362,7 +388,6 @@ export default function AdminRemotePage() {
       isSelf: true
     }]);
 
-    // Broadcast to staff
     channelRef.current.send({
       type: 'broadcast',
       event: 'chat_message',
@@ -414,9 +439,8 @@ export default function AdminRemotePage() {
     <div className={`h-screen max-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased flex flex-col overflow-hidden`}>
       <Toaster position="top-right" />
       
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
+      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
         
-        {/* COMPACT STANDARDIZED HEADER */}
         <div className={`${theme.card} rounded-2xl p-3 sm:p-4 border shadow-sm flex items-center justify-between gap-4 shrink-0 transition-all duration-300`}>
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => router.push('/admin')} className={`p-2 sm:p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`} title="Back to Dashboard">
@@ -444,10 +468,8 @@ export default function AdminRemotePage() {
           </button>
         </div>
 
-        {/* MAIN WORKSPACE: DIRECTORY + LIVE STREAM CONSOLE */}
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
           
-          {/* LEFT: COMPACT STAFF DIRECTORY */}
           {isSidebarOpen && (
             <div className={`w-full lg:w-80 rounded-2xl border shadow-sm flex flex-col shrink-0 overflow-hidden transition-all duration-300 max-h-75 lg:max-h-full ${theme.card}`}>
               <div className={`p-3 border-b space-y-2.5 shrink-0 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/60'}`}>
@@ -522,12 +544,10 @@ export default function AdminRemotePage() {
             </div>
           )}
 
-          {/* RIGHT: IN-BROWSER WEBRTC CONSOLE & WATERMARK VIEWPORT */}
           <div className={`flex-1 rounded-2xl border shadow-sm overflow-hidden flex flex-col min-w-0 min-h-0 transition-all ${theme.card}`}>
             {activeSession ? (
               <div className="flex-1 flex flex-col h-full min-w-0 min-h-0">
                 
-                {/* Top Target & Connection Status Bar */}
                 <div className={`p-3.5 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 ${isDarkMode ? 'bg-[#0f0a1c]/80 border-purple-900/40' : 'bg-purple-50/40 border-purple-100'}`}>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-black text-base shrink-0 shadow-sm">
@@ -552,7 +572,6 @@ export default function AdminRemotePage() {
                     </div>
                   </div>
 
-                  {/* Session Action Buttons */}
                   <div className="flex items-center gap-2 shrink-0">
                     {sessionStatus === 'idle' || sessionStatus === 'requesting' ? (
                       <button
@@ -592,7 +611,6 @@ export default function AdminRemotePage() {
                   </div>
                 </div>
 
-                {/* Navigation Sub-Tabs */}
                 <div className={`px-5 pt-1 flex items-center gap-4 border-b shrink-0 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/40' : 'bg-slate-50/40'}`}>
                   {[
                     { id: 'live_stream', label: '🖥️ Live WebRTC Viewport', icon: <Video size={13} /> },
@@ -611,15 +629,12 @@ export default function AdminRemotePage() {
                   ))}
                 </div>
 
-                {/* 🌟 TAB CONTENT AREA */}
                 <div className="flex-1 p-4 sm:p-5 overflow-hidden flex flex-col min-h-0">
                   
-                  {/* Sub-Tab 1: LIVE WEBRTC VIEWPORT & CHAT */}
                   {viewerTab === 'live_stream' && (
                     <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0 overflow-hidden">
                       
                       <div className="flex-1 flex flex-col gap-3 min-h-0">
-                        {/* 🌟 THE IN-BROWSER LIVE VIEWPORT (WITH FULLSCREEN REF) */}
                         <div 
                           ref={viewportContainerRef}
                           onClick={handleViewportClick}
@@ -631,7 +646,6 @@ export default function AdminRemotePage() {
                               : isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c]' : 'border-slate-300 bg-slate-900'
                           }`}
                         >
-                          {/* 🛡️ PERSISTENT MANDATORY SECURITY WATERMARK BANNER */}
                           <div className={`absolute top-3 inset-x-3 z-30 pointer-events-none flex items-center justify-center ${isFullscreen ? 'opacity-50' : ''}`}>
                             <div className="w-full max-w-2xl py-2 px-4 rounded-xl bg-black/85 border border-orange-500/80 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left">
                               <div className="flex items-center gap-2">
@@ -646,7 +660,6 @@ export default function AdminRemotePage() {
                             </div>
                           </div>
 
-                          {/* 🎬 FULLSCREEN AND AUDIO CONTROLS (Floating top right) */}
                           {sessionStatus === 'connected' || sessionStatus === 'controlling' ? (
                             <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
                               <button
@@ -666,7 +679,6 @@ export default function AdminRemotePage() {
                             </div>
                           ) : null}
 
-                          {/* 🟢 THE HTML5 LIVE WEBRTC VIDEO STREAM PLAYER */}
                           <video
                             ref={videoRef}
                             autoPlay
@@ -675,7 +687,6 @@ export default function AdminRemotePage() {
                             className={`w-full h-full object-contain z-10 ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`}
                           />
 
-                          {/* Fallback Display if stream hasn't started yet */}
                           {sessionStatus === 'requesting' ? (
                             <div className="flex flex-col items-center justify-center text-center p-6 text-white z-10">
                               <Loader2 size={40} className="text-orange-500 animate-spin mb-3" />
@@ -695,7 +706,6 @@ export default function AdminRemotePage() {
                           )}
                         </div>
 
-                        {/* Control Toolbar below viewport */}
                         <div className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 shrink-0 ${theme.cardInner}`}>
                           <div className="flex items-center gap-2.5">
                             <button
@@ -711,17 +721,19 @@ export default function AdminRemotePage() {
                             
                             <button
                               type="button"
-                              onClick={() => toast.success("📸 Diagnostic screenshot saved to audit ledger.")}
-                              className="p-1.5 rounded-lg border bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 hover:border-purple-500 cursor-pointer transition-all"
-                              title="Take Diagnostic Snapshot"
+                              onClick={() => {
+                                if(isControlling) toast.success("⌨️ Keyboard active! Simply type on your keyboard to send input.");
+                                else toast.error("Please click 'Enable Mouse Input' to activate keyboard passthrough.");
+                              }}
+                              className="px-3.5 py-1.5 rounded-lg border bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 hover:border-orange-500 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all"
                             >
-                              <Camera size={15} />
+                              <Keyboard size={13} />
+                              <span>Enable Keyboard</span>
                             </button>
                           </div>
                         </div>
                       </div>
 
-                      {/* 💬 LIVE CHAT SIDEBAR (Only visible when connected/requesting) */}
                       {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                         <div className={`w-full xl:w-80 rounded-2xl border flex flex-col overflow-hidden shrink-0 transition-all ${theme.cardInner}`}>
                           <div className={`p-3 border-b flex items-center gap-2 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]' : 'bg-slate-50'}`}>
@@ -729,7 +741,7 @@ export default function AdminRemotePage() {
                             <h3 className={`text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>Live Session Chat</h3>
                           </div>
                           
-                          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-white dark:bg-[#0b0712] min-h-62.5">
+                          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-white dark:bg-[#0b0712] min-h-[250px]">
                             {chatMessages.length === 0 ? (
                               <div className="m-auto text-center text-xs font-medium text-slate-400 dark:text-zinc-600">
                                 Send a message to communicate with {activeSession.full_name?.split(' ')[0]}.
@@ -771,24 +783,24 @@ export default function AdminRemotePage() {
                     </div>
                   )}
 
-                  {/* Sub-Tab 2: Remote Diagnostics & Quick Tools */}
+                  {/* 🌟 NEW: DIAGNOSTICS & SYSTEM COMMAND DISPATCHER */}
                   {viewerTab === 'diagnostics' && (
-                    <div className="max-w-4xl mx-auto space-y-5 animate-in fade-in duration-300 overflow-y-auto">
+                    <div className="max-w-4xl mx-auto space-y-5 animate-in fade-in duration-300 overflow-y-auto w-full">
                       <div className={`p-5 rounded-2xl border space-y-3.5 ${theme.cardInner}`}>
                         <h3 className={`text-sm sm:text-base font-black flex items-center gap-2 ${theme.textMain}`}>
                           <Sliders className="text-orange-600 dark:text-orange-400" size={18} /> 
-                          <span>Remote IT Diagnostics & System Commands</span>
+                          <span>Remote IT Diagnostics & OS Commands</span>
                         </h3>
                         <p className={`text-xs font-medium ${theme.textSub}`}>
-                          Execute remote commands directly on <strong className={theme.textMain}>{activeSession.full_name}</strong>'s browser workspace without disrupting their active OS applications.
+                          Execute remote commands directly on <strong className={theme.textMain}>{activeSession.full_name}</strong>'s Windows OS using the Electron backend privileges.
                         </p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                           {[
-                            { title: '🔄 Force Workspace Refresh', desc: 'Command the staff browser to perform a hard reload and re-fetch session tokens.', action: () => toast.success("Command dispatched: Hard reload initiated.") },
-                            { title: '📋 Request Clipboard Sync', desc: 'Pull text contents from the employee clipboard for troubleshooting.', action: () => toast.success("Command dispatched: Clipboard synchronized.") },
-                            { title: '🧹 Clear Browser Cache', desc: 'Purge local cache and temporary storage on the remote client browser.', action: () => toast.success("Command dispatched: Cache purged successfully.") },
-                            { title: '🔒 Lock Active Session', desc: 'Instantly lock the employee portal screen requiring immediate re-authentication.', action: () => toast.success("Command dispatched: Remote workspace locked.") },
+                            { title: '🔄 Force App Refresh', desc: 'Command the staff application to perform a hard reload and re-fetch session tokens.', action: () => dispatchSystemCommand('refresh_app') },
+                            { title: '🧹 Clear Application Cache', desc: 'Purge local cache and temporary storage on the remote staff client.', action: () => dispatchSystemCommand('clear_cache') },
+                            { title: '🔒 Lock Windows Workstation', desc: 'Instantly lock the employee Windows screen requiring their password to re-enter.', action: () => dispatchSystemCommand('lock_windows') },
+                            { title: '📁 Open File Explorer', desc: 'Launch the Windows File Explorer on the remote machine for visual access.', action: () => dispatchSystemCommand('open_explorer') },
                           ].map((tool, idx) => (
                             <button
                               key={idx}
@@ -808,7 +820,6 @@ export default function AdminRemotePage() {
                     </div>
                   )}
 
-                  {/* Sub-Tab 3: Security Logs */}
                   {viewerTab === 'security_logs' && (
                     <div className="space-y-4 animate-in fade-in duration-300">
                       <div className={`p-4 rounded-xl border flex items-center justify-between ${theme.cardInner}`}>
