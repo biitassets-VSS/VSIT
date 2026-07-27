@@ -85,7 +85,6 @@ export default function StaffDashboardPage() {
 
       const cleanEmail = (activeUser.email || '').toLowerCase().trim();
 
-      // Fetch Profile, Assigned Hardware, Tickets, and Notifications
       const [{ data: userProfile }, { data: assets }, { data: userTickets }, { data: userAlerts }] = await Promise.all([
         supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle(),
         supabase.from('assets').select('*'),
@@ -108,25 +107,21 @@ export default function StaffDashboardPage() {
 
       setProfile(currentProf);
 
-      // Filter assigned assets
       const myAssets = (assets || []).filter(a => a.assigned_to === currentProf.id || a.assigned_to === currentProf.email);
       setHardwareUnits(myAssets);
 
-      // Filter tickets
       const myTickets = (userTickets || []).filter(t => t.user_email === cleanEmail || t.user_id === currentProf.id);
       setTickets(myTickets);
 
-      // Filter & process alerts
       const myAlerts = (userAlerts || []).filter(n => n.target_user === currentProf.id || n.target_role === 'staff' || !n.target_user);
       setAlerts(myAlerts);
 
-      // Check if any existing unread alert is a screen share request
       const pendingShareAlert = myAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
       if (pendingShareAlert && !isStreaming) {
         setIncomingRequest({
           adminName: 'IT Support Commander',
           adminCode: 'EMP-ADMIN',
-          channelId: `session_${currentProf.id}_${Date.now()}`,
+          channelId: `flex_webrtc_stream_${currentProf.id}`,
           alertId: pendingShareAlert.id
         });
       }
@@ -140,24 +135,34 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 📡 SETUP LIVE SIGNALING & DATABASE NOTIFICATION LISTENER FOR INSTANT POPUP
+  // 📡 SETUP LIVE SIGNALING & DATABASE NOTIFICATION LISTENER (WITH MEMORY SCRUBBING)
   const setupSignalingListener = (userId: string) => {
     if (!userId) return;
 
+    const sigTopic = `webrtc_signaling_${userId}`;
+    const notifTopic = `staff_notif_popup_${userId}`;
+
+    // 🌟 ROOT CAUSE FIX: Scrub active memory channels before subscribing to avoid collision!
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic === `realtime:${sigTopic}` || ch.topic === `realtime:${notifTopic}` || ch.topic === sigTopic || ch.topic === notifTopic) {
+        supabase.removeChannel(ch);
+      }
+    });
+
     // 1. Listen for WebRTC Signaling Pulses from Admin Commander
-    const signalingChannel = supabase.channel(`webrtc_signaling_${userId}`)
+    const signalingChannel = supabase.channel(sigTopic)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({
-          adminName: payload.payload.adminName || 'IT Administrator',
-          adminCode: payload.payload.adminCode || 'EMP-ADMIN',
-          channelId: payload.payload.channelId || `session_${userId}_${Date.now()}`
+          adminName: payload.payload?.adminName || 'IT Administrator',
+          adminCode: payload.payload?.adminCode || 'EMP-ADMIN',
+          channelId: payload.payload?.channelId || `flex_webrtc_stream_${userId}`
         });
         toast("⚠️ IT Admin requested live screen sharing!", { icon: '📡', duration: 8000 });
       })
       .subscribe();
 
     // 2. Listen for Real-time Database Notification Inserts
-    const dbNotifChannel = supabase.channel(`staff_notif_popup_${userId}`)
+    const dbNotifChannel = supabase.channel(notifTopic)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
         const newNotif = payload.new;
         setAlerts(prev => [newNotif, ...prev]);
@@ -165,7 +170,7 @@ export default function StaffDashboardPage() {
           setIncomingRequest({
             adminName: 'IT Support Commander',
             adminCode: 'EMP-ADMIN',
-            channelId: `session_${userId}_${Date.now()}`,
+            channelId: `flex_webrtc_stream_${userId}`,
             alertId: newNotif.id
           });
         }
@@ -178,13 +183,20 @@ export default function StaffDashboardPage() {
     };
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE
+  // 🚀 START WEBRTC SCREEN SHARE (WITH MEMORY SCRUBBING)
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
-    const targetChannelId = manualChannelId || incomingRequest?.channelId || `session_${profile?.id || 'staff'}_${Date.now()}`;
+    const targetChannelId = manualChannelId || incomingRequest?.channelId || `flex_webrtc_stream_${profile?.id || 'staff'}`;
     setIsConnecting(true);
 
     try {
-      // 🌟 TS(2353) FIX: Safely cast mediaDevices to allow modern cursor constraints
+      // 🌟 ROOT CAUSE FIX: Scrub any existing streaming channels in memory before connecting
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId) {
+          supabase.removeChannel(ch);
+        }
+      });
+
+      // Safely cast mediaDevices to allow modern cursor constraints
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
         audio: false
@@ -214,6 +226,7 @@ export default function StaffDashboardPage() {
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
+        toast("⚡ Handshake Complete... Establishing Video Stream", { icon: '🔄', duration: 3000 });
         if (peer.signalingState === 'have-local-offer') {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           setIsConnecting(false);
@@ -231,11 +244,16 @@ export default function StaffDashboardPage() {
         toast("🛑 IT Admin ended the remote support session.", { icon: 'ℹ️' });
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          toast("📡 Subscribed to stream channel... Sending SDP Offer", { icon: '📡', duration: 3000 });
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
           sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
         }
       });
+
+      if (!incomingRequest && profile?.id) {
+        toast.success("📡 Transmitting screen stream to IT Admin Commander...");
+      }
 
     } catch (err: any) {
       toast.error(`Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
@@ -402,7 +420,6 @@ export default function StaffDashboardPage() {
           ) : (
             <div className="space-y-2.5">
               {alerts.map((alert) => {
-                // Check if this alert is requesting remote screen share
                 const isRemoteShareAlert = alert.title?.includes('Screen Share') || alert.title?.includes('Remote Support') || alert.message?.includes('screen access');
 
                 return (
@@ -429,12 +446,12 @@ export default function StaffDashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-                      {/* 🟢 THE RESTORED INTERACTIVE ACCEPT & SHARE BUTTON */}
+                      {/* 🟢 THE INTERACTIVE ACCEPT & SHARE BUTTON */}
                       {isRemoteShareAlert && !isStreaming && (
                         <button
                           type="button"
                           disabled={isConnecting}
-                          onClick={() => startScreenShare(`session_${profile?.id}_${Date.now()}`, alert.id)}
+                          onClick={() => startScreenShare(`flex_webrtc_stream_${profile?.id}`, alert.id)}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer animate-pulse active:scale-95 disabled:opacity-50"
                         >
                           {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
@@ -461,7 +478,7 @@ export default function StaffDashboardPage() {
           )}
         </div>
 
-        {/* 🌟 QUICK ACTION GRID */}
+        {/* QUICK ACTION GRID */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-2">
           {[
             { title: 'Raise Ticket', desc: 'IT failure & support', icon: <Ticket size={20} />, path: '/staff/dashboard/tickets/new', color: 'purple' },
@@ -490,7 +507,7 @@ export default function StaffDashboardPage() {
           ))}
         </div>
 
-        {/* 🌟 STAT COUNTERS */}
+        {/* STAT COUNTERS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
           <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
             <div>
@@ -525,7 +542,7 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 HARDWARE & TICKETS SPLIT VIEW */}
+        {/* HARDWARE & TICKETS SPLIT VIEW */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
           
           {/* Hardware Units List */}
