@@ -8,7 +8,7 @@ import {
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
-  ThumbsUp, ThumbsDown, Star
+  ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert
 } from 'lucide-react';
 
 // 🌟 SMART AUDIT WINDOW ENGINE
@@ -70,6 +70,24 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT WITH ADMIN)
+const getChannelTopic = (user: any) => {
+  const code = (user?.emp_code || user?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const email = (user?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const id = (user?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `vsit_rtc_${code || email || id || 'default'}`;
+};
+
+// 🌟 ENTERPRISE ICE SERVERS WITH STUN + TURN TCP/UDP RELAYS
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+];
+
 export default function StaffDashboardPage() {
   const router = useRouter(); 
   
@@ -91,12 +109,23 @@ export default function StaffDashboardPage() {
     type: '',
   });
 
+  // 🌟 INTERACTIVE WEBRTC POPUP & STREAMING STATE
+  const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string; alertId?: string } | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  
+  // WebRTC Peer & Media Stream References
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<any>(null);
+  const activeSignalingUserIdRef = useRef<string | null>(null);
+
   const auditWindow = getAuditWindowInfo();
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
-    let s = raw.split('@')[0].split('.')[0];             
-    s = s.replace(/[_-]/g, ' ');     
+    let s = raw.split('@')[0].split('.')[0];            
+    s = s.replace(/[_-]/g, ' ');    
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
@@ -168,6 +197,7 @@ export default function StaffDashboardPage() {
       if (inspRes.data) setAllInspections(inspRes.data);
 
       if (notifRes.data) {
+        // 🌟 CLIENT SHIELD: Check local storage to guarantee dismissed alerts never return!
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
         let activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
@@ -178,8 +208,32 @@ export default function StaffDashboardPage() {
           return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
         });
 
-        activeNotifications = activeNotifications.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
-        setNotifications(activeNotifications);
+        // 🌟 SMART DEDUPLICATION: Collapse duplicate test alerts by title & message into 1 card
+        const uniqueAlerts: any[] = [];
+        const seenKeys = new Set<string>();
+        activeNotifications.forEach(n => {
+          const key = `${n.title}_${n.message}`.toLowerCase();
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            uniqueAlerts.push(n);
+          } else {
+            // Silently scrub duplicate row in DB
+            supabase.from('notifications').delete().eq('id', n.id).then(() => {});
+          }
+        });
+
+        setNotifications(uniqueAlerts);
+
+        // Check if there is an unread screen share request to trigger popup
+        const pendingShareAlert = uniqueAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
+        if (pendingShareAlert && !isStreaming) {
+          setIncomingRequest({
+            adminName: 'IT Support Commander',
+            adminCode: 'EMP-ADMIN',
+            channelId: getChannelTopic(user),
+            alertId: pendingShareAlert.id
+          });
+        }
 
         const compiledAssets = (assetsRes.data || []).map(asset => {
           const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
@@ -201,7 +255,155 @@ export default function StaffDashboardPage() {
 
         setStats({ totalAssets: compiledAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
       }
+
+      setupSignalingListener(user.id, user);
+
     } catch (err) { console.error("Data sync failure:", err); } finally { clearTimeout(safetyTimeoutId); setLoading(false); }
+  };
+
+  // 📡 SETUP LIVE SIGNALING & INSTANT POPUP LISTENER
+  const setupSignalingListener = (userId: string, userObj: any) => {
+    if (!userId) return;
+    if (activeSignalingUserIdRef.current === userId) return;
+    activeSignalingUserIdRef.current = userId;
+
+    const sigTopic = `webrtc_signaling_${userId}`;
+    const notifTopic = `staff_notif_popup_${userId}_${Date.now()}`;
+    const targetChannelId = getChannelTopic(userObj);
+
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic.includes(sigTopic) || ch.topic.includes(`staff_notif_popup_${userId}`)) {
+        supabase.removeChannel(ch);
+      }
+    });
+
+    const signalingChannel = supabase.channel(sigTopic)
+      .on('broadcast', { event: 'request_screen_share' }, (payload) => {
+        setIncomingRequest({
+          adminName: payload.payload?.adminName || 'IT Administrator',
+          adminCode: payload.payload?.adminCode || 'EMP-ADMIN',
+          channelId: targetChannelId
+        });
+        showToast("⚠️ Remote Access Requested", "IT Admin requested live screen sharing!");
+      })
+      .subscribe();
+
+    const dbNotifChannel = supabase.channel(notifTopic)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
+        const newNotif = payload.new;
+        const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+        if (!newNotif.is_read && !dismissed.includes(newNotif.id)) {
+          setNotifications(prev => {
+            if (prev.some(a => a.id === newNotif.id || (a.title === newNotif.title && a.message === newNotif.message))) return prev;
+            return [newNotif, ...prev];
+          });
+        }
+        if (!newNotif.is_read && !dismissed.includes(newNotif.id) && newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
+          setIncomingRequest({
+            adminName: 'IT Support Commander',
+            adminCode: 'EMP-ADMIN',
+            channelId: targetChannelId,
+            alertId: newNotif.id
+          });
+        }
+      })
+      .subscribe();
+  };
+
+  // 🚀 START WEBRTC SCREEN SHARE
+  const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
+    const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
+    setIsConnecting(true);
+
+    try {
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId) {
+          supabase.removeChannel(ch);
+        }
+      });
+
+      showToast("🚀 Launching Screen Picker", "Please select 'Entire Screen' when prompted.");
+
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
+        audio: false
+      });
+
+      streamRef.current = stream;
+
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenSharing();
+        showToast("Screen Share Stopped", "You have ended live screen sharing.");
+      };
+
+      const peer = new RTCPeerConnection({ iceServers });
+      peerRef.current = peer;
+
+      stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
+
+      const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
+      channelRef.current = sessionChannel;
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
+        }
+      };
+
+      sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
+        showToast("⚡ Handshake Complete", "Establishing secure WebRTC video stream.");
+        if (peer.signalingState === 'have-local-offer') {
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
+          setIsConnecting(false);
+          setIsStreaming(true);
+          setIncomingRequest(null);
+          showToast("🟢 Connected", "Live WebRTC Screen Share Established!");
+          if (alertIdToDismiss) markNotificationAsRead(alertIdToDismiss);
+        }
+      }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
+        if (peer.remoteDescription && payload.payload?.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        }
+      }).on('broadcast', { event: 'terminate_session' }, () => {
+        stopScreenSharing();
+        showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
+      }).subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          showToast("📡 Subscribed to stream channel", "Sending SDP Offer to Admin...");
+          const offer = await peer.createOffer();
+          await peer.setLocalDescription(offer);
+          await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+          showToast("📤 Offer Sent", "Transmitted SDP Offer to Admin Commander!");
+        }
+      });
+
+      if (!incomingRequest) {
+        showToast("📡 Transmitting", "Connecting screen stream to IT Admin...");
+      }
+
+    } catch (err: any) {
+      showToast("Cancelled", `Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
+      setIsConnecting(false);
+    }
+  };
+
+  const stopScreenSharing = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+      streamRef.current = null;
+    }
+    if (peerRef.current) {
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    if (channelRef.current) {
+      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setIsStreaming(false);
+    setIsConnecting(false);
+    setIncomingRequest(null);
   };
 
   useEffect(() => {
@@ -236,20 +438,37 @@ export default function StaffDashboardPage() {
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(realtimeChannel); };
+    return () => { 
+      supabase.removeChannel(realtimeChannel); 
+      activeSignalingUserIdRef.current = null;
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic.includes('webrtc_signaling_') || ch.topic.includes('staff_notif_popup_') || ch.topic.includes('vsit_rtc_')) {
+          supabase.removeChannel(ch);
+        }
+      });
+      stopScreenSharing();
+    };
   }, [currentUser.id, currentUser.email, currentUser.emp_id]);
 
+  // 🌟 PERMANENT DISMISSAL: Saves ID to localStorage so old alerts NEVER return on refresh!
   const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
-    const target = String(targetUser || '').trim().toLowerCase();
-    const isGlobalBroadcast = target === '' || target === 'null' || ['all', 'broadcast', 'everyone', 'staff'].includes(target);
-    
-    if (isGlobalBroadcast) {
+    if (incomingRequest?.alertId === notifId) setIncomingRequest(null);
+
+    try {
       const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-      if (!dismissed.includes(notifId)) { dismissed.push(notifId); localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); }
-    } else {
+      if (!dismissed.includes(notifId)) { 
+        dismissed.push(notifId); 
+        localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); 
+      }
+    } catch (e) {}
+
+    try {
       await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
-    }
+      await supabase.from('notifications').delete().eq('id', notifId);
+    } catch (e) {}
+    
+    showToast("Alert Dismissed", "Notification permanently cleared.");
   };
 
   const toggleReaction = (notifId: string, type: 'like' | 'dislike') => {
@@ -329,6 +548,12 @@ export default function StaffDashboardPage() {
 
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
+  // Check if any alert is for screen sharing to show badge on thumbnail
+  const hasScreenShareAlert = notifications.some(n => {
+    const s = (n.title || '').toLowerCase() + ' ' + (n.message || '').toLowerCase();
+    return s.includes('screen') || s.includes('remote') || s.includes('share');
+  });
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative">
       <div className="fixed top-24 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
@@ -341,6 +566,66 @@ export default function StaffDashboardPage() {
         ))}
       </div>
 
+      {/* 🔴 ACTIVE STREAMING FLOATING BADGE WITH INSTANT KILL-SWITCH */}
+      {isStreaming && (
+        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
+          <div className="flex items-center gap-3">
+            <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+            <div>
+              <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
+              <p className="text-[11px] text-zinc-300">IT Support is actively monitoring your workspace.</p>
+            </div>
+          </div>
+          <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
+            <StopCircle size={15} /> <span>Stop Sharing</span>
+          </button>
+        </div>
+      )}
+
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
+      {incomingRequest && !isStreaming && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce">
+              <Monitor size={32} />
+            </div>
+            
+            <div className="text-center space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900">Live IT Support Access Requested</h3>
+              <p className="text-xs sm:text-sm font-medium text-slate-500">
+                <strong className="text-slate-900 font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen for live troubleshooting.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-orange-800 flex items-center gap-3">
+              <ShieldAlert size={22} className="shrink-0 text-orange-600" />
+              <span>When prompted by your browser, select <strong className="underline">"Entire Screen"</strong> or your active window to establish the connection.</span>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => {
+                  if (incomingRequest.alertId) markNotificationAsRead(incomingRequest.alertId);
+                  else setIncomingRequest(null);
+                }} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                Decline
+              </button>
+              <button 
+                onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95"
+              >
+                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
@@ -351,7 +636,6 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {/* 🛑 DELETED THE "Reset Dismissed Alerts" BUTTON ENTIRELY AS REQUESTED */}
             <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer"><RefreshCw size={14}/> Sync Feeds</button>
           </div>
         </div>
@@ -365,8 +649,11 @@ export default function StaffDashboardPage() {
                 const isReject = s.includes('reject'); const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
                 const isApprove = s.includes('approve'); const isReplacement = s.includes('replace') || s.includes('new asset'); 
                 const isBroadcast = s.includes('broadcast') || s.includes('announcement');
+                const isScreenShare = s.includes('screen') || s.includes('remote') || (notif.message || '').toLowerCase().includes('screen');
+
                 let bgColor = 'bg-purple-50 border-purple-200'; let iconColor = 'text-purple-600';
-                if (isReplacement) { bgColor = 'bg-purple-50 border-purple-200'; iconColor = 'text-purple-600'; } 
+                if (isScreenShare) { bgColor = 'bg-orange-50 border-orange-300 shadow-md ring-1 ring-orange-400/30'; iconColor = 'text-orange-600'; }
+                else if (isReplacement) { bgColor = 'bg-purple-50 border-purple-200'; iconColor = 'text-purple-600'; } 
                 else if (isReject) { bgColor = 'bg-rose-50 border-rose-200'; iconColor = 'text-rose-600'; } 
                 else if (isReInspect) { bgColor = 'bg-amber-50 border-amber-200'; iconColor = 'text-amber-600'; } 
                 else if (isApprove) { bgColor = 'bg-emerald-50 border-emerald-200'; iconColor = 'text-emerald-600'; }
@@ -374,16 +661,29 @@ export default function StaffDashboardPage() {
                 return (
                   <div key={notif.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
                     <div className="flex items-start sm:items-center gap-3">
-                      <div className={`p-2 bg-white rounded-lg shadow-xs shrink-0 ${iconColor}`}>{isApprove || isReplacement ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}</div>
+                      <div className={`p-2 bg-white rounded-lg shadow-xs shrink-0 ${iconColor}`}>{isScreenShare ? <Monitor size={20} className="animate-bounce" /> : isApprove || isReplacement ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}</div>
                       <div><h4 className={`font-bold text-sm ${iconColor}`}>{notif.title || 'System Alert'}</h4><p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p></div>
                     </div>
-                    <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto mt-3 sm:mt-0">
                       {isBroadcast && (
                         <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
                           <button onClick={() => toggleReaction(notif.id, 'like')} className={`p-1.5 rounded-md transition-colors ${reactions[notif.id] === 'like' ? 'bg-purple-100 text-purple-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`} title="Acknowledge / Like"><ThumbsUp size={14} className={reactions[notif.id] === 'like' ? "fill-blue-600 text-purple-600" : ""} /></button>
                           <button onClick={() => toggleReaction(notif.id, 'dislike')} className={`p-1.5 rounded-md transition-colors ${reactions[notif.id] === 'dislike' ? 'bg-rose-100 text-rose-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`} title="Dislike"><ThumbsDown size={14} className={reactions[notif.id] === 'dislike' ? "fill-rose-600 text-rose-600" : ""} /></button>
                         </div>
                       )}
+                      
+                      {/* 🟢 PROMINENT ACCEPT & SHARE BUTTON FOR SUPPORT ALERTS */}
+                      {isScreenShare && !isStreaming && (
+                        <button 
+                          onClick={() => startScreenShare(getChannelTopic(currentUser), notif.id)} 
+                          disabled={isConnecting}
+                          className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer animate-pulse active:scale-95 disabled:opacity-50"
+                        >
+                          {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                          <span>Accept & Share</span>
+                        </button>
+                      )}
+
                       <button onClick={() => markNotificationAsRead(notif.id, notif.target_user)} className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-xs">Dismiss</button>
                     </div>
                   </div>
@@ -395,17 +695,33 @@ export default function StaffDashboardPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'TICKET', isActionDisabled: false },
-            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen },
-            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
-            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600 bg-orange-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
+            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'TICKET', isActionDisabled: false, badge: null },
+            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, badge: null },
+            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false, badge: null },
+            { 
+              name: 'Team Screen', 
+              desc: isStreaming ? '🟢 Screen Live Active' : (hasScreenShareAlert ? '🚨 Live Request' : 'Remote access'), 
+              icon: Monitor, 
+              color: isStreaming ? 'text-emerald-600 bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400 animate-pulse' : (hasScreenShareAlert ? 'text-rose-600 bg-rose-50 border-rose-300 ring-2 ring-rose-400 animate-bounce' : 'text-orange-600 bg-orange-50 border-indigo-100'), 
+              type: 'ROUTE', 
+              path: '/staff/dashboard/remote', 
+              isActionDisabled: false,
+              badge: isStreaming ? '🟢 LIVE' : (hasScreenShareAlert ? '🚨 REQUEST' : null)
+            },
           ].map((item) => (
               <button 
                 key={item.name} 
                 onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
                 disabled={item.isActionDisabled}
-                className={`bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex flex-col sm:flex-row items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
+                className={`relative bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex flex-col sm:flex-row items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
               >
+                {/* 🚨 DYNAMIC BADGE ON TEAM SCREEN THUMBNAIL */}
+                {item.badge && (
+                  <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-600 text-white shadow-md animate-bounce">
+                    {item.badge}
+                  </span>
+                )}
+
                 <div className={`p-3 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>{item.isActionDisabled ? <Lock size={20} /> : <item.icon size={20} />}</div>
                 <div><h3 className={`font-bold text-sm leading-tight ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-purple-600'} transition-colors`}>{item.name}</h3><p className="text-[10px] lg:text-xs font-medium text-slate-500 mt-1 line-clamp-2">{item.desc}</p></div>
               </button>
@@ -428,7 +744,7 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 2-COLUMN LAYOUT RESTORED: HARDWARE ON LEFT, TICKETS ON RIGHT 🌟 */}
+        {/* 🌟 2-COLUMN LAYOUT: HARDWARE ON LEFT, TICKETS ON RIGHT 🌟 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
           {/* HARDWARE UNITS */}
@@ -529,7 +845,7 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* 🌟 ENHANCED SERVICE TICKETS COLUMN 🌟 */}
+          {/* SERVICE TICKETS COLUMN */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-orange-600 shrink-0" size={18}/> My Service Tickets</div>
