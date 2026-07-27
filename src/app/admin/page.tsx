@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, AlertCircle, Clock,
-  AlertTriangle, Bell, Monitor, Megaphone, 
+  AlertTriangle, Monitor, Megaphone, 
   Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
   BarChart3, Settings, Cpu
 } from 'lucide-react';
@@ -62,7 +62,6 @@ export default function AdminDashboardPage() {
   });
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     // 🟢 DYNAMIC THEME OBSERVER: Instantly syncs with your top Navbar toggle
@@ -72,9 +71,8 @@ export default function AdminDashboardPage() {
       if (isDark) document.documentElement.classList.add('dark');
     };
     
-    syncTheme(); // Run on mount
+    syncTheme();
 
-    // Watch for class changes on HTML tag triggered by external Navbar
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
@@ -84,7 +82,14 @@ export default function AdminDashboardPage() {
       Notification.requestPermission();
     }
 
-    return () => observer.disconnect();
+    // 🌟 GLOBAL EVENT BRIDGE: Allows top navbar buttons to open the announcement modal
+    const handleOpenBroadcast = () => setIsBroadcastModalOpen(true);
+    window.addEventListener('open-broadcast-modal', handleOpenBroadcast);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('open-broadcast-modal', handleOpenBroadcast);
+    };
   }, []);
 
   const triggerDesktopAlert = (title: string, body: string) => {
@@ -99,11 +104,9 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    // Real-Time Socket Connection for Instant Updates
     const adminChannel = supabase
       .channel('admin-live-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
-        setNotifications((prev) => [payload.new, ...prev]);
         triggerDesktopAlert(payload.new.title || 'System Alert', payload.new.message || 'New notification received.');
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadAdminData())
@@ -142,13 +145,12 @@ export default function AdminDashboardPage() {
       setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
 
       const [
-        { data: assets }, { data: inspections }, { data: tickets }, staffRes, notifRes
+        { data: assets }, { data: inspections }, { data: tickets }, staffRes
       ] = await Promise.all([
         supabase.from('assets').select('id, status'),
         supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
-        supabase.from('profiles').select('*'),
-        supabase.from('notifications').select('*').eq('target_role', 'admin').eq('is_read', false).order('created_at', { ascending: false })
+        supabase.from('profiles').select('*')
       ]);
 
       const staffData = staffRes.data || [];
@@ -208,8 +210,6 @@ export default function AdminDashboardPage() {
         }
       });
       const offlineCount = staffData.length - onlineCount - deactivatedCount;
-
-      if (notifRes.data) setNotifications(notifRes.data);
 
       const formattedRecentLogs = inspData.slice(0, 8).map(log => {
         const matchedProfile = staffData.find(p => p.email?.toLowerCase() === log.user_email?.toLowerCase() || p.id === log.inspected_by);
@@ -294,10 +294,10 @@ export default function AdminDashboardPage() {
 
   return (
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
-      <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-4 lg:p-6 gap-4 lg:gap-5 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-4 lg:gap-5 overflow-y-auto custom-scrollbar">
         
-        {/* 🌟 HEADER */}
-        <div className={`${theme.card} rounded-2xl p-3 sm:p-4 border flex flex-col md:flex-row justify-between md:items-center gap-4 shrink-0 shadow-sm transition-all`}>
+        {/* 🌟 CLEAN HEADER (REMOVED DUPLICATE BELL, ANNOUNCEMENT, AND SETTINGS BUTTONS) */}
+        <div className={`${theme.card} rounded-2xl p-4 sm:p-5 border flex items-center justify-between shrink-0 shadow-sm transition-all`}>
           <Link href="/admin" className="flex items-center gap-4 group">
             <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md ${isDarkMode ? 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]' : 'bg-[#fff7ed] border-[#fed7aa] text-[#F97316]'}`}>
               <Cpu className="w-6 h-6" strokeWidth={2} />
@@ -307,23 +307,6 @@ export default function AdminDashboardPage() {
               <p className={`text-[11px] lg:text-xs font-medium mt-0.5 ${theme.subText}`}>Welcome back, {adminName}. Here is your live IT infrastructure status.</p>
             </div>
           </Link>
-          
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <button onClick={() => setIsBroadcastModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[#8B5CF6]/30">
-              <Megaphone size={14} /> Announcement
-            </button>
-            <button onClick={() => router.push('/admin/settings')} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 hover:-translate-y-0.5 ${isDarkMode ? 'bg-zinc-900 border-[#F97316]/30 text-[#F97316] hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:border-[#F97316]/50 hover:text-[#F97316]'}`}>
-              <Settings size={14} /> Settings
-            </button>
-            <button className={`p-2.5 rounded-xl border transition-all duration-300 relative shadow-sm group cursor-default ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6]' : 'bg-white border-slate-200 text-slate-500 hover:border-[#8B5CF6]/50 hover:text-[#8B5CF6]'}`}>
-              <Bell size={18} className={notifications.length > 0 ? "animate-pulse" : ""} />
-              {notifications.length > 0 && (
-                <span className={`absolute -top-1.5 -right-1.5 bg-[#F97316] text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 shadow-sm ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
-                  {notifications.length}
-                </span>
-              )}
-            </button>
-          </div>
         </div>
 
         {/* 📊 THUMBNAIL CARDS */}
@@ -429,7 +412,7 @@ export default function AdminDashboardPage() {
                       <div className={`relative w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${isOrange ? (isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]') : (isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]')}`}>
                         <m.icon size={24} strokeWidth={2.2} />
                         {m.badge > 0 && (
-                          <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-rose-500 shadow-sm border-2 ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
+                          <span className={`absolute -top-1.5 -right-1.5 min-w-4.5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-rose-500 shadow-sm border-2 ${isDarkMode ? 'border-zinc-900' : 'border-white'}`}>
                             {m.badge}
                           </span>
                         )}
@@ -450,7 +433,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="w-full lg:w-[28%] flex flex-col gap-3 h-[400px] lg:h-full">
+          <div className="w-full lg:w-[28%] flex flex-col gap-3 h-100 lg:h-full">
             <h3 className={`text-[11px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
             <div className={`${theme.card} rounded-2xl border p-5 flex-1 flex flex-col overflow-hidden shadow-sm`}>
               {recentActivity.length === 0 ? (
@@ -483,9 +466,9 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* 🚀 FIXED TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
+      {/* 🚀 TOP-BAR BROADCAST ANNOUNCEMENT MODAL */}
       {isBroadcastModalOpen && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className={`rounded-2xl max-w-lg w-full p-6 shadow-2xl border space-y-5 animate-in zoom-in-95 duration-300 ${theme.card}`}>
             <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <h3 className={`text-base font-extrabold flex items-center gap-2 uppercase tracking-wide ${theme.text}`}>
@@ -499,7 +482,6 @@ export default function AdminDashboardPage() {
             <form onSubmit={handleSendBroadcast} className="space-y-4">
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Message Text *</label>
-                {/* 🔴 THIS TEXTAREA IS NOW FULLY REBUILT WITHOUT TAILWIND 'DARK:' PREFIXES TO PREVENT DESYNC */}
                 <textarea 
                   rows={3} 
                   required 
@@ -515,7 +497,6 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
-                {/* 🔴 THIS FILE UPLOAD BOX IS NOW FULLY REBUILT WITHOUT TAILWIND 'DARK:' PREFIXES */}
                 <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${
                   isDarkMode 
                     ? 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:bg-[#121212] hover:border-[#8B5CF6]/50' 
@@ -528,7 +509,6 @@ export default function AdminDashboardPage() {
                 {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1"><X size={12} /> Remove attached file</button>}
               </div>
               <div className={`flex gap-2 pt-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                {/* 🔴 CANCEL BUTTON FIX: GUARANTEED TO MATCH LIGHT/DARK SETTINGS */}
                 <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all shadow-sm ${
                   isDarkMode 
                     ? 'bg-[#18181b] border-zinc-800 text-zinc-300 hover:bg-zinc-800' 

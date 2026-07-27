@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   LogOut, ClipboardCheck, Ticket, 
-  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu
+  Loader2, Bell, X, CheckCircle2, AlertTriangle, Cpu,
+  Megaphone, Settings
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -178,7 +179,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       
       {/* 🟢 TOAST NOTIFICATION POPUP */}
       {activeAlert && (
-        <div className={`fixed top-20 right-6 z-[100] w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
+        <div className={`fixed top-20 right-6 z-100 w-80 border shadow-2xl rounded-2xl p-5 animate-in slide-in-from-right-8 fade-in duration-300 ${theme.dropdownBg} ${theme.border}`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#F97316] animate-pulse ring-4 ring-[#F97316]/20"></span>
@@ -191,7 +192,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* 🌟 FULL-WIDTH TOP HEADER BAR */}
+      {/* 🌟 FULL-WIDTH TOP HEADER BAR (WITH INTEGRATED ANNOUNCEMENT & SETTINGS BUTTONS) */}
       <header className={`h-16 flex items-center justify-between px-4 md:px-8 border-b shadow-sm shrink-0 sticky top-0 z-40 transition-colors duration-300 ${theme.bgHeader} ${theme.border}`}>
         
         {/* Top Left: Logo */}
@@ -206,9 +207,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         </div>
 
-        {/* Top Right: Bell & Logout */}
-        <div className="flex items-center gap-3 ml-auto relative">
+        {/* Top Right: Announcement, Settings, Bell & Logout */}
+        <div className="flex items-center gap-2.5 sm:gap-3 ml-auto relative">
           
+          {/* 🚀 ANNOUNCEMENT BUTTON (MOVED FROM BANNER TO TOP BAR) */}
+          <button 
+            onClick={() => window.dispatchEvent(new Event('open-broadcast-modal'))}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all duration-200 hover:-translate-y-0.5 cursor-pointer"
+            title="Broadcast Announcement to Staff"
+          >
+            <Megaphone size={14} />
+            <span className="hidden md:inline">Announcement</span>
+          </button>
+
+          {/* 🚀 SETTINGS BUTTON (MOVED FROM BANNER TO TOP BAR) */}
+          <Link 
+            href="/admin/settings"
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-200 hover:-translate-y-0.5 ${isDarkMode ? 'bg-zinc-900 border-purple-900/50 text-purple-300 hover:bg-zinc-800 hover:border-orange-500' : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300 hover:text-purple-700 shadow-2xs'}`}
+            title="System Settings"
+          >
+            <Settings size={14} />
+            <span className="hidden md:inline">Settings</span>
+          </Link>
+
           {/* Notifications Bell */}
           <div className="relative">
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${isNotifOpen ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/30 text-[#8B5CF6]' : `${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-[#8B5CF6] hover:border-[#8B5CF6]/50'}`}`}>
@@ -291,7 +312,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
 
             {/* Tooltip visible strictly on hover showing Login User Email and Name */}
-            <div className={`absolute right-0 top-full mt-2 hidden group-hover:flex flex-col p-3.5 rounded-2xl shadow-xl z-50 min-w-[210px] text-left border pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#18181b] border-zinc-800 text-white' : 'bg-slate-900 border-slate-800 text-white'}`}>
+            <div className={`absolute right-0 top-full mt-2 hidden group-hover:flex flex-col p-3.5 rounded-2xl shadow-xl z-50 min-w-52.5 text-left border pointer-events-none animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#18181b] border-zinc-800 text-white' : 'bg-slate-900 border-slate-800 text-white'}`}>
               <span className="text-[9px] font-black uppercase tracking-widest text-[#F97316]">Logged in as</span>
               <span className="text-xs font-bold truncate mt-0.5">{adminProfile.name}</span>
               <span className="text-[11px] font-mono text-slate-400 truncate mt-0.5">{adminProfile.email}</span>
