@@ -3,771 +3,733 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import toast, { Toaster } from 'react-hot-toast';
 import { 
-  Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
-  AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
-  Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
-  ThumbsUp, ThumbsDown, Star
+  Monitor, Loader2, ShieldCheck, Check, X, Radio, Laptop, 
+  ShieldAlert, Wifi, CheckCircle2, AlertTriangle, ExternalLink, 
+  StopCircle, Ticket, Lock, PlusCircle, RefreshCw, Bell, Power,
+  ChevronRight, Cpu, HardDrive, UserCheck, Trash2
 } from 'lucide-react';
 
-// 🌟 SMART AUDIT WINDOW ENGINE
-function getAuditWindowInfo(category: string = 'Laptop') {
-  const today = new Date();
-  const year = today.getFullYear();
-  const currentMonth = today.getMonth(); 
-  
-  let targetMonth = currentMonth;
-  const isLaptop = (category || '').toLowerCase().includes('laptop');
-  
-  if (!isLaptop) {
-    const quarter = Math.floor(currentMonth / 3);
-    targetMonth = (quarter * 3) + 2; 
-  }
-
-  const lastDayOfMonth = new Date(year, targetMonth + 1, 0);
-  const lastSaturday = new Date(lastDayOfMonth);
-  while (lastSaturday.getDay() !== 6) {
-    lastSaturday.setDate(lastSaturday.getDate() - 1);
-  }
-  lastSaturday.setHours(23, 59, 59, 999);
-
-  const windowStart = new Date(lastSaturday);
-  windowStart.setDate(lastSaturday.getDate() - 4);
-  windowStart.setHours(0, 0, 0, 0);
-
-  return {
-    isOpen: today >= windowStart && today <= lastSaturday,
-    windowStart,
-    lastSaturday,
-    year,
-    month: targetMonth
-  };
+interface StaffProfile {
+  id: string;
+  name?: string;
+  full_name?: string;
+  email: string;
+  emp_code?: string;
+  department?: string;
 }
 
-const playAlertSound = () => {
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT WITH ADMIN)
+const getChannelTopic = (staff: any) => {
+  const code = (staff?.emp_code || staff?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const email = (staff?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const id = (staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `vsit_rtc_${code || email || id || 'default'}`;
+};
+
+// 🌟 ENTERPRISE ICE SERVERS WITH STUN + TURN TCP/UDP RELAYS
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+];
+
+// 🌟 CLIENT-SIDE DISMISSAL SHIELD (BLOCKS OLD ALERTS FROM REAPPEARING AFTER REFRESH)
+const getDismissedIds = (): Set<string> => {
   try {
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => console.warn("Browser requires user interaction before playing sound automatically."));
-    }
-  } catch (e) {}
+    const raw = localStorage.getItem('vsit_dismissed_alerts');
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch { return new Set(); }
 };
 
-// HELPER: Calculate resolution time
-const formatDuration = (start: string, end: string) => {
-  if (!start || !end) return '';
-  const d1 = new Date(start).getTime();
-  const d2 = new Date(end).getTime();
-  const diffHrs = Math.max(0, (d2 - d1) / (1000 * 60 * 60));
-  
-  if (diffHrs < 1) {
-    const mins = Math.max(0, (d2 - d1) / (1000 * 60));
-    return `${Math.floor(mins)} mins`;
-  }
-  if (diffHrs > 24) return `${Math.floor(diffHrs / 24)} days`;
-  return `${Math.floor(diffHrs)} hrs`;
+const saveDismissedId = (id: string) => {
+  try {
+    const ids = getDismissedIds();
+    ids.add(id);
+    localStorage.setItem('vsit_dismissed_alerts', JSON.stringify(Array.from(ids)));
+  } catch {}
 };
 
-export default function StaffDashboardPage() {
-  const router = useRouter(); 
-  
+export default function StaffRootDashboardPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
-  const [isAuthorized, setIsAuthorized] = useState(false); 
+  const [profile, setProfile] = useState<StaffProfile | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [hardwareUnits, setHardwareUnits] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // 🌟 INTERACTIVE WEBRTC POPUP & STREAMING STATE
+  const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string; alertId?: string } | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   
-  const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
-  const [myTickets, setMyTickets] = useState<any[]>([]);
-  const [allInspections, setAllInspections] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
-
-  const [reactions, setReactions] = useState<Record<string, 'like' | 'dislike'>>({});
-  const [toasts, setToasts] = useState<{ id: number, title: string, message: string }[]>([]);
-
-  const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
-    isOpen: false,
-    type: '',
-  });
-
-  const auditWindow = getAuditWindowInfo();
-
-  const formatDisplayName = (raw: string) => {
-    if (!raw) return 'Staff Member';
-    let s = raw.split('@')[0].split('.')[0];             
-    s = s.replace(/[_-]/g, ' ');     
-    return s.charAt(0).toUpperCase() + s.slice(1); 
-  };
-
-  const showToast = (title: string, message: string) => {
-    playAlertSound();
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, title, message }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 7000); 
-  };
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<any>(null);
+  const activeSignalingUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-    const savedReactions = JSON.parse(localStorage.getItem('vsit_reactions') || '{}');
-    setReactions(savedReactions);
+    const checkTheme = () => {
+      const savedTheme = localStorage.getItem('vsit_theme');
+      const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+
+    checkTheme();
+    window.addEventListener('storage', checkTheme);
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    loadDashboardData();
+    return () => {
+      window.removeEventListener('storage', checkTheme);
+      observer.disconnect();
+      stopScreenSharing();
+      
+      activeSignalingUserIdRef.current = null;
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic.includes('webrtc_signaling_') || ch.topic.includes('staff_notif_popup_') || ch.topic.includes('vsit_rtc_')) {
+          supabase.removeChannel(ch);
+        }
+      });
+    };
   }, []);
 
-  useEffect(() => {
-    const watcher = setInterval(() => {
-      const isGuest = localStorage.getItem('isGuestSession') === 'true';
-      const activeSession = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!activeSession && !isGuest) window.location.replace('/');
-    }, 500);
-    return () => clearInterval(watcher);
-  }, []);
-
-  const loadRealDatabase = async () => {
-    const safetyTimeoutId = setTimeout(() => setLoading(false), 4000);
-
+  const loadDashboardData = async () => {
+    setLoading(true);
     try {
-      const isGuest = localStorage.getItem('isGuestSession') === 'true';
+      const rawSession = localStorage.getItem('vsit_staff_session') || 
+                         localStorage.getItem('vsit_admin_session') || 
+                         localStorage.getItem('user');
 
-      if (isGuest) {
-        clearTimeout(safetyTimeoutId);
-        setCurrentUser({ id: 'guest-mock-uuid', email: 'demo_user@virtualstaffing.com', emp_id: 'DEMO-001', name: 'Demo Guest User' });
-        setAssignedAssets([]); setAllInspections([]); setMyTickets([]); setNotifications([]);
-        setStats({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
-        setIsAuthorized(true); setLoading(false); return; 
+      if (!rawSession) {
+        toast.error("No active session found. Redirecting...");
+        router.push('/');
+        return;
       }
 
-      const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!sessionStr) { clearTimeout(safetyTimeoutId); window.location.replace('/'); return; }
+      let activeUser: any = {};
+      try { activeUser = JSON.parse(rawSession); } 
+      catch (e) { activeUser = { email: rawSession }; }
 
-      let user: any = {};
-      try { user = JSON.parse(sessionStr); } catch (e) { user = { name: sessionStr.split('@')[0], email: sessionStr }; }
+      const cleanEmail = (activeUser.email || '').toLowerCase().trim();
 
-      const cleanEmail = user.email?.toLowerCase().trim();
-      if (cleanEmail === 'lakhwinder.bi@outlook.com') { clearTimeout(safetyTimeoutId); window.location.replace('/admin'); return; }
-
-      const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
-      if (profile) {
-        if (profile.status === 'Disabled') { clearTimeout(safetyTimeoutId); window.location.replace('/'); return; }
-        user.emp_id = profile.emp_code || profile.emp_id || 'STAFF';
-        user.name = profile.full_name || profile.name || user.name;
-        user.id = profile.id;
-      } else { clearTimeout(safetyTimeoutId); window.location.replace('/'); return; }
-      
-      setCurrentUser(user);
-      setIsAuthorized(true); 
-
-      const [assetsRes, inspRes, ticketsRes, notifRes] = await Promise.all([
-        supabase.from('assets').select('*').eq('assigned_to', user.id),
-        supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
-        supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false }),
-        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(200)
+      const [{ data: userProfile }, { data: assets }, { data: userTickets }, { data: userAlerts }] = await Promise.all([
+        supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle(),
+        supabase.from('assets').select('*'),
+        supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('notifications').select('*').eq('is_read', false).order('created_at', { ascending: false }).limit(30)
       ]);
 
-      if (inspRes.data) setAllInspections(inspRes.data);
-
-      if (notifRes.data) {
-        const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-        let activeNotifications = notifRes.data.filter(n => {
-          const isUnread = n.is_read !== true; 
-          const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
-          const target = String(n.target_user || '').trim().toLowerCase();
-          const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
-          const isPersonal = target === String(user.id).toLowerCase() || target === cleanEmail || target === String(user.emp_id).toLowerCase();
-          return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
-        });
-
-        activeNotifications = activeNotifications.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
-        setNotifications(activeNotifications);
-
-        const compiledAssets = (assetsRes.data || []).map(asset => {
-          const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
-          return {
-            ...asset,
-            live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
-            live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
-          };
-        });
-        setAssignedAssets(compiledAssets);
-        
-        const needsInspCount = compiledAssets.filter(a => 
-          ['pending', 're-inspection', 'overdue', 'not approved', 'reject'].some(status => (a.live_inspection_status || '').toLowerCase().includes(status))
-        ).length;
-
-        const tix = ticketsRes.data || [];
-        setMyTickets(tix);
-        const openTixCount = tix.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
-
-        setStats({ totalAssets: compiledAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
+      let currentProf: StaffProfile;
+      if (userProfile) {
+        currentProf = userProfile;
+      } else {
+        currentProf = {
+          id: 'temp-' + Date.now(),
+          full_name: activeUser.name || activeUser.full_name || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          emp_code: activeUser.emp_code || 'EMP-9857',
+          department: activeUser.department || 'Migration'
+        };
       }
-    } catch (err) { console.error("Data sync failure:", err); } finally { clearTimeout(safetyTimeoutId); setLoading(false); }
+
+      setProfile(currentProf);
+
+      const myAssets = (assets || []).filter(a => a.assigned_to === currentProf.id || a.assigned_to === currentProf.email);
+      setHardwareUnits(myAssets);
+
+      const myTickets = (userTickets || []).filter(t => t.user_email === cleanEmail || t.user_id === currentProf.id);
+      setTickets(myTickets);
+
+      // 🌟 SMART DEDUPLICATION & CLIENT SHIELD: Filters out dismissed alerts and collapses duplicates!
+      const dismissedIds = getDismissedIds();
+      const rawAlerts = (userAlerts || []).filter(n => 
+        (n.target_user === currentProf.id || n.target_role === 'staff' || !n.target_user) && !n.is_read && !dismissedIds.has(n.id)
+      );
+      
+      const uniqueAlerts: any[] = [];
+      const seenTitles = new Set<string>();
+      rawAlerts.forEach(a => {
+        const key = (a.title || 'alert').trim().toLowerCase();
+        if (!seenTitles.has(key)) {
+          seenTitles.add(key);
+          uniqueAlerts.push(a);
+        } else {
+          // Silently clean up duplicate database rows in background
+          supabase.from('notifications').update({ is_read: true }).eq('id', a.id).then(() => {});
+          supabase.from('notifications').delete().eq('id', a.id).then(() => {});
+        }
+      });
+
+      setAlerts(uniqueAlerts);
+
+      const pendingShareAlert = uniqueAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
+      if (pendingShareAlert && !isStreaming) {
+        setIncomingRequest({
+          adminName: 'IT Support Commander',
+          adminCode: 'EMP-ADMIN',
+          channelId: getChannelTopic(currentProf),
+          alertId: pendingShareAlert.id
+        });
+      }
+
+      setupSignalingListener(currentProf.id, currentProf);
+
+    } catch (error: any) {
+      toast.error(`Error syncing dashboard: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => {
-    loadRealDatabase();
-    if (!currentUser || currentUser.id === 'guest-mock-uuid' || !currentUser.id) return;
+  // 📡 SETUP LIVE SIGNALING WITH DYNAMIC INSTANCE TOKEN (ZERO LINTER / RUNTIME ERRORS)
+  const setupSignalingListener = (userId: string, currentProf: any) => {
+    if (!userId) return;
+    if (activeSignalingUserIdRef.current === userId) return;
+    activeSignalingUserIdRef.current = userId;
 
-    const realtimeChannel = supabase.channel('staff-dashboard-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tickets' }, (payload) => { 
-        if (payload.new.created_by?.toLowerCase() === currentUser.email?.toLowerCase()) showToast("Ticket Updated", `Your ticket status was changed to: ${payload.new.status}`);
-        loadRealDatabase(); 
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => { 
-        if (payload.new.assigned_to === currentUser.id) showToast("Hardware Update", `IT has updated your device details.`);
-        loadRealDatabase(); 
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inspections' }, (payload) => { 
-        if (payload.new.inspected_by === currentUser.id) {
-          if (payload.new.status === 'Return Approved') showToast("Handover Approved", "IT has successfully received and unassigned your device.");
-          if (payload.new.status === 'Return Rejected') showToast("Return Rejected", "IT rejected your device return. Please check dashboard for details.");
-        }
-        loadRealDatabase(); 
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => { 
-        const target = String(payload.new.target_user || '').trim().toLowerCase();
-        const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff'].includes(target);
-        const isPersonal = target === String(currentUser.id).toLowerCase() || target === currentUser.email?.toLowerCase() || target === String(currentUser.emp_id).toLowerCase();
-        if (isGlobal || isPersonal) {
-            showToast(payload.new.title || "New System Alert", payload.new.message || "You have a new message from Admin.");
-            if ("Notification" in window && Notification.permission === "granted") new Notification(payload.new.title || "New System Alert", { body: payload.new.message, icon: "/favicon.ico" });
-        }
-        loadRealDatabase(); 
+    const sigTopic = `webrtc_signaling_${userId}`;
+    const notifTopic = `staff_notif_popup_${userId}_${Date.now()}`;
+    const targetChannelId = getChannelTopic(currentProf);
+
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic.includes(sigTopic) || ch.topic.includes(`staff_notif_popup_${userId}`)) {
+        supabase.removeChannel(ch);
+      }
+    });
+
+    const signalingChannel = supabase.channel(sigTopic)
+      .on('broadcast', { event: 'request_screen_share' }, (payload) => {
+        setIncomingRequest({
+          adminName: payload.payload?.adminName || 'IT Administrator',
+          adminCode: payload.payload?.adminCode || 'EMP-ADMIN',
+          channelId: targetChannelId
+        });
+        toast("⚠️ IT Admin requested live screen sharing!", { icon: '📡', duration: 8000 });
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(realtimeChannel); };
-  }, [currentUser.id, currentUser.email, currentUser.emp_id]);
-
-  const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
-    setNotifications(prev => prev.filter(n => n.id !== notifId));
-    const target = String(targetUser || '').trim().toLowerCase();
-    const isGlobalBroadcast = target === '' || target === 'null' || ['all', 'broadcast', 'everyone', 'staff'].includes(target);
-    
-    if (isGlobalBroadcast) {
-      const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-      if (!dismissed.includes(notifId)) { dismissed.push(notifId); localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); }
-    } else {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
-    }
+    const dbNotifChannel = supabase.channel(notifTopic)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
+        const newNotif = payload.new;
+        const dismissedIds = getDismissedIds();
+        if (!newNotif.is_read && !dismissedIds.has(newNotif.id)) {
+          setAlerts(prev => {
+            if (prev.some(a => a.id === newNotif.id || (a.title === newNotif.title && a.message === newNotif.message))) return prev;
+            return [newNotif, ...prev];
+          });
+        }
+        if (!newNotif.is_read && !dismissedIds.has(newNotif.id) && newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
+          setIncomingRequest({
+            adminName: 'IT Support Commander',
+            adminCode: 'EMP-ADMIN',
+            channelId: targetChannelId,
+            alertId: newNotif.id
+          });
+        }
+      })
+      .subscribe();
   };
 
-  const toggleReaction = (notifId: string, type: 'like' | 'dislike') => {
-    setReactions(prev => {
-      const newReactions = { ...prev };
-      if (newReactions[notifId] === type) delete newReactions[notifId]; else newReactions[notifId] = type;
-      localStorage.setItem('vsit_reactions', JSON.stringify(newReactions));
-      return newReactions;
-    });
-  };
+  // 🚀 START WEBRTC SCREEN SHARE
+  const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
+    const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(profile);
+    setIsConnecting(true);
 
-  const handleRateTicket = async (ticketId: string, rating: number) => {
     try {
-      await supabase.from('tickets').update({ rating }).eq('id', ticketId);
-      setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, rating } : t));
-      showToast("Rating Submitted", "Thank you for rating our IT support!");
-    } catch (e) {
-      console.error(e);
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId) {
+          supabase.removeChannel(ch);
+        }
+      });
+
+      toast("🚀 Launching Screen Picker... Please select 'Entire Screen'", { icon: '🖥️', duration: 5000 });
+
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
+        audio: false
+      });
+
+      streamRef.current = stream;
+
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenSharing();
+        toast.error("Screen sharing stopped.");
+      };
+
+      const peer = new RTCPeerConnection({ iceServers });
+      peerRef.current = peer;
+
+      stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
+
+      const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
+      channelRef.current = sessionChannel;
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
+        }
+      };
+
+      sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
+        toast("⚡ Received SDP Answer from Admin... Completing Tunnel", { icon: '🔄', duration: 4000 });
+        if (peer.signalingState === 'have-local-offer') {
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
+          setIsConnecting(false);
+          setIsStreaming(true);
+          setIncomingRequest(null);
+          toast.success("🟢 Live WebRTC Screen Share Established!");
+          if (alertIdToDismiss) dismissAlert(alertIdToDismiss);
+        }
+      }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
+        if (peer.remoteDescription && payload.payload?.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        }
+      }).on('broadcast', { event: 'terminate_session' }, () => {
+        stopScreenSharing();
+        toast("🛑 IT Admin ended the remote support session.", { icon: 'ℹ️' });
+      }).subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          toast(`📡 Subscribed to topic: [${targetChannelId}]... Sending Offer`, { icon: '📡', duration: 4000 });
+          const offer = await peer.createOffer();
+          await peer.setLocalDescription(offer);
+          await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+          toast("📤 Transmitted SDP Offer to Admin Commander!", { icon: '📡', duration: 3000 });
+        }
+      });
+
+      if (!incomingRequest) {
+        toast.success("📡 Transmitting screen stream to IT Admin Commander...");
+      }
+
+    } catch (err: any) {
+      toast.error(`Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
+      setIsConnecting(false);
     }
   };
-  
-  const getStatusBadge = (status: string) => {
-    const s = (status || '').toLowerCase().trim();
-    if (s === 'open' || s === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
-    if (s === 'in progress') return 'bg-purple-50 text-purple-700 border-purple-200';
-    if (s === 'resolved' || s === 'closed') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    return 'bg-slate-50 text-slate-600 border-slate-200';
+
+  const stopScreenSharing = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+      streamRef.current = null;
+    }
+    if (peerRef.current) {
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    if (channelRef.current) {
+      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setIsStreaming(false);
+    setIsConnecting(false);
+    setIncomingRequest(null);
   };
 
-  const getAssetAuditState = (asset: any) => {
-    const status = (asset.live_inspection_status || '').toLowerCase();
-    const auditWindow = getAuditWindowInfo(asset.category);
-    
-    if (asset.status?.toLowerCase().includes('return') || status.includes('return pending')) {
-      return { disabled: true, text: "Return Pending", classes: "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" };
+  // 🌟 CLIENT SHIELD & PERMANENT DISMISSAL
+  const dismissAlert = async (id?: string) => {
+    if (id) {
+      saveDismissedId(id);
+      setAlerts(prev => prev.filter(a => a.id !== id));
+      if (incomingRequest?.alertId === id) setIncomingRequest(null);
+      try {
+        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+        await supabase.from('notifications').delete().eq('id', id);
+      } catch (err) {
+        console.error("Error updating notification:", err);
+      }
+    } else {
+      setIncomingRequest(null);
     }
+    toast.success("Alert dismissed.");
+  };
 
-    if (status === 'rejected' || status === 'fail') {
-      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-sm animate-pulse" };
+  // 🌟 CLIENT SHIELD & CLEAR ALL PERMANENTLY
+  const dismissAllAlerts = async () => {
+    const ids = alerts.map(a => a.id);
+    ids.forEach(id => saveDismissedId(id));
+    setAlerts([]);
+    setIncomingRequest(null);
+    if (ids.length > 0) {
+      try {
+        await supabase.from('notifications').update({ is_read: true }).in('id', ids);
+        await supabase.from('notifications').delete().in('id', ids);
+        toast.success("All action alerts cleared permanently!");
+      } catch (err) {
+        console.error("Error clearing notifications:", err);
+      }
     }
-    if (status === 're-inspection') {
-      return { disabled: false, text: "Re-Inspection Required", classes: "bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm animate-pulse" };
-    }
+  };
 
-    const hasAudited = allInspections.some(insp => {
-       const d = new Date(insp.created_at);
-       return insp.asset_id === asset.id && 
-              d.getFullYear() === auditWindow.year && 
-              d.getMonth() === auditWindow.month &&
-              !insp.notes?.includes('[RETURN REQUEST]') &&
-              !insp.status?.toLowerCase().includes('return') &&
-              (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
+  const handleManualSync = () => {
+    setIsSyncing(true);
+    loadDashboardData().then(() => {
+      setIsSyncing(false);
+      toast.success("✔ Live feeds synchronized!");
     });
-
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none" };
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200" };
-    
-    return { disabled: false, text: "Audit Device", classes: "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm" };
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Connecting real-time database...</p>
-      </div>
-    );
-  }
+  const theme = {
+    bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
+    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
+    cardInner: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200',
+    textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500',
+    divider: isDarkMode ? 'border-purple-900/40' : 'border-slate-100',
+  };
 
-  if (!isAuthorized) return null; 
-
-  const requiresGlobalReinspection = assignedAssets.some(a => {
-    const s = (a.live_inspection_status || '').toLowerCase();
-    if (s.includes('return')) return false;
-    return ['re-inspection', 'not approved', 'reject'].some(val => s.includes(val));
-  });
-
-  const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
+  if (loading) return (
+    <div className={`min-h-screen ${theme.bg} flex flex-col items-center justify-center gap-4 transition-colors`}>
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
+      <p className={`text-xs font-bold uppercase tracking-widest ${theme.textSub}`}>Syncing Staff Workspace...</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative">
-      <div className="fixed top-24 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
-        {toasts.map(t => (
-          <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
-            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0"><Bell size={18} className="animate-pulse" /></div>
-            <div className="flex-1 pt-0.5"><h4 className="font-bold text-sm text-slate-900 leading-tight">{t.title}</h4><p className="text-xs text-slate-500 mt-1 line-clamp-2">{t.message}</p></div>
-            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:text-slate-600 shrink-0 p-1"><X size={16}/></button>
-          </div>
-        ))}
-      </div>
-
-      <div className="max-w-7xl mx-auto space-y-8">
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-500">
-              <span className="text-purple-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-purple-50 rounded-md border border-purple-200/60">ID: {currentUser.emp_id}</span>
-              <span>{currentUser.email}</span>
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col relative`}>
+      <Toaster position="top-right" />
+      
+      {/* 🔴 ACTIVE STREAMING FLOATING BADGE */}
+      {isStreaming && (
+        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
+          <div className="flex items-center gap-3">
+            <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+            <div>
+              <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
+              <p className="text-[11px] text-zinc-300">IT Support is actively monitoring your workspace.</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {/* 🛑 DELETED THE "Reset Dismissed Alerts" BUTTON ENTIRELY AS REQUESTED */}
-            <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer"><RefreshCw size={14}/> Sync Feeds</button>
+          <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
+            <StopCircle size={15} /> <span>Stop Sharing</span>
+          </button>
+        </div>
+      )}
+
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
+      {incomingRequest && !isStreaming && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#150f24] border-2 border-orange-500 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner animate-bounce">
+              <Monitor size={32} />
+            </div>
+            
+            <div className="text-center space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900 dark:text-purple-50">Live IT Support Access Requested</h3>
+              <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-purple-300/70">
+                <strong className="text-slate-900 dark:text-white font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen for live troubleshooting.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30 text-xs font-semibold text-orange-800 dark:text-orange-300 flex items-center gap-3">
+              <ShieldAlert size={22} className="shrink-0 text-orange-600 dark:text-orange-400" />
+              <span>When prompted by your browser, select <strong className="underline">"Entire Screen"</strong> or your active window to establish the connection.</span>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => dismissAlert(incomingRequest?.alertId)} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-purple-900/50 text-xs font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+              >
+                Decline
+              </button>
+              <button 
+                onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95"
+              >
+                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {notifications.length > 0 && (
-          <div className="space-y-3 animate-in slide-in-from-top-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Bell size={14} className="text-amber-500 animate-bounce" /> Action Alerts ({notifications.length})</h3>
-            <div className="grid grid-cols-1 gap-3">
-              {notifications.map(notif => {
-                const s = (notif.title || '').toLowerCase();
-                const isReject = s.includes('reject'); const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
-                const isApprove = s.includes('approve'); const isReplacement = s.includes('replace') || s.includes('new asset'); 
-                const isBroadcast = s.includes('broadcast') || s.includes('announcement');
-                let bgColor = 'bg-purple-50 border-purple-200'; let iconColor = 'text-purple-600';
-                if (isReplacement) { bgColor = 'bg-purple-50 border-purple-200'; iconColor = 'text-purple-600'; } 
-                else if (isReject) { bgColor = 'bg-rose-50 border-rose-200'; iconColor = 'text-rose-600'; } 
-                else if (isReInspect) { bgColor = 'bg-amber-50 border-amber-200'; iconColor = 'text-amber-600'; } 
-                else if (isApprove) { bgColor = 'bg-emerald-50 border-emerald-200'; iconColor = 'text-emerald-600'; }
+      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
+      <div className="w-full max-w-350 px-3 sm:px-6 lg:px-10 mx-auto space-y-6 pt-4 flex-1 flex flex-col">
+        
+        {/* STANDARDIZED WELCOME BANNER */}
+        <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300`}>
+          <div className="space-y-1 min-w-0">
+            <h1 className={`text-xl sm:text-3xl font-black tracking-tight truncate ${theme.textMain} flex items-center gap-2`}>
+              <span>Welcome back, {profile?.full_name || profile?.name || 'Staff Member'}</span>
+              <span className="animate-bounce">👋</span>
+            </h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-widest bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20">
+                ID: {profile?.emp_code || 'EMP-9857'}
+              </span>
+              <span className={`text-xs font-semibold truncate ${theme.textSub}`}>{profile?.email}</span>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm shrink-0 hover:border-orange-500 hover:text-orange-600 ${theme.cardInner} ${theme.textMain} disabled:opacity-50`}
+          >
+            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+            <span>Sync Feeds</span>
+          </button>
+        </div>
+
+        {/* 🌟 ACTION ALERTS BOX WITH GUARANTEED ACCEPT BUTTON & CLIENT SHIELD */}
+        <div className="space-y-3 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell size={16} className="text-orange-600 dark:text-orange-400 animate-pulse" />
+              <h2 className={`text-xs font-black uppercase tracking-widest ${theme.textSub}`}>Action Alerts ({alerts.length})</h2>
+            </div>
+            {alerts.length > 0 && (
+              <button
+                onClick={dismissAllAlerts}
+                className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Trash2 size={13} /> <span>Clear All Alerts</span>
+              </button>
+            )}
+          </div>
+
+          {alerts.length === 0 ? (
+            <div className={`p-6 rounded-2xl border text-center text-xs font-bold ${theme.cardInner} ${theme.textSub}`}>
+              <CheckCircle2 size={24} className="mx-auto mb-1.5 text-emerald-500 opacity-60" />
+              <span>No pending action alerts. You are all caught up!</span>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {alerts.map((alert) => {
+                const isRemoteShareAlert = alert.title?.includes('Screen Share') || alert.title?.includes('Remote Support') || alert.message?.includes('screen access');
 
                 return (
-                  <div key={notif.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
-                    <div className="flex items-start sm:items-center gap-3">
-                      <div className={`p-2 bg-white rounded-lg shadow-xs shrink-0 ${iconColor}`}>{isApprove || isReplacement ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}</div>
-                      <div><h4 className={`font-bold text-sm ${iconColor}`}>{notif.title || 'System Alert'}</h4><p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p></div>
+                  <div 
+                    key={alert.id}
+                    className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                      isRemoteShareAlert 
+                        ? 'bg-orange-500/10 border-orange-500/40 shadow-md ring-1 ring-orange-500/20' 
+                        : `${theme.cardInner} ${theme.divider}`
+                    }`}
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${isRemoteShareAlert ? 'bg-orange-600 text-white animate-bounce' : 'bg-purple-500/10 text-purple-600 dark:text-purple-300'}`}>
+                        {isRemoteShareAlert ? <Monitor size={18} /> : <AlertTriangle size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className={`text-sm font-black truncate ${isRemoteShareAlert ? 'text-orange-600 dark:text-orange-400' : theme.textMain}`}>
+                          {alert.title || 'System Notification'}
+                        </h3>
+                        <p className={`text-xs font-medium mt-0.5 leading-relaxed ${theme.textSub}`}>
+                          {alert.message}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
-                      {isBroadcast && (
-                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
-                          <button onClick={() => toggleReaction(notif.id, 'like')} className={`p-1.5 rounded-md transition-colors ${reactions[notif.id] === 'like' ? 'bg-purple-100 text-purple-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`} title="Acknowledge / Like"><ThumbsUp size={14} className={reactions[notif.id] === 'like' ? "fill-blue-600 text-purple-600" : ""} /></button>
-                          <button onClick={() => toggleReaction(notif.id, 'dislike')} className={`p-1.5 rounded-md transition-colors ${reactions[notif.id] === 'dislike' ? 'bg-rose-100 text-rose-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`} title="Dislike"><ThumbsDown size={14} className={reactions[notif.id] === 'dislike' ? "fill-rose-600 text-rose-600" : ""} /></button>
-                        </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+                      {/* 🟢 GUARANTEED ACCEPT & SHARE BUTTON FOR SUPPORT ALERTS */}
+                      {isRemoteShareAlert && !isStreaming && (
+                        <button
+                          type="button"
+                          disabled={isConnecting}
+                          onClick={() => startScreenShare(getChannelTopic(profile), alert.id)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer animate-pulse active:scale-95 disabled:opacity-50"
+                        >
+                          {isConnecting ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                          <span>Accept & Share</span>
+                        </button>
                       )}
-                      <button onClick={() => markNotificationAsRead(notif.id, notif.target_user)} className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-xs">Dismiss</button>
+
+                      <button
+                        type="button"
+                        onClick={() => dismissAlert(alert.id)}
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                          isRemoteShareAlert 
+                            ? 'bg-white/80 dark:bg-[#150f24] border-orange-200 dark:border-orange-500/30 text-orange-800 dark:text-orange-300 hover:bg-orange-100' 
+                            : `${theme.card} ${theme.textSub} hover:border-orange-500 hover:text-orange-600`
+                        }`}
+                      >
+                        Dismiss
+                      </button>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'TICKET', isActionDisabled: false },
-            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen },
-            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false },
-            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600 bg-orange-50 border-indigo-100', type: 'ROUTE', path: '/staff/dashboard/remote', isActionDisabled: false },
-          ].map((item) => (
-              <button 
-                key={item.name} 
-                onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
-                disabled={item.isActionDisabled}
-                className={`bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex flex-col sm:flex-row items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
-              >
-                <div className={`p-3 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>{item.isActionDisabled ? <Lock size={20} /> : <item.icon size={20} />}</div>
-                <div><h3 className={`font-bold text-sm leading-tight ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-purple-600'} transition-colors`}>{item.name}</h3><p className="text-[10px] lg:text-xs font-medium text-slate-500 mt-1 line-clamp-2">{item.desc}</p></div>
-              </button>
-            )
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-            <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Hardware</p><h2 className="text-3xl sm:text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
-            <div className="p-4 rounded-2xl bg-purple-50 text-purple-600 font-bold"><Laptop size={28} /></div>
+        {/* 🌟 QUICK ACTION GRID WITH DYNAMIC "TEAM SCREEN" LIVE REQUEST BADGE */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-2">
+          {[
+            { title: 'Raise Ticket', desc: 'IT failure & support', icon: <Ticket size={20} />, path: '/staff/dashboard/tickets/new', color: 'purple', badge: null },
+            { title: 'Device Audit', desc: 'Hardware inspections', icon: <Lock size={20} />, path: '/staff/dashboard/inspections', color: 'slate', badge: null },
+            { title: 'Request Gear', desc: 'New equipment order', icon: <PlusCircle size={20} />, path: '/staff/dashboard/requests', color: 'emerald', badge: null },
+            { 
+              title: 'Team Screen', 
+              desc: 'Remote IT support hub', 
+              icon: <Monitor size={20} />, 
+              path: '/staff/dashboard/remote', 
+              color: 'orange',
+              badge: (incomingRequest || alerts.some(a => a.title?.includes('Screen Share'))) ? '🚨 Live Request' : null
+            }
+          ].map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => router.push(item.path)}
+              className={`relative p-4 sm:p-5 rounded-2xl border text-left flex flex-col justify-between gap-3 transition-all duration-200 cursor-pointer ${theme.card} hover:-translate-y-1 hover:shadow-lg hover:border-orange-500 group`}
+            >
+              {/* 🚨 DYNAMIC BADGE ON TEAM SCREEN THUMBNAIL */}
+              {item.badge && (
+                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-600 text-white shadow-md animate-bounce">
+                  {item.badge}
+                </span>
+              )}
+
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                item.color === 'orange' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' :
+                item.color === 'purple' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-300' :
+                item.color === 'emerald' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                'bg-slate-500/10 text-slate-600 dark:text-zinc-400'
+              }`}>
+                {item.icon}
+              </div>
+              <div>
+                <h3 className={`text-xs sm:text-sm font-black group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors ${theme.textMain}`}>{item.title}</h3>
+                <p className={`text-[11px] font-medium mt-0.5 truncate ${theme.textSub}`}>{item.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* STAT COUNTERS */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assigned Hardware</span>
+              <h3 className={`text-2xl sm:text-3xl font-black mt-1 ${theme.textMain}`}>{hardwareUnits.length}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold">
+              <Laptop size={24} />
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-            <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Action Required</p><h2 className="text-3xl sm:text-4xl font-black text-amber-600 mt-1">{stats.needsInspection}</h2></div>
-            <div className="p-4 rounded-2xl bg-amber-50 text-amber-600"><AlertCircle size={28} /></div>
+
+          <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Action Required</span>
+              <h3 className="text-2xl sm:text-3xl font-black mt-1 text-orange-600 dark:text-orange-400">{alerts.length}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold">
+              <AlertTriangle size={24} />
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-            <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Open Tickets</p><h2 className="text-3xl sm:text-4xl font-black text-orange-600 mt-1">{stats.openTickets}</h2></div>
-            <div className="p-4 rounded-2xl bg-orange-50 text-orange-600"><Ticket size={28} /></div>
+
+          <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${theme.card}`}>
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Open Tickets</span>
+              <h3 className="text-2xl sm:text-3xl font-black mt-1 text-emerald-600 dark:text-emerald-400">
+                {tickets.filter(t => !t.status?.toLowerCase().includes('resolv') && !t.status?.toLowerCase().includes('clos')).length}
+              </h3>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <Ticket size={24} />
+            </div>
           </div>
         </div>
 
-        {/* 🌟 2-COLUMN LAYOUT RESTORED: HARDWARE ON LEFT, TICKETS ON RIGHT 🌟 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        {/* HARDWARE & TICKETS SPLIT VIEW */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
           
-          {/* HARDWARE UNITS */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 md:p-8 space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800">
-                <Laptop className="text-purple-600 shrink-0" size={18}/> My Hardware Units
+          {/* Hardware Units List */}
+          <div className={`rounded-3xl border shadow-sm overflow-hidden flex flex-col ${theme.card}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/60'}`}>
+              <div className="flex items-center gap-2">
+                <Laptop size={18} className="text-purple-600 dark:text-purple-300" />
+                <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>My Hardware Units</h3>
               </div>
-              <span className="text-xs font-bold text-slate-400">{assignedAssets.length} Total</span>
+              <span className="text-[11px] font-bold text-purple-600 dark:text-purple-300">{hardwareUnits.length} Total</span>
             </div>
-            
-            {assignedAssets.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 font-medium text-xs">No active assets linked to your account.</div>
-            ) : (
-              <div className="space-y-4">
-                {assignedAssets.map(asset => {
-                  const btnState = getAssetAuditState(asset);
-                  const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
-                  const isReturnPending = (asset.status || '').toLowerCase().includes('return');
-                  const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
 
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto custom-scrollbar max-h-95">
+              {hardwareUnits.length === 0 ? (
+                <div className={`text-center py-12 text-xs font-bold ${theme.textSub}`}>No hardware assets currently assigned.</div>
+              ) : (
+                hardwareUnits.map((asset) => (
+                  <div key={asset.id} className={`p-4 rounded-2xl border space-y-3 ${theme.cardInner}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className={`text-sm font-black ${theme.textMain}`}>{asset.name || 'Unnamed Asset'}</h4>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        {asset.status || 'Approved'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/50 dark:border-purple-900/30 text-[11px]">
+                      <div>
+                        <span className={`block font-bold text-[9px] uppercase ${theme.textSub}`}>Tag ID</span>
+                        <span className="font-mono font-bold text-orange-600 dark:text-orange-400">{asset.asset_tag || asset.tag_id || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className={`block font-bold text-[9px] uppercase ${theme.textSub}`}>Serial S/N</span>
+                        <span className="font-mono font-bold truncate block" title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Service Tickets List */}
+          <div className={`rounded-3xl border shadow-sm overflow-hidden flex flex-col ${theme.card}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-slate-50/60'}`}>
+              <div className="flex items-center gap-2">
+                <Ticket size={18} className="text-orange-600 dark:text-orange-400" />
+                <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>My Service Tickets</h3>
+              </div>
+              <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400">{tickets.length} Raised</span>
+            </div>
+
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto custom-scrollbar max-h-95">
+              {tickets.length === 0 ? (
+                <div className={`text-center py-12 text-xs font-bold ${theme.textSub}`}>No service tickets submitted.</div>
+              ) : (
+                tickets.map((t) => {
+                  const isResolved = t.status?.toLowerCase().includes('resolv') || t.status?.toLowerCase().includes('clos');
                   return (
-                    <div key={asset.id} className={`bg-white p-5 rounded-2xl border ${isReInspect || isReturnRejected ? 'border-rose-200/80 shadow-sm' : 'border-slate-200/80 shadow-sm'} hover:border-slate-300 hover:shadow-md transition-all flex flex-col gap-4`}>
-                      
-                      <div className="flex justify-between items-start gap-3">
-                        <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
-                          {asset.name || asset.asset_name || asset.model || 'Generic Device'}
-                        </h4>
-                        <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border shrink-0 ${
-                          isReturnRejected ? 'bg-rose-50 text-rose-600 border-rose-200' :
-                          isReturnPending ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                          isReInspect ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                          'bg-emerald-50 text-emerald-600 border-emerald-200'
+                    <div key={t.id} className={`p-4 rounded-2xl border space-y-2.5 ${theme.cardInner}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className={`text-sm font-bold truncate ${theme.textMain}`}>{t.title || 'Support Request'}</h4>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border shrink-0 ${
+                          isResolved ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
                         }`}>
-                          {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : (asset.live_inspection_status || 'Pending')}
+                          {t.status || 'Pending'}
                         </span>
                       </div>
-
-                      <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
-                        <div>
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Tag ID</span>
-                          <span className="font-mono text-xs font-semibold text-slate-700">{asset.asset_tag || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Serial S/N</span>
-                          <span className="font-mono text-xs font-semibold text-slate-700 break-all">{asset.serial_number || asset.serial || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Updated</span>
-                          <span className="text-xs font-semibold text-slate-700">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Category</span>
-                          <span className="text-xs font-semibold text-slate-700">{asset.category || 'N/A'}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-2 pt-1 justify-end">
-                        <button 
-                          disabled={isReturnPending && !isReturnRejected}
-                          onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                          className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                            (isReturnPending && !isReturnRejected)
-                              ? 'bg-orange-100 text-orange-400 border-orange-100 cursor-not-allowed opacity-60'
-                              : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50 cursor-pointer'
-                          }`}
-                        >
-                          Return
-                        </button>
-
-                        <button 
-                          disabled={isReturnPending && !isReturnRejected}
-                          onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
-                          className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                            (isReturnPending && !isReturnRejected)
-                              ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                              : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50 cursor-pointer'
-                          }`}
-                        >
-                          Replace
-                        </button>
-
-                        <button 
-                          disabled={btnState.disabled}
-                          onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                          className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm ${btnState.classes}`}
-                        >
-                          {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
-                          {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
-                          <span>{btnState.text}</span>
-                        </button>
-                      </div>
-
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 🌟 ENHANCED SERVICE TICKETS COLUMN 🌟 */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-orange-600 shrink-0" size={18}/> My Service Tickets</div>
-              <span className="text-xs font-bold text-slate-400">{myTickets.length} Raised</span>
-            </div>
-            
-            {myTickets.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
-            ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-                {myTickets.map(tix => {
-                  const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
-                  
-                  return (
-                    <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-bold text-sm text-slate-900 leading-snug">{tix.title || tix.subject}</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
-                      </div>
-                      
-                      <p className="text-xs text-slate-600 font-normal">{tix.description || tix.note}</p>
-
-                      {/* Notes Added by Admin/Staff */}
-                      {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-700">
-                          <strong className="text-slate-900 block mb-1">Admin Response:</strong>
-                          {tix.admin_remarks || tix.admin_notes || tix.resolution_notes}
-                        </div>
-                      )}
-
-                      {/* Resolution Meta & Rating System */}
-                      {isResolved && (
-                        <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-                          {tix.updated_at && (
-                             <div className="text-[10px] font-semibold text-slate-500 uppercase flex items-center gap-1">
-                               <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
-                             </div>
-                          )}
-
-                          <div className="flex items-center gap-1 mt-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Rate Support:</span>
-                            {[1, 2, 3, 4, 5].map(star => (
-                              <button
-                                key={star}
-                                disabled={!!tix.rating}
-                                onClick={() => handleRateTicket(tix.id, star)}
-                                className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
-                              >
-                                <Star size={14} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-slate-300"} />
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-medium border-t border-slate-50 mt-2">
-                        <span>Category: <strong className="text-slate-600 font-semibold">{tix.category || 'General'}</strong></span>
-                        <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
+                      <p className={`text-xs leading-relaxed line-clamp-2 ${theme.textSub}`}>{t.description || t.message || 'No description provided.'}</p>
+                      <div className="pt-2 border-t border-slate-200/50 dark:border-purple-900/30 flex justify-between items-center text-[10px] font-mono text-zinc-400">
+                        <span>Submitted: {new Date(t.created_at).toLocaleDateString()}</span>
+                        <span className="text-purple-600 dark:text-purple-300 font-bold uppercase">{t.category || 'Hardware'}</span>
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {modal.isOpen && (
-        <LiveDatabaseModal type={modal.type} asset={modal.targetAsset} user={currentUser} setAssignedAssets={setAssignedAssets} onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} />
-      )}
-    </div>
-  );
-}
-
-// 🌟 TRANSACTIONAL MODAL
-function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: any) {
-  const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT' || type === 'RETURN';
-  const [isUnlocked, setIsUnlocked] = useState(!needsLock);
-  const [serialInput, setSerialInput] = useState('');
-  const [lockError, setLockError] = useState(false);
-
-  const [formTitle, setFormTitle] = useState('');
-  const [formText, setFormText] = useState('');
-  const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
-  const [formCondition, setFormCondition] = useState('Pristine / Flawless');
-  const [showQR, setShowQR] = useState(false);
-  const [qrUrl, setQrUrl] = useState('');
-  const [isTransmitting, setIsTransmitting] = useState(false);
-  const [successDone, setSuccessDone] = useState(false);
-
-  const handleAttemptUnlock = () => {
-    if (!asset) { alert("No hardware assigned to test against!"); return; }
-    if (user.id === 'guest-mock-uuid') { setLockError(false); setIsUnlocked(true); return; }
-    const typed = serialInput.trim().toLowerCase();
-    if (typed === (asset.serial_number||'').toLowerCase() || typed === (asset.asset_tag||'').toLowerCase()) { setLockError(false); setIsUnlocked(true); } else setLockError(true);
-  };
-
-  const generateMobileHandoff = () => {
-    const baseUrl = window.location.origin;
-    const cat = asset?.category || formCategory;
-    const finalNotes = type === 'RETURN' ? `[RETURN REQUEST] ${formText}` : formText;
-    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
-    setQrUrl(url);
-    setShowQR(true);
-  };
-
-  const handleLivePostgresSubmit = async () => {
-    if (type === 'INSPECTION' || type === 'RETURN') {
-      if (type === 'RETURN') {
-        try {
-          await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', asset.id);
-          if (setAssignedAssets) {
-            setAssignedAssets((prev: any[]) => prev.map(a => a.id === asset.id ? { ...a, status: 'Pending Return' } : a));
-          }
-        } catch(e) { console.warn("Failed to mark as Pending Return", e); }
-      }
-      generateMobileHandoff();
-      return;
-    }
-
-    setIsTransmitting(true);
-    if (user.id === 'guest-mock-uuid') { setTimeout(() => { setIsTransmitting(false); setSuccessDone(true); setTimeout(() => onClose(), 1200); }, 800); return; }
-
-    let submitError = null; 
-    try {
-      const cleanEmail = user.email.toLowerCase().trim();
-      const finalEmp = user.emp_id || 'STAFF';
-      let humanName = user.name || cleanEmail.split('@')[0];
-      humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
-      humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
-
-      if (type === 'TICKET') {
-        const { error } = await supabase.from('tickets').insert({ title: formTitle || 'IT Support Ticket', category: formCategory, description: formText || 'No details given', status: 'Open', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName });
-        submitError = error;
-      } else if (type === 'REQUEST') {
-        const { error } = await supabase.from('tickets').insert({ title: `Asset Request: ${formCategory}`, category: `Request: ${formCategory}`, description: formText || `Staff requested ${formCategory}`, status: 'Pending', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName });
-        submitError = error;
-      } else if (type === 'REPLACEMENT') {
-        const { error: ticketError } = await supabase.from('tickets').insert({ title: `Replacement Request: ${asset.name}`, category: 'Asset Replacement', description: `Tag ID: ${asset.asset_tag} | S/N: ${asset.serial_number}\n\nReason: ${formText}`, status: 'Pending', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName });
-        submitError = ticketError;
-        if (!ticketError) await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', asset.id);
-      }
-      if (submitError) throw submitError;
-      setSuccessDone(true); setTimeout(() => onClose(), 1200);
-    } catch (e: any) { alert(`Database Error: ${e.message || JSON.stringify(e)}`); } finally { setIsTransmitting(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-        <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl font-bold ${type === 'RETURN' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{type === 'RETURN' ? <LogOut size={20} /> : <Ticket size={20}/>}</div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">{type === 'REPLACEMENT' ? 'Assets Replacement' : type === 'RETURN' ? 'Asset Return Request' : 'Portal Submission'}</h3>
-              {type !== 'REPLACEMENT' && type !== 'RETURN' && <p className="text-xs text-slate-500 font-medium">{type}</p>}
-              {type === 'RETURN' && <p className="text-xs text-slate-500 font-medium">Initiate IT Handover</p>}
+                })
+              )}
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors"><X size={18}/></button>
+
         </div>
 
-        <div className="p-6 sm:p-8 overflow-y-auto space-y-5">
-          {successDone ? (
-            <div className="py-10 text-center space-y-2">
-              <CheckCircle2 size={48} className="text-emerald-600 mx-auto animate-bounce"/>
-              <h4 className="text-xl font-bold text-slate-900">Database Updated!</h4>
-            </div>
-          ) : showQR ? (
-            <div className="py-6 text-center space-y-6 animate-in zoom-in-95 duration-300">
-              <div>
-                <h4 className="text-lg font-black text-slate-900 uppercase tracking-widest">Mobile Device Handoff</h4>
-                <p className="text-xs text-slate-500 font-semibold mt-1">Scan this code with your phone camera to take certified watermark photos of the asset.</p>
-              </div>
-              <div className="p-4 bg-white border-2 border-slate-200 rounded-3xl inline-block shadow-lg mx-auto">
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-48 h-48 rounded-xl" />
-              </div>
-              <div className="p-4 bg-purple-50 border border-purple-100 rounded-2xl text-left">
-                <h5 className="text-[10px] font-black uppercase text-purple-800 tracking-widest mb-2 flex items-center gap-2"><Camera size={14}/> Photo Requirements</h5>
-                <ul className="text-xs text-purple-900 font-medium space-y-1.5 ml-1">
-                  {(asset?.category || '').toLowerCase().includes('laptop') ? (
-                    <><li>✅ Screen & Keypad view</li><li>✅ Top and Bottom (with Tag)</li><li>✅ Left and Right Side Ports</li></>
-                  ) : (
-                    <><li>✅ Clear Front / Top View</li><li>✅ Bottom View (showing Asset Tag)</li></>
-                  )}
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 text-sm font-medium">
-              {needsLock && (
-                <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 space-y-3">
-                  <p className="text-xs font-bold text-purple-900 flex items-center gap-2">🔒 Security Verification Required</p>
-                  <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest mode...' : 'Type exact Tag ID or S/N...'} className="flex-1 p-3 bg-white rounded-xl border border-purple-200 text-xs font-bold outline-none"/>
-                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors">Verify</button>}
-                  </div>
-                  {lockError && <p className="text-[11px] text-rose-600 font-bold">Incorrect device code.</p>}
-                </div>
-              )}
-
-              {type === 'TICKET' && (
-                <>
-                  <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Issue Subject</label><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} placeholder="E.g. Monitor display flickering" className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-purple-600 text-sm font-semibold"/></div>
-                  <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Category</label><select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-200 font-semibold"><option>Hardware</option><option>Software</option><option>Network</option></select></div>
-                </>
-              )}
-
-              {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
-                <div className="animate-in slide-in-from-top-4 duration-300">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Asset Condition</label>
-                  <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-200 font-semibold mb-4 outline-none focus:border-purple-600">
-                    <option>Pristine / Flawless</option><option>Good / Minor Scratches</option><option>Poor / Damaged (Requires Fix)</option><option>Non-Functional / Dead</option>
-                  </select>
-                </div>
-              )}
-
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-purple-600 text-sm resize-none"/></div>
-            </div>
-          )}
-        </div>
-
-        {!successDone && (
-          <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 shrink-0">
-            {showQR ? (
-              <button onClick={onClose} className="w-full py-3.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm transition-colors">Close Portal (Awaiting Mobile Scan)</button>
-            ) : (
-              <>
-                <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer transition-colors">Cancel</button>
-                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className={`px-7 py-3 rounded-xl text-xs font-bold text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-colors ${type === 'RETURN' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
-                  {isTransmitting && <Loader2 size={14} className="animate-spin"/>} {type === 'INSPECTION' || type === 'RETURN' ? 'Generate Camera QR' : 'Transmit'}
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

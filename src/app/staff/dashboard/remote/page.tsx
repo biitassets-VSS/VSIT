@@ -22,7 +22,7 @@ interface StaffProfile {
   assigned_asset_name?: string;
 }
 
-// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT WITH ADMIN)
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR
 const getChannelTopic = (staff: any) => {
   const code = (staff?.emp_code || staff?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const email = (staff?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -155,7 +155,6 @@ export default function StaffRemotePage() {
     activeSignalingUserIdRef.current = userId;
 
     const sigTopic = `webrtc_signaling_${userId}`;
-    // 🌟 ROOT CAUSE FIX: Dynamic unique topic token prevents "cannot add postgres_changes" errors!
     const notifTopic = `staff_notif_popup_${userId}_${Date.now()}`;
     const targetChannelId = getChannelTopic(currentProf);
 
@@ -191,7 +190,7 @@ export default function StaffRemotePage() {
       .subscribe();
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE OVER DETERMINISTIC TOPIC & TURN RELAYS
+  // 🚀 START WEBRTC SCREEN SHARE
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(profile);
     setIsConnecting(true);
@@ -392,13 +391,13 @@ export default function StaffRemotePage() {
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
       <div className="w-full max-w-350 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 flex-1 flex flex-col">
         
-        {/* STANDARDIZED HEADER */}
+        {/* STANDARDIZED HEADER WITH BACK ARROW TO https://vsit-teal.vercel.app/staff */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300`}>
           <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
             <button 
-              onClick={() => router.push('/staff/dashboard')} 
+              onClick={() => router.push('/staff')} 
               className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}
-              title="Back to Dashboard"
+              title="Back to Staff Dashboard"
             >
               <ArrowLeft size={18} />
             </button>
@@ -464,7 +463,6 @@ export default function StaffRemotePage() {
               </div>
 
               <div className="space-y-4">
-                {/* PROMINENT MANUAL "START SHARING" BUTTON FOR INSTANT SUPPORT */}
                 {!isStreaming ? (
                   <button
                     type="button"
