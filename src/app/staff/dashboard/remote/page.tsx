@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Monitor, ArrowLeft, Loader2, ShieldCheck, Copy, Check, 
   Key, HelpCircle, Radio, Laptop, ShieldAlert, Wifi, 
-  CheckCircle2, AlertTriangle, ExternalLink
+  CheckCircle2, AlertTriangle, ExternalLink, StopCircle, Video, Power
 } from 'lucide-react';
 
 interface StaffProfile {
@@ -29,6 +29,16 @@ export default function StaffRemotePage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'instructions' | 'security'>('overview');
+
+  // 🌟 INTERACTIVE WEBRTC POPUP & STREAMING STATE
+  const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string } | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  
+  // WebRTC Peer & Media Stream References
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<any>(null);
 
   // 🌟 REAL-TIME GLOBAL THEME LISTENER
   useEffect(() => {
@@ -52,6 +62,7 @@ export default function StaffRemotePage() {
     return () => {
       window.removeEventListener('storage', checkTheme);
       observer.disconnect();
+      stopScreenSharing();
     };
   }, []);
 
@@ -81,19 +92,18 @@ export default function StaffRemotePage() {
 
       if (profErr) throw profErr;
 
+      let currentProf: StaffProfile;
       if (userProfile) {
         const matchedAsset = (assets || []).find(a => a.assigned_to === userProfile.id || a.assigned_to === userProfile.email);
-        
-        setProfile({
+        currentProf = {
           ...userProfile,
           rustdesk_id: userProfile.rustdesk_id || userProfile.remote_id || 'Not Assigned',
           rustdesk_password: userProfile.rustdesk_password || userProfile.remote_password || '••••••••',
           assigned_asset_name: matchedAsset ? matchedAsset.name : 'Unassigned Workstation'
-        });
+        };
       } else {
-        // Fallback for session token without full profile row
-        setProfile({
-          id: 'temp',
+        currentProf = {
+          id: 'temp-' + Date.now(),
           full_name: activeUser.name || activeUser.full_name || cleanEmail.split('@')[0],
           email: cleanEmail,
           emp_code: activeUser.emp_code || 'EMP-STAFF',
@@ -101,13 +111,144 @@ export default function StaffRemotePage() {
           rustdesk_id: 'Contact IT Support',
           rustdesk_password: '••••••••',
           assigned_asset_name: 'Standard Workstation'
-        });
+        };
       }
+
+      setProfile(currentProf);
+      setupSignalingListener(currentProf.id);
+
     } catch (error: any) {
       toast.error(`Error loading support details: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 📡 SETUP LIVE SIGNALING & DATABASE NOTIFICATION LISTENER FOR INSTANT POPUP
+  const setupSignalingListener = (userId: string) => {
+    if (!userId) return;
+
+    // 1. Listen for WebRTC Signaling Pulses from Admin Commander
+    const signalingChannel = supabase.channel(`webrtc_signaling_${userId}`)
+      .on('broadcast', { event: 'request_screen_share' }, (payload) => {
+        setIncomingRequest({
+          adminName: payload.payload.adminName || 'IT Administrator',
+          adminCode: payload.payload.adminCode || 'EMP-ADMIN',
+          channelId: payload.payload.channelId || `session_${userId}_${Date.now()}`
+        });
+        toast("⚠️ IT Admin requested live screen sharing!", { icon: '📡', duration: 8000 });
+      })
+      .subscribe();
+
+    // 2. Listen for Real-time Database Notification Inserts (Fallback for 100% Reliability)
+    const dbNotifChannel = supabase.channel(`staff_notif_popup_${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
+        const newNotif = payload.new;
+        if (newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
+          setIncomingRequest({
+            adminName: 'IT Support Commander',
+            adminCode: 'EMP-ADMIN',
+            channelId: `session_${userId}_${Date.now()}`
+          });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(signalingChannel);
+      supabase.removeChannel(dbNotifChannel);
+    };
+  };
+
+  // 🚀 START WEBRTC SCREEN SHARE (TRIGGERED BY POPUP OR MANUAL BUTTON)
+  const startScreenShare = async (manualChannelId?: string) => {
+    const targetChannelId = manualChannelId || incomingRequest?.channelId || `session_${profile?.id || 'staff'}_${Date.now()}`;
+    setIsConnecting(true);
+
+    try {
+      // 1. Request browser screen capture permission
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' as any, frameRate: { ideal: 30, max: 60 } },
+        audio: false
+      });
+
+      streamRef.current = stream;
+
+      // When user clicks the browser's native floating "Stop Sharing" bar
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenSharing();
+        toast.error("Screen sharing stopped.");
+      };
+
+      // 2. Initialize WebRTC Peer Connection with Google STUN servers
+      const peer = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+      });
+      peerRef.current = peer;
+
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+
+      // 3. Connect to Supabase Session Signaling Channel
+      const sessionChannel = supabase.channel(targetChannelId);
+      channelRef.current = sessionChannel;
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
+        }
+      };
+
+      sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
+        if (peer.signalingState === 'have-local-offer') {
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
+          setIsConnecting(false);
+          setIsStreaming(true);
+          setIncomingRequest(null);
+          toast.success("🟢 Live WebRTC Screen Share Established!");
+        }
+      }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
+        if (peer.remoteDescription && payload.payload.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        }
+      }).on('broadcast', { event: 'terminate_session' }, () => {
+        stopScreenSharing();
+        toast("🛑 IT Admin ended the remote support session.", { icon: 'ℹ️' });
+      }).subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          const offer = await peer.createOffer();
+          await peer.setLocalDescription(offer);
+          sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+        }
+      });
+
+      // If manual trigger, notify Admin automatically
+      if (!incomingRequest && profile?.id) {
+        toast.success("📡 Transmitting screen stream to IT Admin Commander...");
+      }
+
+    } catch (err: any) {
+      toast.error(`Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
+      setIsConnecting(false);
+    }
+  };
+
+  const stopScreenSharing = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    if (peerRef.current) {
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    if (channelRef.current) {
+      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setIsStreaming(false);
+    setIsConnecting(false);
+    setIncomingRequest(null);
   };
 
   const copyToClipboard = (text: string, fieldName: string) => {
@@ -137,13 +278,70 @@ export default function StaffRemotePage() {
   );
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col`}>
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col relative`}>
       <Toaster position="top-right" />
       
+      {/* 🔴 ACTIVE STREAMING FLOATING BADGE WITH INSTANT KILL-SWITCH */}
+      {isStreaming && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
+          <div className="flex items-center gap-3">
+            <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+            <div>
+              <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
+              <p className="text-[11px] text-zinc-300">IT Support is actively viewing your workspace.</p>
+            </div>
+          </div>
+          <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
+            <StopCircle size={15} /> <span>Stop Sharing</span>
+          </button>
+        </div>
+      )}
+
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
+      {incomingRequest && !isStreaming && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#150f24] border-2 border-orange-500 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner animate-bounce">
+              <Monitor size={32} />
+            </div>
+            
+            <div className="text-center space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900 dark:text-purple-50">Live IT Support Access Requested</h3>
+              <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-purple-300/70">
+                <strong className="text-slate-900 dark:text-white font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen for live troubleshooting.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30 text-xs font-semibold text-orange-800 dark:text-orange-300 flex items-center gap-3">
+              <ShieldAlert size={22} className="shrink-0 text-orange-600 dark:text-orange-400" />
+              <span>When prompted by your browser, select <strong className="underline">"Entire Screen"</strong> or your active window to establish the connection.</span>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setIncomingRequest(null)} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-purple-900/50 text-xs font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+              >
+                Decline
+              </button>
+              <button 
+                onClick={() => startScreenShare()} 
+                disabled={isConnecting} 
+                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95"
+              >
+                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
-      <div className="w-full max-w-350 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 flex-1 flex flex-col">
+      <div className="w-full max-w-[1400px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 flex-1 flex flex-col">
         
-        {/* 🌟 STANDARDIZED HEADER */}
+        {/* STANDARDIZED HEADER */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300`}>
           <div className="flex items-center gap-3.5 sm:gap-5 min-w-0">
             <button 
@@ -176,10 +374,10 @@ export default function StaffRemotePage() {
           </div>
         </div>
 
-        {/* 🌟 NAVIGATION TABS */}
+        {/* NAVIGATION TABS */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar shrink-0">
           {[
-            { id: 'overview', label: '🖥️ Workstation & Credentials', icon: <Laptop size={14} /> },
+            { id: 'overview', label: '🖥️ Workstation & Screen Share', icon: <Laptop size={14} /> },
             { id: 'instructions', label: '📖 How Remote Support Works', icon: <HelpCircle size={14} /> },
             { id: 'security', label: '🛡️ Privacy & Watermark Policies', icon: <ShieldCheck size={14} /> }
           ].map(tab => (
@@ -197,11 +395,11 @@ export default function StaffRemotePage() {
           ))}
         </div>
 
-        {/* 🌟 TAB 1: OVERVIEW & CREDENTIALS */}
+        {/* 🌟 TAB 1: OVERVIEW & ONE-CLICK SCREEN SHARE BUTTON */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
             
-            {/* Left: Workstation Details */}
+            {/* Left: Workstation Details & Manual Launch Button */}
             <div className={`p-6 sm:p-8 rounded-3xl border shadow-sm space-y-6 flex flex-col justify-between ${theme.card}`}>
               <div className="space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-300 flex items-center justify-center font-black text-xl shadow-inner">
@@ -214,16 +412,40 @@ export default function StaffRemotePage() {
                 </div>
               </div>
 
-              <div className={`p-4 rounded-2xl border space-y-2 ${theme.cardInner}`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className={theme.textSub}>Connection Status:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" /> Online & Ready
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className={theme.textSub}>Signaling Channel:</span>
-                  <span className="font-mono font-bold text-orange-600 dark:text-orange-400">WebRTC DTLS / TLS 1.3</span>
+              <div className="space-y-4">
+                {/* 🟢 PROMINENT MANUAL "START SHARING" BUTTON FOR INSTANT SUPPORT */}
+                {!isStreaming ? (
+                  <button
+                    type="button"
+                    disabled={isConnecting}
+                    onClick={() => startScreenShare()}
+                    className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                  >
+                    {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Radio size={16} className="animate-pulse" />}
+                    <span>{isConnecting ? 'Opening Selector...' : '📡 Share Screen Now'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={stopScreenSharing}
+                    className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-rose-600/25 transition-all cursor-pointer active:scale-95"
+                  >
+                    <StopCircle size={16} />
+                    <span>Stop Active Screen Share</span>
+                  </button>
+                )}
+
+                <div className={`p-4 rounded-2xl border space-y-2 ${theme.cardInner}`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={theme.textSub}>Connection Status:</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" /> Online & Ready
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={theme.textSub}>Signaling Channel:</span>
+                    <span className="font-mono font-bold text-orange-600 dark:text-orange-400">WebRTC DTLS / TLS 1.3</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -301,7 +523,7 @@ export default function StaffRemotePage() {
                 </div>
                 <h4 className={`text-sm sm:text-base font-black ${theme.textMain}`}>1. In-Browser WebRTC Screen Share</h4>
                 <p className={`text-xs leading-relaxed ${theme.textSub}`}>
-                  When an administrator initiates a live session, a popup alert will appear directly on your dashboard. Simply click <strong className="text-orange-600 dark:text-orange-400">Accept & Share</strong> and select your screen when prompted by your browser. No software installation is required!
+                  When an administrator initiates a live session, a popup alert will appear directly on your screen. You can also click <strong className="text-orange-600 dark:text-orange-400">Share Screen Now</strong> above at any time while on the phone with IT!
                 </p>
               </div>
 
