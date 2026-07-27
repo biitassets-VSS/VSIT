@@ -125,7 +125,7 @@ export default function StaffDashboardPage() {
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
     let s = raw.split('@')[0].split('.')[0];            
-    s = s.replace(/[_-]/g, ' ');    
+    s = s.replace(/[_-]/g, ' ');  
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
@@ -224,37 +224,29 @@ export default function StaffDashboardPage() {
 
         setNotifications(uniqueAlerts);
 
-        // Check if there is an unread screen share request to trigger popup
-        const pendingShareAlert = uniqueAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
-        if (pendingShareAlert && !isStreaming) {
-          setIncomingRequest({
-            adminName: 'IT Support Commander',
-            adminCode: 'EMP-ADMIN',
-            channelId: getChannelTopic(user),
-            alertId: pendingShareAlert.id
-          });
-        }
-
-        const compiledAssets = (assetsRes.data || []).map(asset => {
-          const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
-          return {
-            ...asset,
-            live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
-            live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
-          };
-        });
-        setAssignedAssets(compiledAssets);
-        
-        const needsInspCount = compiledAssets.filter(a => 
-          ['pending', 're-inspection', 'overdue', 'not approved', 'reject'].some(status => (a.live_inspection_status || '').toLowerCase().includes(status))
-        ).length;
-
-        const tix = ticketsRes.data || [];
-        setMyTickets(tix);
-        const openTixCount = tix.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
-
-        setStats({ totalAssets: compiledAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
+        // 🔴 FIX: Removed the automatic setIncomingRequest logic here. 
+        // We DO NOT want the modal to forcefully pop up every time the page refreshes just because the notification exists in the DB.
       }
+
+      const compiledAssets = (assetsRes.data || []).map(asset => {
+        const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
+        return {
+          ...asset,
+          live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
+          live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
+        };
+      });
+      setAssignedAssets(compiledAssets);
+      
+      const needsInspCount = compiledAssets.filter(a => 
+        ['pending', 're-inspection', 'overdue', 'not approved', 'reject'].some(status => (a.live_inspection_status || '').toLowerCase().includes(status))
+      ).length;
+
+      const tix = ticketsRes.data || [];
+      setMyTickets(tix);
+      const openTixCount = tix.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
+
+      setStats({ totalAssets: compiledAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
 
       setupSignalingListener(user.id, user);
 
@@ -277,6 +269,7 @@ export default function StaffDashboardPage() {
       }
     });
 
+    // 🔴 FIX: The modal will ONLY open when a LIVE ping comes through WebRTC, preventing reload loops.
     const signalingChannel = supabase.channel(sigTopic)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({
@@ -298,14 +291,7 @@ export default function StaffDashboardPage() {
             return [newNotif, ...prev];
           });
         }
-        if (!newNotif.is_read && !dismissed.includes(newNotif.id) && newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
-          setIncomingRequest({
-            adminName: 'IT Support Commander',
-            adminCode: 'EMP-ADMIN',
-            channelId: targetChannelId,
-            alertId: newNotif.id
-          });
-        }
+        // We do NOT call setIncomingRequest here either, to ensure modal only triggers via signaling broadcast.
       })
       .subscribe();
   };
@@ -548,7 +534,7 @@ export default function StaffDashboardPage() {
 
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
-  // Check if any alert is for screen sharing to show badge on thumbnail
+  // 🔴 Check if there is an unread alert so we can display the badge on the Team Screen card
   const hasScreenShareAlert = notifications.some(n => {
     const s = (n.title || '').toLowerCase() + ' ' + (n.message || '').toLowerCase();
     return s.includes('screen') || s.includes('remote') || s.includes('share');
@@ -582,7 +568,7 @@ export default function StaffDashboardPage() {
         </div>
       )}
 
-      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL (Only from LIVE WebRTC) */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
@@ -717,7 +703,7 @@ export default function StaffDashboardPage() {
               >
                 {/* 🚨 DYNAMIC BADGE ON TEAM SCREEN THUMBNAIL */}
                 {item.badge && (
-                  <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-600 text-white shadow-md animate-bounce">
+                  <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest text-white shadow-md ${isStreaming ? 'bg-emerald-500 animate-pulse' : 'bg-rose-600 animate-bounce'}`}>
                     {item.badge}
                   </span>
                 )}
