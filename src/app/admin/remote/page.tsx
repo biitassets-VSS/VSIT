@@ -8,9 +8,10 @@ import {
   Users, Monitor, ArrowLeft, Loader2, ShieldAlert, Search, 
   PanelLeftClose, PanelLeftOpen, ExternalLink, Copy, Check, 
   Bell, RefreshCw, Play, Terminal, Sliders, Power, 
-  Maximize2, Minimize2, AlertTriangle, CheckCircle2, Laptop,
+  Maximize, Minimize, AlertTriangle, CheckCircle2, Laptop,
   HelpCircle, ShieldCheck, Cpu, MousePointer, Keyboard, Lock,
-  Video, Radio, Eye, Camera, StopCircle, Filter
+  Video, Radio, Eye, Camera, StopCircle, Filter, 
+  MessageSquare, Send, Volume2, VolumeX
 } from 'lucide-react';
 
 interface StaffMember {
@@ -30,6 +31,13 @@ interface AdminProfile {
   name: string;
   email: string;
   emp_code: string;
+}
+
+interface ChatMessage {
+  sender: string;
+  text: string;
+  time: string;
+  isSelf: boolean;
 }
 
 // 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT)
@@ -68,21 +76,26 @@ export default function AdminRemotePage() {
   const [isSendingPing, setIsSendingPing] = useState(false);
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({ name: 'System Admin', email: 'admin@vsit.com', emp_code: 'EMP-ADMIN' });
 
+  // 🌟 NEW FEATURES STATE (FULLSCREEN, AUDIO, CHAT)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+
   // WebRTC & DOM References
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
+  const viewportContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const checkTheme = () => {
       const savedTheme = localStorage.getItem('vsit_theme');
       const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
       setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      if (isDark) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
     };
 
     checkTheme();
@@ -90,13 +103,26 @@ export default function AdminRemotePage() {
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
+    // Track fullscreen changes native to browser
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
     loadStaffAndAdminData();
+    
     return () => {
       window.removeEventListener('storage', checkTheme);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       observer.disconnect();
       terminateSession();
     };
   }, []);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   const loadStaffAndAdminData = async () => {
     setLoading(true);
@@ -171,6 +197,7 @@ export default function AdminRemotePage() {
     setActiveSession(staff);
     setSessionStatus('idle');
     setIsControlling(false);
+    setChatMessages([]);
   };
 
   // 📡 INITIATE WEBRTC SIGNALING WITH TURN RELAYS & GUARANTEED TOPIC
@@ -178,6 +205,7 @@ export default function AdminRemotePage() {
     if (!activeSession) return;
     setIsSendingPing(true);
     setSessionStatus('requesting');
+    setChatMessages([]);
 
     try {
       const targetChannelId = getChannelTopic(activeSession);
@@ -220,6 +248,14 @@ export default function AdminRemotePage() {
       }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
         terminateSession();
         toast.error("Employee stopped sharing their screen.");
+      }).on('broadcast', { event: 'chat_message' }, (payload) => {
+        // Handle incoming chat messages from staff
+        setChatMessages(prev => [...prev, {
+          sender: payload.payload.sender || 'Staff',
+          text: payload.payload.text,
+          time: payload.payload.time,
+          isSelf: false
+        }]);
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           await sessionChannel.send({
@@ -262,6 +298,16 @@ export default function AdminRemotePage() {
     toast.success(nextState ? "🎮 Remote Mouse & Click Injection ENABLED!" : "👁️ Switched to View-Only Mode.");
   };
 
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      viewportContainerRef.current?.requestFullscreen().catch((err) => {
+        toast.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   const terminateSession = () => {
     if (peerRef.current) {
       peerRef.current.close();
@@ -277,6 +323,7 @@ export default function AdminRemotePage() {
     }
     setSessionStatus('idle');
     setIsControlling(false);
+    if (document.fullscreenElement) document.exitFullscreen();
   };
 
   const handleViewportClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -285,11 +332,48 @@ export default function AdminRemotePage() {
     const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
     const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
     
+    // Simulate sending pointer coordinates to Staff side
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'admin_pointer_click',
+        payload: { x, y }
+      });
+    }
+
     toast(`🖱️ Click pulse sent to target at X:${x}% Y:${y}%`, {
       icon: '⚡',
       style: { background: isDarkMode ? '#18181b' : '#333', color: '#fff', fontSize: '11px' },
       duration: 1200
     });
+  };
+
+  const sendChatMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !channelRef.current) return;
+    
+    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Add to local state
+    setChatMessages(prev => [...prev, {
+      sender: 'Me (Admin)',
+      text: chatInput,
+      time: timeString,
+      isSelf: true
+    }]);
+
+    // Broadcast to staff
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'chat_message',
+      payload: {
+        sender: adminProfile.name,
+        text: chatInput,
+        time: timeString
+      }
+    });
+
+    setChatInput('');
   };
 
   const filteredStaff = useMemo(() => {
@@ -330,7 +414,7 @@ export default function AdminRemotePage() {
     <div className={`h-screen max-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased flex flex-col overflow-hidden`}>
       <Toaster position="top-right" />
       
-      <div className="w-full max-w-350 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
         
         {/* COMPACT STANDARDIZED HEADER */}
         <div className={`${theme.card} rounded-2xl p-3 sm:p-4 border shadow-sm flex items-center justify-between gap-4 shrink-0 transition-all duration-300`}>
@@ -511,9 +595,9 @@ export default function AdminRemotePage() {
                 {/* Navigation Sub-Tabs */}
                 <div className={`px-5 pt-1 flex items-center gap-4 border-b shrink-0 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]/40' : 'bg-slate-50/40'}`}>
                   {[
-                    { id: 'live_stream', label: '🖥️ Live WebRTC Viewport & Watermark', icon: <Video size={13} /> },
-                    { id: 'diagnostics', label: '🛠️ Remote Diagnostics & Control', icon: <Sliders size={13} /> },
-                    { id: 'security_logs', label: '🛡️ Audit Security Ledger', icon: <ShieldCheck size={13} /> }
+                    { id: 'live_stream', label: '🖥️ Live WebRTC Viewport', icon: <Video size={13} /> },
+                    { id: 'diagnostics', label: '🛠️ Remote Diagnostics', icon: <Sliders size={13} /> },
+                    { id: 'security_logs', label: '🛡️ Audit Ledger', icon: <ShieldCheck size={13} /> }
                   ].map(t => (
                     <button
                       key={t.id}
@@ -528,128 +612,168 @@ export default function AdminRemotePage() {
                 </div>
 
                 {/* 🌟 TAB CONTENT AREA */}
-                <div className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar flex flex-col min-h-0">
+                <div className="flex-1 p-4 sm:p-5 overflow-hidden flex flex-col min-h-0">
                   
-                  {/* Sub-Tab 1: LIVE WEBRTC VIEWPORT & MANDATORY WATERMARK OVERLAY */}
+                  {/* Sub-Tab 1: LIVE WEBRTC VIEWPORT & CHAT */}
                   {viewerTab === 'live_stream' && (
-                    <div className="flex-1 flex flex-col gap-3 min-h-0">
+                    <div className="flex-1 flex flex-col xl:flex-row gap-4 min-h-0 overflow-hidden">
                       
-                      {/* 🌟 THE IN-BROWSER LIVE VIEWPORT */}
-                      <div 
-                        onClick={handleViewportClick}
-                        className={`relative flex-1 w-full rounded-2xl overflow-hidden border-2 flex flex-col items-center justify-center min-h-0 max-h-125 transition-all select-none ${
-                          isControlling 
-                            ? 'border-orange-500 ring-4 ring-orange-500/20 cursor-crosshair bg-slate-950' 
-                            : sessionStatus === 'connected'
-                            ? 'border-purple-600/50 bg-slate-950 shadow-2xl'
-                            : isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c]' : 'border-slate-300 bg-slate-900'
-                        }`}
-                      >
-                        
-                        {/* 🛡️ PERSISTENT MANDATORY SECURITY WATERMARK BANNER */}
-                        <div className="absolute top-3 inset-x-3 z-30 pointer-events-none flex items-center justify-center">
-                          <div className="w-full max-w-2xl py-2 px-4 rounded-xl bg-black/85 border border-orange-500/80 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
-                              <span className="text-[10px] font-mono font-black text-orange-400 uppercase tracking-wider">
-                                ⚠️ LIVE IT SUPPORT IN PROGRESS | DO NOT CLOSE BROWSER
+                      <div className="flex-1 flex flex-col gap-3 min-h-0">
+                        {/* 🌟 THE IN-BROWSER LIVE VIEWPORT (WITH FULLSCREEN REF) */}
+                        <div 
+                          ref={viewportContainerRef}
+                          onClick={handleViewportClick}
+                          className={`relative flex-1 w-full rounded-2xl overflow-hidden border-2 flex flex-col items-center justify-center min-h-0 transition-all select-none ${
+                            isControlling 
+                              ? 'border-orange-500 ring-4 ring-orange-500/20 cursor-crosshair bg-slate-950' 
+                              : sessionStatus === 'connected'
+                              ? 'border-purple-600/50 bg-slate-950 shadow-2xl'
+                              : isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c]' : 'border-slate-300 bg-slate-900'
+                          }`}
+                        >
+                          {/* 🛡️ PERSISTENT MANDATORY SECURITY WATERMARK BANNER */}
+                          <div className={`absolute top-3 inset-x-3 z-30 pointer-events-none flex items-center justify-center ${isFullscreen ? 'opacity-50' : ''}`}>
+                            <div className="w-full max-w-2xl py-2 px-4 rounded-xl bg-black/85 border border-orange-500/80 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+                                <span className="text-[10px] font-mono font-black text-orange-400 uppercase tracking-wider">
+                                  ⚠️ LIVE IT SUPPORT IN PROGRESS | DO NOT CLOSE BROWSER
+                                </span>
+                              </div>
+                              <span className="text-[9px] font-mono font-bold text-zinc-300 uppercase bg-purple-950/80 px-2.5 py-0.5 rounded-md border border-purple-500/40">
+                                AUTHORIZED ADMIN: <strong className="text-white">{adminProfile.name} ({adminProfile.emp_code})</strong>
                               </span>
                             </div>
-                            <span className="text-[9px] font-mono font-bold text-zinc-300 uppercase bg-purple-950/80 px-2.5 py-0.5 rounded-md border border-purple-500/40">
-                              AUTHORIZED ADMIN: <strong className="text-white">{adminProfile.name} ({adminProfile.emp_code})</strong>
-                            </span>
                           </div>
+
+                          {/* 🎬 FULLSCREEN AND AUDIO CONTROLS (Floating top right) */}
+                          {sessionStatus === 'connected' || sessionStatus === 'controlling' ? (
+                            <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setIsAudioEnabled(!isAudioEnabled); }}
+                                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-lg"
+                                title={isAudioEnabled ? "Mute Incoming Audio" : "Enable Incoming Audio (If Staff is transmitting)"}
+                              >
+                                {isAudioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} className="text-rose-400" />}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleFullScreen(); }}
+                                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-lg"
+                                title="Toggle Fullscreen"
+                              >
+                                {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {/* 🟢 THE HTML5 LIVE WEBRTC VIDEO STREAM PLAYER */}
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted={!isAudioEnabled}
+                            className={`w-full h-full object-contain z-10 ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`}
+                          />
+
+                          {/* Fallback Display if stream hasn't started yet */}
+                          {sessionStatus === 'requesting' ? (
+                            <div className="flex flex-col items-center justify-center text-center p-6 text-white z-10">
+                              <Loader2 size={40} className="text-orange-500 animate-spin mb-3" />
+                              <h3 className="text-base font-black">Awaiting Employee Screen Share Authorization...</h3>
+                              <p className="text-xs text-zinc-400 mt-1 max-w-sm">
+                                A WebRTC signaling prompt has been sent to <strong className="text-white">{activeSession.full_name || 'Staff'}</strong>. Once they click Accept on their screen, the video feed will render live inside this player.
+                              </p>
+                            </div>
+                          ) : sessionStatus === 'idle' && (
+                            <div className="flex flex-col items-center justify-center text-center p-6 text-zinc-500 z-10">
+                              <Video size={48} className="mb-3 opacity-30" />
+                              <h3 className="text-sm font-black text-zinc-400">WebRTC Viewport Offline</h3>
+                              <p className="text-xs mt-1 max-w-sm">
+                                Click <strong className="text-orange-400">Initiate Screen Share</strong> above to establish a live in-browser stream with mandatory watermark overlays.
+                              </p>
+                            </div>
+                          )}
                         </div>
 
-                        {/* 🟢 THE HTML5 LIVE WEBRTC VIDEO STREAM PLAYER */}
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className={`w-full h-full max-h-120 object-contain z-10 ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`}
-                        />
-
-                        {/* Fallback Display if stream hasn't started yet */}
-                        {sessionStatus === 'requesting' ? (
-                          <div className="flex flex-col items-center justify-center text-center p-6 text-white z-10">
-                            <Loader2 size={40} className="text-orange-500 animate-spin mb-3" />
-                            <h3 className="text-base font-black">Awaiting Employee Screen Share Authorization...</h3>
-                            <p className="text-xs text-zinc-400 mt-1 max-w-sm">
-                              A WebRTC signaling prompt has been sent to <strong className="text-white">{activeSession.full_name || 'Staff'}</strong>. Once they click Accept on their screen, the video feed will render live inside this player.
-                            </p>
+                        {/* Control Toolbar below viewport */}
+                        <div className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 shrink-0 ${theme.cardInner}`}>
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={toggleRemoteControl}
+                              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all ${
+                                isControlling ? 'bg-orange-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border text-slate-700 dark:text-zinc-300 hover:border-orange-500'
+                              }`}
+                            >
+                              <MousePointer size={13} />
+                              <span>{isControlling ? '🎮 Mouse Input Enabled' : 'Enable Mouse Input'}</span>
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={() => toast.success("📸 Diagnostic screenshot saved to audit ledger.")}
+                              className="p-1.5 rounded-lg border bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 hover:border-purple-500 cursor-pointer transition-all"
+                              title="Take Diagnostic Snapshot"
+                            >
+                              <Camera size={15} />
+                            </button>
                           </div>
-                        ) : sessionStatus === 'idle' && (
-                          <div className="flex flex-col items-center justify-center text-center p-6 text-zinc-500 z-10">
-                            <Video size={48} className="mb-3 opacity-30" />
-                            <h3 className="text-sm font-black text-zinc-400">WebRTC Viewport Offline</h3>
-                            <p className="text-xs mt-1 max-w-sm">
-                              Click <strong className="text-orange-400">Initiate Screen Share</strong> above to establish a live in-browser stream with mandatory watermark overlays.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Bottom Status Bar inside Viewport */}
-                        <div className="absolute bottom-3 inset-x-4 z-20 flex justify-between items-center pointer-events-none">
-                          <span className="text-[9px] font-mono font-bold px-2.5 py-0.5 rounded bg-black/70 text-zinc-300 border border-white/10">
-                            Protocol: RTCPeerConnection / DataChannel
-                          </span>
-                          <span className="text-[9px] font-mono font-bold px-2.5 py-0.5 rounded bg-black/70 text-zinc-300 border border-white/10">
-                            Watermark Enforcement: MANDATORY (100% OPACITY)
-                          </span>
                         </div>
                       </div>
 
-                      {/* Control Toolbar below viewport */}
-                      <div className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 shrink-0 ${theme.cardInner}`}>
-                        <div className="flex items-center gap-2.5">
-                          <button
-                            type="button"
-                            onClick={toggleRemoteControl}
-                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all ${
-                              isControlling ? 'bg-orange-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border text-slate-700 dark:text-zinc-300 hover:border-orange-500'
-                            }`}
-                          >
-                            <MousePointer size={13} />
-                            <span>{isControlling ? '🎮 Mouse Input Enabled' : 'Enable Mouse Input'}</span>
-                          </button>
+                      {/* 💬 LIVE CHAT SIDEBAR (Only visible when connected/requesting) */}
+                      {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
+                        <div className={`w-full xl:w-80 rounded-2xl border flex flex-col overflow-hidden shrink-0 transition-all ${theme.cardInner}`}>
+                          <div className={`p-3 border-b flex items-center gap-2 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]' : 'bg-slate-50'}`}>
+                            <MessageSquare size={16} className="text-purple-500" />
+                            <h3 className={`text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>Live Session Chat</h3>
+                          </div>
                           
-                          <button
-                            type="button"
-                            onClick={() => toast.success("⌨️ Keyboard input passthrough active for this window.")}
-                            className="px-3.5 py-1.5 rounded-lg border bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 hover:border-orange-500 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all"
-                          >
-                            <Keyboard size={13} />
-                            <span>Enable Keyboard</span>
-                          </button>
-                        </div>
+                          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-white dark:bg-[#0b0712] min-h-62.5">
+                            {chatMessages.length === 0 ? (
+                              <div className="m-auto text-center text-xs font-medium text-slate-400 dark:text-zinc-600">
+                                Send a message to communicate with {activeSession.full_name?.split(' ')[0]}.
+                              </div>
+                            ) : (
+                              chatMessages.map((msg, idx) => (
+                                <div key={idx} className={`flex flex-col max-w-[85%] ${msg.isSelf ? 'self-end items-end' : 'self-start items-start'}`}>
+                                  <span className="text-[9px] text-slate-400 font-bold mb-0.5 px-1">{msg.isSelf ? 'You' : msg.sender} • {msg.time}</span>
+                                  <div className={`px-3 py-2 rounded-xl text-xs font-medium shadow-sm ${msg.isSelf ? 'bg-orange-600 text-white rounded-br-none' : 'bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 rounded-bl-none border border-slate-200 dark:border-zinc-700'}`}>
+                                    {msg.text}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                            <div ref={chatEndRef} />
+                          </div>
 
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => toast.success("📸 Diagnostic screenshot saved to audit ledger.")}
-                            className="p-2 rounded-lg border bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 hover:border-purple-500 cursor-pointer transition-all"
-                            title="Take Diagnostic Snapshot"
-                          >
-                            <Camera size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => toast.success("🔒 Remote workspace lock command sent to OS.")}
-                            className="p-2 rounded-lg border bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 hover:border-rose-500 cursor-pointer transition-all"
-                            title="Lock Staff Workspace"
-                          >
-                            <Lock size={15} />
-                          </button>
+                          <form onSubmit={sendChatMessage} className={`p-3 border-t flex gap-2 ${theme.divider} ${isDarkMode ? 'bg-[#0f0a1c]' : 'bg-slate-50'}`}>
+                            <input 
+                              type="text" 
+                              value={chatInput}
+                              onChange={e => setChatInput(e.target.value)}
+                              placeholder="Type a message..."
+                              className={`flex-1 px-3 py-2 rounded-xl border text-xs outline-none focus:border-orange-500 transition-colors ${
+                                isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-white placeholder-zinc-500' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                              }`}
+                            />
+                            <button 
+                              type="submit" 
+                              disabled={!chatInput.trim()}
+                              className="p-2 bg-orange-600 text-white rounded-xl disabled:opacity-50 hover:bg-orange-700 transition-colors cursor-pointer"
+                            >
+                              <Send size={16} />
+                            </button>
+                          </form>
                         </div>
-                      </div>
+                      )}
 
                     </div>
                   )}
 
                   {/* Sub-Tab 2: Remote Diagnostics & Quick Tools */}
                   {viewerTab === 'diagnostics' && (
-                    <div className="max-w-4xl mx-auto space-y-5 animate-in fade-in duration-300">
+                    <div className="max-w-4xl mx-auto space-y-5 animate-in fade-in duration-300 overflow-y-auto">
                       <div className={`p-5 rounded-2xl border space-y-3.5 ${theme.cardInner}`}>
                         <h3 className={`text-sm sm:text-base font-black flex items-center gap-2 ${theme.textMain}`}>
                           <Sliders className="text-orange-600 dark:text-orange-400" size={18} /> 
