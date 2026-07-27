@@ -386,7 +386,7 @@ export default function StaffDashboardPage() {
         showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
       })
       
-      // 🌟 FIXED: LIVE CHAT RECEIVER (Auto-opens chat)
+      // 🌟 LIVE CHAT RECEIVER (Auto-opens chat)
       .on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, {
           sender: payload.payload.sender || 'Admin',
@@ -400,11 +400,26 @@ export default function StaffDashboardPage() {
         showToast("💬 New IT Message", `Admin: ${payload.payload.text}`);
       })
       
-      // 🌟 NEW: REMOTE CONTROL LASER POINTER
+      // 🌟 REMOTE CONTROL: LASER POINTER + REAL OS CLICK
       .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
         const { x, y } = payload.payload;
+        
+        // 1. Show the visual red dot
         setAdminPing({ x, y, id: Date.now() });
-        setTimeout(() => setAdminPing(null), 2000); // Auto fade-out
+        setTimeout(() => setAdminPing(null), 2000); 
+
+        // 2. 🚨 EXECUTE REAL WINDOWS CLICK (If running inside Electron) 🚨
+        if (typeof window !== 'undefined' && (window as any).electronAPI) {
+          (window as any).electronAPI.sendRemoteClick(x, y);
+        }
+      })
+      
+      // 🌟 REMOTE CONTROL: KEYBOARD TYPING (If running inside Electron)
+      .on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
+         const { text } = payload.payload;
+         if (typeof window !== 'undefined' && (window as any).electronAPI) {
+           (window as any).electronAPI.sendRemoteType(text);
+         }
       })
       
       .subscribe(async (status) => {
