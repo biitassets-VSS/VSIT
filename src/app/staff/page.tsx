@@ -386,7 +386,7 @@ export default function StaffDashboardPage() {
         showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
       })
       
-      // 🌟 NEW: LIVE CHAT RECEIVER
+      // 🌟 FIXED: LIVE CHAT RECEIVER (Auto-opens chat)
       .on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, {
           sender: payload.payload.sender || 'Admin',
@@ -394,7 +394,10 @@ export default function StaffDashboardPage() {
           time: payload.payload.time,
           isSelf: false
         }]);
-        if (!showChat) showToast("💬 New IT Message", `Admin: ${payload.payload.text}`);
+        
+        setShowChat(true); // Force chat to open so they see it
+        playAlertSound();
+        showToast("💬 New IT Message", `Admin: ${payload.payload.text}`);
       })
       
       // 🌟 NEW: REMOTE CONTROL LASER POINTER
