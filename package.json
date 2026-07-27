@@ -2,6 +2,7 @@
   "name": "it-assets-management",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
@@ -10,7 +11,9 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "electron-dev": "electron .",
+    "build-exe": "electron-builder --win nsis"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1073.0",
@@ -51,5 +54,22 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.112.0"
+  },
+  "build": {
+    "appId": "com.virtualstaffing.portal",
+    "productName": "Virtual Staffing Portal",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": true
+    }
   }
 }
