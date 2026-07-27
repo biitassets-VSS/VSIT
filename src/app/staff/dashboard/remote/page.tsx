@@ -22,6 +22,24 @@ interface StaffProfile {
   assigned_asset_name?: string;
 }
 
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT WITH ADMIN)
+const getChannelTopic = (staff: any) => {
+  const code = (staff?.emp_code || staff?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const email = (staff?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const id = (staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `vsit_rtc_${code || email || id || 'default'}`;
+};
+
+// 🌟 ENTERPRISE ICE SERVERS WITH STUN + TURN TCP/UDP RELAYS
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+];
+
 export default function StaffRemotePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -31,16 +49,15 @@ export default function StaffRemotePage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'instructions' | 'security'>('overview');
 
   // 🌟 INTERACTIVE WEBRTC POPUP & STREAMING STATE
-  const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string } | null>(null);
+  const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string; alertId?: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   
-  // WebRTC Peer & Media Stream References
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
+  const activeSignalingUserIdRef = useRef<string | null>(null);
 
-  // 🌟 REAL-TIME GLOBAL THEME LISTENER
   useEffect(() => {
     const checkTheme = () => {
       const savedTheme = localStorage.getItem('vsit_theme');
@@ -63,6 +80,13 @@ export default function StaffRemotePage() {
       window.removeEventListener('storage', checkTheme);
       observer.disconnect();
       stopScreenSharing();
+      
+      activeSignalingUserIdRef.current = null;
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic.includes('webrtc_signaling_') || ch.topic.includes('staff_notif_popup_') || ch.topic.includes('vsit_rtc_')) {
+          supabase.removeChannel(ch);
+        }
+      });
     };
   }, []);
 
@@ -115,7 +139,7 @@ export default function StaffRemotePage() {
       }
 
       setProfile(currentProf);
-      setupSignalingListener(currentProf.id);
+      setupSignalingListener(currentProf.id, currentProf);
 
     } catch (error: any) {
       toast.error(`Error loading support details: ${error.message}`);
@@ -124,49 +148,63 @@ export default function StaffRemotePage() {
     }
   };
 
-  // 📡 SETUP LIVE SIGNALING & DATABASE NOTIFICATION LISTENER FOR INSTANT POPUP
-  const setupSignalingListener = (userId: string) => {
+  // 📡 SETUP LIVE SIGNALING WITH DYNAMIC INSTANCE TOKEN (ZERO COLLISION)
+  const setupSignalingListener = (userId: string, currentProf: any) => {
     if (!userId) return;
+    if (activeSignalingUserIdRef.current === userId) return;
+    activeSignalingUserIdRef.current = userId;
 
-    // 1. Listen for WebRTC Signaling Pulses from Admin Commander
-    const signalingChannel = supabase.channel(`webrtc_signaling_${userId}`)
+    const sigTopic = `webrtc_signaling_${userId}`;
+    // 🌟 ROOT CAUSE FIX: Dynamic unique topic token prevents "cannot add postgres_changes" errors!
+    const notifTopic = `staff_notif_popup_${userId}_${Date.now()}`;
+    const targetChannelId = getChannelTopic(currentProf);
+
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic.includes(sigTopic) || ch.topic.includes(`staff_notif_popup_${userId}`)) {
+        supabase.removeChannel(ch);
+      }
+    });
+
+    const signalingChannel = supabase.channel(sigTopic)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({
-          adminName: payload.payload.adminName || 'IT Administrator',
-          adminCode: payload.payload.adminCode || 'EMP-ADMIN',
-          channelId: payload.payload.channelId || `session_${userId}_${Date.now()}`
+          adminName: payload.payload?.adminName || 'IT Administrator',
+          adminCode: payload.payload?.adminCode || 'EMP-ADMIN',
+          channelId: targetChannelId
         });
         toast("⚠️ IT Admin requested live screen sharing!", { icon: '📡', duration: 8000 });
       })
       .subscribe();
 
-    // 2. Listen for Real-time Database Notification Inserts (Fallback for 100% Reliability)
-    const dbNotifChannel = supabase.channel(`staff_notif_popup_${userId}`)
+    const dbNotifChannel = supabase.channel(notifTopic)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
         const newNotif = payload.new;
-        if (newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
+        if (!newNotif.is_read && newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
           setIncomingRequest({
             adminName: 'IT Support Commander',
             adminCode: 'EMP-ADMIN',
-            channelId: `session_${userId}_${Date.now()}`
+            channelId: targetChannelId,
+            alertId: newNotif.id
           });
         }
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(signalingChannel);
-      supabase.removeChannel(dbNotifChannel);
-    };
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE (TRIGGERED BY POPUP OR MANUAL BUTTON)
-  const startScreenShare = async (manualChannelId?: string) => {
-    const targetChannelId = manualChannelId || incomingRequest?.channelId || `session_${profile?.id || 'staff'}_${Date.now()}`;
+  // 🚀 START WEBRTC SCREEN SHARE OVER DETERMINISTIC TOPIC & TURN RELAYS
+  const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
+    const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(profile);
     setIsConnecting(true);
 
     try {
-      // 🌟 TS(2353) FIX: Safely cast mediaDevices to allow modern cursor constraints
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId) {
+          supabase.removeChannel(ch);
+        }
+      });
+
+      toast("🚀 Launching Screen Picker... Please select 'Entire Screen'", { icon: '🖥️', duration: 5000 });
+
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
         audio: false
@@ -174,22 +212,17 @@ export default function StaffRemotePage() {
 
       streamRef.current = stream;
 
-      // When user clicks the browser's native floating "Stop Sharing" bar
       stream.getVideoTracks()[0].onended = () => {
         stopScreenSharing();
         toast.error("Screen sharing stopped.");
       };
 
-      // 2. Initialize WebRTC Peer Connection with Google STUN servers
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
-      });
+      const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
       stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
 
-      // 3. Connect to Supabase Session Signaling Channel
-      const sessionChannel = supabase.channel(targetChannelId);
+      const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
@@ -199,15 +232,17 @@ export default function StaffRemotePage() {
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
+        toast("⚡ Received SDP Answer from Admin... Completing Tunnel", { icon: '🔄', duration: 4000 });
         if (peer.signalingState === 'have-local-offer') {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           setIsConnecting(false);
           setIsStreaming(true);
           setIncomingRequest(null);
           toast.success("🟢 Live WebRTC Screen Share Established!");
+          if (alertIdToDismiss) dismissAlert(alertIdToDismiss);
         }
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload.candidate) {
+        if (peer.remoteDescription && payload.payload?.candidate) {
           await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
         }
       }).on('broadcast', { event: 'terminate_session' }, () => {
@@ -215,14 +250,15 @@ export default function StaffRemotePage() {
         toast("🛑 IT Admin ended the remote support session.", { icon: 'ℹ️' });
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          toast(`📡 Subscribed to topic: [${targetChannelId}]... Sending Offer`, { icon: '📡', duration: 4000 });
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
-          sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+          await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+          toast("📤 Transmitted SDP Offer to Admin Commander!", { icon: '📡', duration: 3000 });
         }
       });
 
-      // If manual trigger, notify Admin automatically
-      if (!incomingRequest && profile?.id) {
+      if (!incomingRequest) {
         toast.success("📡 Transmitting screen stream to IT Admin Commander...");
       }
 
@@ -249,6 +285,21 @@ export default function StaffRemotePage() {
     setIsStreaming(false);
     setIsConnecting(false);
     setIncomingRequest(null);
+  };
+
+  const dismissAlert = async (id?: string) => {
+    if (id) {
+      if (incomingRequest?.alertId === id) setIncomingRequest(null);
+      try {
+        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+        await supabase.from('notifications').delete().eq('id', id);
+      } catch (err) {
+        console.error("Error updating notification:", err);
+      }
+    } else {
+      setIncomingRequest(null);
+    }
+    toast.success("Alert dismissed.");
   };
 
   const copyToClipboard = (text: string, fieldName: string) => {
@@ -281,14 +332,14 @@ export default function StaffRemotePage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col relative`}>
       <Toaster position="top-right" />
       
-      {/* 🌟 TAILWIND CANONICAL FIX: z-9999 */}
+      {/* 🔴 ACTIVE STREAMING FLOATING BADGE */}
       {isStreaming && (
         <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
             <div>
               <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
-              <p className="text-[11px] text-zinc-300">IT Support is actively viewing your workspace.</p>
+              <p className="text-[11px] text-zinc-300">IT Support is actively monitoring your workspace.</p>
             </div>
           </div>
           <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
@@ -297,7 +348,7 @@ export default function StaffRemotePage() {
         </div>
       )}
 
-      {/* 🌟 TAILWIND CANONICAL FIX: z-9999 */}
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-[#150f24] border-2 border-orange-500 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
@@ -319,14 +370,14 @@ export default function StaffRemotePage() {
 
             <div className="flex gap-3 pt-2">
               <button 
-                onClick={() => setIncomingRequest(null)} 
+                onClick={() => dismissAlert(incomingRequest?.alertId)} 
                 disabled={isConnecting} 
                 className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-purple-900/50 text-xs font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer"
               >
                 Decline
               </button>
               <button 
-                onClick={() => startScreenShare()} 
+                onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} 
                 disabled={isConnecting} 
                 className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95"
               >
@@ -338,7 +389,7 @@ export default function StaffRemotePage() {
         </div>
       )}
 
-      {/* 🌟 TAILWIND CANONICAL FIX: max-w-350 (was max-w-[1400px]) */}
+      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
       <div className="w-full max-w-350 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 flex-1 flex flex-col">
         
         {/* STANDARDIZED HEADER */}
