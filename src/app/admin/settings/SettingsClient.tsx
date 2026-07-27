@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
-  Moon, Sun, Monitor, Shield, Users, Sliders, Save, 
-  CheckCircle2, AlertCircle, RefreshCw, Eye, Lock,
-  Search, UserCheck, ShieldCheck, Mail, Globe, Database
+  ArrowLeft, Settings as SettingsIcon, Sun, Moon, Monitor, 
+  Sliders, Users, ShieldCheck, Save, RefreshCw, Search, 
+  UserCheck, CheckCircle2, Lock, Mail, Globe, Database, 
+  Cpu, HardDrive, ShieldAlert,
+  Shield
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -30,46 +33,29 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // 🌟 REAL-TIME THEME INITIALIZATION & STORAGE OBSERVER
+  // 🌟 SAFE THEME INITIALIZATION (ZERO INFINITE LOOPS)
   useEffect(() => {
-    const checkTheme = () => {
-      const savedTheme = localStorage.getItem('vsit_theme');
-      const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
-      setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.classList.add('light');
-      }
-    };
-
-    checkTheme();
-    window.addEventListener('storage', checkTheme);
-    const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    return () => {
-      window.removeEventListener('storage', checkTheme);
-      observer.disconnect();
-    };
+    const savedTheme = localStorage.getItem('vsit_theme');
+    const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
+    setIsDarkMode(isDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, []);
 
-  // 🌟 INSTANT THEME SWITCHER (SYNC WITH GLOBAL NAVBAR & FULL SCREEN)
+  // 🌟 INSTANT THEME SWITCHER (CLEAN & BUG-FREE)
   const applyThemeMode = (mode: 'dark' | 'light') => {
     const isDark = mode === 'dark';
     setIsDarkMode(isDark);
     if (isDark) {
       document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
       localStorage.setItem('vsit_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
       localStorage.setItem('vsit_theme', 'light');
     }
-    window.dispatchEvent(new Event('storage'));
     toast.success(isDark ? '🌙 Dark Theme enabled globally!' : '☀️ Light Theme enabled globally!');
   };
 
@@ -89,7 +75,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
            (u.emp_code || '').toLowerCase().includes(q);
   });
 
-  // 🌟 DYNAMIC BRAND THEME DICTIONARY (100% LIGHT ORANGE & PURPLE HARMONY)
+  // 🌟 DYNAMIC BRAND THEME DICTIONARY
   const theme = {
     card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
     cardInner: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200',
@@ -101,9 +87,36 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <Toaster position="top-right" />
       
+      {/* 🌟 RESTORED PORTAL SETTINGS HEADER CARD */}
+      <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex items-center justify-between gap-4 transition-all duration-300 hover:shadow-md`}>
+        <div className="flex items-center gap-3.5 sm:gap-5">
+          <Link 
+            href="/admin" 
+            className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textMuted}`}
+            title="Back to Dashboard"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div>
+            <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
+              <h1 className={`text-xl sm:text-2xl md:text-3xl font-black tracking-tight ${theme.textMain} flex items-center gap-2.5`}>
+                <SettingsIcon className="text-orange-600 dark:text-orange-400 w-6 h-6 sm:w-7 sm:h-7 shrink-0" /> 
+                <span>Portal Settings</span>
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest bg-orange-50 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-500/30">
+                System Commander
+              </span>
+            </div>
+            <p className={`text-xs sm:text-sm font-semibold ${theme.textMuted}`}>
+              Configure system preferences, appearance themes, user roles, and global IT portal parameters.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 🌟 BRAND COLOR NAVIGATION TABS (TOUCH-SCROLLABLE ON MOBILE) */}
       <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-2 custom-scrollbar shrink-0">
         {[
