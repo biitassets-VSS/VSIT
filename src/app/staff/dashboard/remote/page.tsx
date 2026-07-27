@@ -166,9 +166,9 @@ export default function StaffRemotePage() {
     setIsConnecting(true);
 
     try {
-      // 1. Request browser screen capture permission
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' as any, frameRate: { ideal: 30, max: 60 } },
+      // 🌟 TS(2353) FIX: Safely cast mediaDevices to allow modern cursor constraints
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
         audio: false
       });
 
@@ -186,7 +186,7 @@ export default function StaffRemotePage() {
       });
       peerRef.current = peer;
 
-      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
 
       // 3. Connect to Supabase Session Signaling Channel
       const sessionChannel = supabase.channel(targetChannelId);
@@ -234,7 +234,7 @@ export default function StaffRemotePage() {
 
   const stopScreenSharing = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop());
       streamRef.current = null;
     }
     if (peerRef.current) {
@@ -281,9 +281,9 @@ export default function StaffRemotePage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col relative`}>
       <Toaster position="top-right" />
       
-      {/* 🔴 ACTIVE STREAMING FLOATING BADGE WITH INSTANT KILL-SWITCH */}
+      {/* 🌟 TAILWIND CANONICAL FIX: z-9999 */}
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
+        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
             <div>
@@ -297,9 +297,9 @@ export default function StaffRemotePage() {
         </div>
       )}
 
-      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
+      {/* 🌟 TAILWIND CANONICAL FIX: z-9999 */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-[#150f24] border-2 border-orange-500 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner animate-bounce">
               <Monitor size={32} />
@@ -338,8 +338,8 @@ export default function StaffRemotePage() {
         </div>
       )}
 
-      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
-      <div className="w-full max-w-[1400px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 flex-1 flex flex-col">
+      {/* 🌟 TAILWIND CANONICAL FIX: max-w-350 (was max-w-[1400px]) */}
+      <div className="w-full max-w-350 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 flex-1 flex flex-col">
         
         {/* STANDARDIZED HEADER */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300`}>
@@ -395,7 +395,7 @@ export default function StaffRemotePage() {
           ))}
         </div>
 
-        {/* 🌟 TAB 1: OVERVIEW & ONE-CLICK SCREEN SHARE BUTTON */}
+        {/* TAB 1: OVERVIEW & ONE-CLICK SCREEN SHARE BUTTON */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
             
@@ -413,7 +413,7 @@ export default function StaffRemotePage() {
               </div>
 
               <div className="space-y-4">
-                {/* 🟢 PROMINENT MANUAL "START SHARING" BUTTON FOR INSTANT SUPPORT */}
+                {/* PROMINENT MANUAL "START SHARING" BUTTON FOR INSTANT SUPPORT */}
                 {!isStreaming ? (
                   <button
                     type="button"
@@ -508,7 +508,7 @@ export default function StaffRemotePage() {
           </div>
         )}
 
-        {/* 🌟 TAB 2: INSTRUCTIONS */}
+        {/* TAB 2: INSTRUCTIONS */}
         {activeTab === 'instructions' && (
           <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm space-y-6 max-w-4xl mx-auto animate-in fade-in duration-300`}>
             <div>
@@ -540,7 +540,7 @@ export default function StaffRemotePage() {
           </div>
         )}
 
-        {/* 🌟 TAB 3: SECURITY & WATERMARKS */}
+        {/* TAB 3: SECURITY & WATERMARKS */}
         {activeTab === 'security' && (
           <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm space-y-6 max-w-4xl mx-auto animate-in fade-in duration-300`}>
             <div className="flex items-center gap-3">
