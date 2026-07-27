@@ -282,7 +282,7 @@ function AdminAssetReturnsContent() {
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
         
         {/* 🌟 DYNAMIC HEADER (WITH BACK ARROW IN FRONT OF ICON & NO EXTRA RIGHT BUTTON) */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
@@ -302,7 +302,7 @@ function AdminAssetReturnsContent() {
                   <span>Asset Returns</span>
                 </h1>
                 {pendingCount > 0 && (
-                  <span className="px-3 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
+                  <span className="px-3 py-0.5 bg-linear-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
                     {pendingCount} Pending Requests
                   </span>
                 )}
@@ -563,7 +563,7 @@ function AdminAssetReturnsContent() {
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}

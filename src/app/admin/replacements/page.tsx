@@ -278,7 +278,7 @@ function AdminReplacementsContent() {
       <Toaster position="top-right" />
       
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
         
         {/* 🌟 DYNAMIC HEADER (WITH BACK ARROW IN FRONT OF ICON & NO EXTRA RIGHT BUTTON) */}
         <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
@@ -298,7 +298,7 @@ function AdminReplacementsContent() {
                   <span>Hardware Replacements</span>
                 </h1>
                 {pendingRequests.length > 0 && (
-                  <span className="px-3 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
+                  <span className="px-3 py-0.5 bg-linear-to-r from-orange-500 to-amber-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
                     {pendingRequests.length} Pending Swaps
                   </span>
                 )}
@@ -510,7 +510,7 @@ function AdminReplacementsContent() {
 
       {/* 🚀 PROCESSING SWAP MODAL (100% ADAPTIVE FOR LIGHT & DARK MODE) */}
       {modal.isOpen && modal.data && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
           <div className={`rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 ${theme.card}`}>
             
             {/* Modal Header */}
