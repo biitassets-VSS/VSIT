@@ -8,7 +8,8 @@ import {
   AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
   Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
-  ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert, Check
+  ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert, Check,
+  MessageSquare, Send
 } from 'lucide-react';
 
 // 🌟 SMART AUDIT WINDOW ENGINE
@@ -70,7 +71,7 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
-// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT WITH ADMIN)
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR
 const getChannelTopic = (user: any) => {
   const code = (user?.emp_code || user?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const email = (user?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -109,18 +110,28 @@ export default function StaffDashboardPage() {
     type: '',
   });
 
-  // 🌟 INTERACTIVE WEBRTC POPUP & STREAMING STATE
+  // 🌟 WEBRTC POPUP & STREAMING STATE
   const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string; alertId?: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   
-  // WebRTC Peer & Media Stream References
+  // 🌟 NEW LIVE CHAT & REMOTE CONTROL STATE
+  const [chatMessages, setChatMessages] = useState<{sender: string, text: string, time: string, isSelf: boolean}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [showChat, setShowChat] = useState(false);
+  const [adminPing, setAdminPing] = useState<{x: number, y: number, id: number} | null>(null);
+
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
   const activeSignalingUserIdRef = useRef<string | null>(null);
 
   const auditWindow = getAuditWindowInfo();
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, showChat]);
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
@@ -207,7 +218,6 @@ export default function StaffDashboardPage() {
           const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
           const isPersonal = target === String(user.id).toLowerCase() || target === cleanEmail || target === String(user.emp_id).toLowerCase();
           
-          // 🌟 GHOST REQUEST FIX: Drop screen share requests older than 5 minutes
           const s = ((n.title || '') + ' ' + (n.message || '')).toLowerCase();
           const isScreenShareAlert = s.includes('screen') || s.includes('remote') || s.includes('share');
           const ageInMinutes = (now - new Date(n.created_at).getTime()) / 60000;
@@ -216,7 +226,6 @@ export default function StaffDashboardPage() {
           return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
         });
 
-        // 🌟 SMART DEDUPLICATION: Collapse duplicate test alerts by title & message into 1 card
         const uniqueAlerts: any[] = [];
         const seenKeys = new Set<string>();
         activeNotifications.forEach(n => {
@@ -225,7 +234,6 @@ export default function StaffDashboardPage() {
             seenKeys.add(key);
             uniqueAlerts.push(n);
           } else {
-            // Silently scrub duplicate row in DB
             supabase.from('notifications').delete().eq('id', n.id).then(() => {});
           }
         });
@@ -258,7 +266,6 @@ export default function StaffDashboardPage() {
     } catch (err) { console.error("Data sync failure:", err); } finally { clearTimeout(safetyTimeoutId); setLoading(false); }
   };
 
-  // 📡 SETUP LIVE SIGNALING & INSTANT POPUP LISTENER
   const setupSignalingListener = (userId: string, userObj: any) => {
     if (!userId) return;
     if (activeSignalingUserIdRef.current === userId) return;
@@ -299,14 +306,14 @@ export default function StaffDashboardPage() {
       .subscribe();
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE
+  // 🚀 START WEBRTC SCREEN SHARE (NOW WITH AUDIO)
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
     setIsConnecting(true);
 
-    // 🌟 IMMEDIATE NOTIFICATION DISMISSAL FIX
     if (alertIdToDismiss) markNotificationAsRead(alertIdToDismiss);
     if (incomingRequest) setIncomingRequest(null); 
+    setChatMessages([]);
 
     try {
       supabase.getChannels().forEach(ch => {
@@ -317,10 +324,19 @@ export default function StaffDashboardPage() {
 
       showToast("🚀 Launching Screen Picker", "Please select 'Entire Screen' when prompted.");
 
+      // 1. Capture the Screen (Video)
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
-        audio: false
+        audio: true // Captures system audio if user allows
       });
+
+      // 2. Capture the Microphone (Voice) so Admin can hear the staff member
+      try {
+        const voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceStream.getAudioTracks().forEach(track => stream.addTrack(track));
+      } catch (voiceErr) {
+        console.warn("Could not capture microphone audio. Admin will only hear system audio.", voiceErr);
+      }
 
       streamRef.current = stream;
 
@@ -332,7 +348,6 @@ export default function StaffDashboardPage() {
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
-      // 🌟 NATIVE DISCONNECT FIX: Detects when Admin browser drops connection
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
           stopScreenSharing();
@@ -367,9 +382,29 @@ export default function StaffDashboardPage() {
         stopScreenSharing();
         showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
       }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
-        stopScreenSharing(); // Backup listener
+        stopScreenSharing(); 
         showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
-      }).subscribe(async (status) => {
+      })
+      
+      // 🌟 NEW: LIVE CHAT RECEIVER
+      .on('broadcast', { event: 'chat_message' }, (payload) => {
+        setChatMessages(prev => [...prev, {
+          sender: payload.payload.sender || 'Admin',
+          text: payload.payload.text,
+          time: payload.payload.time,
+          isSelf: false
+        }]);
+        if (!showChat) showToast("💬 New IT Message", `Admin: ${payload.payload.text}`);
+      })
+      
+      // 🌟 NEW: REMOTE CONTROL LASER POINTER
+      .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
+        const { x, y } = payload.payload;
+        setAdminPing({ x, y, id: Date.now() });
+        setTimeout(() => setAdminPing(null), 2000); // Auto fade-out
+      })
+      
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           showToast("📡 Subscribed to stream channel", "Sending SDP Offer to Admin...");
           const offer = await peer.createOffer();
@@ -403,6 +438,33 @@ export default function StaffDashboardPage() {
     setIsStreaming(false);
     setIsConnecting(false);
     setIncomingRequest(null);
+    setShowChat(false);
+  };
+
+  const sendChatMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !channelRef.current) return;
+    
+    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    setChatMessages(prev => [...prev, {
+      sender: currentUser.name || 'Me',
+      text: chatInput,
+      time: timeString,
+      isSelf: true
+    }]);
+
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'chat_message',
+      payload: {
+        sender: currentUser.name || currentUser.email,
+        text: chatInput,
+        time: timeString
+      }
+    });
+
+    setChatInput('');
   };
 
   useEffect(() => {
@@ -449,7 +511,6 @@ export default function StaffDashboardPage() {
     };
   }, [currentUser.id, currentUser.email, currentUser.emp_id]);
 
-  // 🌟 PERMANENT DISMISSAL: Saves ID to localStorage so old alerts NEVER return on refresh!
   const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
     if (incomingRequest?.alertId === notifId) setIncomingRequest(null);
@@ -547,7 +608,6 @@ export default function StaffDashboardPage() {
 
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
-  // 🌟 REDUNDANT ACCEPT FIX: Filter out screen share requests if already streaming or connecting!
   const visibleNotifications = notifications.filter(notif => {
     const s = ((notif.title || '') + ' ' + (notif.message || '')).toLowerCase();
     const isScreenShare = s.includes('screen') || s.includes('remote') || s.includes('share');
@@ -555,14 +615,13 @@ export default function StaffDashboardPage() {
     return true;
   });
 
-  // Check if there is an unread alert so we can display the badge on the Team Screen card
   const hasScreenShareAlert = visibleNotifications.some(n => {
     const s = (n.title || '').toLowerCase() + ' ' + (n.message || '').toLowerCase();
     return s.includes('screen') || s.includes('remote') || s.includes('share');
   });
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
       <div className="fixed top-24 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map(t => (
           <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
@@ -573,23 +632,84 @@ export default function StaffDashboardPage() {
         ))}
       </div>
 
-      {/* 🔴 ACTIVE STREAMING FLOATING BADGE WITH INSTANT KILL-SWITCH */}
+      {/* 🔴 ACTIVE STREAMING FLOATING CONTROLS & CHAT WIDGET */}
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
-          <div className="flex items-center gap-3">
-            <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping shrink-0" />
-            <div>
-              <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
-              <p className="text-[11px] text-zinc-300">IT Support is actively monitoring your workspace.</p>
+        <>
+          {/* 🎯 Admin Laser Pointer Overlay */}
+          {adminPing && (
+            <div 
+              className="fixed z-99999 pointer-events-none flex items-center justify-center"
+              style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}
+            >
+              <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
+              <div className="relative w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(225,29,72,1)]" />
+            </div>
+          )}
+
+          {/* 💬 Bottom Right Session Controls (Chat + Stop) */}
+          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+            
+            {showChat && (
+              <div className="w-80 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 overflow-hidden flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4">
+                <div className="p-3 bg-slate-900 text-white flex justify-between items-center">
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <MessageSquare size={14} className="text-orange-500" /> Live Support Chat
+                  </span>
+                  <button onClick={() => setShowChat(false)} className="hover:text-rose-400 transition-colors cursor-pointer"><X size={16}/></button>
+                </div>
+                
+                <div className="h-56 p-3 overflow-y-auto flex flex-col gap-2.5 bg-slate-50 custom-scrollbar">
+                  {chatMessages.length === 0 ? (
+                    <div className="m-auto text-[11px] font-bold text-slate-400 text-center">No messages yet.</div>
+                  ) : (
+                    chatMessages.map((msg, i) => (
+                      <div key={i} className={`max-w-[85%] text-[11px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-orange-600 text-white self-end rounded-2xl rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 self-start rounded-2xl rounded-bl-none'}`}>
+                        <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-orange-200' : 'text-slate-400'}`}>{msg.sender}</div>
+                        {msg.text}
+                      </div>
+                    ))
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <form onSubmit={sendChatMessage} className="p-2 bg-white border-t border-slate-100 flex gap-2">
+                  <input 
+                    value={chatInput} 
+                    onChange={e=>setChatInput(e.target.value)} 
+                    placeholder="Type a reply to Admin..." 
+                    className="flex-1 text-xs font-semibold px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-orange-500 transition-colors" 
+                  />
+                  <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 cursor-pointer transition-colors">
+                    <Send size={14}/>
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="bg-slate-900 border-2 border-orange-500 text-white p-3 sm:p-4 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto">
+              <div className="flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <div>
+                  <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
+                  <p className="text-[10px] text-zinc-300">IT Support is viewing your workspace.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer relative ${showChat ? 'bg-slate-700 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'}`}>
+                  <MessageSquare size={14} /> 
+                  <span className="hidden sm:inline">Chat</span>
+                  {chatMessages.length > 0 && !showChat && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-pulse border-2 border-slate-900" />}
+                </button>
+                <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer">
+                  <StopCircle size={15} /> <span className="hidden sm:inline">Stop Sharing</span>
+                </button>
+              </div>
             </div>
           </div>
-          <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0">
-            <StopCircle size={15} /> <span>Stop Sharing</span>
-          </button>
-        </div>
+        </>
       )}
 
-      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL (Only from LIVE WebRTC) */}
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
@@ -679,7 +799,6 @@ export default function StaffDashboardPage() {
                         </div>
                       )}
                       
-                      {/* 🟢 PROMINENT ACCEPT & SHARE BUTTON FOR SUPPORT ALERTS */}
                       {isScreenShare && !isStreaming && (
                         <button 
                           onClick={() => startScreenShare(getChannelTopic(currentUser), notif.id)} 
@@ -722,7 +841,6 @@ export default function StaffDashboardPage() {
                 disabled={item.isActionDisabled}
                 className={`relative bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex flex-col sm:flex-row items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
               >
-                {/* 🚨 DYNAMIC BADGE ON TEAM SCREEN THUMBNAIL */}
                 {item.badge && (
                   <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest text-white shadow-md ${isStreaming ? 'bg-emerald-500 animate-pulse' : 'bg-rose-600 animate-bounce'}`}>
                     {item.badge}
@@ -751,10 +869,8 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 2-COLUMN LAYOUT: HARDWARE ON LEFT, TICKETS ON RIGHT 🌟 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          {/* HARDWARE UNITS */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 md:p-8 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800">
@@ -852,7 +968,6 @@ export default function StaffDashboardPage() {
             )}
           </div>
 
-          {/* SERVICE TICKETS COLUMN */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-orange-600 shrink-0" size={18}/> My Service Tickets</div>
@@ -875,7 +990,6 @@ export default function StaffDashboardPage() {
                       
                       <p className="text-xs text-slate-600 font-normal">{tix.description || tix.note}</p>
 
-                      {/* Notes Added by Admin/Staff */}
                       {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-700">
                           <strong className="text-slate-900 block mb-1">Admin Response:</strong>
@@ -883,7 +997,6 @@ export default function StaffDashboardPage() {
                         </div>
                       )}
 
-                      {/* Resolution Meta & Rating System */}
                       {isResolved && (
                         <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
                           {tix.updated_at && (
@@ -929,7 +1042,6 @@ export default function StaffDashboardPage() {
   );
 }
 
-// 🌟 TRANSACTIONAL MODAL
 function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT' || type === 'RETURN';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
