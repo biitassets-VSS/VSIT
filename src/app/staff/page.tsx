@@ -197,14 +197,22 @@ export default function StaffDashboardPage() {
       if (inspRes.data) setAllInspections(inspRes.data);
 
       if (notifRes.data) {
-        // 🌟 CLIENT SHIELD: Check local storage to guarantee dismissed alerts never return!
         const dismissedBroadcasts = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+        const now = new Date().getTime();
+        
         let activeNotifications = notifRes.data.filter(n => {
           const isUnread = n.is_read !== true; 
           const isNotDismissedLocally = !dismissedBroadcasts.includes(n.id);
           const target = String(n.target_user || '').trim().toLowerCase();
           const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
           const isPersonal = target === String(user.id).toLowerCase() || target === cleanEmail || target === String(user.emp_id).toLowerCase();
+          
+          // 🌟 GHOST REQUEST FIX: Drop screen share requests older than 5 minutes
+          const s = ((n.title || '') + ' ' + (n.message || '')).toLowerCase();
+          const isScreenShareAlert = s.includes('screen') || s.includes('remote') || s.includes('share');
+          const ageInMinutes = (now - new Date(n.created_at).getTime()) / 60000;
+          if (isScreenShareAlert && ageInMinutes > 5) return false;
+
           return isUnread && isNotDismissedLocally && (isGlobal || isPersonal);
         });
 
@@ -223,9 +231,6 @@ export default function StaffDashboardPage() {
         });
 
         setNotifications(uniqueAlerts);
-
-        // 🔴 FIX: Removed the automatic setIncomingRequest logic here. 
-        // We DO NOT want the modal to forcefully pop up every time the page refreshes just because the notification exists in the DB.
       }
 
       const compiledAssets = (assetsRes.data || []).map(asset => {
@@ -269,7 +274,6 @@ export default function StaffDashboardPage() {
       }
     });
 
-    // 🔴 FIX: The modal will ONLY open when a LIVE ping comes through WebRTC, preventing reload loops.
     const signalingChannel = supabase.channel(sigTopic)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({
@@ -291,7 +295,6 @@ export default function StaffDashboardPage() {
             return [newNotif, ...prev];
           });
         }
-        // We do NOT call setIncomingRequest here either, to ensure modal only triggers via signaling broadcast.
       })
       .subscribe();
   };
@@ -300,6 +303,10 @@ export default function StaffDashboardPage() {
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
     setIsConnecting(true);
+
+    // 🌟 IMMEDIATE NOTIFICATION DISMISSAL FIX
+    if (alertIdToDismiss) markNotificationAsRead(alertIdToDismiss);
+    if (incomingRequest) setIncomingRequest(null); 
 
     try {
       supabase.getChannels().forEach(ch => {
@@ -325,6 +332,14 @@ export default function StaffDashboardPage() {
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
+      // 🌟 NATIVE DISCONNECT FIX: Detects when Admin browser drops connection
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          stopScreenSharing();
+          showToast("🛑 Session Ended", "IT Admin disconnected from the session.");
+        }
+      };
+
       stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
 
       const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
@@ -342,9 +357,7 @@ export default function StaffDashboardPage() {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           setIsConnecting(false);
           setIsStreaming(true);
-          setIncomingRequest(null);
           showToast("🟢 Connected", "Live WebRTC Screen Share Established!");
-          if (alertIdToDismiss) markNotificationAsRead(alertIdToDismiss);
         }
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
         if (peer.remoteDescription && payload.payload?.candidate) {
@@ -352,6 +365,9 @@ export default function StaffDashboardPage() {
         }
       }).on('broadcast', { event: 'terminate_session' }, () => {
         stopScreenSharing();
+        showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
+      }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
+        stopScreenSharing(); // Backup listener
         showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -363,13 +379,10 @@ export default function StaffDashboardPage() {
         }
       });
 
-      if (!incomingRequest) {
-        showToast("📡 Transmitting", "Connecting screen stream to IT Admin...");
-      }
-
     } catch (err: any) {
       showToast("Cancelled", `Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
       setIsConnecting(false);
+      setIsStreaming(false);
     }
   };
 
@@ -534,8 +547,16 @@ export default function StaffDashboardPage() {
 
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
-  // 🔴 Check if there is an unread alert so we can display the badge on the Team Screen card
-  const hasScreenShareAlert = notifications.some(n => {
+  // 🌟 REDUNDANT ACCEPT FIX: Filter out screen share requests if already streaming or connecting!
+  const visibleNotifications = notifications.filter(notif => {
+    const s = ((notif.title || '') + ' ' + (notif.message || '')).toLowerCase();
+    const isScreenShare = s.includes('screen') || s.includes('remote') || s.includes('share');
+    if (isScreenShare && (isStreaming || isConnecting)) return false; 
+    return true;
+  });
+
+  // Check if there is an unread alert so we can display the badge on the Team Screen card
+  const hasScreenShareAlert = visibleNotifications.some(n => {
     const s = (n.title || '').toLowerCase() + ' ' + (n.message || '').toLowerCase();
     return s.includes('screen') || s.includes('remote') || s.includes('share');
   });
@@ -626,11 +647,11 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {notifications.length > 0 && (
+        {visibleNotifications.length > 0 && (
           <div className="space-y-3 animate-in slide-in-from-top-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Bell size={14} className="text-amber-500 animate-bounce" /> Action Alerts ({notifications.length})</h3>
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Bell size={14} className="text-amber-500 animate-bounce" /> Action Alerts ({visibleNotifications.length})</h3>
             <div className="grid grid-cols-1 gap-3">
-              {notifications.map(notif => {
+              {visibleNotifications.map(notif => {
                 const s = (notif.title || '').toLowerCase();
                 const isReject = s.includes('reject'); const isReInspect = s.includes('re-inspect') || s.includes('re-audit');
                 const isApprove = s.includes('approve'); const isReplacement = s.includes('replace') || s.includes('new asset'); 
