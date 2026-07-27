@@ -8,7 +8,7 @@ import {
   Monitor, Loader2, ShieldCheck, Check, X, Radio, Laptop, 
   ShieldAlert, Wifi, CheckCircle2, AlertTriangle, ExternalLink, 
   StopCircle, Ticket, Lock, PlusCircle, RefreshCw, Bell, Power,
-  ChevronRight, Cpu, HardDrive, UserCheck
+  ChevronRight, Cpu, HardDrive, UserCheck, Trash2
 } from 'lucide-react';
 
 interface StaffProfile {
@@ -39,6 +39,7 @@ export default function StaffDashboardPage() {
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
+  const activeSignalingUserIdRef = useRef<string | null>(null);
 
   // 🌟 REAL-TIME GLOBAL THEME LISTENER
   useEffect(() => {
@@ -63,6 +64,14 @@ export default function StaffDashboardPage() {
       window.removeEventListener('storage', checkTheme);
       observer.disconnect();
       stopScreenSharing();
+      
+      // 🌟 MEMORY SCRUBBING: Clean up realtime channels on unmount
+      activeSignalingUserIdRef.current = null;
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic.includes('webrtc_signaling_') || ch.topic.includes('staff_notif_popup_')) {
+          supabase.removeChannel(ch);
+        }
+      });
     };
   }, []);
 
@@ -85,11 +94,12 @@ export default function StaffDashboardPage() {
 
       const cleanEmail = (activeUser.email || '').toLowerCase().trim();
 
+      // 🌟 PERMANENT FIX: Query ONLY unread notifications (.eq('is_read', false))
       const [{ data: userProfile }, { data: assets }, { data: userTickets }, { data: userAlerts }] = await Promise.all([
         supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle(),
         supabase.from('assets').select('*'),
         supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(5),
-        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(10)
+        supabase.from('notifications').select('*').eq('is_read', false).order('created_at', { ascending: false }).limit(20)
       ]);
 
       let currentProf: StaffProfile;
@@ -113,7 +123,10 @@ export default function StaffDashboardPage() {
       const myTickets = (userTickets || []).filter(t => t.user_email === cleanEmail || t.user_id === currentProf.id);
       setTickets(myTickets);
 
-      const myAlerts = (userAlerts || []).filter(n => n.target_user === currentProf.id || n.target_role === 'staff' || !n.target_user);
+      // Strict client-side filter to guarantee zero read notifications enter state
+      const myAlerts = (userAlerts || []).filter(n => 
+        (n.target_user === currentProf.id || n.target_role === 'staff' || !n.target_user) && !n.is_read
+      );
       setAlerts(myAlerts);
 
       const pendingShareAlert = myAlerts.find(a => !a.is_read && (a.title?.includes('Screen Share') || a.title?.includes('Remote Support')));
@@ -135,38 +148,48 @@ export default function StaffDashboardPage() {
     }
   };
 
-  // 📡 SETUP LIVE SIGNALING & DATABASE NOTIFICATION LISTENER (WITH MEMORY SCRUBBING)
+  // 📡 SETUP LIVE SIGNALING (WITH COLLISION PREVENTION)
   const setupSignalingListener = (userId: string) => {
     if (!userId) return;
+
+    // 🌟 PERMANENT FIX: Skip channel creation if already subscribing for this user!
+    if (activeSignalingUserIdRef.current === userId) {
+      return;
+    }
+    activeSignalingUserIdRef.current = userId;
 
     const sigTopic = `webrtc_signaling_${userId}`;
     const notifTopic = `staff_notif_popup_${userId}`;
 
-    // 🌟 ROOT CAUSE FIX: Scrub active memory channels before subscribing to avoid collision!
+    // Safely remove lingering channels before re-attaching
     supabase.getChannels().forEach(ch => {
-      if (ch.topic === `realtime:${sigTopic}` || ch.topic === `realtime:${notifTopic}` || ch.topic === sigTopic || ch.topic === notifTopic) {
+      if (ch.topic.includes(sigTopic) || ch.topic.includes(notifTopic)) {
         supabase.removeChannel(ch);
       }
     });
 
-    // 1. Listen for WebRTC Signaling Pulses from Admin Commander
     const signalingChannel = supabase.channel(sigTopic)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({
           adminName: payload.payload?.adminName || 'IT Administrator',
           adminCode: payload.payload?.adminCode || 'EMP-ADMIN',
-          channelId: payload.payload?.channelId || `flex_webrtc_stream_${userId}`
+          channelId: `flex_webrtc_stream_${userId}`
         });
         toast("⚠️ IT Admin requested live screen sharing!", { icon: '📡', duration: 8000 });
       })
       .subscribe();
 
-    // 2. Listen for Real-time Database Notification Inserts
     const dbNotifChannel = supabase.channel(notifTopic)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${userId}` }, (payload) => {
         const newNotif = payload.new;
-        setAlerts(prev => [newNotif, ...prev]);
-        if (newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
+        // Only insert if notification is unread
+        if (!newNotif.is_read) {
+          setAlerts(prev => {
+            if (prev.some(a => a.id === newNotif.id)) return prev;
+            return [newNotif, ...prev];
+          });
+        }
+        if (!newNotif.is_read && newNotif.title && (newNotif.title.includes('Screen Share') || newNotif.title.includes('Remote Support'))) {
           setIncomingRequest({
             adminName: 'IT Support Commander',
             adminCode: 'EMP-ADMIN',
@@ -176,27 +199,14 @@ export default function StaffDashboardPage() {
         }
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(signalingChannel);
-      supabase.removeChannel(dbNotifChannel);
-    };
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE (WITH MEMORY SCRUBBING)
+  // 🚀 START WEBRTC SCREEN SHARE
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || `flex_webrtc_stream_${profile?.id || 'staff'}`;
     setIsConnecting(true);
 
     try {
-      // 🌟 ROOT CAUSE FIX: Scrub any existing streaming channels in memory before connecting
-      supabase.getChannels().forEach(ch => {
-        if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId) {
-          supabase.removeChannel(ch);
-        }
-      });
-
-      // Safely cast mediaDevices to allow modern cursor constraints
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
         audio: false
@@ -280,13 +290,33 @@ export default function StaffDashboardPage() {
     setIncomingRequest(null);
   };
 
+  // 🌟 PERMANENT FIX: Dismiss individual alert permanently
   const dismissAlert = async (id: string) => {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setAlerts(prev => prev.filter(a => a.id !== id));
     if (incomingRequest?.alertId === id) {
       setIncomingRequest(null);
     }
-    toast.success("Alert dismissed.");
+    try {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      toast.success("Alert dismissed.");
+    } catch (err) {
+      console.error("Error updating notification:", err);
+    }
+  };
+
+  // 🌟 BONUS TOOL: Clear All Alerts instantly
+  const dismissAllAlerts = async () => {
+    const ids = alerts.map(a => a.id);
+    setAlerts([]);
+    setIncomingRequest(null);
+    if (ids.length > 0) {
+      try {
+        await supabase.from('notifications').update({ is_read: true }).in('id', ids);
+        toast.success("All action alerts cleared!");
+      } catch (err) {
+        console.error("Error clearing notifications:", err);
+      }
+    }
   };
 
   const handleManualSync = () => {
@@ -317,7 +347,7 @@ export default function StaffDashboardPage() {
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 flex flex-col relative`}>
       <Toaster position="top-right" />
       
-      {/* 🔴 ACTIVE STREAMING FLOATING BADGE WITH INSTANT KILL-SWITCH */}
+      {/* 🔴 ACTIVE STREAMING FLOATING BADGE */}
       {isStreaming && (
         <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 sm:p-5 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-sm w-full">
           <div className="flex items-center gap-3">
@@ -405,11 +435,21 @@ export default function StaffDashboardPage() {
           </button>
         </div>
 
-        {/* 🌟 ACTION ALERTS BOX WITH DYNAMIC ACCEPT BUTTON */}
+        {/* 🌟 ACTION ALERTS BOX WITH DYNAMIC ACCEPT & CLEAR ALL BUTTONS */}
         <div className="space-y-3 animate-in fade-in duration-300">
-          <div className="flex items-center gap-2">
-            <Bell size={16} className="text-orange-600 dark:text-orange-400 animate-pulse" />
-            <h2 className={`text-xs font-black uppercase tracking-widest ${theme.textSub}`}>Action Alerts ({alerts.length})</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell size={16} className="text-orange-600 dark:text-orange-400 animate-pulse" />
+              <h2 className={`text-xs font-black uppercase tracking-widest ${theme.textSub}`}>Action Alerts ({alerts.length})</h2>
+            </div>
+            {alerts.length > 0 && (
+              <button
+                onClick={dismissAllAlerts}
+                className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Trash2 size={13} /> <span>Clear All Alerts</span>
+              </button>
+            )}
           </div>
 
           {alerts.length === 0 ? (
@@ -446,7 +486,6 @@ export default function StaffDashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-                      {/* 🟢 THE INTERACTIVE ACCEPT & SHARE BUTTON */}
                       {isRemoteShareAlert && !isStreaming && (
                         <button
                           type="button"
