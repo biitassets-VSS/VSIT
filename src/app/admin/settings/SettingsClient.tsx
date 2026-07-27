@@ -3,43 +3,74 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Moon, Sun, Monitor, Shield, Users, Sliders, Save, 
-  CheckCircle2, AlertCircle, RefreshCw, Eye, Lock
+  CheckCircle2, AlertCircle, RefreshCw, Eye, Lock,
+  Search, UserCheck, ShieldCheck, Mail, Globe, Database
 } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
-export default function SettingsClient({ initialSettings, initialUsers }: { initialSettings: any, initialUsers: any[] }) {
+interface UserProfile {
+  id: string;
+  name: string;
+  full_name: string;
+  email: string;
+  role: string;
+  emp_code: string;
+}
+
+interface SettingsClientProps {
+  initialSettings: any;
+  initialUsers: UserProfile[];
+}
+
+export default function SettingsClient({ initialSettings, initialUsers }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<'appearance' | 'general' | 'users' | 'security'>('appearance');
   const [settings, setSettings] = useState(initialSettings);
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState<UserProfile[]>(initialUsers || []);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  // Initialize Theme from LocalStorage
+  // 🌟 REAL-TIME THEME INITIALIZATION & STORAGE OBSERVER
   useEffect(() => {
-    const savedTheme = localStorage.getItem('vsit_theme');
-    if (savedTheme === 'dark') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    } else {
-      setIsDarkMode(false);
-      document.documentElement.classList.remove('dark');
-    }
+    const checkTheme = () => {
+      const savedTheme = localStorage.getItem('vsit_theme');
+      const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+    };
+
+    checkTheme();
+    window.addEventListener('storage', checkTheme);
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      window.removeEventListener('storage', checkTheme);
+      observer.disconnect();
+    };
   }, []);
 
-  // Global Theme Switcher Engine
+  // 🌟 INSTANT THEME SWITCHER (SYNC WITH GLOBAL NAVBAR & FULL SCREEN)
   const applyThemeMode = (mode: 'dark' | 'light') => {
     const isDark = mode === 'dark';
     setIsDarkMode(isDark);
-    localStorage.setItem('vsit_theme', mode);
-    
     if (isDark) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('vsit_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+      localStorage.setItem('vsit_theme', 'light');
     }
-    
-    // Trigger custom window event so layout instantly catches the change if needed
     window.dispatchEvent(new Event('storage'));
+    toast.success(isDark ? '🌙 Dark Theme enabled globally!' : '☀️ Light Theme enabled globally!');
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -47,25 +78,34 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
     setIsSaving(true);
     setTimeout(() => {
       setIsSaving(false);
-      setSaveStatus('Preferences saved successfully!');
-      setTimeout(() => setSaveStatus(null), 3000);
+      toast.success('✔ System preferences saved successfully!');
     }, 600);
   };
 
-  // Styling Map for High-Contrast Readability & Orange/Purple Theme
+  const filteredUsers = users.filter(u => {
+    const q = searchQuery.toLowerCase();
+    return (u.full_name || u.name || '').toLowerCase().includes(q) || 
+           (u.email || '').toLowerCase().includes(q) || 
+           (u.emp_code || '').toLowerCase().includes(q);
+  });
+
+  // 🌟 DYNAMIC BRAND THEME DICTIONARY (100% LIGHT ORANGE & PURPLE HARMONY)
   const theme = {
-    card: isDarkMode ? 'bg-[#121212] border-[#27272a]' : 'bg-white border-slate-200/80',
-    cardInner: isDarkMode ? 'bg-[#18181b] border-[#27272a]' : 'bg-slate-50 border-slate-200',
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textMuted: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    inputBg: isDarkMode ? 'bg-[#0a0a0a] border-[#27272a] text-zinc-100 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20' : 'bg-white border-slate-200 text-slate-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20',
+    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
+    cardInner: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200',
+    cardHover: isDarkMode ? 'hover:border-orange-500/60 hover:bg-[#1c1430]' : 'hover:border-orange-400 hover:shadow-lg',
+    textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
+    textMuted: isDarkMode ? 'text-purple-300/70' : 'text-slate-500',
+    inputBg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 focus:border-orange-500 text-purple-100 placeholder-purple-400/50' : 'bg-slate-50 border-slate-200 focus:border-orange-600 text-slate-900 placeholder-slate-400 font-medium',
+    divider: isDarkMode ? 'border-purple-900/40' : 'border-slate-100',
   };
 
   return (
     <div className="space-y-6">
+      <Toaster position="top-right" />
       
-      {/* Navigation Tabs (Animated & Themed) */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+      {/* 🌟 BRAND COLOR NAVIGATION TABS (TOUCH-SCROLLABLE ON MOBILE) */}
+      <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-2 custom-scrollbar shrink-0">
         {[
           { id: 'appearance', label: 'Appearance & Theme', icon: Moon },
           { id: 'general', label: 'General Defaults', icon: Sliders },
@@ -78,221 +118,253 @@ export default function SettingsClient({ initialSettings, initialUsers }: { init
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all duration-300 cursor-pointer ${
+              className={`flex items-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-widest shrink-0 transition-all duration-200 cursor-pointer border whitespace-nowrap ${
                 isActive 
-                  ? (isDarkMode ? 'bg-orange-400/20 text-orange-400 border border-orange-500/30 shadow-md' : 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm scale-105') 
-                  : `${theme.card} ${theme.textMuted} hover:text-orange-600 hover:bg-orange-50/50 hover:-translate-y-0.5 border`
+                  ? 'bg-orange-600 text-white shadow-md shadow-orange-600/25 border-orange-600 scale-[1.02]' 
+                  : `${theme.card} ${theme.textMuted} hover:text-purple-600 hover:border-purple-300 dark:hover:text-purple-300 dark:hover:border-purple-700`
               }`}
             >
-              <Icon size={16} /> <span>{tab.label}</span>
+              <Icon size={16} className={isActive ? 'text-white' : 'text-purple-500 dark:text-purple-400 group-hover:text-orange-500 transition-colors'} /> 
+              <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Tab 1: Appearance & Theme (Global Dark Mode Controller) */}
+      {/* 🌟 TAB 1: APPEARANCE & THEME SWITCHER */}
       {activeTab === 'appearance' && (
-        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
+        <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm space-y-6 animate-in fade-in duration-300`}>
           <div>
-            <h3 className={`text-lg font-bold ${theme.textMain}`}>Global Color Scheme</h3>
-            <p className={`text-xs mt-1 ${theme.textMuted}`}>Select how the portal appears across all hardware inventory, dashboard, and inspection modules.</p>
+            <h3 className={`text-base sm:text-lg font-black ${theme.textMain}`}>Global Color Scheme</h3>
+            <p className={`text-xs sm:text-sm font-medium mt-1 ${theme.textMuted}`}>
+              Select how the portal appears across all hardware inventory, dashboard, and inspection modules.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             
-            {/* Light Mode Selector (Orange Primary) */}
+            {/* Light Mode Option Box */}
             <div 
               onClick={() => applyThemeMode('light')}
-              className={`p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between relative hover:scale-[1.02] active:scale-95 ${
+              className={`p-6 rounded-3xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between gap-6 relative overflow-hidden group ${
                 !isDarkMode 
-                  ? 'border-orange-500 bg-orange-400/5 shadow-md' 
-                  : `${theme.cardInner} opacity-70 hover:opacity-100 border-transparent`
+                  ? 'border-orange-500 ring-4 ring-orange-500/15 bg-orange-50/40 dark:bg-orange-500/10' 
+                  : `${theme.card} ${theme.cardHover}`
               }`}
             >
-              <div className="flex justify-between items-start mb-6">
-                <div className="p-3 rounded-xl bg-white border border-slate-200 text-orange-400 shadow-sm">
-                  <Sun size={24} />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shadow-2xs group-hover:scale-110 transition-transform">
+                    <Sun size={24} />
+                  </div>
+                  {!isDarkMode && (
+                    <span className="px-3 py-1 bg-orange-600 text-white font-black text-[10px] uppercase tracking-widest rounded-full shadow-sm animate-pulse">
+                      Active Mode
+                    </span>
+                  )}
                 </div>
-                {!isDarkMode && <span className="bg-orange-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full animate-in zoom-in">Active Mode</span>}
-              </div>
-              <div>
-                <h4 className={`text-base font-bold ${theme.textMain}`}>Light Theme</h4>
-                <p className={`text-xs mt-1 ${theme.textMuted}`}>Clean, high-contrast white workspace optimized for daytime office environments and standard displays.</p>
+                <div>
+                  <h4 className={`text-base sm:text-lg font-black ${theme.textMain}`}>Light Theme</h4>
+                  <p className={`text-xs sm:text-sm font-medium mt-1 leading-relaxed ${theme.textMuted}`}>
+                    Clean, high-contrast white workspace optimized for daytime office environments and standard displays.
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Dark Mode Selector (Purple Accent) */}
+            {/* Dark Mode Option Box */}
             <div 
               onClick={() => applyThemeMode('dark')}
-              className={`p-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between relative hover:scale-[1.02] active:scale-95 ${
+              className={`p-6 rounded-3xl border-2 transition-all duration-300 cursor-pointer flex flex-col justify-between gap-6 relative overflow-hidden group ${
                 isDarkMode 
-                  ? 'border-purple-500 bg-purple-500/10 shadow-md' 
-                  : 'bg-slate-900 border-slate-800 text-white opacity-90 hover:opacity-100'
+                  ? 'border-purple-500 ring-4 ring-purple-500/20 bg-purple-950/40' 
+                  : `${theme.card} ${theme.cardHover}`
               }`}
             >
-              <div className="flex justify-between items-start mb-6">
-                <div className="p-3 rounded-xl bg-black border border-zinc-800 text-purple-400 shadow-sm">
-                  <Moon size={24} />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-300 flex items-center justify-center font-bold shadow-2xs group-hover:scale-110 transition-transform">
+                    <Moon size={24} />
+                  </div>
+                  {isDarkMode && (
+                    <span className="px-3 py-1 bg-purple-600 text-white font-black text-[10px] uppercase tracking-widest rounded-full shadow-sm animate-pulse">
+                      Active Mode
+                    </span>
+                  )}
                 </div>
-                {isDarkMode && <span className="bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full animate-in zoom-in">Active Mode</span>}
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-white">Dark Theme (Full Portal)</h4>
-                <p className="text-xs mt-1 text-zinc-400">Deep, low-glare dark palette designed to reduce eye strain during extended audit sessions and night shifts.</p>
+                <div>
+                  <h4 className={`text-base sm:text-lg font-black ${theme.textMain}`}>Dark Theme (Full Portal)</h4>
+                  <p className={`text-xs sm:text-sm font-medium mt-1 leading-relaxed ${theme.textMuted}`}>
+                    Deep, low-glare dark palette designed to reduce eye strain during extended audit sessions and night shifts.
+                  </p>
+                </div>
               </div>
             </div>
 
           </div>
 
-          <div className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-medium transition-colors ${theme.cardInner} ${theme.textMuted}`}>
-            <Monitor size={18} className="text-purple-500 shrink-0" />
+          <div className={`p-4 sm:p-5 rounded-2xl border flex items-center gap-3 text-xs sm:text-sm font-semibold ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-200' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+            <Monitor size={18} className="text-orange-600 dark:text-orange-400 shrink-0" />
             <span>Theme preferences are saved directly to your session browser and apply globally to all data tables and modals.</span>
           </div>
         </div>
       )}
 
-      {/* Tab 2: General Defaults */}
+      {/* 🌟 TAB 2: GENERAL DEFAULTS */}
       {activeTab === 'general' && (
-        <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
+        <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm space-y-6 animate-in fade-in duration-300`}>
           <div>
-            <h3 className={`text-lg font-bold ${theme.textMain}`}>System Configurations</h3>
-            <p className={`text-xs mt-1 ${theme.textMuted}`}>Manage default titles, email recipients, and file processing rules.</p>
+            <h3 className={`text-base sm:text-lg font-black ${theme.textMain}`}>General System Parameters</h3>
+            <p className={`text-xs sm:text-sm font-medium mt-1 ${theme.textMuted}`}>Configure portal identity, notification channels, and file upload restrictions.</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Portal Organization Name</label>
+              <label className={`text-xs font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Portal Identity Name</label>
               <input 
                 type="text" 
                 value={settings.appName} 
                 onChange={e => setSettings({...settings, appName: e.target.value})}
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-all duration-300 ${theme.inputBg}`} 
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                className="w-full p-4 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
               />
             </div>
             <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Support Contact Email</label>
+              <label className={`text-xs font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>IT Support Email Channel</label>
               <input 
                 type="email" 
                 value={settings.supportEmail} 
                 onChange={e => setSettings({...settings, supportEmail: e.target.value})}
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-all duration-300 ${theme.inputBg}`} 
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                className="w-full p-4 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-200/50 dark:border-zinc-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Max Photo Upload Size (MB)</label>
+              <label className={`text-xs font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Max Attachment Upload Size (MB)</label>
               <select 
                 value={settings.maxUploadSizeMB} 
                 onChange={e => setSettings({...settings, maxUploadSizeMB: e.target.value})}
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold transition-all duration-300 ${theme.inputBg}`}
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                className="w-full p-4 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer shadow-2xs"
               >
-                <option value="5">5 MB (Standard)</option>
-                <option value="10">10 MB (High Definition)</option>
-                <option value="25">25 MB (Raw Mobile Capture)</option>
+                <option value="5" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>5 MB (Compact Smartphone Photos)</option>
+                <option value="10" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>10 MB (Recommended Default)</option>
+                <option value="25" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>25 MB (High-Res Audit Captures)</option>
               </select>
             </div>
             <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Watermark Label Format</label>
-              <input 
-                type="text" 
+              <label className={`text-xs font-bold uppercase tracking-wider block mb-2 ${theme.textMuted}`}>Watermark Stamp Formatting</label>
+              <select 
                 value={settings.watermarkFormat} 
-                disabled
-                className={`w-full p-3.5 rounded-xl border outline-none text-sm font-semibold opacity-60 cursor-not-allowed ${theme.inputBg}`} 
-              />
+                onChange={e => setSettings({...settings, watermarkFormat: e.target.value})}
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                className="w-full p-4 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="Date, Time & Tag ID" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Date, Time & Tag ID (Standard)</option>
+                <option value="Employee Name & Tag ID" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Employee Name & Tag ID</option>
+              </select>
             </div>
           </div>
 
-          <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex-1">
-              {saveStatus && (
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 rounded-xl text-xs font-bold animate-in fade-in zoom-in">
-                  <CheckCircle2 size={16} /> {saveStatus}
-                </div>
-              )}
-            </div>
-            <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-8 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100">
-              {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Preferences
+          <div className={`pt-4 border-t flex justify-end ${theme.divider}`}>
+            <button 
+              type="submit" disabled={isSaving}
+              className="w-full sm:w-auto px-8 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/20 cursor-pointer transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+            >
+              {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+              <span>{isSaving ? 'Saving Changes...' : 'Save General Preferences'}</span>
             </button>
           </div>
         </form>
       )}
 
-      {/* Tab 3: Staff Directory */}
+      {/* 🌟 TAB 3: STAFF DIRECTORY OVERVIEW */}
       {activeTab === 'users' && (
-        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
-          <div className="flex justify-between items-center">
+        <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm space-y-6 animate-in fade-in duration-300`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className={`text-lg font-bold ${theme.textMain}`}>Registered Accounts</h3>
-              <p className={`text-xs mt-1 ${theme.textMuted}`}>Staff members with active clearance in the Supabase directory.</p>
+              <h3 className={`text-base sm:text-lg font-black ${theme.textMain}`}>Active Staff Accounts ({users.length})</h3>
+              <p className={`text-xs sm:text-sm font-medium mt-1 ${theme.textMuted}`}>Review registered personnel and manage system privilege roles.</p>
             </div>
-            <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 border border-purple-500/20 text-xs font-bold shadow-sm">{users.length} Active</span>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500" size={16} />
+              <input 
+                type="text" placeholder="Search employee..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                className="w-full pl-11 pr-4 py-3 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
+              />
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className={`border-b text-[10px] uppercase tracking-widest font-black ${theme.textMuted} ${isDarkMode ? 'border-zinc-800' : 'border-slate-200'}`}>
-                  <th className="pb-3 pl-2">Employee Name</th>
-                  <th className="pb-3">EMP Code</th>
-                  <th className="pb-3">Email Address</th>
-                  <th className="pb-3 text-right pr-2">Clearance Role</th>
-                </tr>
-              </thead>
-              <tbody className={`divide-y text-xs font-semibold ${isDarkMode ? 'divide-zinc-800/60' : 'divide-slate-100'}`}>
-                {users.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-slate-400 italic">No user profiles found in database.</td>
-                  </tr>
-                ) : (
-                  users.map((u: any, idx: number) => (
-                    <tr key={u.id || idx} className={`transition-all duration-200 ${isDarkMode ? 'hover:bg-zinc-800/40' : 'hover:bg-orange-50/50'}`}>
-                      <td className={`py-3.5 pl-2 font-bold ${theme.textMain}`}>{u.full_name || u.name || 'Unnamed Staff'}</td>
-                      <td className="py-3.5 font-mono text-orange-600 font-bold">{u.emp_code || 'N/A'}</td>
-                      <td className={`py-3.5 ${theme.textMuted}`}>{u.email || 'No email registered'}</td>
-                      <td className="py-3.5 text-right pr-2">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
-                          u.role === 'admin' 
-                            ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20 shadow-sm' 
-                            : 'bg-purple-500/10 text-purple-600 border border-purple-500/20 shadow-sm'
-                        }`}>
-                          {u.role || 'Staff'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredUsers.length === 0 ? (
+              <div className={`col-span-full p-12 text-center border rounded-2xl ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40 text-purple-300/70' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                <UserCheck size={36} className="mx-auto mb-2 opacity-50" />
+                <p className="text-xs font-bold uppercase tracking-wider">No matching staff accounts found.</p>
+              </div>
+            ) : (
+              filteredUsers.map(user => (
+                <div key={user.id} className={`p-5 rounded-2xl border flex items-center justify-between gap-4 transition-all ${isDarkMode ? 'bg-[#0f0a1c]/80 border-purple-900/40 hover:border-orange-500/50' : 'bg-slate-50/80 border-slate-200 hover:border-orange-400'}`}>
+                  <div className="overflow-hidden">
+                    <h4 className={`text-sm font-bold truncate ${theme.textMain}`}>{user.full_name || user.name || 'Unnamed Staff'}</h4>
+                    <p className={`text-xs truncate mt-0.5 font-mono ${theme.textMuted}`}>{user.email}</p>
+                    <span className="inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20">
+                      {user.emp_code || 'NO-ID'}
+                    </span>
+                  </div>
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border shrink-0 ${
+                    user.role?.toLowerCase() === 'admin' 
+                      ? 'bg-purple-600 text-white border-purple-500 shadow-xs' 
+                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                  }`}>
+                    {user.role || 'Staff'}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
 
-      {/* Tab 4: Security */}
+      {/* 🌟 TAB 4: ACCESS & SECURITY */}
       {activeTab === 'security' && (
-        <div className={`${theme.card} rounded-3xl p-6 md:p-8 border shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-lg hover:-translate-y-1 transition-all`}>
+        <div className={`${theme.card} rounded-3xl p-6 sm:p-8 border shadow-sm space-y-6 animate-in fade-in duration-300`}>
           <div>
-            <h3 className={`text-lg font-bold ${theme.textMain}`}>Access Control Policies</h3>
-            <p className={`text-xs mt-1 ${theme.textMuted}`}>Manage authentication restrictions and audit enforcement.</p>
+            <h3 className={`text-base sm:text-lg font-black ${theme.textMain}`}>Portal Access & Security Restrictions</h3>
+            <p className={`text-xs sm:text-sm font-medium mt-1 ${theme.textMuted}`}>Enforce administrative approval rules and control employee dashboard capabilities.</p>
           </div>
 
           <div className="space-y-4">
-            <div className={`p-5 rounded-2xl border flex items-center justify-between transition-colors ${theme.cardInner} hover:border-orange-200 dark:hover:border-zinc-700`}>
-              <div>
-                <h4 className={`text-sm font-bold ${theme.textMain}`}>Require Admin Adjudication</h4>
-                <p className={`text-xs mt-0.5 ${theme.textMuted}`}>All mobile hardware inspections must be manually approved before asset status changes.</p>
+            {[
+              { title: 'Allow Staff Portal Login', desc: 'Permit active employees to sign into their dashboard and view assigned devices.', state: settings.allowStaffLogin, key: 'allowStaffLogin' },
+              { title: 'Require Admin Approval for Hardware Returns', desc: 'Mandate IT administrative verification before an asset is returned to warehouse stock.', state: settings.requireAdminApproval, key: 'requireAdminApproval' },
+              { title: 'Compress Smartphone Uploads Automatically', desc: 'Reduce image file sizes on client devices before transmitting to Supabase cloud storage.', state: settings.compressUploads, key: 'compressUploads' },
+            ].map((item, idx) => (
+              <div key={idx} className={`p-5 rounded-2xl border flex items-center justify-between gap-4 transition-all ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-slate-50 border-slate-200'}`}>
+                <div>
+                  <h4 className={`text-sm font-bold ${theme.textMain}`}>{item.title}</h4>
+                  <p className={`text-xs font-medium mt-1 ${theme.textMuted}`}>{item.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettings({ ...settings, [item.key]: !item.state });
+                    toast.success(`Updated "${item.title}" setting!`);
+                  }}
+                  className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer shrink-0 ${item.state ? 'bg-orange-600' : 'bg-slate-300 dark:bg-zinc-700'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${item.state ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
               </div>
-              <input type="checkbox" checked={settings.requireAdminApproval} readOnly className="w-5 h-5 accent-orange-600 rounded cursor-pointer transition-transform hover:scale-110" />
-            </div>
+            ))}
+          </div>
 
-            <div className={`p-5 rounded-2xl border flex items-center justify-between transition-colors ${theme.cardInner} hover:border-orange-200 dark:hover:border-zinc-700`}>
-              <div>
-                <h4 className={`text-sm font-bold ${theme.textMain}`}>Staff Self-Service Edits</h4>
-                <p className={`text-xs mt-0.5 ${theme.textMuted}`}>Allow employees to modify serial tags or hardware categories after assignment.</p>
-              </div>
-              <input type="checkbox" checked={settings.allowStaffEditAssets} readOnly className="w-5 h-5 accent-orange-600 rounded cursor-pointer transition-transform hover:scale-110" />
-            </div>
+          <div className={`p-5 rounded-2xl border flex items-center gap-3 text-xs sm:text-sm font-semibold ${isDarkMode ? 'bg-purple-950/40 border-purple-800/60 text-purple-200' : 'bg-purple-50 border-purple-200 text-purple-900'}`}>
+            <ShieldCheck size={20} className="text-orange-600 dark:text-orange-400 shrink-0" />
+            <span>Security settings are enforced continuously across your Supabase Row Level Security (RLS) policies.</span>
           </div>
         </div>
       )}
