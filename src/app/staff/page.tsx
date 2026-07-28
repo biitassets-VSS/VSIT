@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
-  AlertCircle, Clock, X, Upload, CheckCircle2, AlertTriangle, 
-  Loader2, Calendar, CheckCircle, ArrowUpRight, HelpCircle,
-  Camera, Lock, Monitor, Bell, LogOut, RotateCcw,
+  AlertCircle, Clock, X, CheckCircle2, AlertTriangle, 
+  Loader2, CheckCircle, HelpCircle,
+  Camera, Lock, Monitor, Bell, LogOut,
   ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert, Check,
   MessageSquare, Send
 } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 // 🌟 SMART AUDIT WINDOW ENGINE
 function getAuditWindowInfo(category: string = 'Laptop') {
@@ -126,8 +127,6 @@ export default function StaffDashboardPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
   const activeSignalingUserIdRef = useRef<string | null>(null);
-
-  const auditWindow = getAuditWindowInfo();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -306,7 +305,7 @@ export default function StaffDashboardPage() {
       .subscribe();
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE (AUDIO REMOVED TO PREVENT CRASHES)
+  // 🚀 START WEBRTC SCREEN SHARE (WITH INDESTRUCTIBLE FALLBACK ENGINE)
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
     setIsConnecting(true);
@@ -322,13 +321,28 @@ export default function StaffDashboardPage() {
         }
       });
 
-      showToast("🚀 Launching Screen Picker", "Please select 'Entire Screen' when prompted.");
+      showToast("🚀 Launching Screen Picker", "Establishing secure capture channel...");
 
-      // 🌟 THE FIX: Strict basic video config, no audio allowed to prevent hardware crash
-      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: true,
-        audio: false 
-      });
+      let stream: MediaStream | null = null;
+
+      // 🛡️ INDESTRUCTIBLE 2-LAYER CAPTURE ENGINE 🛡️
+      try {
+        // Attempt 1: Standard Modern Browser API (Will trigger Electron Handler)
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      } catch (err1: any) {
+        console.warn("Primary capture failed, attempting Electron native hook...", err1);
+        try {
+          // Attempt 2: Electron Legacy Native Hook (Bypasses broken display handlers and unreadable monitor indexes)
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { mandatory: { chromeMediaSource: 'desktop' } } as any,
+            audio: false
+          });
+        } catch (err2: any) {
+          throw new Error("Screen capture blocked by Windows. Please check Windows Privacy Settings > Screen Recording.");
+        }
+      }
+
+      if (!stream) throw new Error("Failed to acquire video stream from hardware.");
 
       streamRef.current = stream;
 
@@ -387,7 +401,7 @@ export default function StaffDashboardPage() {
           isSelf: false
         }]);
         
-        setShowChat(true); // Force chat to open so they see it
+        setShowChat(true);
         playAlertSound();
         showToast("💬 New IT Message", `Admin: ${payload.payload.text}`);
       })
@@ -396,17 +410,15 @@ export default function StaffDashboardPage() {
       .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
         const { x, y } = payload.payload;
         
-        // 1. Show the visual red dot
         setAdminPing({ x, y, id: Date.now() });
         setTimeout(() => setAdminPing(null), 2000); 
 
-        // 2. 🚨 EXECUTE REAL WINDOWS CLICK (If running inside Electron) 🚨
         if (typeof window !== 'undefined' && (window as any).electronAPI) {
           (window as any).electronAPI.sendRemoteClick(x, y);
         }
       })
       
-      // 🌟 REMOTE CONTROL: KEYBOARD TYPING (If running inside Electron)
+      // 🌟 REMOTE CONTROL: KEYBOARD TYPING
       .on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
          const { text } = payload.payload;
          if (typeof window !== 'undefined' && (window as any).electronAPI) {
@@ -414,7 +426,7 @@ export default function StaffDashboardPage() {
          }
       })
 
-      // 🌟 REMOTE CONTROL: SYSTEM COMMANDS (Lock PC, Clear Cache, Refresh)
+      // 🌟 REMOTE CONTROL: SYSTEM COMMANDS
       .on('broadcast', { event: 'admin_system_command' }, (payload) => {
          const { command } = payload.payload;
          if (typeof window !== 'undefined' && (window as any).electronAPI) {
@@ -640,6 +652,8 @@ export default function StaffDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
+      <Toaster position="top-right" />
+
       <div className="fixed top-24 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map(t => (
           <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
@@ -656,7 +670,7 @@ export default function StaffDashboardPage() {
           {/* 🎯 Admin Laser Pointer Overlay */}
           {adminPing && (
             <div 
-              className="fixed z-99999 pointer-events-none flex items-center justify-center"
+              className="fixed z-[99999] pointer-events-none flex items-center justify-center"
               style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}
             >
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
@@ -665,7 +679,7 @@ export default function StaffDashboardPage() {
           )}
 
           {/* 💬 Bottom Right Session Controls (Chat + Stop) */}
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {showChat && (
               <div className="w-80 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 overflow-hidden flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4">
@@ -729,7 +743,7 @@ export default function StaffDashboardPage() {
 
       {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce">
               <Monitor size={32} />
@@ -1133,7 +1147,7 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-9999 flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
