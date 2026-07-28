@@ -1,10 +1,13 @@
 // electron/main.js
-const { app, BrowserWindow, ipcMain, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electron');
 const path = require('path');
-const { exec } = require('child_process'); // Required to execute Windows OS commands
-
-// 🌟 Using the FREE community fork of nut.js
+const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
+
+// 🌟 FORCE SOFTWARE RENDERING & STREAMING
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
+app.commandLine.appendSwitch('allow-http-screen-capture');
 
 let mainWindow;
 
@@ -20,30 +23,35 @@ function createWindow() {
     }
   });
 
-  // Load your live portal URL (or localhost for testing)
-  mainWindow.loadURL('https://your-virtual-portal.com/staff');
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.loadURL('https://vsit-teal.vercel.app');
 
-  // 🌟 MAGIC TRICK: Auto-Accept Screen Share!
-  mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      callback({ video: sources[0], audio: 'loopback' }); // Silently grabs Screen 1
-    });
+  // Aggressive Auto-Approval for Media
+  mainWindow.webContents.session.setPermissionCheckHandler(() => true);
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(true);
   });
 }
 
 app.whenReady().then(createWindow);
 
 // -------------------------------------------------------------
+// 🌟 THE BULLETPROOF SCREEN ID GENERATOR
+// -------------------------------------------------------------
+ipcMain.handle('get-desktop-source-id', async () => {
+  // fetchWindowIcons: false prevents memory crashes on Windows
+  const sources = await desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false });
+  return sources[0].id; 
+});
+
+// -------------------------------------------------------------
 // 🎮 ACTUAL WINDOWS OS CONTROL LISTENERS
 // -------------------------------------------------------------
 
-// 1. Physically move the mouse and click
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
-  const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;
   
-  // Convert Admin's screen percentages to actual Windows pixels
   const targetX = Math.round((xPercent / 100) * width);
   const targetY = Math.round((yPercent / 100) * height);
   
@@ -51,14 +59,17 @@ ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   await mouse.click(Button.LEFT);
 });
 
-// 2. Physically type on the keyboard
 ipcMain.on('remote-type', async (event, { text }) => {
   await keyboard.type(text);
 });
 
-// 3. Execute Native Windows OS Commands (Lock, Cache, Explorer)
 ipcMain.on('system-command', async (event, { command }) => {
   try {
+    const allowedCommands = {
+      'lock_windows': 'rundll32.exe user32.dll,LockWorkStation',
+      'open_explorer': 'explorer.exe'
+    };
+
     if (command === 'refresh_app') {
       if (mainWindow) mainWindow.webContents.reloadIgnoringCache();
     } 
@@ -69,13 +80,10 @@ ipcMain.on('system-command', async (event, { command }) => {
         mainWindow.webContents.reload();
       }
     } 
-    else if (command === 'lock_windows') {
-      // Natively locks the Windows Workstation
-      exec('rundll32.exe user32.dll,LockWorkStation');
-    } 
-    else if (command === 'open_explorer') {
-      // Natively opens the Windows File Explorer
-      exec('explorer.exe');
+    else if (allowedCommands[command]) {
+      exec(allowedCommands[command]);
+    } else {
+      console.warn(`Blocked unauthorized system command: ${command}`);
     }
   } catch (err) {
     console.error("Failed to execute OS command:", err);

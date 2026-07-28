@@ -439,7 +439,7 @@ export default function AdminRemotePage() {
     <div className={`h-screen max-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased flex flex-col overflow-hidden`}>
       <Toaster position="top-right" />
       
-      <div className="w-full max-w-[1600px] px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-8 mx-auto py-3.5 flex-1 flex flex-col min-h-0 overflow-hidden gap-3.5">
         
         <div className={`${theme.card} rounded-2xl p-3 sm:p-4 border shadow-sm flex items-center justify-between gap-4 shrink-0 transition-all duration-300`}>
           <div className="flex items-center gap-3 min-w-0">
@@ -741,7 +741,7 @@ export default function AdminRemotePage() {
                             <h3 className={`text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>Live Session Chat</h3>
                           </div>
                           
-                          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-white dark:bg-[#0b0712] min-h-[250px]">
+                          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-white dark:bg-[#0b0712] min-h-62.5">
                             {chatMessages.length === 0 ? (
                               <div className="m-auto text-center text-xs font-medium text-slate-400 dark:text-zinc-600">
                                 Send a message to communicate with {activeSession.full_name?.split(' ')[0]}.

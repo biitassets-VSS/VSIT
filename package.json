@@ -58,12 +58,26 @@
   "build": {
     "appId": "com.virtualstaffing.portal",
     "productName": "Virtual Staffing Portal",
+    "compression": "maximum",
+    "asar": true,
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "electron/**/*",
+      "package.json",
+      "!src/**/*",
+      "!.next/**/*",
+      "!.open-next/**/*",
+      "!.wrangler/**/*",
+      "!public/**/*",
+      "!.github/**/*"
+    ],
     "win": {
       "target": "nsis",
-      "requestedExecutionLevel": "requireAdministrator"
+      "requestedExecutionLevel": "requireAdministrator",
+      "cscLink": "vsit-cert.pfx",
+      "cscKeyPassword": "VSITsecure123"
     },
     "nsis": {
       "oneClick": true,

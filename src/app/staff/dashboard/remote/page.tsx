@@ -204,10 +204,29 @@ export default function StaffRemotePage() {
 
       toast("🚀 Launching Screen Picker... Please select 'Entire Screen'", { icon: '🖥️', duration: 5000 });
 
-      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
-        audio: false
-      });
+      let stream: MediaStream;
+
+      // 🌟 THE BULLETPROOF ELECTRON BYPASS 🌟
+      // If the app detects it is running inside our .exe, it uses direct hardware hooking
+      if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
+        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
+        
+        stream = await (navigator.mediaDevices as any).getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sourceId
+            }
+          }
+        });
+      } else {
+        // Fallback for standard web browsers (like Chrome/Edge)
+        stream = await (navigator.mediaDevices as any).getDisplayMedia({
+          video: true,
+          audio: false
+        });
+      }
 
       streamRef.current = stream;
 
