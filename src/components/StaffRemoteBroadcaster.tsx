@@ -40,10 +40,10 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 2. Request browser screen capture permission
+      // 🌟 THE FIX: Simplified constraints to prevent Electron hardware/driver panics
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } } as any,
-        audio: false
+        video: true,
+        audio: false // Strict false to prevent "NotReadableError"
       });
 
       streamRef.current = stream;
@@ -59,6 +59,13 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
       });
       peerRef.current = peer;
+
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          stopSharing();
+          toast.error("IT Admin disconnected from the session.");
+        }
+      };
 
       // Add local screen video track to peer connection
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
@@ -88,7 +95,30 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       }).on('broadcast', { event: 'terminate_session' }, () => {
         stopSharing();
         toast("🛑 IT Admin ended the remote session.", { icon: 'ℹ️' });
-      }).subscribe(async (status) => {
+      }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
+        stopSharing(); 
+        toast.error("🛑 IT Admin ended the remote support session.");
+      })
+      // 🌟 REMOTE CONTROL EVENTS (Clicks, Typing, System Commands)
+      .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
+        const { x, y } = payload.payload;
+        if (typeof window !== 'undefined' && (window as any).electronAPI) {
+          (window as any).electronAPI.sendRemoteClick(x, y);
+        }
+      })
+      .on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
+         const { text } = payload.payload;
+         if (typeof window !== 'undefined' && (window as any).electronAPI) {
+           (window as any).electronAPI.sendRemoteType(text);
+         }
+      })
+      .on('broadcast', { event: 'admin_system_command' }, (payload) => {
+         const { command } = payload.payload;
+         if (typeof window !== 'undefined' && (window as any).electronAPI) {
+           (window as any).electronAPI.sendSystemCommand(command);
+         }
+      })
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           // Create and send SDP Offer to Admin
           const offer = await peer.createOffer();
@@ -126,7 +156,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     <>
       {/* 🟢 ACTIVE STREAMING FLOATING BADGE */}
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-6">
+        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 border-2 border-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-6">
           <div className="flex items-center gap-2.5">
             <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
             <div>
@@ -142,7 +172,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
 
       {/* ⚠️ INCOMING SCREEN SHARE REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-[#150f24] border border-orange-500/50 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95">
             <div className="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner animate-bounce">
               <Monitor size={28} />

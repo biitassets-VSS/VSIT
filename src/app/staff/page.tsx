@@ -306,7 +306,7 @@ export default function StaffDashboardPage() {
       .subscribe();
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE (NOW WITH AUDIO)
+  // 🚀 START WEBRTC SCREEN SHARE (AUDIO REMOVED TO PREVENT CRASHES)
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
     setIsConnecting(true);
@@ -324,19 +324,11 @@ export default function StaffDashboardPage() {
 
       showToast("🚀 Launching Screen Picker", "Please select 'Entire Screen' when prompted.");
 
-      // 1. Capture the Screen (Video)
+      // 🌟 THE FIX: Simplified constraints to prevent Electron hardware/driver panics
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
-        audio: true // Captures system audio if user allows
+        video: true,
+        audio: false // Strict false to prevent WebRTC NotReadableError crashes
       });
-
-      // 2. Capture the Microphone (Voice) so Admin can hear the staff member
-      try {
-        const voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        voiceStream.getAudioTracks().forEach(track => stream.addTrack(track));
-      } catch (voiceErr) {
-        console.warn("Could not capture microphone audio. Admin will only hear system audio.", voiceErr);
-      }
 
       streamRef.current = stream;
 
@@ -1026,9 +1018,9 @@ export default function StaffDashboardPage() {
                       {isResolved && (
                         <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
                           {tix.updated_at && (
-                             <div className="text-[10px] font-semibold text-slate-500 uppercase flex items-center gap-1">
-                               <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
-                             </div>
+                              <div className="text-[10px] font-semibold text-slate-500 uppercase flex items-center gap-1">
+                                <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
+                              </div>
                           )}
 
                           <div className="flex items-center gap-1 mt-1">

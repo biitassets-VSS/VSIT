@@ -204,29 +204,11 @@ export default function StaffRemotePage() {
 
       toast("🚀 Launching Screen Picker... Please select 'Entire Screen'", { icon: '🖥️', duration: 5000 });
 
-      let stream: MediaStream;
-
-      // 🌟 THE BULLETPROOF ELECTRON BYPASS 🌟
-      // If the app detects it is running inside our .exe, it uses direct hardware hooking
-      if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
-        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
-        
-        stream = await (navigator.mediaDevices as any).getUserMedia({
-          audio: false,
-          video: {
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sourceId
-            }
-          }
-        });
-      } else {
-        // Fallback for standard web browsers (like Chrome/Edge)
-        stream = await (navigator.mediaDevices as any).getDisplayMedia({
-          video: true,
-          audio: false
-        });
-      }
+      // 🌟 THE FIX: Simplified constraint ensures cross-browser & Electron compatibility without crashing
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: true,
+        audio: false // Strict false to prevent "NotReadableError"
+      });
 
       streamRef.current = stream;
 
@@ -237,6 +219,13 @@ export default function StaffRemotePage() {
 
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
+
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          stopScreenSharing();
+          toast.error("IT Admin disconnected from the session.");
+        }
+      };
 
       stream.getTracks().forEach((track: MediaStreamTrack) => peer.addTrack(track, stream));
 
@@ -266,7 +255,32 @@ export default function StaffRemotePage() {
       }).on('broadcast', { event: 'terminate_session' }, () => {
         stopScreenSharing();
         toast("🛑 IT Admin ended the remote support session.", { icon: 'ℹ️' });
-      }).subscribe(async (status) => {
+      }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
+        stopScreenSharing(); 
+        toast.error("🛑 IT Admin ended the remote support session.");
+      })
+      
+      // 🌟 REMOTE CONTROL EVENTS (Clicks, Typing, System Commands)
+      .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
+        const { x, y } = payload.payload;
+        if (typeof window !== 'undefined' && (window as any).electronAPI) {
+          (window as any).electronAPI.sendRemoteClick(x, y);
+        }
+      })
+      .on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
+         const { text } = payload.payload;
+         if (typeof window !== 'undefined' && (window as any).electronAPI) {
+           (window as any).electronAPI.sendRemoteType(text);
+         }
+      })
+      .on('broadcast', { event: 'admin_system_command' }, (payload) => {
+         const { command } = payload.payload;
+         if (typeof window !== 'undefined' && (window as any).electronAPI) {
+           (window as any).electronAPI.sendSystemCommand(command);
+         }
+      })
+
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           toast(`📡 Subscribed to topic: [${targetChannelId}]... Sending Offer`, { icon: '📡', duration: 4000 });
           const offer = await peer.createOffer();

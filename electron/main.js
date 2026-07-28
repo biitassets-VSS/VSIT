@@ -4,11 +4,6 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 FORCE SOFTWARE RENDERING & STREAMING
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
-app.commandLine.appendSwitch('allow-http-screen-capture');
-
 let mainWindow;
 
 function createWindow() {
@@ -26,28 +21,32 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app');
 
-  // Aggressive Auto-Approval for Media
+  // 🌟 1. Auto-Approve Permissions
   mainWindow.webContents.session.setPermissionCheckHandler(() => true);
   mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
     callback(true);
+  });
+
+  // 🌟 2. Official Electron Screen Handler (No Audio to prevent crashes)
+  mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+      if (sources && sources.length > 0) {
+        callback({ video: sources[0] });
+      } else {
+        callback(); 
+      }
+    }).catch(err => {
+      console.error("Screen capture failed:", err);
+      callback();
+    });
   });
 }
 
 app.whenReady().then(createWindow);
 
 // -------------------------------------------------------------
-// 🌟 THE BULLETPROOF SCREEN ID GENERATOR
-// -------------------------------------------------------------
-ipcMain.handle('get-desktop-source-id', async () => {
-  // fetchWindowIcons: false prevents memory crashes on Windows
-  const sources = await desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false });
-  return sources[0].id; 
-});
-
-// -------------------------------------------------------------
 // 🎮 ACTUAL WINDOWS OS CONTROL LISTENERS
 // -------------------------------------------------------------
-
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;

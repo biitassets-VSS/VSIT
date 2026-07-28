@@ -82,14 +82,23 @@ export default function StaffInspectionsClient({
     setCurrentPhotoLabel(label);
     setIsCameraActive(true);
     try {
+      // FIX 1: Use 'ideal' so it defaults to rear camera on mobile, but gracefully falls back to webcams on laptops
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }, audio: false 
+        video: { facingMode: { ideal: 'environment' } }, 
+        audio: false 
       });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      
+      // FIX 2: Wait 50ms for React to actually render the <video> element before attaching the stream
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 50);
+
     } catch (err) {
       console.error("Camera error:", err);
-      alert("Please allow camera access.");
+      alert("Could not access camera. Please check device permissions.");
       closeCamera();
     }
   };

@@ -196,11 +196,12 @@ export default function StaffDashboardPage() {
         }
       });
 
-      // Safely cast mediaDevices to allow modern cursor constraints
+       // 🌟 THE FIX: Simplified constraints to prevent Electron hardware/driver panics
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { cursor: 'always', frameRate: { ideal: 30, max: 60 } },
-        audio: false
+        video: true,
+        audio: false // Strict false to prevent WebRTC NotReadableError crashes
       });
+
 
       streamRef.current = stream;
 
