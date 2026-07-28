@@ -57,7 +57,6 @@ const playAlertSound = () => {
   } catch (e) {}
 };
 
-// HELPER: Calculate resolution time
 const formatDuration = (start: string, end: string) => {
   if (!start || !end) return '';
   const d1 = new Date(start).getTime();
@@ -80,7 +79,6 @@ const getChannelTopic = (user: any) => {
   return `vsit_rtc_${code || email || id || 'default'}`;
 };
 
-// 🌟 ENTERPRISE ICE SERVERS WITH STUN + TURN TCP/UDP RELAYS
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -111,12 +109,10 @@ export default function StaffDashboardPage() {
     type: '',
   });
 
-  // 🌟 WEBRTC POPUP & STREAMING STATE
   const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string; alertId?: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   
-  // 🌟 NEW LIVE CHAT & REMOTE CONTROL STATE
   const [chatMessages, setChatMessages] = useState<{sender: string, text: string, time: string, isSelf: boolean}[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
@@ -327,18 +323,23 @@ export default function StaffDashboardPage() {
 
       // 🛡️ INDESTRUCTIBLE 2-LAYER CAPTURE ENGINE 🛡️
       try {
-        // Attempt 1: Standard Modern Browser API (Will trigger Electron Handler)
+        // Attempt 1: Standard Modern Browser API (Triggers Electron Handler)
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       } catch (err1: any) {
         console.warn("Primary capture failed, attempting Electron native hook...", err1);
         try {
-          // Attempt 2: Electron Legacy Native Hook (Bypasses broken display handlers and unreadable monitor indexes)
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { mandatory: { chromeMediaSource: 'desktop' } } as any,
+          // Attempt 2: Electron Legacy Native Hook (Bypasses unreadable monitor indexes)
+          let sourceId = null;
+          if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
+            sourceId = await (window as any).electronAPI.getDesktopSourceId();
+          }
+          
+          stream = await (navigator.mediaDevices as any).getUserMedia({
+            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any,
             audio: false
           });
         } catch (err2: any) {
-          throw new Error("Screen capture blocked by Windows. Please check Windows Privacy Settings > Screen Recording.");
+          throw new Error("Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'.");
         }
       }
 
@@ -391,8 +392,6 @@ export default function StaffDashboardPage() {
         stopScreenSharing(); 
         showToast("🛑 Session Ended", "IT Admin ended the remote support session.");
       })
-      
-      // 🌟 LIVE CHAT RECEIVER (Auto-opens chat)
       .on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, {
           sender: payload.payload.sender || 'Admin',
@@ -405,8 +404,6 @@ export default function StaffDashboardPage() {
         playAlertSound();
         showToast("💬 New IT Message", `Admin: ${payload.payload.text}`);
       })
-      
-      // 🌟 REMOTE CONTROL: LASER POINTER + REAL OS CLICK
       .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
         const { x, y } = payload.payload;
         
@@ -417,23 +414,18 @@ export default function StaffDashboardPage() {
           (window as any).electronAPI.sendRemoteClick(x, y);
         }
       })
-      
-      // 🌟 REMOTE CONTROL: KEYBOARD TYPING
       .on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
          const { text } = payload.payload;
          if (typeof window !== 'undefined' && (window as any).electronAPI) {
            (window as any).electronAPI.sendRemoteType(text);
          }
       })
-
-      // 🌟 REMOTE CONTROL: SYSTEM COMMANDS
       .on('broadcast', { event: 'admin_system_command' }, (payload) => {
          const { command } = payload.payload;
          if (typeof window !== 'undefined' && (window as any).electronAPI) {
            (window as any).electronAPI.sendSystemCommand(command);
          }
       })
-      
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           showToast("📡 Subscribed to stream channel", "Sending SDP Offer to Admin...");
@@ -496,50 +488,6 @@ export default function StaffDashboardPage() {
 
     setChatInput('');
   };
-
-  useEffect(() => {
-    loadRealDatabase();
-    if (!currentUser || currentUser.id === 'guest-mock-uuid' || !currentUser.id) return;
-
-    const realtimeChannel = supabase.channel('staff-dashboard-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tickets' }, (payload) => { 
-        if (payload.new.created_by?.toLowerCase() === currentUser.email?.toLowerCase()) showToast("Ticket Updated", `Your ticket status was changed to: ${payload.new.status}`);
-        loadRealDatabase(); 
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => { 
-        if (payload.new.assigned_to === currentUser.id) showToast("Hardware Update", `IT has updated your device details.`);
-        loadRealDatabase(); 
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inspections' }, (payload) => { 
-        if (payload.new.inspected_by === currentUser.id) {
-          if (payload.new.status === 'Return Approved') showToast("Handover Approved", "IT has successfully received and unassigned your device.");
-          if (payload.new.status === 'Return Rejected') showToast("Return Rejected", "IT rejected your device return. Please check dashboard for details.");
-        }
-        loadRealDatabase(); 
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => { 
-        const target = String(payload.new.target_user || '').trim().toLowerCase();
-        const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff'].includes(target);
-        const isPersonal = target === String(currentUser.id).toLowerCase() || target === currentUser.email?.toLowerCase() || target === String(currentUser.emp_id).toLowerCase();
-        if (isGlobal || isPersonal) {
-            showToast(payload.new.title || "New System Alert", payload.new.message || "You have a new message from Admin.");
-            if ("Notification" in window && Notification.permission === "granted") new Notification(payload.new.title || "New System Alert", { body: payload.new.message, icon: "/favicon.ico" });
-        }
-        loadRealDatabase(); 
-      })
-      .subscribe();
-
-    return () => { 
-      supabase.removeChannel(realtimeChannel); 
-      activeSignalingUserIdRef.current = null;
-      supabase.getChannels().forEach(ch => {
-        if (ch.topic.includes('webrtc_signaling_') || ch.topic.includes('staff_notif_popup_') || ch.topic.includes('vsit_rtc_')) {
-          supabase.removeChannel(ch);
-        }
-      });
-      stopScreenSharing();
-    };
-  }, [currentUser.id, currentUser.email, currentUser.emp_id]);
 
   const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
@@ -652,9 +600,7 @@ export default function StaffDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
-      <Toaster position="top-right" />
-
-      <div className="fixed top-24 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed top-24 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map(t => (
           <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0"><Bell size={18} className="animate-pulse" /></div>
@@ -664,10 +610,8 @@ export default function StaffDashboardPage() {
         ))}
       </div>
 
-      {/* 🔴 ACTIVE STREAMING FLOATING CONTROLS & CHAT WIDGET */}
       {isStreaming && (
         <>
-          {/* 🎯 Admin Laser Pointer Overlay */}
           {adminPing && (
             <div 
               className="fixed z-[99999] pointer-events-none flex items-center justify-center"
@@ -678,7 +622,6 @@ export default function StaffDashboardPage() {
             </div>
           )}
 
-          {/* 💬 Bottom Right Session Controls (Chat + Stop) */}
           <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {showChat && (
@@ -741,7 +684,6 @@ export default function StaffDashboardPage() {
         </>
       )}
 
-      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">

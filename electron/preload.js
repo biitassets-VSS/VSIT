@@ -6,6 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendRemoteType: (text) => ipcRenderer.send('remote-type', { text }),
   sendSystemCommand: (command) => ipcRenderer.send('system-command', { command }),
   
-  // 🌟 THE NEW HARDWARE BYPASS HOOK
+  // 🌟 REQUIRED FOR SECONDARY FALLBACK ENGINE
   getDesktopSourceId: () => ipcRenderer.invoke('get-desktop-source-id')
 });
