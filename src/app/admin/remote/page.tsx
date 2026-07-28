@@ -40,7 +40,7 @@ interface ChatMessage {
   isSelf: boolean;
 }
 
-// 🌟 DETERMINISTIC TOPIC KEY GENERATOR (GUARANTEES 100% ALIGNMENT)
+// 🌟 DETERMINISTIC TOPIC KEY GENERATOR
 const getChannelTopic = (staff: any) => {
   const code = (staff?.emp_code || staff?.emp_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const email = (staff?.email || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -67,7 +67,6 @@ export default function AdminRemotePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [filterOnlineOnly, setFilterOnlineOnly] = useState(false);
   
   // 🌟 NATIVE WEBRTC RECEIVER STATE
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'requesting' | 'connected' | 'controlling'>('idle');
@@ -201,9 +200,7 @@ export default function AdminRemotePage() {
         });
 
         setStaffList(enhancedStaff);
-        if (enhancedStaff.length > 0 && !activeSession) {
-          selectStaffMember(enhancedStaff[0]);
-        }
+        // NOTE: Auto-select logic has been completely removed so it starts empty.
       }
     } catch (error: any) {
       toast.error(`Failed to load network core: ${error.message}`);
@@ -359,13 +356,11 @@ export default function AdminRemotePage() {
     }
   };
 
-  // 🌟 NEW: REMOTE SYSTEM COMMAND DISPATCHER
   const dispatchSystemCommand = (commandType: string) => {
     if (!channelRef.current) {
       return toast.error("No active connection to execute commands.");
     }
     
-    // Depending on the command, you will write the matching implementation in electron/main.js
     channelRef.current.send({
       type: 'broadcast',
       event: 'admin_system_command',
@@ -401,23 +396,18 @@ export default function AdminRemotePage() {
     setChatInput('');
   };
 
+  // 🌟 PURE SEARCH FILTER LOGIC (No default rendering)
   const filteredStaff = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    return staffList.filter(s => {
-      const matchesSearch = (s.full_name || s.name || '').toLowerCase().includes(q) || 
-                            (s.emp_code || '').toLowerCase().includes(q) ||
-                            (s.email || '').toLowerCase().includes(q) ||
-                            (s.department || '').toLowerCase().includes(q);
-      
-      const isOnline = s.is_online || s.status?.toLowerCase() === 'online' || s.status?.toLowerCase() === 'active';
-      if (filterOnlineOnly && !isOnline) return false;
-      return matchesSearch;
-    });
-  }, [staffList, searchQuery, filterOnlineOnly]);
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return []; // Returns nothing until the admin searches
 
-  const onlineCount = useMemo(() => {
-    return staffList.filter(s => s.is_online || s.status?.toLowerCase() === 'online' || s.status?.toLowerCase() === 'active').length;
-  }, [staffList]);
+    return staffList.filter(s => {
+      return (s.full_name || s.name || '').toLowerCase().includes(q) || 
+             (s.emp_code || '').toLowerCase().includes(q) ||
+             (s.email || '').toLowerCase().includes(q) ||
+             (s.department || '').toLowerCase().includes(q);
+    });
+  }, [staffList, searchQuery]);
 
   const theme = {
     bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
@@ -484,31 +474,17 @@ export default function AdminRemotePage() {
                     className="w-full pl-9 pr-3 py-2 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
                   />
                 </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setFilterOnlineOnly(false)}
-                    className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
-                      !filterOnlineOnly ? 'bg-orange-600 text-white border-orange-600 shadow-2xs' : `${theme.cardInner} ${theme.textSub} hover:text-orange-500`
-                    }`}
-                  >
-                    All Staff ({staffList.length})
-                  </button>
-                  <button
-                    onClick={() => setFilterOnlineOnly(true)}
-                    className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border flex items-center justify-center gap-1 ${
-                      filterOnlineOnly ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs' : `${theme.cardInner} text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10`
-                    }`}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Live Only ({onlineCount})</span>
-                  </button>
-                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-2.5 space-y-1 custom-scrollbar min-h-0">
-                {filteredStaff.length === 0 ? (
-                  <div className={`text-center p-6 text-xs font-bold ${theme.textSub}`}>No matching computers found.</div>
+                {searchQuery.trim() === '' ? (
+                  <div className={`text-center p-6 text-xs font-bold ${theme.textSub}`}>
+                    Type a name, email, or EMP ID to search.
+                  </div>
+                ) : filteredStaff.length === 0 ? (
+                  <div className={`text-center p-6 text-xs font-bold ${theme.textSub}`}>
+                    No matching staff found.
+                  </div>
                 ) : (
                   filteredStaff.map((staff) => {
                     const isSelected = activeSession?.id === staff.id;
@@ -845,7 +821,7 @@ export default function AdminRemotePage() {
                 <Monitor size={48} className={`mb-3 opacity-40 ${theme.textSub}`} />
                 <h3 className={`text-sm sm:text-base font-black ${theme.textMain}`}>Select a Computer from the Directory</h3>
                 <p className={`text-xs font-medium mt-1 max-w-sm ${theme.textSub}`}>
-                  Choose a staff member on the left to initiate live in-browser WebRTC screen sharing and interactive mouse control.
+                  Search for a staff member on the left to initiate live in-browser WebRTC screen sharing and interactive mouse control.
                 </p>
               </div>
             )}
