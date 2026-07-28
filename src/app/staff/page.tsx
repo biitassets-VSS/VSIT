@@ -324,10 +324,10 @@ export default function StaffDashboardPage() {
 
       showToast("🚀 Launching Screen Picker", "Please select 'Entire Screen' when prompted.");
 
-      // 🌟 THE FIX: Simplified constraints to prevent Electron hardware/driver panics
+      // 🌟 THE FIX: Strict basic video config, no audio allowed to prevent hardware crash
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: true,
-        audio: false // Strict false to prevent WebRTC NotReadableError crashes
+        audio: false 
       });
 
       streamRef.current = stream;
