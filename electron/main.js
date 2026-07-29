@@ -29,7 +29,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadURL('http://localhost:3000'); // Or your vercel URL when deployed
+  mainWindow.loadURL('https://your-app-name.vercel.app'); // Or your vercel URL when deployed
 
   // 🌟 SET DISPLAY MEDIA HANDLER ON DEFAULT SESSION
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {

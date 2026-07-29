@@ -344,7 +344,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
       {/* FLOATING TOASTS */}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
             <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
@@ -363,13 +363,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {isStreaming && (
         <>
           {adminPing && (
-            <div className="fixed z-[99999] pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
+            <div className="fixed z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
               <div className="relative w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(225,29,72,1)]" />
             </div>
           )}
           
-          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
             
             {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
@@ -436,7 +436,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
@@ -498,7 +498,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </button>
 
             {isNotifOpen && (
-              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><History size={14} className="text-purple-600"/> Session Alerts History</h3>
                 </div>
