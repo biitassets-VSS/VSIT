@@ -199,23 +199,40 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       let stream: MediaStream | null = null;
       
       const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+      console.log("🔍 DIAGNOSTIC: Is Electron API detected?", !!electronAPI);
 
       try {
+        console.log("🌐 TRIGGERING LAYER 1: Standard Web Browser Fallback...");
+        // 1. Try standard getDisplayMedia (triggers setDisplayMediaRequestHandler in Electron automatically)
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false
+        });
+        console.log("✅ LAYER 1 SUCCESS: Stream acquired!");
+      } catch (primaryErr: any) {
+        console.warn("getDisplayMedia direct call failed. Attempting Electron sourceId bypass...", primaryErr);
+
         if (electronAPI && electronAPI.getDesktopSourceId) {
-          // 🌟 We are in the Electron wrapper! Bypass getDisplayMedia to avoid Windows NotReadableError
+          console.log("🚀 TRIGGERING LAYER 2: Using Electron Desktop Capturer...");
           const sourceId = await electronAPI.getDesktopSourceId();
-          if (!sourceId) throw new Error("Could not detect Windows monitor ID.");
+          console.log("🎯 DETECTED SOURCE ID:", sourceId);
+          
+          if (!sourceId) throw new Error("Could not detect Windows monitor source ID.");
           
           stream = await (navigator.mediaDevices as any).getUserMedia({ 
             audio: false, 
-            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
+            video: { 
+              mandatory: { 
+                chromeMediaSource: 'desktop', 
+                chromeMediaSourceId: sourceId 
+              } 
+            } as any 
           });
+          console.log("✅ LAYER 2 SUCCESS: Stream acquired!");
         } else {
-          // 🌐 We are in a standard Web Browser
-          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+          console.error("❌ FATAL SCREEN SHARE ERROR (No fallback available):", primaryErr);
+          throw primaryErr;
         }
-      } catch (err: any) {
-        throw err; 
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
@@ -284,7 +301,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     } catch (err: any) {
       let errorMessage = err.message || err.name || 'Permission denied';
       
-      // Clearly explain the OS block if it occurs
       if (errorMessage.includes('Could not start video source')) {
         errorMessage = "Hardware Blocked: Windows or your Browser refused to start the video feed. Try restarting your browser or checking Windows Privacy Settings for Screen Recording.";
       }
