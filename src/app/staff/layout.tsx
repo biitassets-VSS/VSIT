@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Laptop, ClipboardCheck, 
   LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell, History, AlertTriangle,
-  Monitor, ShieldAlert, Check, Radio, StopCircle, MessageSquare, Send, Volume2, VolumeX
+  Monitor, ShieldAlert, Check, Radio, StopCircle, MessageSquare, Send
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -102,7 +102,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, showChat]);
 
-  // 🌟 UNIFIED ALERT DISPATCHER (Sends to both Floating Toast AND Persistent Dropdown)
+  // 🌟 UNIFIED ALERT DISPATCHER
   const addSystemAlert = (title: string, message: string, playSound = true) => {
     if (playSound) playAlertSound();
     const id = String(Date.now() + Math.random());
@@ -112,6 +112,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
     
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000);
+  };
+
+  const dismissHistoryAlert = async (id: string) => {
+    setAlertHistory(prev => prev.filter(a => a.id !== id));
+    const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+    if (!dismissed.includes(id)) { dismissed.push(id); localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); }
+    try {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      await supabase.from('notifications').delete().eq('id', id);
+    } catch (e) {}
   };
 
   // 2. REALTIME NETWORK LISTENERS
@@ -162,9 +172,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   }, [staffProfile.id, staffProfile.email]);
 
   // 3. WEBRTC EXECUTION ENGINE
-  const startScreenShare = async (manualChannelId?: string) => {
+  // 🌟 FIX: Re-added the second argument `alertIdToDismiss` so TypeScript stops complaining!
+  const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(staffProfile);
     setIsConnecting(true);
+    
+    // Clear out the alert from history if they clicked Accept from an alert
+    if (alertIdToDismiss) {
+      dismissHistoryAlert(alertIdToDismiss);
+    }
+    
     setIncomingRequest(null); 
     setChatMessages([]);
 
@@ -253,7 +270,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       });
 
     } catch (err: any) {
-      // 🌟 THIS GUARANTEES THE ERROR SAVES TO THE HISTORY BELL FOREVER
       addSystemAlert("❌ Connection Failed", err.message || 'Permission denied');
       setIsConnecting(false);
       setIsStreaming(false);
@@ -280,16 +296,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  const dismissHistoryAlert = async (id: string) => {
-    setAlertHistory(prev => prev.filter(a => a.id !== id));
-    const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-    if (!dismissed.includes(id)) { dismissed.push(id); localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); }
-    try {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-      await supabase.from('notifications').delete().eq('id', id);
-    } catch (e) {}
-  };
-
   const handleLogout = async () => {
     try { await supabase.auth.signOut(); } catch (e) {}
     localStorage.clear();
@@ -297,6 +303,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   };
 
   const unreadCount = alertHistory.filter(a => !a.read).length;
+
+  if (isCheckingAuth) return (
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
