@@ -58,21 +58,18 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-// 🌟 HARDWARE ID HOOK (TESTING WINDOW CAPTURE INSTEAD OF SCREEN)
+// 🌟 HARDWARE ID HOOK (FORCING FULL SCREEN FOR IT ADMIN)
 ipcMain.handle('get-desktop-source-id', async () => {
   try {
-    // We changed 'screen' to 'window' here to bypass full-desktop OS blocks
-    const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+    // We MUST use 'screen' so the IT Admin sees the whole desktop, not just a random window.
+    const sources = await desktopCapturer.getSources({ types: ['screen'] });
     
-    // Find the first actual application window (not a background process)
-    const validWindow = sources.find(s => s.id.startsWith('window') && s.name !== 'Virtual Staffing Portal');
-    
-    if (validWindow) {
-      console.log("Returning Window ID instead of Screen ID:", validWindow.id);
-      return validWindow.id;
+    if (sources.length > 0) {
+      console.log("🎯 Desktop Screen ID retrieved:", sources[0].id);
+      return sources[0].id;
     }
     
-    return sources.length > 0 ? sources[0].id : null;
+    return null;
   } catch (e) {
     console.error("Source ID fetch failed:", e);
     return null;
