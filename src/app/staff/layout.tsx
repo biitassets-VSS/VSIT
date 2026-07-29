@@ -16,6 +16,14 @@ interface StaffProfile {
   initials: string;
 }
 
+interface AlertRecord {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+}
+
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -24,10 +32,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-
-  // 🌟 Non-blocking Floating Toasts State
+  const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
 
   const [staffProfile, setStaffProfile] = useState<StaffProfile>({
@@ -81,25 +87,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     verifyStaff();
   }, [router]);
 
-  // 🌟 HELPER: Show multiple non-blocking toast alerts
-  const showToastAlert = (notification: any) => {
-    const toastId = notification.id || String(Date.now());
-    setToasts(prev => [...prev, { ...notification, toastId }]);
-    
-    // Auto remove after 10 seconds for readability
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.toastId !== toastId));
-    }, 10000);
-  };
-
-  const removeToastAlert = (toastId: string) => {
-    setToasts(prev => prev.filter(t => t.toastId !== toastId));
-  };
-
-  // 2. 🚨 REALTIME NOTIFICATION ENGINE (Fixed to catch Global & Personal)
+  // 2. 🚨 REALTIME NOTIFICATION & HISTORY ENGINE
   useEffect(() => {
     if (!staffProfile.id || staffProfile.id === 'guest-mock-uuid') return;
 
+    // Fetch initial missed notifications
     const fetchMissedNotifications = async () => {
       const { data } = await supabase
         .from('notifications')
@@ -116,21 +108,26 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           const isPersonal = target === String(staffProfile.id).toLowerCase() || target === staffProfile.email.toLowerCase();
           return isGlobal || isPersonal;
         });
-        setNotifications(validNotifs);
+
+        const historyRecords = validNotifs.map(n => ({
+          id: n.id,
+          title: n.title || 'System Alert',
+          message: n.message,
+          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: false
+        }));
+        setAlertHistory(historyRecords);
       }
     };
     
     fetchMissedNotifications();
 
+    // Listen for incoming live notifications
     const notificationSubscription = supabase
       .channel('staff-layout-alerts')
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-        },
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
           const n = payload.new;
           const target = String(n.target_user || '').trim().toLowerCase();
@@ -138,10 +135,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           const isPersonal = target === String(staffProfile.id).toLowerCase() || target === staffProfile.email.toLowerCase();
           
           if (isGlobal || isPersonal) {
-            showToastAlert(n);
-            setNotifications((prev) => {
+            const timeStr = new Date(n.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const toastId = n.id || String(Date.now());
+            
+            // 1. Show Floating Toast (Auto dismisses after 12 seconds)
+            setToasts(prev => [...prev, { id: toastId, title: n.title || 'System Alert', message: n.message }]);
+            setTimeout(() => {
+              setToasts(prev => prev.filter(t => t.id !== toastId));
+            }, 12000);
+
+            // 2. Add to Persistent History Dropdown
+            setAlertHistory(prev => {
               if (prev.some(existing => existing.id === n.id)) return prev;
-              return [n, ...prev];
+              return [{ id: toastId, title: n.title || 'System Alert', message: n.message, time: timeStr, read: false }, ...prev].slice(0, 50);
             });
           }
         }
@@ -153,23 +159,34 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
   }, [staffProfile.id, staffProfile.email]);
 
+  const toggleNotifDropdown = () => {
+    setIsNotifOpen(!isNotifOpen);
+    if (!isNotifOpen) {
+      // Mark all as read locally when opening the dropdown so the red badge goes away
+      setAlertHistory(prev => prev.map(a => ({ ...a, read: true })));
+    }
+  };
+
+  const dismissHistoryAlert = async (id: string) => {
+    // Remove from UI History immediately
+    setAlertHistory(prev => prev.filter(a => a.id !== id));
+    
+    // Mark as dismissed locally to prevent re-fetching
+    const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+    if (!dismissed.includes(id)) { 
+      dismissed.push(id); 
+      localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); 
+    }
+
+    // Delete/Update in Supabase
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id).catch(() => {});
+    await supabase.from('notifications').delete().eq('id', id).catch(() => {});
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
     window.location.href = '/';
-  };
-
-  const markNotificationAsRead = async (notificationId: string) => {
-    setNotifications((prev) => prev.filter(n => n.id !== notificationId));
-    
-    const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-    if (!dismissed.includes(notificationId)) { 
-      dismissed.push(notificationId); 
-      localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); 
-    }
-
-    await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId).catch(() => {});
-    await supabase.from('notifications').delete().eq('id', notificationId).catch(() => {});
   };
 
   if (isCheckingAuth) return (
@@ -178,6 +195,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     </div>
   );
 
+  const unreadCount = alertHistory.filter(a => !a.read).length;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
@@ -185,18 +204,18 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div 
-            key={toast.toastId} 
+            key={toast.id} 
             className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-[340px] sm:w-[400px] flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300"
           >
             <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
               <AlertTriangle size={20} className="animate-pulse" />
             </div>
             <div className="flex-1 pr-2 min-w-0">
-              <h4 className="text-sm font-bold text-slate-900 leading-tight truncate">{toast.title || 'System Alert'}</h4>
-              <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed break-words">{toast.message}</p>
+              <h4 className="text-sm font-bold text-slate-900 leading-tight truncate">{toast.title}</h4>
+              <p className="text-xs font-medium text-slate-600 mt-1 leading-relaxed break-words">{toast.message}</p>
             </div>
             <button 
-              onClick={() => removeToastAlert(toast.toastId)} 
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} 
               className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1 rounded-lg hover:bg-slate-100"
             >
               <X size={16} />
@@ -296,43 +315,38 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
 
           <div className="relative">
-            {/* 🌟 THE SINGLE, UNIFIED HEADER BELL */}
+            {/* 🌟 THE UNIFIED HEADER BELL */}
             <button 
-              onClick={() => setIsNotifOpen(!isNotifOpen)}
+              onClick={toggleNotifDropdown}
               className="relative p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm cursor-pointer"
-              title="Notifications"
+              title="Session Alerts History"
             >
               <Bell size={18} />
-              {notifications.length > 0 && (
+              {unreadCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">
-                  {notifications.length}
+                  {unreadCount}
                 </span>
               )}
             </button>
 
-            {/* NOTIFICATIONS DROPDOWN */}
+            {/* NOTIFICATIONS HISTORY DROPDOWN */}
             {isNotifOpen && (
               <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                    <History size={14} className="text-purple-600"/> Session Alerts
+                    <History size={14} className="text-purple-600"/> Session Alerts History
                   </h3>
-                  {notifications.length > 0 && (
-                    <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md border border-orange-200">
-                      {notifications.length} New
-                    </span>
-                  )}
                 </div>
                 
                 <div className="max-h-[400px] overflow-y-auto custom-scrollbar bg-white">
-                  {notifications.length === 0 ? (
+                  {alertHistory.length === 0 ? (
                     <div className="px-4 py-10 text-center text-slate-400 flex flex-col items-center gap-2">
                       <Bell size={24} className="opacity-20" />
-                      <span className="text-xs font-medium">You're all caught up!</span>
+                      <span className="text-xs font-medium">No alerts recorded yet.</span>
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100">
-                      {notifications.map((notif) => {
+                      {alertHistory.map((notif) => {
                         const isError = (notif.title || '').toLowerCase().includes('error') || (notif.title || '').toLowerCase().includes('cancel') || (notif.title || '').toLowerCase().includes('fail');
                         
                         return (
@@ -341,15 +355,18 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                               <AlertTriangle size={16} />
                             </div>
                             <div className="flex-1 pr-6 min-w-0">
-                              <p className={`text-xs font-bold truncate ${isError ? 'text-rose-700' : 'text-slate-900'}`}>{notif.title || 'System Alert'}</p>
-                              <p className={`text-[11px] mt-1 leading-relaxed break-words ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
+                              <div className="flex justify-between items-start mb-0.5">
+                                <p className={`text-xs font-bold truncate ${isError ? 'text-rose-700' : 'text-slate-900'}`}>{notif.title}</p>
+                                <span className="text-[9px] font-bold text-slate-400">{notif.time}</span>
+                              </div>
+                              <p className={`text-[11px] mt-1.5 leading-relaxed break-words ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
                                 {notif.message}
                               </p>
                             </div>
                             <button 
-                              onClick={() => markNotificationAsRead(notif.id)}
+                              onClick={() => dismissHistoryAlert(notif.id)}
                               className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-100 rounded-md shadow-sm"
-                              title="Dismiss"
+                              title="Delete from History"
                             >
                               <X size={12} />
                             </button>
@@ -366,7 +383,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         {/* PAGE CONTENT CONTAINER */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8 relative custom-scrollbar">
-          {/* Constrain max width for better readability on ultrawide monitors */}
           <div className="max-w-7xl mx-auto h-full">
             {children}
           </div>
