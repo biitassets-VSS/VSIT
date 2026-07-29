@@ -655,21 +655,7 @@ export default function StaffDashboardPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
       
-      {/* 🌟 NEW: GLOBAL TOP-RIGHT BELL BUTTON (Replaces old dummy layout bell) */}
-      <div className="fixed top-4 right-4 sm:right-6 z-[90]">
-        <button
-          onClick={() => setIsAlertsModalOpen(true)}
-          className="relative p-2.5 bg-white border border-slate-200 shadow-sm rounded-full hover:bg-slate-50 transition-colors cursor-pointer"
-          title="View Session Alerts History"
-        >
-          <Bell size={18} className="text-slate-700" />
-          {unreadAlertsCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
-              {unreadAlertsCount}
-            </span>
-          )}
-        </button>
-      </div>
+      
 
       {/* 🌟 NEW: SESSION ALERTS HISTORY MODAL */}
       {isAlertsModalOpen && (
