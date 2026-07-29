@@ -198,29 +198,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       addSystemAlert("🚀 Launching Screen Picker", "Establishing secure capture channel...", false);
       let stream: MediaStream | null = null;
       
+      const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+
       try {
-        // ALWAYS try the modern browser API first (Works in Chrome, Edge, and Modern Electron)
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      } catch (err1: any) {
-        console.warn("getDisplayMedia failed:", err1);
-        
-        // If it fails, check if we are in an older Electron wrapper
-        const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
         if (electronAPI && electronAPI.getDesktopSourceId) {
-          try {
-            const sourceId = await electronAPI.getDesktopSourceId();
-            if (!sourceId) throw new Error("Could not detect monitor ID.");
-            
-            stream = await (navigator.mediaDevices as any).getUserMedia({ 
-              audio: false, 
-              video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
-            });
-          } catch (err2: any) {
-            throw err2; 
-          }
+          // 🌟 We are in the Electron wrapper! Bypass getDisplayMedia to avoid Windows NotReadableError
+          const sourceId = await electronAPI.getDesktopSourceId();
+          if (!sourceId) throw new Error("Could not detect Windows monitor ID.");
+          
+          stream = await (navigator.mediaDevices as any).getUserMedia({ 
+            audio: false, 
+            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
+          });
         } else {
-          throw err1; 
+          // 🌐 We are in a standard Web Browser
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         }
+      } catch (err: any) {
+        throw err; 
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");

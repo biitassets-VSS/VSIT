@@ -29,7 +29,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadURL('https://vsit-teal.vercel.app');
+  mainWindow.loadURL('http://localhost:3000');
 
   // 🌟 AGGRESSIVE PERMISSION AUTO-APPROVAL (Updated for all Media/Screen Types)
   mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
