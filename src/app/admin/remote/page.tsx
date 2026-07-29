@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { 
   Monitor, ArrowLeft, Loader2, Search, PanelLeftClose, PanelLeftOpen, 
   RefreshCw, Power, Keyboard, Video, Clipboard, FileUp, Volume2, 
-  Ban, MessageSquare, Send, X
+  Ban, MessageSquare, Send, X, Maximize, Minimize
 } from 'lucide-react';
 
 interface StaffMember {
@@ -39,6 +39,7 @@ export default function AdminRemotePage() {
   const [isControlling, setIsControlling] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -55,6 +56,13 @@ export default function AdminRemotePage() {
   useEffect(() => { loadStaffAndAdminData(); return () => terminateSession(); }, []);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
+
+  // Handle ESC key exiting fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const loadStaffAndAdminData = async () => {
     try {
@@ -79,7 +87,6 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
-      // ANTI-DROP: Only disconnect on hard failure
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
           terminateSession();
@@ -124,17 +131,13 @@ export default function AdminRemotePage() {
         setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Staff', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
         setIsChatOpen(true);
         toast.success(`💬 New message from ${payload.payload.sender || 'Staff'}`);
-      })
-      // 🌟 HANDSHAKE LISTENERS ADDED HERE
-      .on('broadcast', { event: 'control_accepted' }, () => {
+      }).on('broadcast', { event: 'control_accepted' }, () => {
         setIsControlling(true);
         setSessionStatus('controlling');
         toast.success("✅ Staff granted remote control access!");
-      })
-      .on('broadcast', { event: 'control_rejected' }, () => {
+      }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Staff declined remote control.");
-      })
-      .subscribe(async (status) => {
+      }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           const pingChannel = supabase.channel(backgroundChannelId);
           pingChannel.subscribe(async (pingStatus) => {
@@ -152,7 +155,8 @@ export default function AdminRemotePage() {
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (channelRef.current) { channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: {} }); supabase.removeChannel(channelRef.current); channelRef.current = null; }
     if (videoRef.current) videoRef.current.srcObject = null;
-    setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+    setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false); setIsFullscreen(false);
   };
 
   const sendControlCommand = (command: any) => {
@@ -201,6 +205,16 @@ export default function AdminRemotePage() {
     setChatInput('');
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      viewportContainerRef.current?.requestFullscreen().catch(err => {
+        toast.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   return (
     <div className="h-screen bg-slate-50 font-sans flex flex-col overflow-hidden">
       <Toaster position="top-right" />
@@ -231,7 +245,7 @@ export default function AdminRemotePage() {
                   <input type="text" placeholder="Search EMP ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all" />
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                 {staffList.filter(s => s.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())).map((staff) => (
                   <button key={staff.id} onClick={() => { terminateSession(); setActiveSession(staff); }} className={`w-full text-left p-3 rounded-xl transition-all border flex items-center justify-between ${ activeSession?.id === staff.id ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-transparent hover:border-slate-200' }`}>
                     <div>
@@ -278,7 +292,7 @@ export default function AdminRemotePage() {
                   
                   {sessionStatus === 'requesting' && <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold">Awaiting Staff Approval...</p></div>}
                   
-                  {/* 🌟 HIGH-READABILITY GLASS CHAT */}
+                  {/* HIGH-READABILITY GLASS CHAT */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div className="absolute bottom-24 right-6 w-80 bg-slate-900/85 backdrop-blur-2xl border border-slate-700 shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
                       <div className="p-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white flex justify-between items-center shadow-sm">
@@ -304,7 +318,7 @@ export default function AdminRemotePage() {
                     </div>
                   )}
 
-                  {/* 🌟 PREMIUM CONTROL BAR */}
+                  {/* PREMIUM CONTROL BAR WITH FULLSCREEN */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-2xl border border-slate-600 p-2 rounded-2xl flex gap-2 shadow-2xl z-50">
                       {[
@@ -325,7 +339,7 @@ export default function AdminRemotePage() {
                         { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
                         { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Pull Remote Clipboard" },
                         { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
-                        { icon: <FileUp size={18} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
+                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
                         { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Force App Refresh" },
                         { icon: <Ban size={18} />, active: false, action: terminateSession, tooltip: "Terminate Session", color: "text-rose-500 hover:bg-rose-500/20 hover:text-rose-400" }
                       ].map((btn, i) => (
