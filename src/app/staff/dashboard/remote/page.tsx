@@ -88,7 +88,7 @@ export default function RemoteSupportPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         <div className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col relative overflow-hidden shadow-sm">
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-400 to-orange-600" />
+          <div className="absolute top-0 inset-x-0 h-1 bg-linear-to-r from-orange-400 to-orange-600" />
           
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-6">
             <Monitor size={16} className="text-orange-500"/> Native WebRTC Connection
