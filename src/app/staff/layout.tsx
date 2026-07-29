@@ -154,8 +154,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setIsConnecting(true);
     
     if (alertIdToDismiss) dismissHistoryAlert(alertIdToDismiss);
-    setIncomingRequest(null); 
-    setChatMessages([]);
 
     try {
       if (streamRef.current) {
@@ -163,28 +161,43 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         streamRef.current = null;
       }
 
-      addSystemAlert("🚀 Launching Screen Picker", "Establishing secure capture channel...", false);
+      console.log("🚀 Starting stream acquisition...");
       let stream: MediaStream | null = null;
       const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
 
-      try {
+      if (electronAPI && electronAPI.getDesktopSourceId) {
+        // 🌟 FORCE ELECTRON NATIVE BYPASS (Prevents getDisplayMedia from hanging forever)
+        console.log("⚡ Electron detected! Bypassing getDisplayMedia to prevent hangs.");
+        const sourceId = await electronAPI.getDesktopSourceId();
+        console.log("🎯 Desktop Source ID retrieved:", sourceId);
+
+        if (!sourceId) throw new Error("Could not detect Windows monitor source ID.");
+        
+        console.log("🎥 Requesting native getUserMedia with hardware constraints...");
+        stream = await (navigator.mediaDevices as any).getUserMedia({ 
+          audio: false, 
+          video: { 
+            mandatory: { 
+              chromeMediaSource: 'desktop', 
+              chromeMediaSourceId: sourceId 
+            } 
+          } 
+        });
+        console.log("✅ stream acquired successfully!");
+      } else {
+        // 🌐 STANDARD WEB BROWSER FALLBACK
+        console.log("🌐 Browser detected! Using standard getDisplayMedia...");
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      } catch (primaryErr: any) {
-        if (electronAPI && electronAPI.getDesktopSourceId) {
-          const sourceId = await electronAPI.getDesktopSourceId();
-          if (!sourceId) throw new Error("Could not detect Windows monitor source ID.");
-          
-          stream = await (navigator.mediaDevices as any).getUserMedia({ 
-            audio: false, 
-            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
-          });
-        } else {
-          throw primaryErr;
-        }
+        console.log("✅ getDisplayMedia success!");
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
       streamRef.current = stream;
+
+      // Only close the incoming request modal AFTER stream is secured so it doesn't get stuck
+      setIncomingRequest(null);
+      setChatMessages([]);
+      addSystemAlert("🚀 Stream Secured", "Establishing remote connection...", false);
 
       stream.getVideoTracks()[0].onended = () => {
         stopScreenSharing();
@@ -253,6 +266,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       });
 
     } catch (err: any) {
+      console.error("🔥 FINAL CRASH REASON:", err);
       let errorMessage = err.message || err.name || 'Permission denied';
       if (errorMessage.includes('Could not start video source')) {
         errorMessage = "Hardware Blocked: Windows or your Browser refused to start the video feed.";
@@ -260,6 +274,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       addSystemAlert("❌ Connection Failed", errorMessage);
       setIsConnecting(false);
       setIsStreaming(false);
+      setIncomingRequest(null); // Ensure modal closes on error
       setListenerKey(prev => prev + 1);
     }
   };
@@ -462,7 +477,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F8FAFC]">
-        {/* 🌟 RESTORED HEADER WITH NOTIFICATION BELL */}
         <header className="h-16 bg-white border-b border-slate-200/70 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3">
             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 lg:hidden rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"><Menu size={20} /></button>
