@@ -52,6 +52,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
+  const [listenerKey, setListenerKey] = useState(0);
 
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -138,13 +139,22 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
     fetchMissedNotifications();
 
+    // 🌟 THE FIX FOR THE MISSING MODAL: Restore the correct signaling channel
     const sigTopic = `webrtc_signaling_${staffProfile.id}`;
     const targetChannelId = getChannelTopic(staffProfile);
 
+    // Clean old channels
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId || ch.topic === 'staff-layout-alerts' || ch.topic === sigTopic) {
+        supabase.removeChannel(ch);
+      }
+    });
+
+    // Listen on webrtc_signaling_[ID] for the modal trigger
     const signalingChannel = supabase.channel(sigTopic)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({ adminName: payload.payload?.adminName || 'IT Administrator', adminCode: payload.payload?.adminCode || 'EMP-ADMIN', channelId: targetChannelId });
-        addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click accept on your screen.");
+        addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click Accept & Share.");
       }).subscribe();
 
     const dbChannel = supabase.channel('staff-layout-alerts')
@@ -160,7 +170,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       supabase.removeChannel(signalingChannel);
       supabase.removeChannel(dbChannel);
     };
-  }, [staffProfile.id, staffProfile.email]);
+  }, [staffProfile, listenerKey]);
 
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(staffProfile);
@@ -178,22 +188,29 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       addSystemAlert("🚀 Launching Screen Picker", "Establishing secure capture channel...", false);
       let stream: MediaStream | null = null;
       
-      const isElectronApp = typeof window !== 'undefined' && !!(window as any).electronAPI && !!(window as any).electronAPI.getDesktopSourceId;
-
+      // 🌟 THE FIX FOR "COULD NOT START VIDEO SOURCE":
+      // Always try the modern native API first. If that fails, fall back to Electron's legacy hook.
       try {
-        if (isElectronApp) {
-          const sourceId = await (window as any).electronAPI.getDesktopSourceId();
-          if (!sourceId) throw new Error("Could not detect monitor ID in App.");
-          
-          stream = await (navigator.mediaDevices as any).getUserMedia({ 
-            audio: false, 
-            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
-          });
-        } else {
-          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      } catch (err1: any) {
+        console.warn("Standard capture failed, trying Electron legacy hook...", err1);
+        
+        try {
+          const electronAPI = (window as any).electronAPI;
+          if (electronAPI && electronAPI.getDesktopSourceId) {
+            const sourceId = await electronAPI.getDesktopSourceId();
+            if (!sourceId) throw new Error("Could not detect monitor ID in App.");
+            
+            stream = await (navigator.mediaDevices as any).getUserMedia({ 
+              audio: false, 
+              video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
+            });
+          } else {
+            throw err1; // Throw original error if not in electron
+          }
+        } catch (err2: any) {
+          throw new Error(`Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'. Detail: ${err2.message || err2.name}`);
         }
-      } catch (captureError: any) {
-        throw new Error(`Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'. Detail: ${captureError.message || captureError.name}`);
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
@@ -263,6 +280,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       addSystemAlert("❌ Connection Failed", err.message || 'Permission denied');
       setIsConnecting(false);
       setIsStreaming(false);
+      setListenerKey(prev => prev + 1); // Reset listeners so they can try again
     }
   };
 
@@ -275,6 +293,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       channelRef.current = null;
     }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
+    setListenerKey(prev => prev + 1);
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
@@ -292,7 +311,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
-  // 🌟 WIRE UP GLOBAL HOOKS
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).triggerGlobalScreenShare = () => startScreenShare();
