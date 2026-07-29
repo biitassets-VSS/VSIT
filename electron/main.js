@@ -29,7 +29,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadURL('https://your-app-name.vercel.app'); // Or your vercel URL when deployed
+  mainWindow.loadURL('https://vsit-teal.vercel.app'); // Or your vercel URL when deployed
 
   // 🌟 SET DISPLAY MEDIA HANDLER ON DEFAULT SESSION
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
