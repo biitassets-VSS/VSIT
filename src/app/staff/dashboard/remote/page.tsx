@@ -7,8 +7,6 @@ import toast from 'react-hot-toast';
 
 export default function RemoteSupportPage() {
   const [staffInfo, setStaffInfo] = useState({ emp_id: '...', assigned_pc: 'Loading...' });
-  
-  // 🌟 NEW: State to hold actual remote credentials from DB
   const [remoteCreds, setRemoteCreds] = useState({ id: 'Not Assigned', pin: '••••••••' });
 
   useEffect(() => {
@@ -20,6 +18,8 @@ export default function RemoteSupportPage() {
       try { user = JSON.parse(sessionString); } catch (e) { return; }
 
       const email = user.email?.toLowerCase().trim();
+      
+      // Get the profile safely
       const { data: profile } = await supabase.from('profiles').select('emp_code, id').ilike('email', email).single();
       
       let pcName = 'Not Assigned';
@@ -27,15 +27,13 @@ export default function RemoteSupportPage() {
       let rPin = 'No Password Set';
 
       if (profile) {
-        // 🌟 FIX: Removed .single() so it doesn't crash if they have multiple assets!
+        // Find assets safely (avoids .single() crash)
         const { data: assets } = await supabase.from('assets').select('*').eq('assigned_to', profile.id);
         
         if (assets && assets.length > 0) {
-          // Try to find the laptop/desktop first
           const mainPc = assets.find(a => (a.category || '').toLowerCase().includes('laptop') || (a.category || '').toLowerCase().includes('desktop')) || assets[0];
           pcName = mainPc.name || mainPc.model || mainPc.asset_tag || 'Generic Workstation';
           
-          // If you add these columns to Supabase, it will pull them automatically
           if (mainPc.remote_id) rId = mainPc.remote_id;
           if (mainPc.remote_pin) rPin = mainPc.remote_pin;
         }
@@ -89,9 +87,8 @@ export default function RemoteSupportPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* NATIVE WEBRTC CONNECTION PANEL */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col relative overflow-hidden shadow-sm">
-          <div className="absolute top-0 inset-x-0 h-1 bg-linear-to-r from-orange-400 to-orange-600" />
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-400 to-orange-600" />
           
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-6">
             <Monitor size={16} className="text-orange-500"/> Native WebRTC Connection
@@ -123,7 +120,6 @@ export default function RemoteSupportPage() {
           </div>
         </div>
 
-        {/* 3RD PARTY FALLBACK PANEL (e.g. RustDesk / AnyDesk) */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-6">
             <Key size={16} className="text-purple-600"/> 3rd-Party Fallback Credentials

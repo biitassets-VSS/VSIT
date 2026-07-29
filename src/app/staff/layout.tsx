@@ -139,22 +139,20 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
     fetchMissedNotifications();
 
-    // 🌟 THE FIX FOR THE MISSING MODAL: Restore the correct signaling channel
-    const sigTopic = `webrtc_signaling_${staffProfile.id}`;
+    // 🌟 1. FIX THE MODAL POPUP: Listen directly to the exact channel Admin broadcasts on!
     const targetChannelId = getChannelTopic(staffProfile);
 
     // Clean old channels
     supabase.getChannels().forEach(ch => {
-      if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId || ch.topic === 'staff-layout-alerts' || ch.topic === sigTopic) {
+      if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId || ch.topic === 'staff-layout-alerts') {
         supabase.removeChannel(ch);
       }
     });
 
-    // Listen on webrtc_signaling_[ID] for the modal trigger
-    const signalingChannel = supabase.channel(sigTopic)
+    const signalingChannel = supabase.channel(targetChannelId)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({ adminName: payload.payload?.adminName || 'IT Administrator', adminCode: payload.payload?.adminCode || 'EMP-ADMIN', channelId: targetChannelId });
-        addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click Accept & Share.");
+        addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click Accept on your dashboard.");
       }).subscribe();
 
     const dbChannel = supabase.channel('staff-layout-alerts')
@@ -186,31 +184,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       });
 
       addSystemAlert("🚀 Launching Screen Picker", "Establishing secure capture channel...", false);
+      
       let stream: MediaStream | null = null;
       
-      // 🌟 THE FIX FOR "COULD NOT START VIDEO SOURCE":
-      // Always try the modern native API first. If that fails, fall back to Electron's legacy hook.
+      // 🌟 2. FIX THE VIDEO CRASH: Use strictly modern API and let main.js intercept it.
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      } catch (err1: any) {
-        console.warn("Standard capture failed, trying Electron legacy hook...", err1);
-        
-        try {
-          const electronAPI = (window as any).electronAPI;
-          if (electronAPI && electronAPI.getDesktopSourceId) {
-            const sourceId = await electronAPI.getDesktopSourceId();
-            if (!sourceId) throw new Error("Could not detect monitor ID in App.");
-            
-            stream = await (navigator.mediaDevices as any).getUserMedia({ 
-              audio: false, 
-              video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
-            });
-          } else {
-            throw err1; // Throw original error if not in electron
-          }
-        } catch (err2: any) {
-          throw new Error(`Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'. Detail: ${err2.message || err2.name}`);
-        }
+      } catch (captureError: any) {
+        throw new Error(`Permission Denied. Please ensure Windows Privacy Settings allow desktop app screen recording. Detail: ${captureError.message || captureError.name}`);
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
@@ -311,6 +292,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
+  // 🌟 WIRE UP GLOBAL HOOKS
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).triggerGlobalScreenShare = () => startScreenShare();
@@ -331,15 +313,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
       {/* 🌟 FLOATING TOASTS CONTAINER */}
-      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
+          <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-[340px] sm:w-[400px] flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
             <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
               <AlertTriangle size={20} className="animate-pulse" />
             </div>
             <div className="flex-1 pr-2 min-w-0">
               <h4 className="text-sm font-bold text-slate-900 leading-tight truncate">{toast.title}</h4>
-              <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed wrap-break-word">{toast.message}</p>
+              <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed break-words">{toast.message}</p>
             </div>
             <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1 rounded-lg hover:bg-slate-100"><X size={16} /></button>
           </div>
@@ -350,12 +332,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {isStreaming && (
         <>
           {adminPing && (
-            <div className="fixed z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
+            <div className="fixed z-[99999] pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
               <div className="relative w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(225,29,72,1)]" />
             </div>
           )}
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             {showChat && (
               <div className="w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4">
                 <div className="p-3 bg-slate-900 text-white flex justify-between items-center">
@@ -393,9 +375,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </>
       )}
 
-      {/* ⚠️ INCOMING REQUEST MODAL (Global) */}
+      {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
@@ -442,7 +424,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         <div className="p-3 border-t border-slate-100 shrink-0 relative bg-slate-50/50">
           <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="h-8 w-8 shrink-0 rounded-full bg-linear-to-tr from-orange-500 to-orange-400 flex items-center justify-center text-white font-bold text-xs shadow-sm border border-orange-600/20">{staffProfile.initials}</div>
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-tr from-orange-500 to-orange-400 flex items-center justify-center text-white font-bold text-xs shadow-sm border border-orange-600/20">{staffProfile.initials}</div>
               <div className="text-left overflow-hidden"><p className="text-sm font-semibold text-slate-800 leading-tight truncate">{staffProfile.name}</p><p className="text-[10px] font-medium text-slate-500 truncate">{staffProfile.email}</p></div>
             </div>
             <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
@@ -473,7 +455,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><History size={14} className="text-purple-600"/> Session Alerts History</h3>
                 </div>
-                <div className="max-h-100 overflow-y-auto custom-scrollbar bg-white">
+                <div className="max-h-[400px] overflow-y-auto custom-scrollbar bg-white">
                   {alertHistory.length === 0 ? (
                     <div className="px-4 py-10 text-center text-slate-400 flex flex-col items-center gap-2"><Bell size={24} className="opacity-20" /><span className="text-xs font-medium">No alerts recorded yet.</span></div>
                   ) : (
@@ -485,7 +467,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                             <div className={`mt-0.5 shrink-0 ${isError ? 'text-rose-500' : 'text-orange-500'}`}><AlertTriangle size={16} /></div>
                             <div className="flex-1 pr-6 min-w-0">
                               <div className="flex justify-between items-start mb-0.5"><p className={`text-xs font-bold truncate ${isError ? 'text-rose-700' : 'text-slate-900'}`}>{notif.title}</p><span className="text-[9px] font-bold text-slate-400">{notif.time}</span></div>
-                              <p className={`text-[11px] mt-1.5 leading-relaxed wrap-break-word ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>{notif.message}</p>
+                              <p className={`text-[11px] mt-1.5 leading-relaxed break-words ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>{notif.message}</p>
                             </div>
                             <button onClick={() => dismissHistoryAlert(notif.id)} className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-100 rounded-md shadow-sm" title="Delete from History"><X size={12} /></button>
                           </div>
