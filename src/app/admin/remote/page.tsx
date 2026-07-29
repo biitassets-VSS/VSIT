@@ -208,7 +208,7 @@ export default function AdminRemotePage() {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       viewportContainerRef.current?.requestFullscreen().catch(err => {
-        toast.error(`Error attempting to enable fullscreen: ${err.message}`);
+        toast.error(`Fullscreen error: ${err.message}`);
       });
     } else {
       document.exitFullscreen();
@@ -220,7 +220,6 @@ export default function AdminRemotePage() {
       <Toaster position="top-right" />
       <div className="w-full max-w-[1600px] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4">
         
-        {/* Header */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20"><Monitor size={20} /></div>
@@ -236,7 +235,6 @@ export default function AdminRemotePage() {
 
         <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
           
-          {/* Sidebar */}
           {isSidebarOpen && (
             <div className="w-80 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col shrink-0 overflow-hidden">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -245,7 +243,7 @@ export default function AdminRemotePage() {
                   <input type="text" placeholder="Search EMP ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all" />
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {staffList.filter(s => s.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())).map((staff) => (
                   <button key={staff.id} onClick={() => { terminateSession(); setActiveSession(staff); }} className={`w-full text-left p-3 rounded-xl transition-all border flex items-center justify-between ${ activeSession?.id === staff.id ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-transparent hover:border-slate-200' }`}>
                     <div>
@@ -259,7 +257,6 @@ export default function AdminRemotePage() {
             </div>
           )}
 
-          {/* Main Viewport */}
           <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
             {activeSession ? (
               <>
@@ -292,38 +289,38 @@ export default function AdminRemotePage() {
                   
                   {sessionStatus === 'requesting' && <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold">Awaiting Staff Approval...</p></div>}
                   
-                  {/* HIGH-READABILITY GLASS CHAT */}
+                  {/* 🌟 TRANSPARENT GLASS CHAT BOX */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div className="absolute bottom-24 right-6 w-80 bg-slate-900/85 backdrop-blur-2xl border border-slate-700 shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
-                      <div className="p-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white flex justify-between items-center shadow-sm">
-                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} /> Live Support Chat</span>
+                    <div className="absolute bottom-24 right-6 w-80 bg-black/40 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
+                      <div className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center shadow-sm">
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Support Chat</span>
                         <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white"><X size={16}/></button>
                       </div>
                       <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                         {chatMessages.length === 0 ? (
-                          <div className="m-auto text-center text-xs font-medium text-slate-400">Send a message to start communicating.</div>
+                          <div className="m-auto text-center text-xs font-medium text-slate-300">Send a message to start communicating.</div>
                         ) : (
                           chatMessages.map((msg, i) => (
-                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none border border-purple-500' : 'bg-slate-800 text-white self-start rounded-2xl rounded-bl-none border border-slate-600'}`}>
-                              <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-purple-200' : 'text-orange-400'}`}>{msg.sender}</div>{msg.text}
+                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-gradient-to-tr from-purple-600 to-orange-500 text-white self-end rounded-2xl rounded-br-none border border-white/20' : 'bg-black/40 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
+                              <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/80' : 'text-orange-400'}`}>{msg.sender}</div>{msg.text}
                             </div>
                           ))
                         )}
                         <div ref={chatEndRef} />
                       </div>
-                      <form onSubmit={sendChatMessage} className="p-2 bg-slate-800/80 border-t border-slate-700 flex gap-2 backdrop-blur-md">
-                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-950 text-white border border-slate-600 rounded-xl outline-none focus:border-purple-500 transition-all placeholder-slate-500" />
-                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-md"><Send size={14}/></button>
+                      <form onSubmit={sendChatMessage} className="p-2 bg-black/40 border-t border-white/10 flex gap-2 backdrop-blur-md">
+                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-white/10 text-white border border-transparent rounded-xl outline-none focus:border-orange-500 transition-all placeholder-slate-400" />
+                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-gradient-to-tr from-purple-600 to-orange-500 text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-all shadow-md"><Send size={14}/></button>
                       </form>
                     </div>
                   )}
 
-                  {/* PREMIUM CONTROL BAR WITH FULLSCREEN */}
+                  {/* 🌟 ICON ONLY TRANSPARENT GLASS TOOLBAR */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-2xl border border-slate-600 p-2 rounded-2xl flex gap-2 shadow-2xl z-50">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-2xl border border-white/10 p-2 rounded-2xl flex gap-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] z-50">
                       {[
                         { 
-                          icon: <Video size={18} />, 
+                          icon: <Video size={20} />, 
                           active: isControlling, 
                           action: () => { 
                             if (isControlling) {
@@ -335,15 +332,16 @@ export default function AdminRemotePage() {
                           }, 
                           tooltip: isControlling ? "Disable Control" : "Request Remote Control" 
                         },
-                        { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Passthrough" },
-                        { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
-                        { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Pull Remote Clipboard" },
-                        { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
-                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
-                        { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Force App Refresh" },
-                        { icon: <Ban size={18} />, active: false, action: terminateSession, tooltip: "Terminate Session", color: "text-rose-500 hover:bg-rose-500/20 hover:text-rose-400" }
+                        { icon: <Keyboard size={20} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Passthrough" },
+                        { icon: <MessageSquare size={20} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
+                        { icon: <Clipboard size={20} />, active: false, action: requestClipboardSync, tooltip: "Pull Remote Clipboard" },
+                        { icon: <Volume2 size={20} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
+                        { icon: isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
+                        { icon: <FileUp size={20} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
+                        { icon: <RefreshCw size={20} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Force App Refresh" },
+                        { icon: <Ban size={20} />, active: false, action: terminateSession, tooltip: "Terminate Session", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/20" }
                       ].map((btn, i) => (
-                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${btn.color || 'text-white'} ${btn.active ? 'bg-gradient-to-tr from-purple-600 to-orange-500 shadow-lg border border-orange-400' : 'bg-white/5 hover:bg-white/20 border border-transparent'}`}>
+                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${btn.color || 'text-slate-300 hover:text-white'} ${btn.active ? 'bg-gradient-to-tr from-purple-600 to-orange-500 text-white shadow-lg shadow-orange-500/20 border border-white/20' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}>
                           {btn.icon}
                         </button>
                       ))}
