@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { 
   Monitor, ArrowLeft, Loader2, Search, PanelLeftClose, PanelLeftOpen, 
   RefreshCw, Power, Keyboard, Video, Clipboard, FileUp, Volume2, 
-  Ban, MessageSquare, Send, X, Users, Maximize, Minimize
+  Ban, MessageSquare, Send, X, Users, Maximize, Minimize, GripVertical
 } from 'lucide-react';
 
 interface StaffMember {
@@ -58,6 +58,14 @@ export default function StaffRemotePage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
 
+  // 🌟 DRAG & DROP STATE
+  const [dockPos, setDockPos] = useState({ x: 0, y: 0 });
+  const [chatPos, setChatPos] = useState({ x: 0, y: 0 });
+  const [isDraggingDock, setIsDraggingDock] = useState(false);
+  const [isDraggingChat, setIsDraggingChat] = useState(false);
+  const dragStartDock = useRef({ x: 0, y: 0 });
+  const dragStartChat = useRef({ x: 0, y: 0 });
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
@@ -65,16 +73,8 @@ export default function StaffRemotePage() {
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    loadStaffData();
-    return () => terminateSession("Page navigated away.");
-  }, []);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, isChatOpen]);
-
-  // Handle ESC key exiting fullscreen
+  useEffect(() => { loadStaffData(); return () => terminateSession("Page navigated away."); }, []);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
   useEffect(() => {
     const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -90,9 +90,7 @@ export default function StaffRemotePage() {
           const parsed = JSON.parse(sessionString);
           currentEmail = parsed.email || '';
           setCurrentStaffProfile(parsed);
-        } catch (e) {
-          currentEmail = sessionString;
-        }
+        } catch (e) { currentEmail = sessionString; }
       }
 
       const [{ data: profiles }, { data: assets }] = await Promise.all([
@@ -109,17 +107,15 @@ export default function StaffRemotePage() {
           }));
         setStaffList(otherStaff);
       }
-    } catch (error) {
-      toast.error("Failed to load staff directory.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) {} finally { setLoading(false); }
   };
 
   const requestLiveScreenShare = async () => {
     if (!activeSession) return;
     setSessionStatus('requesting');
     setChatMessages([]);
+    setDockPos({ x: 0, y: 0 }); // Reset UI
+    setChatPos({ x: 0, y: 0 });
 
     try {
       const backgroundChannelId = getChannelTopic(activeSession);
@@ -131,9 +127,7 @@ export default function StaffRemotePage() {
       peer.addTransceiver('video', { direction: 'recvonly' });
 
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          terminateSession("Network connection failed.");
-        }
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') { terminateSession("Network connection failed."); }
       };
 
       const dataChannel = peer.createDataChannel('enterprise_control');
@@ -142,9 +136,7 @@ export default function StaffRemotePage() {
       peer.ontrack = (event) => {
         if (videoRef.current && event.streams[0]) {
           videoRef.current.srcObject = event.streams[0];
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(e => console.error("Play failed:", e));
-          };
+          videoRef.current.onloadedmetadata = () => { videoRef.current?.play().catch(e => console.error("Play failed:", e)); };
           setSessionStatus('connected');
           toast.success("🟢 Live Screen Stream Established!");
         }
@@ -154,9 +146,7 @@ export default function StaffRemotePage() {
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
-        }
+        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
@@ -167,9 +157,7 @@ export default function StaffRemotePage() {
           await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
         } catch (rtcError) {}
       }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload?.candidate) {
-          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
-        }
+        if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
       }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
         terminateSession("Remote colleague stopped sharing their screen.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
@@ -177,9 +165,7 @@ export default function StaffRemotePage() {
         setIsChatOpen(true);
         toast.success(`💬 Message from ${payload.payload.sender || 'Colleague'}`);
       }).on('broadcast', { event: 'control_accepted' }, () => {
-        setIsControlling(true);
-        setSessionStatus('controlling');
-        toast.success("✅ Colleague granted remote control access!");
+        setIsControlling(true); setSessionStatus('controlling'); toast.success("✅ Colleague granted remote control access!");
       }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Colleague declined remote control.");
       }).subscribe(async (status) => {
@@ -189,38 +175,22 @@ export default function StaffRemotePage() {
             if (pingStatus === 'SUBSCRIBED') {
               const senderName = currentStaffProfile?.full_name || currentStaffProfile?.name || 'Staff Colleague';
               const senderCode = currentStaffProfile?.emp_code || 'STAFF';
-
-              await pingChannel.send({ 
-                type: 'broadcast', 
-                event: 'request_screen_share', 
-                payload: { adminName: senderName, adminCode: senderCode, channelId: liveSessionId }
-              });
+              await pingChannel.send({ type: 'broadcast', event: 'request_screen_share', payload: { adminName: senderName, adminCode: senderCode, channelId: liveSessionId } });
               supabase.removeChannel(pingChannel);
             }
           });
         }
       });
-    } catch (err) { 
-      setSessionStatus('idle'); 
-      toast.error("Failed to establish signaling connection.");
-    }
+    } catch (err) { setSessionStatus('idle'); }
   };
 
   const terminateSession = (reason = "Session terminated.") => {
-    if (channelRef.current) { 
-      channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: { reason } }); 
-      supabase.removeChannel(channelRef.current); 
-      channelRef.current = null; 
-    }
-    if (peerRef.current) { 
-      peerRef.current.close(); 
-      peerRef.current = null; 
-    }
+    if (channelRef.current) { channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: { reason } }); supabase.removeChannel(channelRef.current); channelRef.current = null; }
+    if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (videoRef.current) videoRef.current.srcObject = null;
     if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
 
     if (sessionStatus !== 'idle') toast.error(`🛑 ${reason}`);
-
     setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false); setIsFullscreen(false);
   };
 
@@ -231,6 +201,24 @@ export default function StaffRemotePage() {
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
+    // 🌟 INTERCEPT DRAG MOTIONS
+    if (type === 'mousemove') {
+      if (isDraggingDock) {
+        setDockPos({ x: e.clientX - dragStartDock.current.x, y: e.clientY - dragStartDock.current.y });
+        return;
+      }
+      if (isDraggingChat) {
+        setChatPos({ x: e.clientX - dragStartChat.current.x, y: e.clientY - dragStartChat.current.y });
+        return;
+      }
+    }
+    if (type === 'mouseup' || type === 'mouseleave') {
+      if (isDraggingDock || isDraggingChat) {
+        setIsDraggingDock(false); setIsDraggingChat(false);
+        return;
+      }
+    }
+
     if (!isControlling) return;
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -267,22 +255,14 @@ export default function StaffRemotePage() {
     const myName = currentStaffProfile?.full_name?.split(' ')[0] || 'Me';
     
     setChatMessages(prev => [...prev, { sender: myName, text: chatInput, time: timeString, isSelf: true }]);
-    channelRef.current.send({ 
-      type: 'broadcast', 
-      event: 'chat_message', 
-      payload: { sender: currentStaffProfile?.full_name || 'Colleague', text: chatInput, time: timeString } 
-    });
+    channelRef.current.send({ type: 'broadcast', event: 'chat_message', payload: { sender: currentStaffProfile?.full_name || 'Colleague', text: chatInput, time: timeString } });
     setChatInput('');
   };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      viewportContainerRef.current?.requestFullscreen().catch(err => {
-        toast.error(`Fullscreen error: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
-    }
+      viewportContainerRef.current?.requestFullscreen().catch(err => { toast.error(`Fullscreen error: ${err.message}`); });
+    } else { document.exitFullscreen(); }
   };
 
   if (loading) return (
@@ -324,22 +304,12 @@ export default function StaffRemotePage() {
             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search Staff Name or ID..." 
-                  value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 transition-all" 
-                />
+                <input type="text" placeholder="Search Staff Name or ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 transition-all" />
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
               {staffList.filter(s => s.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())).map((staff) => (
-                <button 
-                  key={staff.id} 
-                  onClick={() => { terminateSession("Switched user."); setActiveSession(staff); }} 
-                  className={`w-full text-left p-3.5 rounded-2xl transition-all border flex items-center justify-between ${ activeSession?.id === staff.id ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-transparent hover:border-slate-200 shadow-sm' }`}
-                >
+                <button key={staff.id} onClick={() => { terminateSession("Switched user."); setActiveSession(staff); }} className={`w-full text-left p-3.5 rounded-2xl transition-all border flex items-center justify-between ${ activeSession?.id === staff.id ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-transparent hover:border-slate-200 shadow-sm' }`}>
                   <div>
                     <p className={`font-bold text-sm ${activeSession?.id === staff.id ? 'text-orange-700' : 'text-slate-900'}`}>{staff.full_name || staff.name}</p>
                     <p className="text-[10px] font-bold text-slate-500 mt-0.5">{staff.emp_code || 'STAFF'} • {staff.assigned_asset_name}</p>
@@ -377,6 +347,7 @@ export default function StaffRemotePage() {
                 onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
                 onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
                 onMouseUp={(e) => handleMouseEvent(e, 'mouseup')}
+                onMouseLeave={(e) => handleMouseEvent(e, 'mouseleave')}
                 onWheel={(e) => { if(isControlling) { e.preventDefault(); sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
                 onContextMenu={(e) => e.preventDefault()}
               >
@@ -389,38 +360,70 @@ export default function StaffRemotePage() {
                   </div>
                 )}
                 
-                {/* 🌟 TRANSPARENT GLASS CHAT BOX */}
+                {/* 🌟 DRAGGABLE TRANSPARENT GLASS CHAT BOX */}
                 {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                  <div className="absolute bottom-24 right-6 w-80 bg-black/40 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
-                    <div className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center shadow-sm">
+                  <div 
+                    onMouseDown={(e) => e.stopPropagation()} // Prevent remote clicks
+                    style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }}
+                    className="absolute bottom-24 right-6 w-80 bg-black/20 backdrop-blur-[40px] border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden transition-opacity"
+                  >
+                    {/* Chat Header (Drag Handle) */}
+                    <div 
+                      onMouseDown={(e) => {
+                        e.stopPropagation(); setIsDraggingChat(true);
+                        dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y };
+                      }}
+                      className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center cursor-grab active:cursor-grabbing"
+                    >
                       <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-purple-400" /> Peer Chat</span>
-                      <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white"><X size={16}/></button>
+                      <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white/70 hover:text-white"><X size={16}/></button>
                     </div>
+                    
+                    {/* Chat Body */}
                     <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                       {chatMessages.length === 0 ? (
-                        <div className="m-auto text-center text-xs font-medium text-slate-300">Send a message to start communicating.</div>
+                        <div className="m-auto text-center text-xs font-medium text-white/50">Send a message to start communicating.</div>
                       ) : (
                         chatMessages.map((msg, i) => (
-                          <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-gradient-to-tr from-purple-600 to-orange-500 text-white self-end rounded-2xl rounded-br-none border border-white/20' : 'bg-black/40 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
+                          <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-black/40 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
                             <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/80' : 'text-purple-400'}`}>{msg.sender}</div>{msg.text}
                           </div>
                         ))
                       )}
                       <div ref={chatEndRef} />
                     </div>
-                    <form onSubmit={sendChatMessage} className="p-2 bg-black/40 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                      <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a message..." className="flex-1 text-xs font-semibold px-3 py-2 bg-white/10 text-white border border-transparent rounded-xl outline-none focus:border-purple-500 transition-all placeholder-slate-400" />
-                      <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-gradient-to-tr from-purple-600 to-orange-500 text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-all shadow-md"><Send size={14}/></button>
+                    
+                    {/* Chat Input */}
+                    <form onSubmit={sendChatMessage} className="p-2 bg-black/20 border-t border-white/10 flex gap-2 backdrop-blur-md">
+                      <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a message..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/40 text-white border border-white/10 rounded-xl outline-none focus:border-white/30 transition-all placeholder-white/40 shadow-inner" />
+                      <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all shadow-md border border-white/10"><Send size={14}/></button>
                     </form>
                   </div>
                 )}
 
-                {/* 🌟 ICON ONLY TRANSPARENT GLASS TOOLBAR */}
+                {/* 🌟 DRAGGABLE MAC-OS GLASS TOOLBAR */}
                 {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-2xl border border-white/10 p-2 rounded-2xl flex gap-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] z-50">
+                  <div 
+                    onMouseDown={(e) => e.stopPropagation()} // Prevent remote clicks
+                    style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }}
+                    className="absolute bottom-6 left-1/2 bg-black/20 backdrop-blur-[40px] border border-white/20 p-1.5 rounded-full flex gap-1 shadow-[0_16px_40px_rgba(0,0,0,0.6)] z-50 items-center"
+                  >
+                    {/* Drag Grip Handle */}
+                    <div 
+                      onMouseDown={(e) => {
+                        e.stopPropagation(); setIsDraggingDock(true);
+                        dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y };
+                      }}
+                      className="cursor-grab active:cursor-grabbing p-2 text-white/30 hover:text-white/80 transition-colors ml-1"
+                    >
+                      <GripVertical size={16} />
+                    </div>
+                    
+                    <div className="w-px h-6 bg-white/10 mx-1" /> {/* Divider */}
+
                     {[
                       { 
-                        icon: <Video size={20} />, 
+                        icon: <Video size={18} />, 
                         active: isControlling, 
                         action: () => { 
                           if (isControlling) {
@@ -432,16 +435,16 @@ export default function StaffRemotePage() {
                         }, 
                         tooltip: isControlling ? "Disable Control" : "Request Remote Control" 
                       },
-                      { icon: <Keyboard size={20} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
-                      { icon: <MessageSquare size={20} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Peer Chat" },
-                      { icon: <Clipboard size={20} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
-                      { icon: <Volume2 size={20} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Audio" },
-                      { icon: isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
-                      { icon: <FileUp size={20} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
-                      { icon: <RefreshCw size={20} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
-                      { icon: <Ban size={20} />, active: false, action: () => terminateSession("Session ended by user."), tooltip: "Disconnect", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/20" }
+                      { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
+                      { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Peer Chat" },
+                      { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
+                      { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Audio" },
+                      { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
+                      { icon: <FileUp size={18} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
+                      { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
+                      { icon: <Ban size={18} />, active: false, action: () => terminateSession("Session ended by user."), tooltip: "Disconnect", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/30 border-transparent hover:border-rose-500/50" }
                     ].map((btn, i) => (
-                      <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${btn.color || 'text-slate-300 hover:text-white'} ${btn.active ? 'bg-gradient-to-tr from-purple-600 to-orange-500 text-white shadow-lg shadow-orange-500/20 border border-white/20' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}>
+                      <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-white/20 text-white shadow-inner border border-white/20' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}>
                         {btn.icon}
                       </button>
                     ))}

@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { 
   Monitor, ArrowLeft, Loader2, Search, PanelLeftClose, PanelLeftOpen, 
   RefreshCw, Power, Keyboard, Video, Clipboard, FileUp, Volume2, 
-  Ban, MessageSquare, Send, X, Maximize, Minimize
+  Ban, MessageSquare, Send, X, Maximize, Minimize, GripVertical
 } from 'lucide-react';
 
 interface StaffMember {
@@ -46,6 +46,14 @@ export default function AdminRemotePage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
 
+  // 🌟 DRAG & DROP STATE
+  const [dockPos, setDockPos] = useState({ x: 0, y: 0 });
+  const [chatPos, setChatPos] = useState({ x: 0, y: 0 });
+  const [isDraggingDock, setIsDraggingDock] = useState(false);
+  const [isDraggingChat, setIsDraggingChat] = useState(false);
+  const dragStartDock = useRef({ x: 0, y: 0 });
+  const dragStartChat = useRef({ x: 0, y: 0 });
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
@@ -54,10 +62,7 @@ export default function AdminRemotePage() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { loadStaffAndAdminData(); return () => terminateSession(); }, []);
-
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
-
-  // Handle ESC key exiting fullscreen
   useEffect(() => {
     const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -77,6 +82,8 @@ export default function AdminRemotePage() {
     if (!activeSession) return;
     setSessionStatus('requesting');
     setChatMessages([]);
+    setDockPos({ x: 0, y: 0 }); // Reset UI positions
+    setChatPos({ x: 0, y: 0 });
 
     try {
       const backgroundChannelId = getChannelTopic(activeSession);
@@ -100,9 +107,7 @@ export default function AdminRemotePage() {
       peer.ontrack = (event) => {
         if (videoRef.current && event.streams[0]) {
           videoRef.current.srcObject = event.streams[0];
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(e => console.error("Play failed:", e));
-          };
+          videoRef.current.onloadedmetadata = () => { videoRef.current?.play().catch(e => console.error("Play failed:", e)); };
           setSessionStatus('connected');
           toast.success("🟢 Live Video Stream Established!");
         }
@@ -166,6 +171,24 @@ export default function AdminRemotePage() {
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
+    // 🌟 INTERCEPT DRAG MOTIONS
+    if (type === 'mousemove') {
+      if (isDraggingDock) {
+        setDockPos({ x: e.clientX - dragStartDock.current.x, y: e.clientY - dragStartDock.current.y });
+        return;
+      }
+      if (isDraggingChat) {
+        setChatPos({ x: e.clientX - dragStartChat.current.x, y: e.clientY - dragStartChat.current.y });
+        return;
+      }
+    }
+    if (type === 'mouseup' || type === 'mouseleave') {
+      if (isDraggingDock || isDraggingChat) {
+        setIsDraggingDock(false); setIsDraggingChat(false);
+        return;
+      }
+    }
+
     if (!isControlling) return;
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -207,9 +230,7 @@ export default function AdminRemotePage() {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      viewportContainerRef.current?.requestFullscreen().catch(err => {
-        toast.error(`Fullscreen error: ${err.message}`);
-      });
+      viewportContainerRef.current?.requestFullscreen().catch(err => { toast.error(`Fullscreen error: ${err.message}`); });
     } else {
       document.exitFullscreen();
     }
@@ -220,6 +241,7 @@ export default function AdminRemotePage() {
       <Toaster position="top-right" />
       <div className="w-full max-w-[1600px] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4">
         
+        {/* Header */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20"><Monitor size={20} /></div>
@@ -235,6 +257,7 @@ export default function AdminRemotePage() {
 
         <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
           
+          {/* Sidebar */}
           {isSidebarOpen && (
             <div className="w-80 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col shrink-0 overflow-hidden">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -257,6 +280,7 @@ export default function AdminRemotePage() {
             </div>
           )}
 
+          {/* Main Viewport */}
           <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
             {activeSession ? (
               <>
@@ -282,6 +306,7 @@ export default function AdminRemotePage() {
                   onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
                   onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
                   onMouseUp={(e) => handleMouseEvent(e, 'mouseup')}
+                  onMouseLeave={(e) => handleMouseEvent(e, 'mouseleave')}
                   onWheel={(e) => { if(isControlling) { e.preventDefault(); sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
                   onContextMenu={(e) => e.preventDefault()}
                 >
@@ -289,38 +314,70 @@ export default function AdminRemotePage() {
                   
                   {sessionStatus === 'requesting' && <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold">Awaiting Staff Approval...</p></div>}
                   
-                  {/* 🌟 TRANSPARENT GLASS CHAT BOX */}
+                  {/* 🌟 DRAGGABLE TRANSPARENT GLASS CHAT */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div className="absolute bottom-24 right-6 w-80 bg-black/40 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
-                      <div className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center shadow-sm">
-                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Support Chat</span>
-                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white"><X size={16}/></button>
+                    <div 
+                      onMouseDown={(e) => e.stopPropagation()} // Prevent remote clicks
+                      style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }}
+                      className="absolute bottom-24 right-6 w-80 bg-black/20 backdrop-blur-[40px] border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden transition-opacity"
+                    >
+                      {/* Chat Header (Drag Handle) */}
+                      <div 
+                        onMouseDown={(e) => {
+                          e.stopPropagation(); setIsDraggingChat(true);
+                          dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y };
+                        }}
+                        className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center cursor-grab active:cursor-grabbing"
+                      >
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Chat</span>
+                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white/70 hover:text-white"><X size={16}/></button>
                       </div>
+                      
+                      {/* Chat Body */}
                       <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                         {chatMessages.length === 0 ? (
-                          <div className="m-auto text-center text-xs font-medium text-slate-300">Send a message to start communicating.</div>
+                          <div className="m-auto text-center text-xs font-medium text-white/50">Send a message to start communicating.</div>
                         ) : (
                           chatMessages.map((msg, i) => (
-                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-gradient-to-tr from-purple-600 to-orange-500 text-white self-end rounded-2xl rounded-br-none border border-white/20' : 'bg-black/40 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
+                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-black/40 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
                               <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/80' : 'text-orange-400'}`}>{msg.sender}</div>{msg.text}
                             </div>
                           ))
                         )}
                         <div ref={chatEndRef} />
                       </div>
-                      <form onSubmit={sendChatMessage} className="p-2 bg-black/40 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-white/10 text-white border border-transparent rounded-xl outline-none focus:border-orange-500 transition-all placeholder-slate-400" />
-                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-gradient-to-tr from-purple-600 to-orange-500 text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-all shadow-md"><Send size={14}/></button>
+                      
+                      {/* Chat Input */}
+                      <form onSubmit={sendChatMessage} className="p-2 bg-black/20 border-t border-white/10 flex gap-2 backdrop-blur-md">
+                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/40 text-white border border-white/10 rounded-xl outline-none focus:border-white/30 transition-all placeholder-white/40 shadow-inner" />
+                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all shadow-md border border-white/10"><Send size={14}/></button>
                       </form>
                     </div>
                   )}
 
-                  {/* 🌟 ICON ONLY TRANSPARENT GLASS TOOLBAR */}
+                  {/* 🌟 DRAGGABLE MAC-OS GLASS TOOLBAR */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-2xl border border-white/10 p-2 rounded-2xl flex gap-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] z-50">
+                    <div 
+                      onMouseDown={(e) => e.stopPropagation()} // Prevent remote clicks
+                      style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }}
+                      className="absolute bottom-6 left-1/2 bg-black/20 backdrop-blur-[40px] border border-white/20 p-1.5 rounded-full flex gap-1 shadow-[0_16px_40px_rgba(0,0,0,0.6)] z-50 items-center"
+                    >
+                      {/* Drag Grip Handle */}
+                      <div 
+                        onMouseDown={(e) => {
+                          e.stopPropagation(); setIsDraggingDock(true);
+                          dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y };
+                        }}
+                        className="cursor-grab active:cursor-grabbing p-2 text-white/30 hover:text-white/80 transition-colors ml-1"
+                      >
+                        <GripVertical size={16} />
+                      </div>
+                      
+                      <div className="w-px h-6 bg-white/10 mx-1" /> {/* Divider */}
+
                       {[
                         { 
-                          icon: <Video size={20} />, 
+                          icon: <Video size={18} />, 
                           active: isControlling, 
                           action: () => { 
                             if (isControlling) {
@@ -332,16 +389,16 @@ export default function AdminRemotePage() {
                           }, 
                           tooltip: isControlling ? "Disable Control" : "Request Remote Control" 
                         },
-                        { icon: <Keyboard size={20} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Passthrough" },
-                        { icon: <MessageSquare size={20} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
-                        { icon: <Clipboard size={20} />, active: false, action: requestClipboardSync, tooltip: "Pull Remote Clipboard" },
-                        { icon: <Volume2 size={20} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
-                        { icon: isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
-                        { icon: <FileUp size={20} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
-                        { icon: <RefreshCw size={20} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Force App Refresh" },
-                        { icon: <Ban size={20} />, active: false, action: terminateSession, tooltip: "Terminate Session", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/20" }
+                        { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Passthrough" },
+                        { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
+                        { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Pull Remote Clipboard" },
+                        { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
+                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
+                        { icon: <FileUp size={18} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
+                        { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Force App Refresh" },
+                        { icon: <Ban size={18} />, active: false, action: terminateSession, tooltip: "Terminate Session", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/30 border-transparent hover:border-rose-500/50" }
                       ].map((btn, i) => (
-                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${btn.color || 'text-slate-300 hover:text-white'} ${btn.active ? 'bg-gradient-to-tr from-purple-600 to-orange-500 text-white shadow-lg shadow-orange-500/20 border border-white/20' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}>
+                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-white/20 text-white shadow-inner border border-white/20' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}>
                           {btn.icon}
                         </button>
                       ))}
