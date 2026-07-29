@@ -20,10 +20,13 @@ interface ChatMessage {
 
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
+// 🌟 UPGRADED STUN SERVERS FOR INSTANT P2P HANDSHAKE WITHOUT TIMEOUTS
 const iceServers = [
-  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+  { urls: 'stun:stun.l.google.com:19302' }, 
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun.services.mozilla.com' }
 ];
 
 export default function AdminRemotePage() {
@@ -35,18 +38,15 @@ export default function AdminRemotePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'requesting' | 'connected' | 'controlling'>('idle');
   
-  // Enterprise Features State
   const [isControlling, setIsControlling] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
-  // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
 
-  // 🌟 DRAG & DROP STATE
   const [dockPos, setDockPos] = useState({ x: 0, y: 0 });
   const [chatPos, setChatPos] = useState({ x: 0, y: 0 });
   const [isDraggingDock, setIsDraggingDock] = useState(false);
@@ -82,7 +82,7 @@ export default function AdminRemotePage() {
     if (!activeSession) return;
     setSessionStatus('requesting');
     setChatMessages([]);
-    setDockPos({ x: 0, y: 0 }); // Reset UI positions
+    setDockPos({ x: 0, y: 0 });
     setChatPos({ x: 0, y: 0 });
 
     try {
@@ -90,18 +90,20 @@ export default function AdminRemotePage() {
       const liveSessionId = `${backgroundChannelId}_live_${Date.now()}`;
       if (channelRef.current) supabase.removeChannel(channelRef.current);
 
-      const peer = new RTCPeerConnection({ iceServers });
+      const peer = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 10 });
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
+      // 🌟 LENIENT CONNECTION TIMEOUT HANDLER (Prevents 5-sec false dropouts)
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+        console.log("Admin ICE Connection State:", peer.iceConnectionState, "Connection State:", peer.connectionState);
+        if (peer.connectionState === 'failed') {
           terminateSession();
           toast.error("Network connection failed.");
         }
       };
 
-      const dataChannel = peer.createDataChannel('enterprise_control');
+      const dataChannel = peer.createDataChannel('enterprise_channel', { ordered: true });
       dataChannelRef.current = dataChannel;
 
       peer.ontrack = (event) => {
@@ -117,7 +119,9 @@ export default function AdminRemotePage() {
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
-        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
+        if (event.candidate) {
+          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
+        }
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
@@ -126,16 +130,17 @@ export default function AdminRemotePage() {
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
           await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
-        } catch (rtcError) {}
+        } catch (rtcError) { console.error("SDP offer error:", rtcError); }
       }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        if (peer.remoteDescription && payload.payload?.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        }
       }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
         terminateSession();
         toast.error("Employee stopped sharing their screen.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Staff', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
         setIsChatOpen(true);
-        toast.success(`💬 New message from ${payload.payload.sender || 'Staff'}`);
       }).on('broadcast', { event: 'control_accepted' }, () => {
         setIsControlling(true);
         setSessionStatus('controlling');
@@ -171,7 +176,6 @@ export default function AdminRemotePage() {
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
-    // 🌟 INTERCEPT DRAG MOTIONS
     if (type === 'mousemove') {
       if (isDraggingDock) {
         setDockPos({ x: e.clientX - dragStartDock.current.x, y: e.clientY - dragStartDock.current.y });
@@ -183,10 +187,7 @@ export default function AdminRemotePage() {
       }
     }
     if (type === 'mouseup' || type === 'mouseleave') {
-      if (isDraggingDock || isDraggingChat) {
-        setIsDraggingDock(false); setIsDraggingChat(false);
-        return;
-      }
+      if (isDraggingDock || isDraggingChat) { setIsDraggingDock(false); setIsDraggingChat(false); return; }
     }
 
     if (!isControlling) return;
@@ -215,7 +216,7 @@ export default function AdminRemotePage() {
 
   const requestClipboardSync = () => {
     sendControlCommand({ type: 'sync_clipboard' });
-    toast.success("Clipboard sync requested. Awaiting remote data...");
+    toast.success("Clipboard sync requested...");
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
@@ -231,9 +232,7 @@ export default function AdminRemotePage() {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       viewportContainerRef.current?.requestFullscreen().catch(err => { toast.error(`Fullscreen error: ${err.message}`); });
-    } else {
-      document.exitFullscreen();
-    }
+    } else { document.exitFullscreen(); }
   };
 
   return (
@@ -241,7 +240,6 @@ export default function AdminRemotePage() {
       <Toaster position="top-right" />
       <div className="w-full max-w-[1600px] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4">
         
-        {/* Header */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20"><Monitor size={20} /></div>
@@ -250,20 +248,19 @@ export default function AdminRemotePage() {
               <p className="text-xs font-semibold text-slate-500">Enterprise P2P Remote Diagnostics Protocol</p>
             </div>
           </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:border-purple-500 hover:text-purple-600 transition-all bg-slate-50 shadow-sm">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:border-purple-500 transition-all bg-slate-50 shadow-sm">
             {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
           </button>
         </div>
 
         <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
           
-          {/* Sidebar */}
           {isSidebarOpen && (
             <div className="w-80 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col shrink-0 overflow-hidden">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="Search EMP ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all" />
+                  <input type="text" placeholder="Search EMP ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 transition-all" />
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -280,7 +277,6 @@ export default function AdminRemotePage() {
             </div>
           )}
 
-          {/* Main Viewport */}
           <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
             {activeSession ? (
               <>
@@ -290,11 +286,11 @@ export default function AdminRemotePage() {
                     <p className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-md inline-block mt-1">{sessionStatus.toUpperCase()}</p>
                   </div>
                   {sessionStatus === 'idle' ? (
-                    <button onClick={requestLiveScreenShare} className="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-600/20 transition-all flex items-center gap-2">
+                    <button onClick={requestLiveScreenShare} className="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 cursor-pointer">
                       <Monitor size={16} /> Connect WebRTC
                     </button>
                   ) : (
-                    <button onClick={terminateSession} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-rose-600/20 transition-all flex items-center gap-2">
+                    <button onClick={terminateSession} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 cursor-pointer">
                       <Power size={16} /> Disconnect
                     </button>
                   )}
@@ -314,26 +310,20 @@ export default function AdminRemotePage() {
                   
                   {sessionStatus === 'requesting' && <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold">Awaiting Staff Approval...</p></div>}
                   
-                  {/* 🌟 DRAGGABLE TRANSPARENT GLASS CHAT */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div 
-                      onMouseDown={(e) => e.stopPropagation()} // Prevent remote clicks
+                      onMouseDown={(e) => e.stopPropagation()}
                       style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }}
-                      className="absolute bottom-24 right-6 w-80 bg-black/20 backdrop-blur-[40px] border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden transition-opacity"
+                      className="absolute bottom-24 right-6 w-80 bg-black/20 backdrop-blur-[40px] border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden"
                     >
-                      {/* Chat Header (Drag Handle) */}
                       <div 
-                        onMouseDown={(e) => {
-                          e.stopPropagation(); setIsDraggingChat(true);
-                          dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y };
-                        }}
+                        onMouseDown={(e) => { e.stopPropagation(); setIsDraggingChat(true); dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y }; }}
                         className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center cursor-grab active:cursor-grabbing"
                       >
                         <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Chat</span>
-                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white/70 hover:text-white"><X size={16}/></button>
+                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md text-white/70 hover:text-white"><X size={16}/></button>
                       </div>
                       
-                      {/* Chat Body */}
                       <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                         {chatMessages.length === 0 ? (
                           <div className="m-auto text-center text-xs font-medium text-white/50">Send a message to start communicating.</div>
@@ -347,45 +337,34 @@ export default function AdminRemotePage() {
                         <div ref={chatEndRef} />
                       </div>
                       
-                      {/* Chat Input */}
                       <form onSubmit={sendChatMessage} className="p-2 bg-black/20 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/40 text-white border border-white/10 rounded-xl outline-none focus:border-white/30 transition-all placeholder-white/40 shadow-inner" />
-                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all shadow-md border border-white/10"><Send size={14}/></button>
+                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/40 text-white border border-white/10 rounded-xl outline-none focus:border-white/35 transition-all placeholder-white/40 shadow-inner" />
+                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all border border-white/10"><Send size={14}/></button>
                       </form>
                     </div>
                   )}
 
-                  {/* 🌟 DRAGGABLE MAC-OS GLASS TOOLBAR */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div 
-                      onMouseDown={(e) => e.stopPropagation()} // Prevent remote clicks
+                      onMouseDown={(e) => e.stopPropagation()}
                       style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }}
                       className="absolute bottom-6 left-1/2 bg-black/20 backdrop-blur-[40px] border border-white/20 p-1.5 rounded-full flex gap-1 shadow-[0_16px_40px_rgba(0,0,0,0.6)] z-50 items-center"
                     >
-                      {/* Drag Grip Handle */}
                       <div 
-                        onMouseDown={(e) => {
-                          e.stopPropagation(); setIsDraggingDock(true);
-                          dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y };
-                        }}
+                        onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }}
                         className="cursor-grab active:cursor-grabbing p-2 text-white/30 hover:text-white/80 transition-colors ml-1"
                       >
                         <GripVertical size={16} />
                       </div>
                       
-                      <div className="w-px h-6 bg-white/10 mx-1" /> {/* Divider */}
+                      <div className="w-px h-6 bg-white/10 mx-1" />
 
                       {[
                         { 
-                          icon: <Video size={18} />, 
-                          active: isControlling, 
+                          icon: <Video size={18} />, active: isControlling, 
                           action: () => { 
-                            if (isControlling) {
-                              setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode.");
-                            } else {
-                              channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} });
-                              toast("Requesting control permission...");
-                            }
+                            if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
+                            else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control permission..."); }
                           }, 
                           tooltip: isControlling ? "Disable Control" : "Request Remote Control" 
                         },
