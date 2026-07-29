@@ -49,12 +49,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // Notification & Toast State
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
 
-  // WebRTC & Session State
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -70,7 +68,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   const [staffProfile, setStaffProfile] = useState<any>({ id: '', name: 'Loading...', email: '...', initials: 'ST' });
 
-  // 1. Authenticate
   useEffect(() => {
     const verifyStaff = async () => {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
@@ -102,7 +99,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, showChat]);
 
-  // 🌟 UNIFIED ALERT DISPATCHER
   const addSystemAlert = (title: string, message: string, playSound = true) => {
     if (playSound) playAlertSound();
     const id = String(Date.now() + Math.random());
@@ -110,7 +106,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     
     setToasts(prev => [...prev, { id, title, message }]);
     setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
-    
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000);
   };
 
@@ -124,11 +119,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     } catch (e) {}
   };
 
-  // 2. REALTIME NETWORK LISTENERS
   useEffect(() => {
     if (!staffProfile.id || staffProfile.id === 'guest-mock-uuid') return;
 
-    // A. Fetch Unread Database Notifications
     const fetchMissedNotifications = async () => {
       try {
         const { data } = await supabase.from('notifications').select('*').eq('is_read', false).order('created_at', { ascending: false });
@@ -145,7 +138,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
     fetchMissedNotifications();
 
-    // B. Listen for WebRTC Screen Share Pings
     const sigTopic = `webrtc_signaling_${staffProfile.id}`;
     const targetChannelId = getChannelTopic(staffProfile);
 
@@ -155,7 +147,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click accept on your screen.");
       }).subscribe();
 
-    // C. Listen for DB Inserts
     const dbChannel = supabase.channel('staff-layout-alerts')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         const n = payload.new;
@@ -171,17 +162,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
   }, [staffProfile.id, staffProfile.email]);
 
-  // 3. WEBRTC EXECUTION ENGINE
-  // 🌟 FIX: Re-added the second argument `alertIdToDismiss` so TypeScript stops complaining!
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(staffProfile);
     setIsConnecting(true);
     
-    // Clear out the alert from history if they clicked Accept from an alert
-    if (alertIdToDismiss) {
-      dismissHistoryAlert(alertIdToDismiss);
-    }
-    
+    if (alertIdToDismiss) dismissHistoryAlert(alertIdToDismiss);
     setIncomingRequest(null); 
     setChatMessages([]);
 
@@ -302,6 +287,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
+  // 🌟 WIRE UP GLOBAL HOOKS SO ANY PAGE CAN TRIGGER THE SCREEN SHARE
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).triggerGlobalScreenShare = () => startScreenShare();
+      (window as any).triggerGlobalStopShare = () => stopScreenSharing();
+      (window as any).globalStreamStatus = isStreaming;
+    }
+  }, [staffProfile, incomingRequest, isStreaming]);
+
   const unreadCount = alertHistory.filter(a => !a.read).length;
 
   if (isCheckingAuth) return (
@@ -313,7 +307,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
-      {/* 🌟 FLOATING TOASTS CONTAINER (Auto-dismisses) */}
       <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-[340px] sm:w-[400px] flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
@@ -324,14 +317,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               <h4 className="text-sm font-bold text-slate-900 leading-tight truncate">{toast.title}</h4>
               <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed break-words">{toast.message}</p>
             </div>
-            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1 rounded-lg hover:bg-slate-100">
-              <X size={16} />
-            </button>
+            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1 rounded-lg hover:bg-slate-100"><X size={16} /></button>
           </div>
         ))}
       </div>
 
-      {/* 🔴 ACTIVE STREAMING UI */}
       {isStreaming && (
         <>
           {adminPing && (
@@ -378,7 +368,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </>
       )}
 
-      {/* ⚠️ INCOMING REQUEST MODAL (Global) */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
@@ -402,7 +391,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* SIDEBAR */}
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-slate-900/40 z-40 lg:hidden backdrop-blur-sm transition-opacity" />}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-200/70 z-50 flex flex-col transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.02)] ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="h-16 flex items-center px-5 border-b border-slate-100 shrink-0"><img src="/logo.png" alt="Logo" className="h-7 w-auto" /></div>
@@ -440,7 +428,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F8FAFC]">
         <header className="h-16 bg-white border-b border-slate-200/70 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3">
@@ -449,13 +436,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
 
           <div className="relative">
-            {/* 🌟 THE UNIFIED HEADER BELL */}
             <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className="relative p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm cursor-pointer" title="Session Alerts History">
               <Bell size={18} />
               {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">{unreadCount}</span>}
             </button>
 
-            {/* NOTIFICATIONS HISTORY DROPDOWN */}
             {isNotifOpen && (
               <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
