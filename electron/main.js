@@ -4,6 +4,9 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
+// 🌟 FIX FOR WINDOWS GPU CAPTURE BLOCK (NotReadableError)
+app.disableHardwareAcceleration();
+
 // 🌟 MAGIC SWITCHES TO FORCE WEBRTC & SCREEN CAPTURE IN WINDOWS
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');

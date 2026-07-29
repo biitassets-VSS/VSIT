@@ -203,7 +203,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       try {
         console.log("🌐 TRIGGERING LAYER 1: Standard Web Browser Fallback...");
-        // 1. Try standard getDisplayMedia (triggers setDisplayMediaRequestHandler in Electron automatically)
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: false
@@ -299,6 +298,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       });
 
     } catch (err: any) {
+      // 🔴 ADDED LOGGING HERE FOR FINAL DIAGNOSTICS
+      console.error("🔥 FINAL CRASH REASON:", err);
+
       let errorMessage = err.message || err.name || 'Permission denied';
       
       if (errorMessage.includes('Could not start video source')) {
