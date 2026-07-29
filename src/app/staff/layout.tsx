@@ -49,10 +49,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
+  // Notification & Toast State
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
+  const [listenerKey, setListenerKey] = useState(0); // Used to restart listeners after a session ends
 
+  // WebRTC & Session State
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -68,6 +71,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   const [staffProfile, setStaffProfile] = useState<any>({ id: '', name: 'Loading...', email: '...', initials: 'ST' });
 
+  // 1. Authenticate
   useEffect(() => {
     const verifyStaff = async () => {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
@@ -99,6 +103,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, showChat]);
 
+  // 🌟 UNIFIED ALERT DISPATCHER
   const addSystemAlert = (title: string, message: string, playSound = true) => {
     if (playSound) playAlertSound();
     const id = String(Date.now() + Math.random());
@@ -106,6 +111,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     
     setToasts(prev => [...prev, { id, title, message }]);
     setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
+    
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000);
   };
 
@@ -119,6 +125,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     } catch (e) {}
   };
 
+  // 2. REALTIME NETWORK LISTENERS
   useEffect(() => {
     if (!staffProfile.id || staffProfile.id === 'guest-mock-uuid') return;
 
@@ -138,13 +145,20 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
     fetchMissedNotifications();
 
-    const sigTopic = `webrtc_signaling_${staffProfile.id}`;
+    // 🌟 FIX 1: LISTEN EXACTLY ON THE SAME CHANNEL ADMIN BROADCASTS TO
     const targetChannelId = getChannelTopic(staffProfile);
 
-    const signalingChannel = supabase.channel(sigTopic)
+    // Clean old channels to prevent duplicates
+    supabase.getChannels().forEach(ch => {
+      if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId || ch.topic === 'staff-layout-alerts') {
+        supabase.removeChannel(ch);
+      }
+    });
+
+    const signalingChannel = supabase.channel(targetChannelId)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({ adminName: payload.payload?.adminName || 'IT Administrator', adminCode: payload.payload?.adminCode || 'EMP-ADMIN', channelId: targetChannelId });
-        addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click accept on your screen.");
+        addSystemAlert("⚠️ Remote Access Requested", `IT Admin (${payload.payload?.adminName || 'IT'}) is requesting live browser screen access for IT support. Please click Accept on your dashboard.`);
       }).subscribe();
 
     const dbChannel = supabase.channel('staff-layout-alerts')
@@ -160,8 +174,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       supabase.removeChannel(signalingChannel);
       supabase.removeChannel(dbChannel);
     };
-  }, [staffProfile.id, staffProfile.email]);
+  }, [staffProfile, listenerKey]); // Restart listeners when profile loads or session ends
 
+  // 3. WEBRTC EXECUTION ENGINE
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(staffProfile);
     setIsConnecting(true);
@@ -171,21 +186,33 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatMessages([]);
 
     try {
+      // Clear out the request listener to make way for the active video session channel
       supabase.getChannels().forEach(ch => {
         if (ch.topic === `realtime:${targetChannelId}` || ch.topic === targetChannelId) supabase.removeChannel(ch);
       });
 
       addSystemAlert("🚀 Launching Screen Picker", "Establishing secure capture channel...", false);
       let stream: MediaStream | null = null;
-      const isElectronApp = typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId;
 
       try {
-        if (isElectronApp) {
-          const sourceId = await (window as any).electronAPI.getDesktopSourceId();
-          if (!sourceId) throw new Error("Backend failed to retrieve monitor ID.");
-          stream = await (navigator.mediaDevices as any).getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any });
-        } else {
+        // 🌟 FIX 2: CASCADE CAPTURE ENGINE. ALWAYS PRIORITIZE getDisplayMedia FIRST
+        try {
           stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        } catch (err1: any) {
+          console.warn("Primary capture failed, attempting legacy hook...", err1);
+          
+          const isElectronApp = typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId;
+          if (isElectronApp) {
+            const sourceId = await (window as any).electronAPI.getDesktopSourceId();
+            if (!sourceId) throw new Error("Backend failed to retrieve monitor ID.");
+            
+            stream = await (navigator.mediaDevices as any).getUserMedia({ 
+              audio: false, 
+              video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
+            });
+          } else {
+            throw err1; // Throw original error if not in Electron app
+          }
         }
       } catch (captureError: any) {
         throw new Error(`Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'. Detail: ${captureError.message}`);
@@ -258,6 +285,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       addSystemAlert("❌ Connection Failed", err.message || 'Permission denied');
       setIsConnecting(false);
       setIsStreaming(false);
+      
+      // If connection fails, restart the listening channel so they can try again!
+      setListenerKey(prev => prev + 1);
     }
   };
 
@@ -270,6 +300,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       channelRef.current = null;
     }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
+    
+    // Restart the connection listener to await the next ping from Admin
+    setListenerKey(prev => prev + 1);
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
@@ -287,7 +320,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
-  // 🌟 WIRE UP GLOBAL HOOKS SO ANY PAGE CAN TRIGGER THE SCREEN SHARE
+  // 🌟 WIRE UP GLOBAL HOOKS SO THE REMOTE PAGE CAN TRIGGER THE SCREEN SHARE
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).triggerGlobalScreenShare = () => startScreenShare();
@@ -307,6 +340,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
+      {/* 🌟 FLOATING TOASTS CONTAINER (Auto-dismisses) */}
       <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-[340px] sm:w-[400px] flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
@@ -322,6 +356,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         ))}
       </div>
 
+      {/* 🔴 ACTIVE STREAMING UI */}
       {isStreaming && (
         <>
           {adminPing && (
@@ -368,6 +403,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </>
       )}
 
+      {/* ⚠️ INCOMING REQUEST MODAL (Global) */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
@@ -391,6 +427,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
+      {/* SIDEBAR */}
       {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-slate-900/40 z-40 lg:hidden backdrop-blur-sm transition-opacity" />}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-200/70 z-50 flex flex-col transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.02)] ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="h-16 flex items-center px-5 border-b border-slate-100 shrink-0"><img src="/logo.png" alt="Logo" className="h-7 w-auto" /></div>
