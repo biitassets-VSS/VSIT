@@ -7,7 +7,6 @@ const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 // 🌟 MAGIC SWITCHES TO FORCE WEBRTC & SCREEN CAPTURE
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
-// 🌟 FIX 1: Enable modern WebRTC capturer features
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
 
 let mainWindow;
@@ -21,7 +20,6 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // 🌟 FIX 2: Prevent stream blocking due to missing user gestures
       autoplayPolicy: 'no-user-gesture-required' 
     }
   });
@@ -32,7 +30,6 @@ function createWindow() {
   // 🌟 AGGRESSIVE PERMISSION AUTO-APPROVAL
   mainWindow.webContents.session.setPermissionCheckHandler(() => true);
   mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
-    // Force approve media/display requests immediately
     if (permission === 'media' || permission === 'display-capture') {
       callback(true);
     } else {
@@ -42,17 +39,15 @@ function createWindow() {
 
   // 🌟 LAYER 1: OFFICIAL DISPLAY HANDLER (React uses getDisplayMedia)
   mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-    // FIX 3: Requesting both types prevents empty array bugs on Windows 11
     desktopCapturer.getSources({ types: ['screen', 'window'], fetchWindowIcons: false }).then((sources) => {
-      // Filter out only the actual Monitors/Screens
       const screens = sources.filter(s => s.id.startsWith('screen'));
       
       if (screens && screens.length > 0) {
-        // 🌟 FIX 4: You MUST provide audio: 'loopback' in modern Electron, or Chromium rejects the stream!
-        callback({ video: screens[0], audio: 'loopback' }); 
+        // 🌟 FIX: Removed audio: 'loopback' which was causing the fatal constraint crash!
+        callback({ video: screens[0] }); 
       } else if (sources && sources.length > 0) {
-        // Fallback to primary source if no explicit 'screen' is labeled
-        callback({ video: sources[0], audio: 'loopback' });
+        // 🌟 FIX: Removed audio: 'loopback' here as well!
+        callback({ video: sources[0] });
       } else {
         callback();
       }
