@@ -4,10 +4,12 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 MAGIC SWITCHES TO FORCE WEBRTC & SCREEN CAPTURE
+// 🌟 MAGIC SWITCHES TO FORCE WEBRTC & SCREEN CAPTURE IN WINDOWS
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
+app.commandLine.appendSwitch('enable-media-stream');
+app.commandLine.appendSwitch('disable-site-isolation-trials');
 
 let mainWindow;
 
@@ -20,17 +22,39 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      autoplayPolicy: 'no-user-gesture-required' 
+      autoplayPolicy: 'no-user-gesture-required',
+      // Ensure WebRTC security restrictions don't block local streams
+      webSecurity: true 
     }
   });
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app');
 
-  // 🌟 AGGRESSIVE PERMISSION AUTO-APPROVAL
-  mainWindow.webContents.session.setPermissionCheckHandler(() => true);
+  // 🌟 AGGRESSIVE PERMISSION AUTO-APPROVAL (Updated for all Media/Screen Types)
+  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    const allowedPermissions = [
+      'media',
+      'display-capture',
+      'mediaKeySystem',
+      'videoCapture',
+      'audioCapture'
+    ];
+    if (allowedPermissions.includes(permission)) {
+      return true;
+    }
+    return true;
+  });
+
   mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media' || permission === 'display-capture') {
+    const allowedPermissions = [
+      'media',
+      'display-capture',
+      'mediaKeySystem',
+      'videoCapture',
+      'audioCapture'
+    ];
+    if (allowedPermissions.includes(permission)) {
       callback(true);
     } else {
       callback(true);
@@ -38,32 +62,40 @@ function createWindow() {
   });
 
   // 🌟 LAYER 1: OFFICIAL DISPLAY HANDLER (React uses getDisplayMedia)
-  mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-    desktopCapturer.getSources({ types: ['screen', 'window'], fetchWindowIcons: false }).then((sources) => {
-      const screens = sources.filter(s => s.id.startsWith('screen'));
+  mainWindow.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ 
+        types: ['screen', 'window'], 
+        fetchWindowIcons: false 
+      });
       
-      if (screens && screens.length > 0) {
-        // 🌟 FIX: Removed audio: 'loopback' which was causing the fatal constraint crash!
-        callback({ video: screens[0] }); 
+      const primaryScreen = sources.find(s => s.id.startsWith('screen'));
+      
+      if (primaryScreen) {
+        // Return ONLY video target without audio constraints to prevent crashes
+        callback({ video: primaryScreen });
       } else if (sources && sources.length > 0) {
-        // 🌟 FIX: Removed audio: 'loopback' here as well!
         callback({ video: sources[0] });
       } else {
+        console.error("No screen sources detected by Electron.");
         callback();
       }
-    }).catch(err => {
-      console.error("Screen capture failed:", err);
+    } catch (err) {
+      console.error("Screen capture failed in DisplayMediaRequestHandler:", err);
       callback();
-    });
+    }
   });
 }
 
 app.whenReady().then(createWindow);
 
-// 🌟 LAYER 2: HARDWARE ID BYPASS HOOK (React uses getUserMedia)
+// 🌟 LAYER 2: HARDWARE ID BYPASS HOOK (React uses getUserMedia fallback)
 ipcMain.handle('get-desktop-source-id', async () => {
   try {
-    const sources = await desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false });
+    const sources = await desktopCapturer.getSources({ 
+      types: ['screen'], 
+      fetchWindowIcons: false 
+    });
     return sources.length > 0 ? sources[0].id : null;
   } catch (e) {
     console.error("Source ID fetch failed:", e);
@@ -114,5 +146,11 @@ ipcMain.on('system-command', async (event, { command }) => {
     }
   } catch (err) {
     console.error("Command failed:", err);
+  }
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
 });
