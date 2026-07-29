@@ -13,7 +13,6 @@ import { supabase } from '@/lib/supabaseClient';
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:openrelay.metered.ca:80' },
   { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
 ];
@@ -34,11 +33,7 @@ const playAlertSound = () => {
 };
 
 interface AlertRecord {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
+  id: string; title: string; message: string; time: string; read: boolean;
 }
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -46,9 +41,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
@@ -66,9 +59,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isControlGranted, setIsControlGranted] = useState(false);
   
   const isControlGrantedRef = useRef(false);
-  useEffect(() => {
-    isControlGrantedRef.current = isControlGranted;
-  }, [isControlGranted]);
+  useEffect(() => { isControlGrantedRef.current = isControlGranted; }, [isControlGranted]);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -98,9 +89,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     verifyStaff();
   }, [router]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, showChat]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, showChat]);
 
   const addSystemAlert = (title: string, message: string, playSound = true) => {
     if (playSound) playAlertSound();
@@ -122,7 +111,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!staffProfile.id) return;
-
     const topic1 = `webrtc_signaling_${staffProfile.id}`;
     const topic2 = `webrtc_signaling_${staffProfile.emp_id}`;
     const topic3 = getChannelTopic(staffProfile);
@@ -146,59 +134,37 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     const ch2 = supabase.channel(topic2).on('broadcast', { event: 'request_screen_share' }, p => handlePing(p, topic2)).subscribe();
     const ch3 = supabase.channel(topic3).on('broadcast', { event: 'request_screen_share' }, p => handlePing(p, topic3)).subscribe();
 
-    return () => {
-      supabase.removeChannel(ch1);
-      supabase.removeChannel(ch2);
-      supabase.removeChannel(ch3);
-    };
+    return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); supabase.removeChannel(ch3); };
   }, [staffProfile, listenerKey]);
 
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(staffProfile);
     setIsConnecting(true);
-    
     if (alertIdToDismiss) dismissHistoryAlert(alertIdToDismiss);
 
     try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-        streamRef.current = null;
-      }
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
 
-      console.log("🚀 Starting stream acquisition...");
       let stream: MediaStream | null = null;
       const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
 
       if (electronAPI && electronAPI.getDesktopSourceId) {
-        console.log("⚡ Electron detected! Bypassing getDisplayMedia to prevent hangs.");
         const sourceId = await electronAPI.getDesktopSourceId();
         if (!sourceId) throw new Error("Could not detect Windows monitor source ID.");
-        
-        stream = await (navigator.mediaDevices as any).getUserMedia({ 
-          audio: false, 
-          video: { 
-            mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } 
-          } 
-        });
+        stream = await (navigator.mediaDevices as any).getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } });
       } else {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       }
 
-      if (!stream) throw new Error("Failed to acquire video stream from hardware.");
+      if (!stream) throw new Error("Failed to acquire video stream.");
       streamRef.current = stream;
 
-      setIncomingRequest(null);
-      setChatMessages([]);
+      setIncomingRequest(null); setChatMessages([]);
       addSystemAlert("🚀 Stream Secured", "Establishing remote connection...", false);
-
-      stream.getVideoTracks()[0].onended = () => {
-        stopScreenSharing("You have ended live screen sharing.");
-      };
 
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
-      // 🌟 WEBRTC DATA CHANNEL RECEIVER FOR ZERO-LATENCY COMMANDS
       peer.ondatachannel = (event) => {
         const receiveChannel = event.channel;
         receiveChannel.onmessage = async (e) => {
@@ -221,20 +187,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         };
       };
 
+      // ANTI-DROP: Only drop on hard failure
       peer.onconnectionstatechange = () => {
-        console.log("📡 Peer Connection State:", peer.connectionState);
-        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          stopScreenSharing("Network or remote peer connection lost.");
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          stopScreenSharing("Network connection failed.");
         }
       };
 
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
 
-      console.log("🧹 Destroying old Supabase background listeners...");
-      supabase.getChannels().forEach(ch => {
-        if (ch.topic === targetChannelId) supabase.removeChannel(ch);
-      });
-
+      supabase.getChannels().forEach(ch => { if (ch.topic === targetChannelId) supabase.removeChannel(ch); });
       const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
       channelRef.current = sessionChannel;
 
@@ -245,18 +207,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
         try {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
-          setIsConnecting(false);
-          setIsStreaming(true);
+          setIsConnecting(false); setIsStreaming(true);
           addSystemAlert("🟢 Connected", "Live WebRTC Screen Share Established!");
-        } catch (e) { console.error("Failed to parse Admin Answer:", e); }
+        } catch (e) {}
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
         if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
       }).on('broadcast', { event: 'terminate_session' }, (payload) => {
         const reason = payload?.payload?.reason || "Session ended by remote user.";
         stopScreenSharing(reason);
       }).on('broadcast', { event: 'admin_stopped_sharing' }, (payload) => {
-        const reason = payload?.payload?.reason || "Admin stopped the session.";
-        stopScreenSharing(reason);
+        stopScreenSharing(payload?.payload?.reason || "Admin stopped the session.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Admin', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
         setShowChat(true);
@@ -265,28 +225,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         setRemoteControlRequest(true);
         addSystemAlert("⚠️ Control Request", "IT Admin is requesting to control your mouse and keyboard.");
       }).subscribe(async (status) => {
-        console.log("📡 New Session Channel Status:", status);
         if (status === 'SUBSCRIBED') {
           try {
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
             await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
-          } catch (e) { console.error("Failed to generate Offer:", e); }
+          } catch (e) {}
         }
       });
 
     } catch (err: any) {
-      console.error("🔥 FINAL CRASH REASON:", err);
-      let errorMessage = err.message || err.name || 'Permission denied';
-      addSystemAlert("❌ Connection Failed", errorMessage);
-      setIsConnecting(false);
-      setIsStreaming(false);
-      setIncomingRequest(null);
-      setListenerKey(prev => prev + 1);
+      addSystemAlert("❌ Connection Failed", err.message || 'Permission denied');
+      setIsConnecting(false); setIsStreaming(false); setIncomingRequest(null); setListenerKey(prev => prev + 1);
     }
   };
 
-  // 🌟 BOTH-SIDES DISCONNECT NOTIFIER UPDATE
   const stopScreenSharing = (reason = "Screen sharing stopped.") => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
@@ -295,11 +248,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
-    
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
     setIsControlGranted(false); setRemoteControlRequest(false);
     
-    // Alert the user precisely why it closed
     addSystemAlert("🛑 Session Disconnected", reason);
     setListenerKey(prev => prev + 1);
   };
@@ -308,7 +259,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     e.preventDefault();
     if (!chatInput.trim() || !channelRef.current) return;
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setChatMessages(prev => [...prev, { sender: staffProfile.name || 'Me', text: chatInput, time: timeString, isSelf: true }]);
+    setChatMessages(prev => [...prev, { sender: 'Me', text: chatInput, time: timeString, isSelf: true }]);
     channelRef.current.send({ type: 'broadcast', event: 'chat_message', payload: { sender: staffProfile.name, text: chatInput, time: timeString } });
     setChatInput('');
   };
@@ -373,61 +324,63 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             
             {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
-              <div className="bg-white border-2 border-purple-500 p-5 rounded-3xl shadow-2xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto">
+              <div className="bg-slate-900/90 backdrop-blur-xl border-2 border-purple-500 p-5 rounded-3xl shadow-2xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
                     <MousePointer2 size={20} className="animate-bounce" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-900 leading-tight">Remote Control Requested</h3>
-                    <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Remote user wants to temporarily control your mouse and keyboard.</p>
+                    <h3 className="text-sm font-black text-white leading-tight">Remote Control Requested</h3>
+                    <p className="text-[11px] text-slate-300 mt-1 font-medium leading-relaxed">IT Admin wants to temporarily control your mouse and keyboard.</p>
                   </div>
                 </div>
                 <div className="flex gap-2 w-full mt-1">
-                  <button onClick={handleDeclineControl} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer">Deny</button>
-                  <button onClick={handleAcceptControl} className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-purple-600/20 cursor-pointer">
+                  <button onClick={handleDeclineControl} className="flex-1 py-2.5 rounded-xl border border-slate-600 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all cursor-pointer">Deny</button>
+                  <button onClick={handleAcceptControl} className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer">
                     <Check size={14} /> Allow Access
                   </button>
                 </div>
               </div>
             )}
 
+            {/* 🌟 HIGH-READABILITY GLASS CHAT FOR STAFF */}
             {showChat && (
-              <div className="w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4">
-                <div className="p-3 bg-slate-900 text-white flex justify-between items-center">
-                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-500" /> Live Support Chat</span>
-                  <button onClick={() => setShowChat(false)} className="hover:text-rose-400 transition-colors cursor-pointer"><X size={16}/></button>
+              <div className="w-80 bg-slate-900/85 backdrop-blur-2xl border border-slate-700 shadow-2xl rounded-2xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden">
+                <div className="p-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white flex justify-between items-center shadow-sm">
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} /> Live Support Chat</span>
+                  <button onClick={() => setShowChat(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white"><X size={16}/></button>
                 </div>
-                <div className="h-56 p-3 overflow-y-auto flex flex-col gap-2.5 bg-slate-50 custom-scrollbar">
+                <div className="h-56 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`max-w-[85%] text-[11px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-orange-600 text-white self-end rounded-2xl rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 self-start rounded-2xl rounded-bl-none'}`}>
-                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-orange-200' : 'text-slate-400'}`}>{msg.sender}</div>{msg.text}
+                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-orange-600 text-white self-end rounded-2xl rounded-br-none border border-orange-500' : 'bg-slate-800 text-white self-start rounded-2xl rounded-bl-none border border-slate-600'}`}>
+                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-orange-200' : 'text-purple-400'}`}>{msg.sender}</div>{msg.text}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <form onSubmit={sendChatMessage} className="p-2 bg-white border-t border-slate-100 flex gap-2">
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-orange-500 transition-colors" />
-                  <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 cursor-pointer transition-colors"><Send size={14}/></button>
+                <form onSubmit={sendChatMessage} className="p-2 bg-slate-800/80 border-t border-slate-700 flex gap-2 backdrop-blur-md">
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-950 text-white border border-slate-600 rounded-xl outline-none focus:border-orange-500 transition-all placeholder-slate-500" />
+                  <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 cursor-pointer transition-colors shadow-md"><Send size={14}/></button>
                 </form>
               </div>
             )}
 
-            <div className="bg-slate-900 border-2 border-orange-500 text-white p-3 sm:p-4 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto">
+            {/* Floating Action Bar */}
+            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700 text-white p-3 sm:p-4 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto">
               <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
                 <div>
                   <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
-                  <p className="text-[10px] text-zinc-300">
-                    {isControlGranted ? 'Remote control is active.' : 'Support is viewing your workspace.'}
+                  <p className="text-[10px] text-zinc-300 font-medium">
+                    {isControlGranted ? 'Admin controls your PC.' : 'IT Support is viewing your workspace.'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer relative ${showChat ? 'bg-slate-700 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'}`}>
+                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer relative ${showChat ? 'bg-slate-700 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-600'}`}>
                   <MessageSquare size={14} /> <span className="hidden sm:inline">Chat</span>
                 </button>
-                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
+                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
               </div>
             </div>
           </div>
@@ -440,12 +393,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
-              <h3 className="text-xl font-black text-slate-900">Live Support Access Requested</h3>
+              <h3 className="text-xl font-black text-slate-900">Live IT Support Access Requested</h3>
               <p className="text-xs sm:text-sm font-medium text-slate-500"><strong className="text-slate-900 font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
             </div>
             <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-orange-800 flex items-center gap-3">
               <ShieldAlert size={22} className="shrink-0 text-orange-600" />
-              <span>By accepting, they will be able to view your desktop natively.</span>
+              <span>By accepting, IT will be able to view your desktop natively.</span>
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer">Decline</button>
@@ -468,7 +421,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             { name: 'My Inspections', href: '/staff/inspections', icon: ClipboardCheck },
             { name: 'IT Tickets', href: '/staff/tickets', icon: Ticket },
             { name: 'Asset Requests', href: '/staff/requests', icon: PlusCircle },
-            { name: 'Replacement Log', href: '/staff/replacements', icon: History }
+            { name: 'Replacement Log', href: '/staff/replacements', icon: History },
+            { name: 'Peer Remote Support', href: '/staff/remote', icon: Monitor } // <-- Added Link here
           ].map((link) => {
             const Icon = link.icon;
             const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);

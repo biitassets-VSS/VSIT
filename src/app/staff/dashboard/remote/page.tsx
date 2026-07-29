@@ -1,170 +1,455 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Monitor, Copy, AlertTriangle, Key, Radio } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
+import { 
+  Monitor, ArrowLeft, Loader2, Search, PanelLeftClose, PanelLeftOpen, 
+  RefreshCw, Power, Keyboard, Video, Clipboard, FileUp, Volume2, 
+  Ban, MessageSquare, Send, X, Users
+} from 'lucide-react';
 
-export default function RemoteSupportPage() {
-  const [staffInfo, setStaffInfo] = useState({ emp_id: '...', assigned_pc: 'Loading...' });
-  const [remoteCreds, setRemoteCreds] = useState({ id: 'Not Assigned', pin: '••••••••' });
+interface StaffMember {
+  id: string; 
+  name?: string; 
+  full_name?: string; 
+  email: string; 
+  emp_code?: string; 
+  department?: string; 
+  is_online?: boolean; 
+  assigned_asset_name?: string;
+}
+
+interface ChatMessage {
+  sender: string; 
+  text: string; 
+  time: string; 
+  isSelf: boolean;
+}
+
+const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' }, 
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+];
+
+export default function StaffRemotePage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [activeSession, setActiveSession] = useState<StaffMember | null>(null);
+  const [currentStaffProfile, setCurrentStaffProfile] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sessionStatus, setSessionStatus] = useState<'idle' | 'requesting' | 'connected' | 'controlling'>('idle');
+  
+  // Enterprise Controls State
+  const [isControlling, setIsControlling] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(false);
+  const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
+  
+  // Floating Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const channelRef = useRef<any>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const viewportContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const fetchInfo = async () => {
+    loadStaffData();
+    return () => terminateSession("Page navigated away.");
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isChatOpen]);
+
+  const loadStaffData = async () => {
+    try {
       const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!sessionString) return;
-
-      let user: any = {};
-      try { user = JSON.parse(sessionString); } catch (e) { return; }
-
-      const email = user.email?.toLowerCase().trim();
-      
-      // Get the profile safely
-      const { data: profile } = await supabase.from('profiles').select('emp_code, id').ilike('email', email).single();
-      
-      let pcName = 'Not Assigned';
-      let rId = 'Not Assigned';
-      let rPin = 'No Password Set';
-
-      if (profile) {
-        // Find assets safely (avoids .single() crash)
-        const { data: assets } = await supabase.from('assets').select('*').eq('assigned_to', profile.id);
-        
-        if (assets && assets.length > 0) {
-          const mainPc = assets.find(a => (a.category || '').toLowerCase().includes('laptop') || (a.category || '').toLowerCase().includes('desktop')) || assets[0];
-          pcName = mainPc.name || mainPc.model || mainPc.asset_tag || 'Generic Workstation';
-          
-          if (mainPc.remote_id) rId = mainPc.remote_id;
-          if (mainPc.remote_pin) rPin = mainPc.remote_pin;
+      let currentEmail = '';
+      if (sessionString) {
+        try {
+          const parsed = JSON.parse(sessionString);
+          currentEmail = parsed.email || '';
+          setCurrentStaffProfile(parsed);
+        } catch (e) {
+          currentEmail = sessionString;
         }
       }
 
-      setStaffInfo({
-        emp_id: profile?.emp_code || 'EMP-UNKNOWN',
-        assigned_pc: pcName
+      const [{ data: profiles }, { data: assets }] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('assets').select('name, assigned_to')
+      ]);
+
+      if (profiles) {
+        // Exclude the current user from the directory
+        const otherStaff = profiles
+          .filter((p: any) => p.email?.toLowerCase() !== currentEmail.toLowerCase())
+          .map((p: any) => ({
+            ...p,
+            assigned_asset_name: (assets || []).find(a => a.assigned_to === p.id)?.name || 'Unassigned PC'
+          }));
+        setStaffList(otherStaff);
+      }
+    } catch (error) {
+      toast.error("Failed to load staff directory.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestLiveScreenShare = async () => {
+    if (!activeSession) return;
+    setSessionStatus('requesting');
+    setChatMessages([]);
+
+    try {
+      const backgroundChannelId = getChannelTopic(activeSession);
+      const liveSessionId = `${backgroundChannelId}_live_${Date.now()}`;
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+
+      const peer = new RTCPeerConnection({ iceServers });
+      peerRef.current = peer;
+      peer.addTransceiver('video', { direction: 'recvonly' });
+
+      // ANTI-DROP
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          terminateSession("Network connection failed.");
+        }
+      };
+
+      // Create WebRTC DataChannel for zero-latency control
+      const dataChannel = peer.createDataChannel('enterprise_control');
+      dataChannelRef.current = dataChannel;
+
+      peer.ontrack = (event) => {
+        if (videoRef.current && event.streams[0]) {
+          videoRef.current.srcObject = event.streams[0];
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().catch(e => console.error("Play failed:", e));
+          };
+          setSessionStatus('connected');
+          toast.success("🟢 Live Screen Stream Established!");
+        }
+      };
+
+      const sessionChannel = supabase.channel(liveSessionId, { config: { broadcast: { self: false, ack: true } } });
+      channelRef.current = sessionChannel;
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
+        }
+      };
+
+      sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
+        } catch (rtcError) {}
+      }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
+        if (peer.remoteDescription && payload.payload?.candidate) {
+          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
+        }
+      }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
+        terminateSession("Remote colleague stopped sharing their screen.");
+      }).on('broadcast', { event: 'chat_message' }, (payload) => {
+        setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Staff', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
+        setIsChatOpen(true);
+        toast.success(`💬 Message from ${payload.payload.sender || 'Colleague'}`);
+      })
+      // Handshake Listeners
+      .on('broadcast', { event: 'control_accepted' }, () => {
+        setIsControlling(true);
+        setSessionStatus('controlling');
+        toast.success("✅ Colleague granted remote control access!");
+      })
+      .on('broadcast', { event: 'control_rejected' }, () => {
+        toast.error("❌ Colleague declined remote control.");
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          const pingChannel = supabase.channel(backgroundChannelId);
+          pingChannel.subscribe(async (pingStatus) => {
+            if (pingStatus === 'SUBSCRIBED') {
+              const senderName = currentStaffProfile?.full_name || currentStaffProfile?.name || 'Staff Colleague';
+              const senderCode = currentStaffProfile?.emp_code || 'STAFF';
+
+              await pingChannel.send({ 
+                type: 'broadcast', 
+                event: 'request_screen_share', 
+                payload: { adminName: senderName, adminCode: senderCode, channelId: liveSessionId }
+              });
+              supabase.removeChannel(pingChannel);
+            }
+          });
+        }
       });
-      setRemoteCreds({ id: rId, pin: rPin });
+    } catch (err) { 
+      setSessionStatus('idle'); 
+      toast.error("Failed to establish signaling connection.");
+    }
+  };
+
+  const terminateSession = (reason = "Session terminated.") => {
+    if (channelRef.current) { 
+      channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: { reason } }); 
+      supabase.removeChannel(channelRef.current); 
+      channelRef.current = null; 
+    }
+    if (peerRef.current) { 
+      peerRef.current.close(); 
+      peerRef.current = null; 
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+
+    if (sessionStatus !== 'idle') {
+      toast.error(`🛑 ${reason}`);
+    }
+
+    setSessionStatus('idle'); 
+    setIsControlling(false); 
+    setIsKeyboardEnabled(false); 
+    setIsChatOpen(false);
+  };
+
+  const sendControlCommand = (command: any) => {
+    if (isControlling && dataChannelRef.current?.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify(command));
+    }
+  };
+
+  const handleMouseEvent = (e: React.MouseEvent, type: string) => {
+    if (!isControlling) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
+    sendControlCommand({ type, xPercent, yPercent, button: e.button });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => { 
+      if (isKeyboardEnabled && document.activeElement?.tagName !== 'INPUT') { 
+        e.preventDefault(); 
+        sendControlCommand({ type: 'keydown', key: e.key }); 
+      }
     };
-    fetchInfo();
-  }, []);
+    const handleKeyUp = (e: KeyboardEvent) => { 
+      if (isKeyboardEnabled && document.activeElement?.tagName !== 'INPUT') { 
+        e.preventDefault(); 
+        sendControlCommand({ type: 'keyup', key: e.key }); 
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
+  }, [isKeyboardEnabled, isControlling]);
 
-  const copyToClipboard = (text: string, label: string) => {
-    if (text === 'Not Assigned' || text === 'No Password Set' || text === '••••••••') {
-      toast.error(`No ${label} available to copy.`);
-      return;
-    }
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard!`);
+  const requestClipboardSync = () => {
+    sendControlCommand({ type: 'sync_clipboard' });
+    toast.success("Clipboard sync requested...");
   };
 
-  const handleManualShareRequest = () => {
-    if (typeof window !== 'undefined' && (window as any).triggerGlobalScreenShare) {
-      (window as any).triggerGlobalScreenShare();
-    } else {
-      toast.error("Screen share engine is initializing. Please wait a moment and try again.");
-    }
+  const sendChatMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !channelRef.current) return;
+    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const myName = currentStaffProfile?.full_name?.split(' ')[0] || 'Me';
+    
+    setChatMessages(prev => [...prev, { sender: myName, text: chatInput, time: timeString, isSelf: true }]);
+    channelRef.current.send({ 
+      type: 'broadcast', 
+      event: 'chat_message', 
+      payload: { sender: currentStaffProfile?.full_name || 'Colleague', text: chatInput, time: timeString } 
+    });
+    setChatInput('');
   };
+
+  if (loading) return (
+    <div className="h-full flex flex-col items-center justify-center gap-3">
+      <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Loading Staff Directory...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 h-full flex flex-col">
       
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Header */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-            <Monitor size={28} />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
+            <Users size={28} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-900">IT Remote Support Hub</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">Live Signaling Active</span>
+              <h1 className="text-xl font-black text-slate-900">Peer Remote Support</h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">P2P Active</span>
             </div>
             <p className="text-xs font-medium text-slate-500 mt-1">
-              View your workstation credentials and connect with IT administration for live screen sharing and diagnostics.
+              Collaborate, share screens, and assist teammates directly from your browser.
             </p>
           </div>
         </div>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:border-purple-500 transition-all bg-slate-50 shadow-sm">
+          {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="flex gap-6 flex-1 min-h-[600px]">
         
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col relative overflow-hidden shadow-sm">
-          <div className="absolute top-0 inset-x-0 h-1 bg-linear-to-r from-orange-400 to-orange-600" />
-          
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-6">
-            <Monitor size={16} className="text-orange-500"/> Native WebRTC Connection
-          </h2>
-
-          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 py-4">
-            <div className="w-full bg-slate-50 rounded-2xl p-4 border border-slate-100 mb-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Assigned Workstation</p>
-              <p className="text-lg font-black text-slate-800">{staffInfo.assigned_pc}</p>
-              <p className="text-xs font-medium text-slate-500">ID: {staffInfo.emp_id}</p>
-            </div>
-
-            <button 
-              onClick={handleManualShareRequest}
-              className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-95"
-            >
-              <Radio size={16} />
-              <span>Share Screen Now</span>
-            </button>
-            
-            <p className="text-[11px] text-slate-500 font-medium px-4">
-              Click to instantly open a secure, peer-to-peer screen sharing tunnel directly with the IT Admin dashboard.
-            </p>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-            <span className="text-slate-400 flex items-center gap-1.5"><ShieldCheck size={14}/> TLS 1.3 Secure</span>
-            <span className="text-emerald-500 flex items-center gap-1.5">🟢 Online & Ready</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-6">
-            <Key size={16} className="text-purple-600"/> 3rd-Party Fallback Credentials
-          </h2>
-
-          <p className="text-xs text-slate-600 font-medium mb-6 leading-relaxed">
-            Provide these credentials to your IT Administrator over telephone or support chat ONLY if the native WebRTC connection above fails.
-          </p>
-
-          <div className="space-y-4">
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">RustDesk / AnyDesk ID</p>
-                <p className="text-base font-black text-slate-800 font-mono tracking-wider">{remoteCreds.id}</p>
+        {/* Directory Sidebar */}
+        {isSidebarOpen && (
+          <div className="w-80 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col shrink-0 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search Staff Name or ID..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 transition-all" 
+                />
               </div>
-              <button 
-                onClick={() => copyToClipboard(remoteCreds.id, 'Remote ID')}
-                className="w-full py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Copy size={12}/> Copy ID
-              </button>
             </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+              {staffList.filter(s => s.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())).map((staff) => (
+                <button 
+                  key={staff.id} 
+                  onClick={() => { terminateSession("Switched user."); setActiveSession(staff); }} 
+                  className={`w-full text-left p-3.5 rounded-2xl transition-all border flex items-center justify-between ${ activeSession?.id === staff.id ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-transparent hover:border-slate-200 shadow-sm' }`}
+                >
+                  <div>
+                    <p className={`font-bold text-sm ${activeSession?.id === staff.id ? 'text-orange-700' : 'text-slate-900'}`}>{staff.full_name || staff.name}</p>
+                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">{staff.emp_code || 'STAFF'} • {staff.assigned_asset_name}</p>
+                  </div>
+                  <Monitor size={16} className={activeSession?.id === staff.id ? 'text-orange-600' : 'text-slate-400'} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Access PIN / Password</p>
-                <p className="text-base font-black text-slate-800 font-mono tracking-wider">{remoteCreds.pin === 'No Password Set' ? 'No Password Set' : '••••••••'}</p>
+        {/* Main Remote Viewport */}
+        <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
+          {activeSession ? (
+            <>
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">{activeSession.full_name || activeSession.name}</h2>
+                  <p className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-md inline-block mt-1">{sessionStatus.toUpperCase()}</p>
+                </div>
+                {sessionStatus === 'idle' ? (
+                  <button onClick={requestLiveScreenShare} className="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-600/20 transition-all flex items-center gap-2 cursor-pointer">
+                    <Monitor size={16} /> Request Connection
+                  </button>
+                ) : (
+                  <button onClick={() => terminateSession("Disconnected by user.")} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-rose-600/20 transition-all flex items-center gap-2 cursor-pointer">
+                    <Power size={16} /> Disconnect
+                  </button>
+                )}
               </div>
-              <button 
-                onClick={() => copyToClipboard(remoteCreds.pin, 'Access PIN')}
-                className="w-full py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer"
+
+              <div 
+                ref={viewportContainerRef} 
+                className={`flex-1 bg-slate-950 relative overflow-hidden flex items-center justify-center ${isControlling ? 'cursor-crosshair' : ''}`}
+                onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
+                onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
+                onMouseUp={(e) => handleMouseEvent(e, 'mouseup')}
+                onWheel={(e) => { if(isControlling) { e.preventDefault(); sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
+                onContextMenu={(e) => e.preventDefault()}
               >
-                <Copy size={12}/> Copy PIN
-              </button>
+                <video ref={videoRef} autoPlay playsInline muted={!isAudioEnabled} className={`max-w-full max-h-full object-contain ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} />
+                
+                {sessionStatus === 'requesting' && (
+                  <div className="text-center text-white">
+                    <Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" />
+                    <p className="font-bold">Awaiting Colleague Permission...</p>
+                  </div>
+                )}
+                
+                {/* Floating Live Chat Box */}
+                {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
+                  <div className="absolute bottom-24 right-6 w-80 bg-slate-900/85 backdrop-blur-2xl border border-slate-700 shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
+                    <div className="p-3 bg-gradient-to-r from-orange-600 to-purple-600 text-white flex justify-between items-center shadow-sm">
+                      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} /> Peer Chat</span>
+                      <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white"><X size={16}/></button>
+                    </div>
+                    <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
+                      {chatMessages.length === 0 ? (
+                        <div className="m-auto text-center text-xs font-medium text-slate-400">Send a message to start communicating.</div>
+                      ) : (
+                        chatMessages.map((msg, i) => (
+                          <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none border border-purple-500' : 'bg-slate-800 text-white self-start rounded-2xl rounded-bl-none border border-slate-600'}`}>
+                            <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-purple-200' : 'text-orange-400'}`}>{msg.sender}</div>{msg.text}
+                          </div>
+                        ))
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+                    <form onSubmit={sendChatMessage} className="p-2 bg-slate-800/80 border-t border-slate-700 flex gap-2 backdrop-blur-md">
+                      <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a message..." className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-950 text-white border border-slate-600 rounded-xl outline-none focus:border-purple-500 transition-all placeholder-slate-500" />
+                      <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 cursor-pointer transition-colors shadow-md"><Send size={14}/></button>
+                    </form>
+                  </div>
+                )}
+
+                {/* Premium Floating Toolbar */}
+                {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-2xl border border-slate-600 p-2 rounded-2xl flex gap-2 shadow-2xl z-50">
+                    {[
+                      { 
+                        icon: <Video size={18} />, 
+                        active: isControlling, 
+                        action: () => { 
+                          if (isControlling) {
+                            setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode.");
+                          } else {
+                            channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} });
+                            toast("Requesting control permission...");
+                          }
+                        }, 
+                        tooltip: isControlling ? "Disable Control" : "Request Remote Control" 
+                      },
+                      { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
+                      { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Peer Chat" },
+                      { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
+                      { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Audio" },
+                      { icon: <FileUp size={18} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
+                      { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
+                      { icon: <Ban size={18} />, active: false, action: () => terminateSession("Session ended by user."), tooltip: "Disconnect", color: "text-rose-500 hover:bg-rose-500/20 hover:text-rose-400" }
+                    ].map((btn, i) => (
+                      <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${btn.color || 'text-white'} ${btn.active ? 'bg-gradient-to-tr from-purple-600 to-orange-500 shadow-lg border border-orange-400' : 'bg-white/5 hover:bg-white/20 border border-transparent'}`}>
+                        {btn.icon}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-slate-400 flex-col gap-4">
+              <Monitor size={64} className="opacity-20" />
+              <p className="font-bold">Select a colleague from the directory to start sharing</p>
             </div>
-          </div>
-
-          <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-100 flex gap-3 items-start">
-            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] font-medium text-amber-800 leading-relaxed">
-              Never share your remote credentials with anyone outside of authorized Virtual Staffing IT Administration.
-            </p>
-          </div>
+          )}
         </div>
-
       </div>
     </div>
   );
