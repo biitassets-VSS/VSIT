@@ -75,7 +75,7 @@
     ],
     "win": {
       "target": "nsis",
-      "requestedExecutionLevel": "requireAdministrator",
+      "requestedExecutionLevel": "asInvoker",
       "cscLink": "vsit-cert.pfx",
       "cscKeyPassword": "VSITsecure123"
     },
