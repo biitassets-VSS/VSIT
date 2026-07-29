@@ -172,22 +172,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       if (electronAPI && electronAPI.getDesktopSourceId) {
         console.log("⚡ Electron detected! Bypassing getDisplayMedia to prevent hangs.");
         const sourceId = await electronAPI.getDesktopSourceId();
-        console.log("🎯 Desktop Source ID retrieved:", sourceId);
-
         if (!sourceId) throw new Error("Could not detect Windows monitor source ID.");
         
         stream = await (navigator.mediaDevices as any).getUserMedia({ 
           audio: false, 
           video: { 
-            mandatory: { 
-              chromeMediaSource: 'desktop', 
-              chromeMediaSourceId: sourceId 
-            } 
+            mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } 
           } 
         });
-        console.log("✅ stream acquired successfully!");
       } else {
-        console.log("🌐 Browser detected! Using standard getDisplayMedia...");
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       }
 
@@ -199,18 +192,39 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       addSystemAlert("🚀 Stream Secured", "Establishing remote connection...", false);
 
       stream.getVideoTracks()[0].onended = () => {
-        stopScreenSharing();
-        addSystemAlert("Screen Share Stopped", "You have ended live screen sharing.");
+        stopScreenSharing("You have ended live screen sharing.");
       };
 
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
+      // 🌟 WEBRTC DATA CHANNEL RECEIVER FOR ZERO-LATENCY COMMANDS
+      peer.ondatachannel = (event) => {
+        const receiveChannel = event.channel;
+        receiveChannel.onmessage = async (e) => {
+          if (!isControlGrantedRef.current || !electronAPI) return;
+          const cmd = JSON.parse(e.data);
+          
+          switch(cmd.type) {
+            case 'mousemove': electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); break;
+            case 'mousedown': electronAPI.sendMouseDown(cmd.button); break;
+            case 'mouseup': electronAPI.sendMouseUp(cmd.button); break;
+            case 'scroll': electronAPI.sendScroll(cmd.deltaY); break;
+            case 'keydown': electronAPI.sendKeyDown(cmd.key); break;
+            case 'keyup': electronAPI.sendKeyUp(cmd.key); break;
+            case 'sync_clipboard': 
+              const text = await electronAPI.readClipboard();
+              receiveChannel.send(JSON.stringify({ type: 'clipboard_data', text }));
+              break;
+            case 'refresh': window.location.reload(); break;
+          }
+        };
+      };
+
       peer.onconnectionstatechange = () => {
         console.log("📡 Peer Connection State:", peer.connectionState);
         if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          stopScreenSharing();
-          addSystemAlert("🛑 Session Ended", "IT Admin disconnected from the session.");
+          stopScreenSharing("Network or remote peer connection lost.");
         }
       };
 
@@ -229,53 +243,35 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
-        console.log("✅ Received WebRTC Answer from Admin!");
         try {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           setIsConnecting(false);
           setIsStreaming(true);
           addSystemAlert("🟢 Connected", "Live WebRTC Screen Share Established!");
-        } catch (e) {
-          console.error("Failed to parse Admin Answer:", e);
-        }
+        } catch (e) { console.error("Failed to parse Admin Answer:", e); }
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
         if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
-      }).on('broadcast', { event: 'terminate_session' }, () => {
-        stopScreenSharing();
-      }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
-        stopScreenSharing(); 
+      }).on('broadcast', { event: 'terminate_session' }, (payload) => {
+        const reason = payload?.payload?.reason || "Session ended by remote user.";
+        stopScreenSharing(reason);
+      }).on('broadcast', { event: 'admin_stopped_sharing' }, (payload) => {
+        const reason = payload?.payload?.reason || "Admin stopped the session.";
+        stopScreenSharing(reason);
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Admin', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
         setShowChat(true);
-        addSystemAlert("💬 New IT Message", `Admin: ${payload.payload.text}`);
+        addSystemAlert("💬 New Message", `${payload.payload.sender || 'Admin'}: ${payload.payload.text}`);
       }).on('broadcast', { event: 'request_remote_control' }, () => {
         setRemoteControlRequest(true);
         addSystemAlert("⚠️ Control Request", "IT Admin is requesting to control your mouse and keyboard.");
-      }).on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
-        if (!isControlGrantedRef.current) return;
-        const { x, y } = payload.payload;
-        setAdminPing({ x, y, id: Date.now() });
-        setTimeout(() => setAdminPing(null), 2000); 
-        if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendRemoteClick(x, y);
-      }).on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
-        if (!isControlGrantedRef.current) return;
-        if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendRemoteType(payload.payload.text);
-      }).on('broadcast', { event: 'admin_system_command' }, (payload) => {
-        if (!isControlGrantedRef.current) return;
-        if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendSystemCommand(payload.payload.command);
       }).subscribe(async (status) => {
-        
         console.log("📡 New Session Channel Status:", status);
         if (status === 'SUBSCRIBED') {
-          console.log("📤 Generating WebRTC Offer...");
           try {
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
             await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
-            console.log("✅ WebRTC Offer sent to Admin successfully!");
-          } catch (e) {
-            console.error("Failed to generate/send Offer:", e);
-          }
+          } catch (e) { console.error("Failed to generate Offer:", e); }
         }
       });
 
@@ -290,17 +286,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     }
   };
 
-  const stopScreenSharing = () => {
+  // 🌟 BOTH-SIDES DISCONNECT NOTIFIER UPDATE
+  const stopScreenSharing = (reason = "Screen sharing stopped.") => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (channelRef.current) {
-      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
+      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: { reason } });
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+    
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
     setIsControlGranted(false); setRemoteControlRequest(false);
     
+    // Alert the user precisely why it closed
+    addSystemAlert("🛑 Session Disconnected", reason);
     setListenerKey(prev => prev + 1);
   };
 
@@ -317,7 +317,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setIsControlGranted(true);
     setRemoteControlRequest(false);
     if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
-    addSystemAlert("✅ Control Granted", "IT Admin now has full mouse and keyboard access.");
+    addSystemAlert("✅ Control Granted", "Remote user now has full mouse and keyboard access.");
   };
 
   const handleDeclineControl = () => {
@@ -344,7 +344,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
       {/* FLOATING TOASTS */}
-      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
             <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
@@ -363,13 +363,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {isStreaming && (
         <>
           {adminPing && (
-            <div className="fixed z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
+            <div className="fixed z-[99999] pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
               <div className="relative w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(225,29,72,1)]" />
             </div>
           )}
           
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
@@ -380,7 +380,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-slate-900 leading-tight">Remote Control Requested</h3>
-                    <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">IT Admin wants to temporarily control your mouse and keyboard to fix an issue.</p>
+                    <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Remote user wants to temporarily control your mouse and keyboard.</p>
                   </div>
                 </div>
                 <div className="flex gap-2 w-full mt-1">
@@ -419,7 +419,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 <div>
                   <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
                   <p className="text-[10px] text-zinc-300">
-                    {isControlGranted ? 'Admin controls your PC.' : 'IT Support is viewing your workspace.'}
+                    {isControlGranted ? 'Remote control is active.' : 'Support is viewing your workspace.'}
                   </p>
                 </div>
               </div>
@@ -427,7 +427,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer relative ${showChat ? 'bg-slate-700 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'}`}>
                   <MessageSquare size={14} /> <span className="hidden sm:inline">Chat</span>
                 </button>
-                <button onClick={stopScreenSharing} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
+                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
               </div>
             </div>
           </div>
@@ -436,16 +436,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
-              <h3 className="text-xl font-black text-slate-900">Live IT Support Access Requested</h3>
+              <h3 className="text-xl font-black text-slate-900">Live Support Access Requested</h3>
               <p className="text-xs sm:text-sm font-medium text-slate-500"><strong className="text-slate-900 font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
             </div>
             <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-orange-800 flex items-center gap-3">
               <ShieldAlert size={22} className="shrink-0 text-orange-600" />
-              <span>By accepting, IT will be able to view your desktop natively.</span>
+              <span>By accepting, they will be able to view your desktop natively.</span>
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer">Decline</button>
@@ -498,7 +498,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </button>
 
             {isNotifOpen && (
-              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><History size={14} className="text-purple-600"/> Session Alerts History</h3>
                 </div>
