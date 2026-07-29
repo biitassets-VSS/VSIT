@@ -9,7 +9,7 @@ import {
   Loader2, CheckCircle, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut,
   ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert, Check,
-  MessageSquare, Send
+  MessageSquare, Send, History
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -102,7 +102,11 @@ export default function StaffDashboardPage() {
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
   const [reactions, setReactions] = useState<Record<string, 'like' | 'dislike'>>({});
+  
+  // 🌟 NEW: PERSISTENT ALERT HISTORY STATE
   const [toasts, setToasts] = useState<{ id: number, title: string, message: string }[]>([]);
+  const [alertHistory, setAlertHistory] = useState<{ id: number, title: string, message: string, time: string, read: boolean }[]>([]);
+  const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
@@ -135,11 +139,20 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
+  // 🌟 FIX: Updated showToast to keep full history and longer display time
   const showToast = (title: string, message: string) => {
     playAlertSound();
     const id = Date.now();
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Add to floating UI
     setToasts(prev => [...prev, { id, title, message }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 7000); 
+    
+    // Add to persistent History Panel
+    setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
+
+    // Increased timeout to 12 seconds
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000); 
   };
 
   useEffect(() => {
@@ -301,7 +314,6 @@ export default function StaffDashboardPage() {
       .subscribe();
   };
 
-  // 🚀 START WEBRTC SCREEN SHARE (WITH INDESTRUCTIBLE FALLBACK ENGINE)
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
     setIsConnecting(true);
@@ -321,14 +333,11 @@ export default function StaffDashboardPage() {
 
       let stream: MediaStream | null = null;
 
-      // 🛡️ INDESTRUCTIBLE 2-LAYER CAPTURE ENGINE 🛡️
       try {
-        // Attempt 1: Standard Modern Browser API (Triggers Electron Handler)
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       } catch (err1: any) {
         console.warn("Primary capture failed, attempting Electron native hook...", err1);
         try {
-          // Attempt 2: Electron Legacy Native Hook (Bypasses unreadable monitor indexes)
           let sourceId = null;
           if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
             sourceId = await (window as any).electronAPI.getDesktopSourceId();
@@ -339,7 +348,7 @@ export default function StaffDashboardPage() {
             audio: false
           });
         } catch (err2: any) {
-          throw new Error("Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'.");
+          throw new Error("Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'. Then try again.");
         }
       }
 
@@ -489,7 +498,6 @@ export default function StaffDashboardPage() {
     setChatInput('');
   };
 
-  // 🌟 FIX: Split out the initial data load from the real-time subscriptions
   useEffect(() => {
     loadRealDatabase();
     
@@ -502,10 +510,9 @@ export default function StaffDashboardPage() {
       });
       stopScreenSharing();
     };
-  }, []); // <-- Empty array: Runs ONLY ONCE on mount
+  }, []);
 
   useEffect(() => {
-    // Only subscribe to changes if we have a valid logged-in user
     if (!currentUser || currentUser.id === 'guest-mock-uuid' || !currentUser.id) return;
 
     const realtimeChannel = supabase.channel('staff-dashboard-changes')
@@ -539,7 +546,7 @@ export default function StaffDashboardPage() {
     return () => { 
       supabase.removeChannel(realtimeChannel); 
     };
-  }, [currentUser.id]); // <-- Re-runs ONLY if the user ID changes
+  }, [currentUser.id]);
 
   const markNotificationAsRead = async (notifId: string, targetUser?: string | null) => {
     setNotifications(prev => prev.filter(n => n.id !== notifId));
@@ -650,23 +657,77 @@ export default function StaffDashboardPage() {
     return s.includes('screen') || s.includes('remote') || s.includes('share');
   });
 
+  const unreadAlertsCount = alertHistory.filter(a => !a.read).length;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
-      <div className="fixed top-24 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      
+      {/* 🌟 NEW: SESSION ALERTS HISTORY MODAL */}
+      {isAlertsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex justify-end">
+          <div className="bg-white w-full max-w-sm h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-black text-slate-800 flex items-center gap-2">
+                <History size={18} className="text-purple-600"/> Session Alerts History
+              </h3>
+              <button 
+                onClick={() => {
+                  setAlertHistory(prev => prev.map(a => ({...a, read: true})));
+                  setIsAlertsModalOpen(false);
+                }} 
+                className="p-2 hover:bg-slate-200 text-slate-500 rounded-full transition-colors"
+              >
+                <X size={18}/>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
+              {alertHistory.length === 0 ? (
+                <div className="text-center text-slate-400 mt-10 flex flex-col items-center">
+                  <Bell size={32} className="opacity-20 mb-2"/>
+                  <p className="text-xs font-bold uppercase tracking-wider">No alerts in this session</p>
+                </div>
+              ) : (
+                alertHistory.map(alert => {
+                  const isError = alert.title.toLowerCase().includes('error') || alert.title.toLowerCase().includes('cancel') || alert.title.toLowerCase().includes('fail');
+                  return (
+                    <div key={alert.id} className={`p-4 rounded-2xl border shadow-sm ${isError ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'}`}>
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className={`font-bold text-sm ${isError ? 'text-rose-700' : 'text-slate-800'}`}>{alert.title}</h4>
+                        <span className="text-[10px] text-slate-400 font-bold bg-white px-2 py-0.5 rounded-md border border-slate-100">{alert.time}</span>
+                      </div>
+                      <p className={`text-xs mt-2 break-words leading-relaxed ${isError ? 'text-rose-600 font-medium' : 'text-slate-600'}`}>{alert.message}</p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING TOASTS OVERLAY */}
+      <div className="fixed top-24 right-6 z-[9999] flex flex-col gap-3 pointer-events-none w-80 sm:w-96">
         {toasts.map(t => (
-          <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 w-80 sm:w-96 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
+          <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0"><Bell size={18} className="animate-pulse" /></div>
-            <div className="flex-1 pt-0.5"><h4 className="font-bold text-sm text-slate-900 leading-tight">{t.title}</h4><p className="text-xs text-slate-500 mt-1 line-clamp-2">{t.message}</p></div>
-            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:text-slate-600 shrink-0 p-1"><X size={16}/></button>
+            <div className="flex-1 pt-0.5 min-w-0">
+              <h4 className="font-bold text-sm text-slate-900 leading-tight truncate">{t.title}</h4>
+              {/* 🌟 FIX: Removed line-clamp-2 and added break-words to ensure full text visibility */}
+              <p className="text-xs font-medium text-slate-600 mt-1.5 break-words leading-relaxed">{t.message}</p>
+            </div>
+            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg shrink-0 transition-colors"><X size={16}/></button>
           </div>
         ))}
       </div>
 
+      {/* 🔴 ACTIVE STREAMING FLOATING CONTROLS & CHAT WIDGET */}
       {isStreaming && (
         <>
+          {/* 🎯 Admin Laser Pointer Overlay */}
           {adminPing && (
             <div 
-              className="fixed z-99999 pointer-events-none flex items-center justify-center"
+              className="fixed z-[99999] pointer-events-none flex items-center justify-center"
               style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}
             >
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
@@ -674,7 +735,8 @@ export default function StaffDashboardPage() {
             </div>
           )}
 
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          {/* 💬 Bottom Right Session Controls (Chat + Stop) */}
+          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {showChat && (
               <div className="w-80 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-200 overflow-hidden flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4">
@@ -736,8 +798,9 @@ export default function StaffDashboardPage() {
         </>
       )}
 
+      {/* ⚠️ INTERACTIVE INCOMING SCREEN SHARE REQUEST POPUP MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce">
               <Monitor size={32} />
@@ -789,6 +852,19 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
+            {/* 🌟 FIX: Added the Bell button to trigger the Session Alerts History Modal */}
+            <button 
+              onClick={() => setIsAlertsModalOpen(true)} 
+              className="relative p-2.5 bg-white border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+              title="View Session Alerts History"
+            >
+              <Bell size={18} className="text-slate-700" />
+              {unreadAlertsCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">
+                  {unreadAlertsCount}
+                </span>
+              )}
+            </button>
             <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer"><RefreshCw size={14}/> Sync Feeds</button>
           </div>
         </div>
@@ -1141,7 +1217,7 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-9999 flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
