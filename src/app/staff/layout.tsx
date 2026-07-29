@@ -62,11 +62,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [showChat, setShowChat] = useState(false);
   const [adminPing, setAdminPing] = useState<{x: number, y: number, id: number} | null>(null);
 
-  // 🌟 NEW: Remote Control Request State
   const [remoteControlRequest, setRemoteControlRequest] = useState(false);
   const [isControlGranted, setIsControlGranted] = useState(false);
   
-  // Ref to hold the latest control status for the WebRTC event listeners (prevents stale state)
   const isControlGrantedRef = useRef(false);
   useEffect(() => {
     isControlGrantedRef.current = isControlGranted;
@@ -230,23 +228,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         setShowChat(true);
         addSystemAlert("💬 New IT Message", `Admin: ${payload.payload.text}`);
       })
-      // 🌟 NEW: Listen for Remote Control Request from Admin
       .on('broadcast', { event: 'request_remote_control' }, () => {
         setRemoteControlRequest(true);
         addSystemAlert("⚠️ Control Request", "IT Admin is requesting to control your mouse and keyboard.");
       })
-      // 🌟 UPDATED: Gate hardware inputs behind isControlGrantedRef
       .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
-        if (!isControlGrantedRef.current) return; // Block input if not granted
+        if (!isControlGrantedRef.current) return;
         const { x, y } = payload.payload;
         setAdminPing({ x, y, id: Date.now() });
         setTimeout(() => setAdminPing(null), 2000); 
         if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendRemoteClick(x, y);
       }).on('broadcast', { event: 'admin_keyboard_input' }, (payload) => {
-        if (!isControlGrantedRef.current) return; // Block input if not granted
+        if (!isControlGrantedRef.current) return;
         if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendRemoteType(payload.payload.text);
       }).on('broadcast', { event: 'admin_system_command' }, (payload) => {
-        if (!isControlGrantedRef.current) return; // Block input if not granted
+        if (!isControlGrantedRef.current) return;
         if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendSystemCommand(payload.payload.command);
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -290,7 +286,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 NEW: Functions to handle Control Request
   const handleAcceptControl = () => {
     setIsControlGranted(true);
     setRemoteControlRequest(false);
@@ -319,6 +314,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
     </div>
   );
+
+  const unreadCount = alertHistory.filter(a => !a.read).length;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
@@ -351,7 +348,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           
           <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
-            {/* 🌟 NEW: REMOTE CONTROL APPROVAL MODAL */}
+            {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
               <div className="bg-white border-2 border-purple-500 p-5 rounded-3xl shadow-2xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto">
                 <div className="flex items-start gap-3">
@@ -438,7 +435,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* SIDEBAR & HEADER CODE (Unchanged) */}
+      {/* SIDEBAR */}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-200/70 z-50 flex flex-col transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.02)] ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="h-16 flex items-center px-5 border-b border-slate-100 shrink-0"><img src="/logo.png" alt="Logo" className="h-7 w-auto" /></div>
         <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto custom-scrollbar">
@@ -465,10 +462,47 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F8FAFC]">
+        {/* 🌟 RESTORED HEADER WITH NOTIFICATION BELL */}
         <header className="h-16 bg-white border-b border-slate-200/70 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3">
             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 lg:hidden rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"><Menu size={20} /></button>
             <h2 className="text-sm lg:text-base font-bold text-slate-800 tracking-tight hidden sm:block">Virtual Staffing Solutions | Staff Dashboard</h2>
+          </div>
+
+          <div className="relative">
+            <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className="relative p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm cursor-pointer" title="Session Alerts History">
+              <Bell size={18} />
+              {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">{unreadCount}</span>}
+            </button>
+
+            {isNotifOpen && (
+              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><History size={14} className="text-purple-600"/> Session Alerts History</h3>
+                </div>
+                <div className="max-h-100 overflow-y-auto custom-scrollbar bg-white">
+                  {alertHistory.length === 0 ? (
+                    <div className="px-4 py-10 text-center text-slate-400 flex flex-col items-center gap-2"><Bell size={24} className="opacity-20" /><span className="text-xs font-medium">No alerts recorded yet.</span></div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {alertHistory.map((notif) => {
+                        const isError = (notif.title || '').toLowerCase().includes('error') || (notif.title || '').toLowerCase().includes('cancel') || (notif.title || '').toLowerCase().includes('fail');
+                        return (
+                          <div key={notif.id} className={`p-4 hover:bg-slate-50 transition-colors group relative flex gap-3 ${isError ? 'bg-rose-50/30' : ''}`}>
+                            <div className={`mt-0.5 shrink-0 ${isError ? 'text-rose-500' : 'text-orange-500'}`}><AlertTriangle size={16} /></div>
+                            <div className="flex-1 pr-6 min-w-0">
+                              <div className="flex justify-between items-start mb-0.5"><p className={`text-xs font-bold truncate ${isError ? 'text-rose-700' : 'text-slate-900'}`}>{notif.title}</p><span className="text-[9px] font-bold text-slate-400">{notif.time}</span></div>
+                              <p className={`text-[11px] mt-1.5 leading-relaxed wrap-break-word ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>{notif.message}</p>
+                            </div>
+                            <button onClick={() => dismissHistoryAlert(notif.id)} className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-100 rounded-md shadow-sm" title="Delete from History"><X size={12} /></button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
