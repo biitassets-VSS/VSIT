@@ -7,9 +7,13 @@ const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 // 🌟 FIX 1: Keep Hardware Acceleration disabled for hybrid GPUs
 app.disableHardwareAcceleration();
 
-// 🌟 FIX 2: We REMOVED 'enable-usermedia-screen-capturing' 
-// (Electron docs state this flag conflicts with getDisplayMedia and causes NotReadableError)
+// 🌟 FIX 2: CRITICAL FLAG RESTORED! 
+// This is strictly required for the native 'getUserMedia' bypass to work!
+app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
+
 app.commandLine.appendSwitch('allow-http-screen-capture');
+app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
+app.commandLine.appendSwitch('enable-media-stream');
 
 let mainWindow;
 
@@ -74,6 +78,7 @@ ipcMain.handle('get-desktop-source-id', async () => {
     return null;
   }
 });
+
 // -------------------------------------------------------------
 // 🎮 OS CONTROL LISTENERS
 // -------------------------------------------------------------

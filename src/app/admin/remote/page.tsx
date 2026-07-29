@@ -200,7 +200,6 @@ export default function AdminRemotePage() {
         });
 
         setStaffList(enhancedStaff);
-        // NOTE: Auto-select logic has been completely removed so it starts empty.
       }
     } catch (error: any) {
       toast.error(`Failed to load network core: ${error.message}`);
@@ -232,6 +231,10 @@ export default function AdminRemotePage() {
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
+      // 🌟 FIX 1: Explicitly force WebRTC to expect incoming video
+      // This prevents 'createAnswer' from failing when the Admin hasn't provided their own camera feed.
+      peer.addTransceiver('video', { direction: 'recvonly' });
+
       peer.ontrack = (event) => {
         if (videoRef.current && event.streams[0]) {
           videoRef.current.srcObject = event.streams[0];
@@ -251,12 +254,18 @@ export default function AdminRemotePage() {
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
-        toast("⚡ Received SDP Offer from Staff... Generating Answer", { icon: '🔄', duration: 4000 });
-        await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
-        toast("📤 Transmitted SDP Answer to Staff!", { icon: '📡', duration: 3000 });
+        // 🌟 FIX 2: Wrapped in try/catch so silent crashes will now appear as Toast errors
+        try {
+          toast("⚡ Received SDP Offer from Staff... Generating Answer", { icon: '🔄', duration: 4000 });
+          await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
+          toast("📤 Transmitted SDP Answer to Staff!", { icon: '📡', duration: 3000 });
+        } catch (rtcError: any) {
+          toast.error(`WebRTC Handshake Crash: ${rtcError.message || rtcError.name}`);
+          console.error("SDP Answer Error:", rtcError);
+        }
       }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
         if (peer.remoteDescription && payload.payload?.candidate) {
           await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
@@ -396,10 +405,9 @@ export default function AdminRemotePage() {
     setChatInput('');
   };
 
-  // 🌟 PURE SEARCH FILTER LOGIC (No default rendering)
   const filteredStaff = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return []; // Returns nothing until the admin searches
+    if (!q) return []; 
 
     return staffList.filter(s => {
       return (s.full_name || s.name || '').toLowerCase().includes(q) || 
