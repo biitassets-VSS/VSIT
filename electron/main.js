@@ -4,14 +4,12 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 FIX FOR WINDOWS GPU CAPTURE BLOCK (NotReadableError)
+// 🌟 FIX 1: Keep Hardware Acceleration disabled for hybrid GPUs
 app.disableHardwareAcceleration();
 
-// 🌟 MAGIC SWITCHES TO FORCE WEBRTC & SCREEN CAPTURE IN WINDOWS
-app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
+// 🌟 FIX 2: We REMOVED 'enable-usermedia-screen-capturing' 
+// (Electron docs state this flag conflicts with getDisplayMedia and causes NotReadableError)
 app.commandLine.appendSwitch('allow-http-screen-capture');
-app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
-app.commandLine.appendSwitch('enable-media-stream');
 
 let mainWindow;
 
@@ -56,17 +54,26 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-// 🌟 HARDWARE ID HOOK
+// 🌟 HARDWARE ID HOOK (TESTING WINDOW CAPTURE INSTEAD OF SCREEN)
 ipcMain.handle('get-desktop-source-id', async () => {
   try {
-    const sources = await desktopCapturer.getSources({ types: ['screen'] });
+    // We changed 'screen' to 'window' here to bypass full-desktop OS blocks
+    const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+    
+    // Find the first actual application window (not a background process)
+    const validWindow = sources.find(s => s.id.startsWith('window') && s.name !== 'Virtual Staffing Portal');
+    
+    if (validWindow) {
+      console.log("Returning Window ID instead of Screen ID:", validWindow.id);
+      return validWindow.id;
+    }
+    
     return sources.length > 0 ? sources[0].id : null;
   } catch (e) {
     console.error("Source ID fetch failed:", e);
     return null;
   }
 });
-
 // -------------------------------------------------------------
 // 🎮 OS CONTROL LISTENERS
 // -------------------------------------------------------------
