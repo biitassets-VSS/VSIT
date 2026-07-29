@@ -7,6 +7,9 @@ import toast from 'react-hot-toast';
 
 export default function RemoteSupportPage() {
   const [staffInfo, setStaffInfo] = useState({ emp_id: '...', assigned_pc: 'Loading...' });
+  
+  // 🌟 NEW: State to hold actual remote credentials from DB
+  const [remoteCreds, setRemoteCreds] = useState({ id: 'Not Assigned', pin: '••••••••' });
 
   useEffect(() => {
     const fetchInfo = async () => {
@@ -20,26 +23,43 @@ export default function RemoteSupportPage() {
       const { data: profile } = await supabase.from('profiles').select('emp_code, id').ilike('email', email).single();
       
       let pcName = 'Not Assigned';
+      let rId = 'Not Assigned';
+      let rPin = 'No Password Set';
+
       if (profile) {
-        const { data: assets } = await supabase.from('assets').select('name').eq('assigned_to', profile.id).single();
-        if (assets) pcName = assets.name;
+        // 🌟 FIX: Removed .single() so it doesn't crash if they have multiple assets!
+        const { data: assets } = await supabase.from('assets').select('*').eq('assigned_to', profile.id);
+        
+        if (assets && assets.length > 0) {
+          // Try to find the laptop/desktop first
+          const mainPc = assets.find(a => (a.category || '').toLowerCase().includes('laptop') || (a.category || '').toLowerCase().includes('desktop')) || assets[0];
+          pcName = mainPc.name || mainPc.model || mainPc.asset_tag || 'Generic Workstation';
+          
+          // If you add these columns to Supabase, it will pull them automatically
+          if (mainPc.remote_id) rId = mainPc.remote_id;
+          if (mainPc.remote_pin) rPin = mainPc.remote_pin;
+        }
       }
 
       setStaffInfo({
         emp_id: profile?.emp_code || 'EMP-UNKNOWN',
         assigned_pc: pcName
       });
+      setRemoteCreds({ id: rId, pin: rPin });
     };
     fetchInfo();
   }, []);
 
   const copyToClipboard = (text: string, label: string) => {
+    if (text === 'Not Assigned' || text === 'No Password Set' || text === '••••••••') {
+      toast.error(`No ${label} available to copy.`);
+      return;
+    }
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard!`);
   };
 
   const handleManualShareRequest = () => {
-    // 🌟 TRIGGER THE GLOBAL ENGINE FROM layout.tsx
     if (typeof window !== 'undefined' && (window as any).triggerGlobalScreenShare) {
       (window as any).triggerGlobalScreenShare();
     } else {
@@ -71,7 +91,7 @@ export default function RemoteSupportPage() {
         
         {/* NATIVE WEBRTC CONNECTION PANEL */}
         <div className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col relative overflow-hidden shadow-sm">
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-400 to-orange-600" />
+          <div className="absolute top-0 inset-x-0 h-1 bg-linear-to-r from-orange-400 to-orange-600" />
           
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 mb-6">
             <Monitor size={16} className="text-orange-500"/> Native WebRTC Connection
@@ -84,7 +104,6 @@ export default function RemoteSupportPage() {
               <p className="text-xs font-medium text-slate-500">ID: {staffInfo.emp_id}</p>
             </div>
 
-            {/* 🌟 WIRED BUTTON */}
             <button 
               onClick={handleManualShareRequest}
               className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-95"
@@ -118,10 +137,10 @@ export default function RemoteSupportPage() {
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">RustDesk / AnyDesk ID</p>
-                <p className="text-base font-black text-slate-800 font-mono tracking-wider">Not Assigned</p>
+                <p className="text-base font-black text-slate-800 font-mono tracking-wider">{remoteCreds.id}</p>
               </div>
               <button 
-                onClick={() => copyToClipboard('Not Assigned', 'Remote ID')}
+                onClick={() => copyToClipboard(remoteCreds.id, 'Remote ID')}
                 className="w-full py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Copy size={12}/> Copy ID
@@ -131,10 +150,10 @@ export default function RemoteSupportPage() {
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Access PIN / Password</p>
-                <p className="text-base font-black text-slate-800 font-mono tracking-wider">••••••••</p>
+                <p className="text-base font-black text-slate-800 font-mono tracking-wider">{remoteCreds.pin === 'No Password Set' ? 'No Password Set' : '••••••••'}</p>
               </div>
               <button 
-                onClick={() => copyToClipboard('No Password Set', 'Access PIN')}
+                onClick={() => copyToClipboard(remoteCreds.pin, 'Access PIN')}
                 className="w-full py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Copy size={12}/> Copy PIN
