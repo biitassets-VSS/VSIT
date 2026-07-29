@@ -166,14 +166,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
 
       if (electronAPI && electronAPI.getDesktopSourceId) {
-        // 🌟 FORCE ELECTRON NATIVE BYPASS (Prevents getDisplayMedia from hanging forever)
         console.log("⚡ Electron detected! Bypassing getDisplayMedia to prevent hangs.");
         const sourceId = await electronAPI.getDesktopSourceId();
         console.log("🎯 Desktop Source ID retrieved:", sourceId);
 
         if (!sourceId) throw new Error("Could not detect Windows monitor source ID.");
         
-        console.log("🎥 Requesting native getUserMedia with hardware constraints...");
         stream = await (navigator.mediaDevices as any).getUserMedia({ 
           audio: false, 
           video: { 
@@ -185,16 +183,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         });
         console.log("✅ stream acquired successfully!");
       } else {
-        // 🌐 STANDARD WEB BROWSER FALLBACK
         console.log("🌐 Browser detected! Using standard getDisplayMedia...");
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        console.log("✅ getDisplayMedia success!");
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
       streamRef.current = stream;
 
-      // Only close the incoming request modal AFTER stream is secured so it doesn't get stuck
       setIncomingRequest(null);
       setChatMessages([]);
       addSystemAlert("🚀 Stream Secured", "Establishing remote connection...", false);
@@ -208,6 +203,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       peerRef.current = peer;
 
       peer.onconnectionstatechange = () => {
+        console.log("📡 Peer Connection State:", peer.connectionState);
         if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
           stopScreenSharing();
           addSystemAlert("🛑 Session Ended", "IT Admin disconnected from the session.");
@@ -215,6 +211,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       };
 
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
+
+      // 🌟 FIX 1: FORCEFULLY CLEAN UP EXISTING SUPABASE CHANNELS
+      // If we don't do this, the .subscribe() callback below will never fire!
+      console.log("🧹 Destroying old Supabase background listeners...");
+      supabase.getChannels().forEach(ch => {
+        if (ch.topic === targetChannelId) supabase.removeChannel(ch);
+      });
 
       const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
       channelRef.current = sessionChannel;
@@ -224,11 +227,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
-        if (peer.signalingState === 'have-local-offer') {
+        console.log("✅ Received WebRTC Answer from Admin!");
+        try {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           setIsConnecting(false);
           setIsStreaming(true);
           addSystemAlert("🟢 Connected", "Live WebRTC Screen Share Established!");
+        } catch (e) {
+          console.error("Failed to parse Admin Answer:", e);
         }
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
         if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
@@ -240,12 +246,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Admin', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
         setShowChat(true);
         addSystemAlert("💬 New IT Message", `Admin: ${payload.payload.text}`);
-      })
-      .on('broadcast', { event: 'request_remote_control' }, () => {
+      }).on('broadcast', { event: 'request_remote_control' }, () => {
         setRemoteControlRequest(true);
         addSystemAlert("⚠️ Control Request", "IT Admin is requesting to control your mouse and keyboard.");
-      })
-      .on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
+      }).on('broadcast', { event: 'admin_pointer_click' }, (payload) => {
         if (!isControlGrantedRef.current) return;
         const { x, y } = payload.payload;
         setAdminPing({ x, y, id: Date.now() });
@@ -258,23 +262,29 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         if (!isControlGrantedRef.current) return;
         if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendSystemCommand(payload.payload.command);
       }).subscribe(async (status) => {
+        
+        // 🌟 FIX 2: THIS IS WHERE IT WAS FAILING BEFORE!
+        console.log("📡 New Session Channel Status:", status);
         if (status === 'SUBSCRIBED') {
-          const offer = await peer.createOffer();
-          await peer.setLocalDescription(offer);
-          await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+          console.log("📤 Generating WebRTC Offer...");
+          try {
+            const offer = await peer.createOffer();
+            await peer.setLocalDescription(offer);
+            await sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
+            console.log("✅ WebRTC Offer sent to Admin successfully!");
+          } catch (e) {
+            console.error("Failed to generate/send Offer:", e);
+          }
         }
       });
 
     } catch (err: any) {
       console.error("🔥 FINAL CRASH REASON:", err);
       let errorMessage = err.message || err.name || 'Permission denied';
-      if (errorMessage.includes('Could not start video source')) {
-        errorMessage = "Hardware Blocked: Windows or your Browser refused to start the video feed.";
-      }
       addSystemAlert("❌ Connection Failed", errorMessage);
       setIsConnecting(false);
       setIsStreaming(false);
-      setIncomingRequest(null); // Ensure modal closes on error
+      setIncomingRequest(null);
       setListenerKey(prev => prev + 1);
     }
   };
@@ -289,6 +299,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
     setIsControlGranted(false); setRemoteControlRequest(false);
+    
+    // 🌟 FIX 3: Reboots the background listener correctly!
     setListenerKey(prev => prev + 1);
   };
 
@@ -304,17 +316,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const handleAcceptControl = () => {
     setIsControlGranted(true);
     setRemoteControlRequest(false);
-    if (channelRef.current) {
-      channelRef.current.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
-    }
+    if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
     addSystemAlert("✅ Control Granted", "IT Admin now has full mouse and keyboard access.");
   };
 
   const handleDeclineControl = () => {
     setRemoteControlRequest(false);
-    if (channelRef.current) {
-      channelRef.current.send({ type: 'broadcast', event: 'control_rejected', payload: {} });
-    }
+    if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'control_rejected', payload: {} });
     addSystemAlert("❌ Control Declined", "You denied the remote control request.");
   };
 
@@ -437,7 +445,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </div>
             <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-orange-800 flex items-center gap-3">
               <ShieldAlert size={22} className="shrink-0 text-orange-600" />
-              <span>Select <strong className="underline">"Entire Screen"</strong> when prompted.</span>
+              <span>By accepting, IT will be able to view your desktop natively.</span>
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer">Decline</button>
