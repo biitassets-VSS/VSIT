@@ -186,6 +186,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatMessages([]);
 
     try {
+      // 🌟 FIX 1: FORCE-KILL ORPHANED STREAMS FIRST
+      // This prevents the "Could not start video source" locked-device error.
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+
       supabase.getChannels().forEach(ch => {
         if (ch.topic.includes('webrtc_signaling_') || ch.topic.includes('vsit_rtc_')) supabase.removeChannel(ch);
       });
@@ -197,23 +204,31 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
         
         if (electronAPI && electronAPI.getDesktopSourceId) {
-          try {
-            const sourceId = await electronAPI.getDesktopSourceId();
-            if (!sourceId) throw new Error("Could not detect monitor ID in App.");
-            
-            stream = await (navigator.mediaDevices as any).getUserMedia({ 
-              audio: false, 
-              video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
-            });
-          } catch (electronErr) {
-            console.warn("Electron native hook failed, falling back to Browser API...", electronErr);
-            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-          }
+          const sourceId = await electronAPI.getDesktopSourceId();
+          if (!sourceId) throw new Error("Could not detect monitor ID.");
+          
+          // Electron Capture (Legacy constraints)
+          stream = await (navigator.mediaDevices as any).getUserMedia({ 
+            audio: false, 
+            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
+          });
         } else {
+          // Standard Browser Capture
           stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         }
-      } catch (captureError: any) {
-        throw new Error(`Action Cancelled or Permission Denied. Detail: ${captureError.message || captureError.name}`);
+      } catch (err1: any) {
+        console.warn("Primary capture failed, engaging ultimate fallback...", err1);
+        
+        // 🌟 FIX 2: THE ULTIMATE FALLBACK
+        // If Electron fails because of OS strictness, instantly fall back to generic getDisplayMedia
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({ 
+            video: { displaySurface: "monitor" } as any, 
+            audio: false 
+          });
+        } catch (err2: any) {
+          throw new Error(`Permission Denied or App Restricted. [Err1: ${err1.message}] [Err2: ${err2.message}]`);
+        }
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
