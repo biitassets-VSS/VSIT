@@ -223,16 +223,19 @@ export default function AdminRemotePage() {
     setChatMessages([]);
 
     try {
-      const targetChannelId = getChannelTopic(activeSession);
+      const backgroundChannelId = getChannelTopic(activeSession);
+      
+      // 🌟 NEW ARCHITECTURE: Create a totally unique channel just for this video session!
+      const liveSessionId = `${backgroundChannelId}_live_${Date.now()}`;
+      
       if (channelRef.current) supabase.removeChannel(channelRef.current);
 
-      toast(`📡 Establishing connection on topic: [${targetChannelId}]`, { icon: '🔍', duration: 4000 });
+      toast(`📡 Establishing video session on: [${liveSessionId}]`, { icon: '🔍', duration: 4000 });
 
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
-      // 🌟 FIX 1: Explicitly force WebRTC to expect incoming video
-      // This prevents 'createAnswer' from failing when the Admin hasn't provided their own camera feed.
+      // Force WebRTC to expect incoming video
       peer.addTransceiver('video', { direction: 'recvonly' });
 
       peer.ontrack = (event) => {
@@ -244,7 +247,8 @@ export default function AdminRemotePage() {
         }
       };
 
-      const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
+      // 🌟 Connect to the NEW unique video channel
+      const sessionChannel = supabase.channel(liveSessionId, { config: { broadcast: { self: false, ack: true } } });
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
@@ -254,7 +258,6 @@ export default function AdminRemotePage() {
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
-        // 🌟 FIX 2: Wrapped in try/catch so silent crashes will now appear as Toast errors
         try {
           toast("⚡ Received SDP Offer from Staff... Generating Answer", { icon: '🔄', duration: 4000 });
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
@@ -282,13 +285,21 @@ export default function AdminRemotePage() {
         }]);
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await sessionChannel.send({
-            type: 'broadcast',
-            event: 'request_screen_share',
-            payload: {
-              adminName: adminProfile.name,
-              adminCode: adminProfile.emp_code,
-              channelId: targetChannelId
+          
+          // 🌟 ONCE ADMIN IS LISTENING TO THE VIDEO CHANNEL, PING STAFF ON THE BACKGROUND CHANNEL TO JOIN!
+          const pingChannel = supabase.channel(backgroundChannelId);
+          pingChannel.subscribe(async (pingStatus) => {
+            if (pingStatus === 'SUBSCRIBED') {
+              await pingChannel.send({
+                type: 'broadcast',
+                event: 'request_screen_share',
+                payload: {
+                  adminName: adminProfile.name,
+                  adminCode: adminProfile.emp_code,
+                  channelId: liveSessionId // 🌟 This tells Staff exactly where to send the video!
+                }
+              });
+              supabase.removeChannel(pingChannel); // Hang up the ping channel
             }
           });
 

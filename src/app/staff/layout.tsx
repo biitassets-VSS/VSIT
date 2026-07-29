@@ -134,7 +134,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     const handlePing = (payload: any, channelUsed: string) => {
       setIncomingRequest((prev: any) => {
         if (!prev) addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click Accept on your dashboard.");
-        return { adminName: payload.payload?.adminName || 'IT Administrator', adminCode: payload.payload?.adminCode || 'EMP-ADMIN', channelId: channelUsed };
+        return { 
+          adminName: payload.payload?.adminName || 'IT Administrator', 
+          adminCode: payload.payload?.adminCode || 'EMP-ADMIN', 
+          channelId: payload.payload?.channelId || channelUsed 
+        };
       });
     };
 
@@ -212,8 +216,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
 
-      // 🌟 FIX 1: FORCEFULLY CLEAN UP EXISTING SUPABASE CHANNELS
-      // If we don't do this, the .subscribe() callback below will never fire!
       console.log("🧹 Destroying old Supabase background listeners...");
       supabase.getChannels().forEach(ch => {
         if (ch.topic === targetChannelId) supabase.removeChannel(ch);
@@ -263,7 +265,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         if (typeof window !== 'undefined' && (window as any).electronAPI) (window as any).electronAPI.sendSystemCommand(payload.payload.command);
       }).subscribe(async (status) => {
         
-        // 🌟 FIX 2: THIS IS WHERE IT WAS FAILING BEFORE!
         console.log("📡 New Session Channel Status:", status);
         if (status === 'SUBSCRIBED') {
           console.log("📤 Generating WebRTC Offer...");
@@ -300,7 +301,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
     setIsControlGranted(false); setRemoteControlRequest(false);
     
-    // 🌟 FIX 3: Reboots the background listener correctly!
     setListenerKey(prev => prev + 1);
   };
 

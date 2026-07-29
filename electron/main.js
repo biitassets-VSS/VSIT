@@ -4,8 +4,6 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 FIX 1: Keep Hardware Acceleration disabled for hybrid GPUs
-app.disableHardwareAcceleration();
 
 // 🌟 FIX 2: CRITICAL FLAG RESTORED! 
 // This is strictly required for the native 'getUserMedia' bypass to work!
