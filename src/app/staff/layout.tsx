@@ -93,30 +93,34 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
     // Fetch initial missed notifications
     const fetchMissedNotifications = async () => {
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('is_read', false)
-        .order('created_at', { ascending: false });
-      
-      if (data) {
-        const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
-        const validNotifs = data.filter(n => {
-          if (dismissed.includes(n.id)) return false;
-          const target = String(n.target_user || '').trim().toLowerCase();
-          const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
-          const isPersonal = target === String(staffProfile.id).toLowerCase() || target === staffProfile.email.toLowerCase();
-          return isGlobal || isPersonal;
-        });
+      try {
+        const { data } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('is_read', false)
+          .order('created_at', { ascending: false });
+        
+        if (data) {
+          const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+          const validNotifs = data.filter(n => {
+            if (dismissed.includes(n.id)) return false;
+            const target = String(n.target_user || '').trim().toLowerCase();
+            const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+            const isPersonal = target === String(staffProfile.id).toLowerCase() || target === staffProfile.email.toLowerCase();
+            return isGlobal || isPersonal;
+          });
 
-        const historyRecords = validNotifs.map(n => ({
-          id: n.id,
-          title: n.title || 'System Alert',
-          message: n.message,
-          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: false
-        }));
-        setAlertHistory(historyRecords);
+          const historyRecords = validNotifs.map(n => ({
+            id: n.id,
+            title: n.title || 'System Alert',
+            message: n.message,
+            time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            read: false
+          }));
+          setAlertHistory(historyRecords);
+        }
+      } catch (err) {
+        console.warn("Error fetching notifications:", err);
       }
     };
     
@@ -178,13 +182,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); 
     }
 
-    // Delete/Update in Supabase
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id).catch(() => {});
-    await supabase.from('notifications').delete().eq('id', id).catch(() => {});
+    // Delete/Update in Supabase with standard try/catch to satisfy TypeScript
+    try {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      await supabase.from('notifications').delete().eq('id', id);
+    } catch (e) {
+      console.warn("Could not dismiss history alert", e);
+    }
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut().catch(() => {});
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("Logout warning:", e);
+    }
     localStorage.clear();
     window.location.href = '/';
   };
@@ -315,11 +327,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
 
           <div className="relative">
-            {/* 🌟 THE UNIFIED HEADER BELL */}
+            {/* 🌟 THE SINGLE, UNIFIED HEADER BELL */}
             <button 
               onClick={toggleNotifDropdown}
               className="relative p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm cursor-pointer"
-              title="Session Alerts History"
+              title="Notifications"
             >
               <Bell size={18} />
               {unreadCount > 0 && (
@@ -334,15 +346,20 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                    <History size={14} className="text-purple-600"/> Session Alerts History
+                    <History size={14} className="text-purple-600"/> Session Alerts
                   </h3>
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md border border-orange-200">
+                      {unreadCount} New
+                    </span>
+                  )}
                 </div>
                 
                 <div className="max-h-[400px] overflow-y-auto custom-scrollbar bg-white">
                   {alertHistory.length === 0 ? (
                     <div className="px-4 py-10 text-center text-slate-400 flex flex-col items-center gap-2">
                       <Bell size={24} className="opacity-20" />
-                      <span className="text-xs font-medium">No alerts recorded yet.</span>
+                      <span className="text-xs font-medium">You're all caught up!</span>
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100">
@@ -366,7 +383,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                             <button 
                               onClick={() => dismissHistoryAlert(notif.id)}
                               className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-100 rounded-md shadow-sm"
-                              title="Delete from History"
+                              title="Dismiss"
                             >
                               <X size={12} />
                             </button>
@@ -383,6 +400,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         {/* PAGE CONTENT CONTAINER */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8 relative custom-scrollbar">
+          {/* Constrain max width for better readability on ultrawide monitors */}
           <div className="max-w-7xl mx-auto h-full">
             {children}
           </div>
