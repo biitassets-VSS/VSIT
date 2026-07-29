@@ -9,7 +9,7 @@ import {
   Loader2, CheckCircle, HelpCircle,
   Camera, Lock, Monitor, Bell, LogOut,
   ThumbsUp, ThumbsDown, Star, Radio, StopCircle, ShieldAlert, Check,
-  MessageSquare, Send, History
+  MessageSquare, Send
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -102,10 +102,7 @@ export default function StaffDashboardPage() {
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
   const [reactions, setReactions] = useState<Record<string, 'like' | 'dislike'>>({});
-  
   const [toasts, setToasts] = useState<{ id: number, title: string, message: string }[]>([]);
-  const [alertHistory, setAlertHistory] = useState<{ id: number, title: string, message: string, time: string, read: boolean }[]>([]);
-  const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
@@ -141,11 +138,8 @@ export default function StaffDashboardPage() {
   const showToast = (title: string, message: string) => {
     playAlertSound();
     const id = Date.now();
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
     setToasts(prev => [...prev, { id, title, message }]);
-    setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000); 
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 7000); 
   };
 
   useEffect(() => {
@@ -154,15 +148,6 @@ export default function StaffDashboardPage() {
     }
     const savedReactions = JSON.parse(localStorage.getItem('vsit_reactions') || '{}');
     setReactions(savedReactions);
-  }, []);
-
-  useEffect(() => {
-    const watcher = setInterval(() => {
-      const isGuest = localStorage.getItem('isGuestSession') === 'true';
-      const activeSession = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!activeSession && !isGuest) window.location.replace('/');
-    }, 500);
-    return () => clearInterval(watcher);
   }, []);
 
   const loadRealDatabase = async () => {
@@ -307,6 +292,7 @@ export default function StaffDashboardPage() {
       .subscribe();
   };
 
+  // 🚀 START WEBRTC SCREEN SHARE (WITH SPLIT BROWSER/ELECTRON LOGIC)
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(currentUser);
     setIsConnecting(true);
@@ -325,24 +311,33 @@ export default function StaffDashboardPage() {
       showToast("🚀 Launching Screen Picker", "Establishing secure capture channel...");
 
       let stream: MediaStream | null = null;
+      const isElectronApp = typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId;
 
       try {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      } catch (err1: any) {
-        console.warn("Primary capture failed, attempting Electron native hook...", err1);
-        try {
-          let sourceId = null;
-          if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
-            sourceId = await (window as any).electronAPI.getDesktopSourceId();
-          }
+        if (isElectronApp) {
+          // 🛡️ STRICT ELECTRON CAPTURE (Bypasses Browser Picker)
+          const sourceId = await (window as any).electronAPI.getDesktopSourceId();
           
+          if (!sourceId) {
+             throw new Error("Electron Preload missing or backend failed to retrieve monitor ID.");
+          }
+
           stream = await (navigator.mediaDevices as any).getUserMedia({
-            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any,
-            audio: false
+            audio: false,
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: sourceId
+              }
+            }
           });
-        } catch (err2: any) {
-          throw new Error("Screen capture blocked. IMPORTANT: Open Windows Settings > Privacy & security > Screen recording and turn ON 'Let desktop apps access your screen'. Then try again.");
+        } else {
+          // 🌐 STRICT BROWSER CAPTURE
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         }
+      } catch (captureError: any) {
+        console.error("Capture Failed:", captureError);
+        throw new Error(`[${isElectronApp ? 'App' : 'Browser'} Error] ${captureError.name || captureError.message}`);
       }
 
       if (!stream) throw new Error("Failed to acquire video stream from hardware.");
@@ -439,7 +434,7 @@ export default function StaffDashboardPage() {
       });
 
     } catch (err: any) {
-      showToast("Cancelled", `Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
+      showToast("Cancelled", `Failure: ${err.message || 'Permission denied'}`);
       setIsConnecting(false);
       setIsStreaming(false);
     }
@@ -650,75 +645,11 @@ export default function StaffDashboardPage() {
     return s.includes('screen') || s.includes('remote') || s.includes('share');
   });
 
-  const unreadAlertsCount = alertHistory.filter(a => !a.read).length;
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
-      
-      
 
-      {/* 🌟 NEW: SESSION ALERTS HISTORY MODAL */}
-      {isAlertsModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex justify-end">
-          <div className="bg-white w-full max-w-sm h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-black text-slate-800 flex items-center gap-2">
-                <History size={18} className="text-purple-600"/> Session Alerts History
-              </h3>
-              <button 
-                onClick={() => {
-                  setAlertHistory(prev => prev.map(a => ({...a, read: true})));
-                  setIsAlertsModalOpen(false);
-                }} 
-                className="p-2 hover:bg-slate-200 text-slate-500 rounded-full transition-colors"
-              >
-                <X size={18}/>
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
-              {alertHistory.length === 0 ? (
-                <div className="text-center text-slate-400 mt-10 flex flex-col items-center">
-                  <Bell size={32} className="opacity-20 mb-2"/>
-                  <p className="text-xs font-bold uppercase tracking-wider">No alerts in this session</p>
-                </div>
-              ) : (
-                alertHistory.map(alert => {
-                  const isError = alert.title.toLowerCase().includes('error') || alert.title.toLowerCase().includes('cancel') || alert.title.toLowerCase().includes('fail');
-                  return (
-                    <div key={alert.id} className={`p-4 rounded-2xl border shadow-sm ${isError ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className={`font-bold text-sm ${isError ? 'text-rose-700' : 'text-slate-800'}`}>{alert.title}</h4>
-                        <span className="text-[10px] text-slate-400 font-bold bg-white px-2 py-0.5 rounded-md border border-slate-100">{alert.time}</span>
-                      </div>
-                      <p className={`text-xs mt-2 break-words leading-relaxed ${isError ? 'text-rose-600 font-medium' : 'text-slate-600'}`}>{alert.message}</p>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FLOATING TOASTS OVERLAY */}
-      <div className="fixed top-24 right-6 z-[9999] flex flex-col gap-3 pointer-events-none w-80 sm:w-96">
-        {toasts.map(t => (
-          <div key={t.id} className="bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-right-8 fade-in duration-300 flex items-start gap-3 pointer-events-auto">
-            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0"><Bell size={18} className="animate-pulse" /></div>
-            <div className="flex-1 pt-0.5 min-w-0">
-              <h4 className="font-bold text-sm text-slate-900 leading-tight truncate">{t.title}</h4>
-              <p className="text-xs font-medium text-slate-600 mt-1.5 break-words leading-relaxed">{t.message}</p>
-            </div>
-            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg shrink-0 transition-colors"><X size={16}/></button>
-          </div>
-        ))}
-      </div>
-
-      {/* 🔴 ACTIVE STREAMING FLOATING CONTROLS & CHAT WIDGET */}
       {isStreaming && (
         <>
-          {/* 🎯 Admin Laser Pointer Overlay */}
           {adminPing && (
             <div 
               className="fixed z-[99999] pointer-events-none flex items-center justify-center"
@@ -729,7 +660,6 @@ export default function StaffDashboardPage() {
             </div>
           )}
 
-          {/* 💬 Bottom Right Session Controls (Chat + Stop) */}
           <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {showChat && (
