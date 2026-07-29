@@ -1,9 +1,8 @@
 // electron/main.js
-const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
-
 
 // 🌟 FIX 2: CRITICAL FLAG RESTORED! 
 // This is strictly required for the native 'getUserMedia' bypass to work!
@@ -29,7 +28,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadURL('https://vsit-teal.vercel.app'); // Or your vercel URL when deployed
+  mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
   // 🌟 SET DISPLAY MEDIA HANDLER ON DEFAULT SESSION
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
@@ -75,29 +74,62 @@ ipcMain.handle('get-desktop-source-id', async () => {
 });
 
 // -------------------------------------------------------------
-// 🎮 OS CONTROL LISTENERS
+// 🎮 OS CONTROL LISTENERS (ADVANCED ENTERPRISE SUITE)
 // -------------------------------------------------------------
+
+// Basic Clicks & Typing (Legacy Fallback)
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   try {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.size;
-    const targetX = Math.round((xPercent / 100) * width);
-    const targetY = Math.round((yPercent / 100) * height);
-    await mouse.setPosition(new Point(targetX, targetY));
+    await mouse.setPosition(new Point(Math.round((xPercent / 100) * width), Math.round((yPercent / 100) * height)));
     await mouse.click(Button.LEFT);
-  } catch (e) {
-    console.error("Click failed:", e);
-  }
+  } catch (e) { console.error("Click failed:", e); }
 });
 
 ipcMain.on('remote-type', async (event, { text }) => {
-  try {
-    await keyboard.type(text);
-  } catch (e) {
-    console.error("Type failed:", e);
-  }
+  try { await keyboard.type(text); } catch (e) { console.error("Type failed:", e); }
 });
 
+// 🌟 ADVANCED MOUSE CONTROL (Zero-Latency Dragging & Scrolling)
+ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
+  try {
+    const { width, height } = screen.getPrimaryDisplay().size;
+    await mouse.setPosition(new Point(Math.round((xPercent / 100) * width), Math.round((yPercent / 100) * height)));
+  } catch (e) {}
+});
+
+ipcMain.on('remote-mouse-down', async (event, { button }) => {
+  try { await mouse.pressButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {}
+});
+
+ipcMain.on('remote-mouse-up', async (event, { button }) => {
+  try { await mouse.releaseButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {}
+});
+
+ipcMain.on('remote-scroll', async (event, { deltaY }) => {
+  try { await mouse.scrollDown(deltaY > 0 ? -2 : 2); } catch (e) {}
+});
+
+// 🌟 ADVANCED KEYBOARD CONTROL (Modifier Keys & Holding)
+ipcMain.on('remote-key-down', async (event, { key }) => {
+  try { await keyboard.pressKey(key); } catch (e) {}
+});
+
+ipcMain.on('remote-key-up', async (event, { key }) => {
+  try { await keyboard.releaseKey(key); } catch (e) {}
+});
+
+// 🌟 CLIPBOARD SYNCING
+ipcMain.on('sync-clipboard-write', (event, { text }) => {
+  clipboard.writeText(text);
+});
+
+ipcMain.handle('sync-clipboard-read', () => {
+  return clipboard.readText();
+});
+
+// 🌟 SYSTEM DIAGNOSTICS COMMANDS
 ipcMain.on('system-command', async (event, { command }) => {
   try {
     const allowedCommands = {
