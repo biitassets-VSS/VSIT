@@ -103,7 +103,6 @@ export default function StaffDashboardPage() {
 
   const [reactions, setReactions] = useState<Record<string, 'like' | 'dislike'>>({});
   
-  // 🌟 NEW: PERSISTENT ALERT HISTORY STATE
   const [toasts, setToasts] = useState<{ id: number, title: string, message: string }[]>([]);
   const [alertHistory, setAlertHistory] = useState<{ id: number, title: string, message: string, time: string, read: boolean }[]>([]);
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
@@ -139,19 +138,13 @@ export default function StaffDashboardPage() {
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
 
-  // 🌟 FIX: Updated showToast to keep full history and longer display time
   const showToast = (title: string, message: string) => {
     playAlertSound();
     const id = Date.now();
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Add to floating UI
     setToasts(prev => [...prev, { id, title, message }]);
-    
-    // Add to persistent History Panel
     setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
-
-    // Increased timeout to 12 seconds
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000); 
   };
 
@@ -662,6 +655,22 @@ export default function StaffDashboardPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased relative overflow-x-hidden">
       
+      {/* 🌟 NEW: GLOBAL TOP-RIGHT BELL BUTTON (Replaces old dummy layout bell) */}
+      <div className="fixed top-4 right-4 sm:right-6 z-[90]">
+        <button
+          onClick={() => setIsAlertsModalOpen(true)}
+          className="relative p-2.5 bg-white border border-slate-200 shadow-sm rounded-full hover:bg-slate-50 transition-colors cursor-pointer"
+          title="View Session Alerts History"
+        >
+          <Bell size={18} className="text-slate-700" />
+          {unreadAlertsCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
+              {unreadAlertsCount}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* 🌟 NEW: SESSION ALERTS HISTORY MODAL */}
       {isAlertsModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex justify-end">
@@ -713,7 +722,6 @@ export default function StaffDashboardPage() {
             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0"><Bell size={18} className="animate-pulse" /></div>
             <div className="flex-1 pt-0.5 min-w-0">
               <h4 className="font-bold text-sm text-slate-900 leading-tight truncate">{t.title}</h4>
-              {/* 🌟 FIX: Removed line-clamp-2 and added break-words to ensure full text visibility */}
               <p className="text-xs font-medium text-slate-600 mt-1.5 break-words leading-relaxed">{t.message}</p>
             </div>
             <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg shrink-0 transition-colors"><X size={16}/></button>
@@ -842,7 +850,7 @@ export default function StaffDashboardPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8 mt-4">
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
@@ -852,19 +860,6 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {/* 🌟 FIX: Added the Bell button to trigger the Session Alerts History Modal */}
-            <button 
-              onClick={() => setIsAlertsModalOpen(true)} 
-              className="relative p-2.5 bg-white border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
-              title="View Session Alerts History"
-            >
-              <Bell size={18} className="text-slate-700" />
-              {unreadAlertsCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">
-                  {unreadAlertsCount}
-                </span>
-              )}
-            </button>
             <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer"><RefreshCw size={14}/> Sync Feeds</button>
           </div>
         </div>

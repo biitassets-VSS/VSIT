@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Laptop, ClipboardCheck, 
-  LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell, Trash2, History, AlertTriangle
+  LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell, History, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -27,7 +27,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  // 🌟 NEW: Non-blocking Floating Toasts State
+  // 🌟 Non-blocking Floating Toasts State
   const [toasts, setToasts] = useState<any[]>([]);
 
   const [staffProfile, setStaffProfile] = useState<StaffProfile>({
@@ -49,7 +49,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       const sessionString = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
       
-      // Hard redirect if they shouldn't be here
       if (!sessionString) {
         window.location.href = '/'; 
         return; 
@@ -82,58 +81,69 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     verifyStaff();
   }, [router]);
 
-  // 🌟 HELPER: Show multiple non-blocking toast alerts at the same time
+  // 🌟 HELPER: Show multiple non-blocking toast alerts
   const showToastAlert = (notification: any) => {
     const toastId = notification.id || String(Date.now());
     setToasts(prev => [...prev, { ...notification, toastId }]);
     
-    // Auto remove after 8 seconds
+    // Auto remove after 10 seconds for readability
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.toastId !== toastId));
-    }, 8000);
+    }, 10000);
   };
 
   const removeToastAlert = (toastId: string) => {
     setToasts(prev => prev.filter(t => t.toastId !== toastId));
   };
 
-  // 2. 🚨 REALTIME NOTIFICATION ENGINE
+  // 2. 🚨 REALTIME NOTIFICATION ENGINE (Fixed to catch Global & Personal)
   useEffect(() => {
     if (!staffProfile.id || staffProfile.id === 'guest-mock-uuid') return;
 
-    // Fetch initial missed notifications
     const fetchMissedNotifications = async () => {
       const { data } = await supabase
         .from('notifications')
         .select('*')
-        .eq('target_user', staffProfile.id)
         .eq('is_read', false)
         .order('created_at', { ascending: false });
       
-      if (data) setNotifications(data);
+      if (data) {
+        const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+        const validNotifs = data.filter(n => {
+          if (dismissed.includes(n.id)) return false;
+          const target = String(n.target_user || '').trim().toLowerCase();
+          const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+          const isPersonal = target === String(staffProfile.id).toLowerCase() || target === staffProfile.email.toLowerCase();
+          return isGlobal || isPersonal;
+        });
+        setNotifications(validNotifs);
+      }
     };
     
     fetchMissedNotifications();
 
-    // Tune the antenna to the Realtime channel
     const notificationSubscription = supabase
-      .channel('staff-alerts')
+      .channel('staff-layout-alerts')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `target_user=eq.${staffProfile.id}`, // Only listen for MY alerts
         },
         (payload) => {
-          console.log('Realtime Alert Received!', payload.new);
+          const n = payload.new;
+          const target = String(n.target_user || '').trim().toLowerCase();
+          const isGlobal = target === '' || target === 'null' || target === 'undefined' || ['all', 'broadcast', 'everyone', 'staff', 'all_staff'].includes(target);
+          const isPersonal = target === String(staffProfile.id).toLowerCase() || target === staffProfile.email.toLowerCase();
           
-          // 🌟 Show non-blocking floating toast (allows multiple simultaneously)
-          showToastAlert(payload.new);
-          
-          // Add to the bell dropdown instantly
-          setNotifications((prev) => [payload.new, ...prev]);
+          if (isGlobal || isPersonal) {
+            showToastAlert(n);
+            setNotifications((prev) => {
+              if (prev.some(existing => existing.id === n.id)) return prev;
+              return [n, ...prev];
+            });
+          }
         }
       )
       .subscribe();
@@ -141,7 +151,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     return () => {
       supabase.removeChannel(notificationSubscription);
     };
-  }, [staffProfile.id]);
+  }, [staffProfile.id, staffProfile.email]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
@@ -150,10 +160,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   };
 
   const markNotificationAsRead = async (notificationId: string) => {
-    // Optimistically remove from UI
     setNotifications((prev) => prev.filter(n => n.id !== notificationId));
-    // Update DB
-    await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
+    
+    const dismissed = JSON.parse(localStorage.getItem('dismissed_broadcasts') || '[]');
+    if (!dismissed.includes(notificationId)) { 
+      dismissed.push(notificationId); 
+      localStorage.setItem('dismissed_broadcasts', JSON.stringify(dismissed)); 
+    }
+
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId).catch(() => {});
+    await supabase.from('notifications').delete().eq('id', notificationId).catch(() => {});
   };
 
   if (isCheckingAuth) return (
@@ -175,13 +191,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
               <AlertTriangle size={20} className="animate-pulse" />
             </div>
-            <div className="flex-1 pr-2">
-              <h4 className="text-sm font-bold text-slate-900 leading-tight">{toast.title}</h4>
-              <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed">{toast.message}</p>
+            <div className="flex-1 pr-2 min-w-0">
+              <h4 className="text-sm font-bold text-slate-900 leading-tight truncate">{toast.title || 'System Alert'}</h4>
+              <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed break-words">{toast.message}</p>
             </div>
             <button 
               onClick={() => removeToastAlert(toast.toastId)} 
-              className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1"
+              className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1 rounded-lg hover:bg-slate-100"
             >
               <X size={16} />
             </button>
@@ -216,7 +232,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             { name: 'Replacement Log', href: '/staff/replacements', icon: History }
           ].map((link) => {
             const Icon = link.icon;
-            // Strict matching for root Dashboard, partial for sub-pages
             const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);
             
             return (
@@ -276,26 +291,32 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               <Menu size={20} />
             </button>
             <h2 className="text-sm lg:text-base font-bold text-slate-800 tracking-tight hidden sm:block">
-              Virtual Staffing Solutions | Staff Dasboard
+              Virtual Staffing Solutions | Staff Dashboard
             </h2>
           </div>
 
           <div className="relative">
+            {/* 🌟 THE SINGLE, UNIFIED HEADER BELL */}
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className="relative p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              className="relative p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm cursor-pointer"
+              title="Notifications"
             >
               <Bell size={18} />
               {notifications.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">
+                  {notifications.length}
+                </span>
               )}
             </button>
 
             {/* NOTIFICATIONS DROPDOWN */}
             {isNotifOpen && (
-              <div className="absolute top-full right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
-                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest">Alerts & Notices</h3>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <History size={14} className="text-purple-600"/> Session Alerts
+                  </h3>
                   {notifications.length > 0 && (
                     <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md border border-orange-200">
                       {notifications.length} New
@@ -303,7 +324,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   )}
                 </div>
                 
-                <div className="max-h-[320px] overflow-y-auto custom-scrollbar bg-white">
+                <div className="max-h-[400px] overflow-y-auto custom-scrollbar bg-white">
                   {notifications.length === 0 ? (
                     <div className="px-4 py-10 text-center text-slate-400 flex flex-col items-center gap-2">
                       <Bell size={24} className="opacity-20" />
@@ -311,24 +332,30 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100">
-                      {notifications.map((notif) => (
-                        <div key={notif.id} className="p-4 hover:bg-slate-50 transition-colors group relative flex gap-3">
-                          <div className="mt-0.5 shrink-0 text-rose-500">
-                            <AlertTriangle size={14} />
+                      {notifications.map((notif) => {
+                        const isError = (notif.title || '').toLowerCase().includes('error') || (notif.title || '').toLowerCase().includes('cancel') || (notif.title || '').toLowerCase().includes('fail');
+                        
+                        return (
+                          <div key={notif.id} className={`p-4 hover:bg-slate-50 transition-colors group relative flex gap-3 ${isError ? 'bg-rose-50/30' : ''}`}>
+                            <div className={`mt-0.5 shrink-0 ${isError ? 'text-rose-500' : 'text-orange-500'}`}>
+                              <AlertTriangle size={16} />
+                            </div>
+                            <div className="flex-1 pr-6 min-w-0">
+                              <p className={`text-xs font-bold truncate ${isError ? 'text-rose-700' : 'text-slate-900'}`}>{notif.title || 'System Alert'}</p>
+                              <p className={`text-[11px] mt-1 leading-relaxed break-words ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
+                                {notif.message}
+                              </p>
+                            </div>
+                            <button 
+                              onClick={() => markNotificationAsRead(notif.id)}
+                              className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-100 rounded-md shadow-sm"
+                              title="Dismiss"
+                            >
+                              <X size={12} />
+                            </button>
                           </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-900 pr-6">{notif.title}</p>
-                            <p className="text-[11px] font-medium text-slate-500 mt-1 leading-relaxed pr-2">{notif.message}</p>
-                          </div>
-                          <button 
-                            onClick={() => markNotificationAsRead(notif.id)}
-                            className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1"
-                            title="Dismiss"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
