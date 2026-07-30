@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-
+// 🌟 CRITICAL: This must be here for Tailwind CSS to work!
+import './globals.css';
 
 export const viewport: Viewport = {
   themeColor: [
@@ -43,7 +44,7 @@ export default function RootLayout({
           <div className="absolute bottom-[-15%] left-[15%] w-[70vw] h-[70vh] bg-rose-400/15 dark:bg-rose-600/10 blur-[160px] rounded-full mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
         </div>
 
-        {/* 🌟 NEON OUTER FRAME: Fixed Z-index syntax */}
+        {/* 🌟 NEON OUTER FRAME */}
         <div className="fixed inset-0 pointer-events-none z-[999] border-[1.5px] border-white/40 dark:border-white/5 shadow-[inset_0_0_100px_rgba(249,115,22,0.03)] dark:shadow-[inset_0_0_100px_rgba(249,115,22,0.05)] transition-all duration-1000" />
 
         {/* Main Content Area */}
