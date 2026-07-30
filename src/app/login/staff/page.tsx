@@ -10,7 +10,8 @@ export default function StaffLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Remove dark mode class for the white theme
+  // Note: If you want the dark theme to work, you might want to remove this useEffect eventually.
+  // Right now, it forces the app out of dark mode on load, which can cause color clashes if your OS is in dark mode.
   useEffect(() => {
     document.documentElement.classList.remove('dark'); 
   }, []);
@@ -21,7 +22,6 @@ export default function StaffLoginPage() {
     setError(null);
 
     try {
-      // 1. Authenticate with Supabase
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
         email: email.trim(), 
         password 
@@ -29,7 +29,6 @@ export default function StaffLoginPage() {
       
       if (authError) throw authError;
 
-      // 2. Fetch the user's profile to check if they are disabled
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -39,10 +38,8 @@ export default function StaffLoginPage() {
       if (profileError) throw profileError;
       if (profile?.status === 'Disabled') throw new Error('Account disabled by administrator.');
 
-      // 3. 🌟 THE CRITICAL FIX: Set the exact local storage key your Staff layout expects
       localStorage.setItem('vsit_staff_session', JSON.stringify(profile || authData.user));
 
-      // 4. Force a hard redirect so the layout reads the fresh local storage data
       setTimeout(() => {
         window.location.href = '/staff';
       }, 400);
@@ -54,16 +51,15 @@ export default function StaffLoginPage() {
   };
 
   return (
-    // 🌟 UPGRADE: Removed `bg-[#F0F4F8]` to let the Layout's light engine shine through
     <div className="min-h-screen bg-transparent flex items-center justify-center p-4 font-sans antialiased relative overflow-hidden">
       
       <div className="relative w-full max-w-md z-10">
         
-        {/* 🌟 UPGRADE: Changed harsh neon to a massive, soft glowing aura */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-orange-400/20 via-purple-400/20 to-orange-400/20 rounded-[3rem] blur-2xl opacity-80"></div>
+        {/* 🌟 AMBIENT GLOW: Softer, wider spread to illuminate the glass */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-orange-400/30 via-purple-400/30 to-orange-400/30 rounded-[3rem] blur-3xl opacity-80"></div>
         
-        {/* 🌟 UPGRADE: The Main Glass Card. High blur, semi-transparent white base, delicate light borders */}
-        <div className="relative bg-white/40 dark:bg-black/20 backdrop-blur-3xl rounded-[2rem] p-8 md:p-10 border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.06)] flex flex-col items-center text-center">
+        {/* 🌟 FIXED MAIN CARD: Pure transparent frosted glass (bg-white/10), no more muddy dark colors */}
+        <div className="relative bg-white/10 dark:bg-black/20 backdrop-blur-3xl rounded-[2rem] p-8 md:p-10 border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] flex flex-col items-center text-center">
           
           <img 
             src="/logo.png" 
@@ -72,13 +68,12 @@ export default function StaffLoginPage() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
-          {/* 🌟 UPGRADE: Glassy Icon wrapper */}
           <div className="w-16 h-16 bg-purple-500/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 text-purple-600 border border-purple-500/20 shadow-[0_8px_24px_rgba(168,85,247,0.15)]">
             <Users size={28} />
           </div>
           
           <h2 className="text-sm font-black uppercase tracking-widest text-purple-600 mb-1">Virtual Staffing Solution</h2>
-          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-800 dark:text-zinc-100">Staff Portal</h1>
+          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-900 dark:text-zinc-100">Staff Portal</h1>
           <p className="text-sm font-semibold tracking-wide text-slate-600 dark:text-slate-400 mb-8">View hardware & sign agreements</p>
 
           {error && (
@@ -90,32 +85,31 @@ export default function StaffLoginPage() {
 
           <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Employee Email</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">Employee Email</label>
               <div className="relative group">
                 <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 transition-colors group-focus-within:text-purple-600" />
-                {/* 🌟 UPGRADE: Glassy Inputs with beautiful focus states */}
+                {/* 🌟 FIXED INPUTS: bg-white/10 ensures it is clear glass, not solid gray */}
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="employee@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 focus:bg-white/80 dark:focus:bg-white/10 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/15 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/10 dark:bg-white/5 backdrop-blur-xl border border-white/30 dark:border-white/10 focus:bg-white/20 dark:focus:bg-white/10 focus:border-purple-400/60 focus:ring-4 focus:ring-purple-400/20 text-slate-900 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-inner"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Password</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">Password</label>
               <div className="relative group">
                 <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 transition-colors group-focus-within:text-purple-600" />
-                {/* 🌟 UPGRADE: Glassy Inputs with beautiful focus states */}
+                {/* 🌟 FIXED INPUTS: bg-white/10 ensures it is clear glass, not solid gray */}
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 focus:bg-white/80 dark:focus:bg-white/10 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/15 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/10 dark:bg-white/5 backdrop-blur-xl border border-white/30 dark:border-white/10 focus:bg-white/20 dark:focus:bg-white/10 focus:border-purple-400/60 focus:ring-4 focus:ring-purple-400/20 text-slate-900 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-inner"
                 />
               </div>
             </div>
 
-            {/* 🌟 UPGRADE: Translucent premium button with deeper shadows */}
             <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600/90 backdrop-blur-md hover:bg-purple-600 border border-purple-500/50 shadow-[0_8px_24px_rgba(168,85,247,0.3)] transition-all duration-300 disabled:opacity-70 cursor-pointer">
               {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={16} /></>}
             </button>
