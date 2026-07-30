@@ -82,120 +82,145 @@ export default function ReplacementsHistoryPage() {
   if (!isAuthorized && !loading) return null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 font-sans text-slate-900 antialiased">
-      <div className="max-w-5xl mx-auto space-y-6">
+    /* 🌟 SCROLL FIX & SPACING: Detached from sidebar, fully transparent layout */
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 animate-in fade-in duration-500 w-full min-h-screen pb-32 select-none relative" onContextMenu={(e) => e.preventDefault()}>
+      
+      {/* 🌟 ADVANCED HEADER WITH PREMIUM GLASS THEME */}
+      <div className="relative bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-7 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col md:flex-row justify-between sm:items-center gap-6 overflow-hidden">
         
-        {/* Header */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-          <div className="flex items-center gap-5">
-            <button onClick={() => router.push('/staff/dashboard')} className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer shrink-0">
-              <ArrowLeft size={18} />
-            </button>
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-                <History className="text-orange-400" /> Replacement History Log
-              </h1>
-              <p className="text-sm font-medium text-slate-500 mt-1">Review your faulty asset reports and newly assigned replacement hardware.</p>
-            </div>
-          </div>
-          <button onClick={fetchReplacements} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 shrink-0 cursor-pointer">
-            <RefreshCw size={14}/> Sync Data
+        {/* Subtle background glow blobs */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-linear-to-br from-orange-400/10 to-purple-500/10 blur-3xl -z-10 rounded-full" />
+        <div className="absolute bottom-0 left-0 w-40 h-40 bg-linear-to-tr from-purple-400/10 to-orange-500/10 blur-3xl -z-10 rounded-full" />
+        
+        <div className="flex items-center gap-4 sm:gap-5 z-10">
+          <button onClick={() => router.push('/staff')} className="p-3 rounded-2xl border border-white/60 bg-white/40 backdrop-blur-md hover:bg-white text-slate-600 transition-all cursor-pointer shrink-0 shadow-[0_4px_15px_rgba(0,0,0,0.02)]">
+            <ArrowLeft size={18} />
           </button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+              <History className="text-purple-600" /> Replacement Log
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1 max-w-xl">
+              Review your faulty asset reports and newly assigned hardware.
+            </p>
+          </div>
         </div>
 
-        {/* List Content */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white rounded-3xl border border-slate-200 shadow-sm">
-            <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
-            <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Fetching records...</p>
-          </div>
-        ) : replacements.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 px-4 bg-white rounded-3xl border border-slate-200 shadow-sm text-center">
-            <PackageOpen size={48} className="text-slate-300 mb-4" />
-            <h3 className="text-lg font-bold text-slate-700">No Replacements Found</h3>
-            <p className="text-sm text-slate-500 mt-2 max-w-sm">Your hardware replacement history will appear here once requested.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {replacements.map(record => {
-              const details = parseFaultyDetails(record.description || '');
-              const status = (record.status || '').toLowerCase().trim();
-              const isResolved = status === 'approved' || status === 'replaced' || status === 'resolved' || status === 'closed';
-              
-              return (
-                <div key={record.id} className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <Wrench size={16} className="text-slate-400"/> {record.title}
-                    </h3>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {new Date(record.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
+        <button 
+          onClick={fetchReplacements} 
+          disabled={loading}
+          className="flex items-center justify-center gap-2 px-6 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-purple-600/20 shrink-0 border border-white/20 disabled:opacity-50 z-10"
+        >
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> 
+          <span>Sync Data</span>
+        </button>
+      </div>
 
-                  <div className="p-6 flex flex-col lg:flex-row gap-6 items-stretch">
+      {/* 🌟 GLASS CONTENT CONTAINER */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-3 bg-white/20 backdrop-blur-2xl rounded-4xl border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+          <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+          <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Fetching records...</p>
+        </div>
+      ) : replacements.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 px-4 bg-white/20 backdrop-blur-2xl rounded-4xl border-2 border-dashed border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.04)] text-center">
+          <PackageOpen size={48} className="text-slate-300 mb-4" />
+          <h3 className="text-lg font-bold text-slate-700">No Replacements Found</h3>
+          <p className="text-sm text-slate-500 mt-2 max-w-sm">Your hardware replacement history will appear here once requested.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {replacements.map(record => {
+            const details = parseFaultyDetails(record.description || '');
+            const status = (record.status || '').toLowerCase().trim();
+            const isResolved = status === 'approved' || status === 'replaced' || status === 'resolved' || status === 'closed';
+            
+            return (
+              <div key={record.id} className="group bg-white/20 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-all duration-300 hover:border-purple-300/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] relative overflow-hidden flex flex-col">
+                
+                {/* Glowing Ambient Status Blob */}
+                <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 group-hover:opacity-20 pointer-events-none ${isResolved ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+
+                {/* Card Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100/80 text-purple-600 flex items-center justify-center shadow-sm shrink-0 border border-purple-200/50">
+                      <Wrench size={18} />
+                    </div>
+                    <span className="line-clamp-1">{record.title}</span>
+                  </h3>
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-white/40 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/60 shadow-sm shrink-0">
+                    {new Date(record.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/')}
+                  </span>
+                </div>
+
+                {/* SPLIT CONTENT: Faulty vs New Asset */}
+                <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+                  
+                  {/* LEFT: FAULTY ASSET (Red Tinted Glass) */}
+                  <div className="flex-1 bg-rose-500/5 backdrop-blur-sm border border-rose-500/20 rounded-3xl p-5 sm:p-6 relative overflow-hidden shadow-inner">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-rose-400"></div>
+                    <h4 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-rose-600 mb-5 flex items-center gap-2">
+                      <AlertCircle size={16}/> Faulty Asset Reported
+                    </h4>
                     
-                    {/* LEFT: FAULTY ASSET */}
-                    <div className="flex-1 bg-rose-50/50 border border-rose-100 rounded-2xl p-5 relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-rose-400"></div>
-                      <h4 className="text-xs font-black uppercase tracking-widest text-rose-600 mb-4 flex items-center gap-2">
-                        <AlertCircle size={14}/> Faulty Asset Reported
-                      </h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center p-3 bg-white rounded-xl border border-rose-100">
-                          <span className="text-[10px] font-bold uppercase text-slate-500">Serial No. (S/N)</span>
-                          <span className="text-xs font-mono font-bold text-slate-800">{details.sn}</span>
-                        </div>
-                        <div className="p-3 bg-white rounded-xl border border-rose-100">
-                          <span className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Issue / Error Note</span>
-                          <p className="text-xs font-medium text-slate-700">{details.reason}</p>
-                        </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-rose-200/50 shadow-sm">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Serial No. (S/N)</span>
+                        <span className="text-xs sm:text-sm font-mono font-bold text-slate-900 wrap-break-word text-right max-w-[60%]">{details.sn}</span>
+                      </div>
+                      <div className="p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-rose-200/50 shadow-sm flex flex-col gap-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Issue / Error Note</span>
+                        <p className="text-xs sm:text-sm font-semibold text-slate-700 wrap-break-word leading-relaxed">{details.reason}</p>
                       </div>
                     </div>
-
-                    {/* MIDDLE: ARROW (Hidden on mobile) */}
-                    <div className="hidden lg:flex flex-col justify-center items-center px-2 text-slate-300">
-                      <ArrowRight size={24} />
-                    </div>
-
-                    {/* RIGHT: NEW REPLACEMENT ASSET */}
-                    <div className={`flex-1 border rounded-2xl p-5 relative overflow-hidden transition-colors ${isResolved ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-200 dashed'}`}>
-                      <div className={`absolute top-0 left-0 w-1 h-full ${isResolved ? 'bg-emerald-400' : 'bg-slate-300'}`}></div>
-                      <h4 className={`text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${isResolved ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {isResolved ? <CheckCircle2 size={14}/> : <RefreshCw size={14} className="animate-spin"/>} 
-                        {isResolved ? 'New Asset Assigned' : 'Pending Logistics Assignment'}
-                      </h4>
-                      
-                      {isResolved ? (
-                        <div className="space-y-3">
-                          <div className="p-4 bg-white rounded-xl border border-emerald-100 shadow-sm flex items-start gap-3">
-                            <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 shrink-0"><Laptop size={20}/></div>
-                            <div>
-                              <span className="text-[10px] font-bold uppercase text-emerald-600 block mb-0.5">Replacement Details</span>
-                              <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">
-                                {record.admin_notes || record.resolution || 'New asset has been assigned to your inventory. Check dashboard.'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="h-full flex flex-col items-center justify-center py-4 text-center">
-                          <div className="p-3 bg-white rounded-full border border-slate-200 mb-3 shadow-sm">
-                            <PackageOpen size={20} className="text-slate-400"/>
-                          </div>
-                          <p className="text-xs font-semibold text-slate-500 max-w-[200px]">IT Admin is currently processing a new replacement for your faulty hardware.</p>
-                        </div>
-                      )}
-                    </div>
-
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
 
-      </div>
+                  {/* MIDDLE: ARROW (Hidden on mobile) */}
+                  <div className="hidden lg:flex flex-col justify-center items-center px-2 text-slate-300 group-hover:text-purple-400 transition-colors">
+                    <ArrowRight size={28} />
+                  </div>
+
+                  {/* RIGHT: NEW REPLACEMENT ASSET (Green Tinted Glass) */}
+                  <div className={`flex-1 rounded-3xl p-5 sm:p-6 relative overflow-hidden transition-all shadow-inner border backdrop-blur-sm ${isResolved ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white/30 border-white/50 border-dashed'}`}>
+                    <div className={`absolute top-0 left-0 w-1 h-full ${isResolved ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
+                    
+                    <h4 className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-5 flex items-center gap-2 ${isResolved ? 'text-emerald-600' : 'text-slate-500'}`}>
+                      {isResolved ? <CheckCircle2 size={16}/> : <RefreshCw size={16} className="animate-spin text-amber-500"/>} 
+                      {isResolved ? 'New Asset Assigned' : 'Pending Logistics Assignment'}
+                    </h4>
+                    
+                    {isResolved ? (
+                      <div className="space-y-3 h-full">
+                        <div className="p-4 sm:p-5 bg-white/60 backdrop-blur-md rounded-2xl border border-emerald-200/50 shadow-sm flex items-start gap-4 h-full">
+                          <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-600 shrink-0 border border-emerald-500/20"><Laptop size={20}/></div>
+                          <div className="flex-1">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600/80 block mb-1.5">Replacement Details</span>
+                            <p className="text-xs sm:text-sm font-semibold text-slate-800 wrap-break-word leading-relaxed">
+                              {record.admin_notes || record.resolution || 'New asset has been assigned to your inventory. Check your dashboard.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-full min-h-30 flex flex-col items-center justify-center py-4 text-center">
+                        <div className="p-4 bg-white/50 backdrop-blur-md rounded-full border border-white/80 mb-4 shadow-sm">
+                          <PackageOpen size={24} className="text-slate-400"/>
+                        </div>
+                        <p className="text-xs sm:text-sm font-semibold text-slate-500 max-w-62.5 leading-relaxed">
+                          IT Admin is currently processing a new replacement for your faulty hardware.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
     </div>
   );
 }
