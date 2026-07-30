@@ -56,7 +56,7 @@ export default function RootLayout({
         </main>
 
         {/* 🌟 UPGRADED WATERMARK: Ultra-premium frosted glass with a pure white/translucent border */}
-        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-orange-900/60 dark:text-orange-100/40 z-999 pointer-events-none uppercase bg-white/20 dark:bg-black/20 backdrop-blur-3xl px-5 py-2.5 rounded-full border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(249,115,22,0.08)] transition-all duration-500">
+        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-orange-900/60 dark:text-orange-100/40 z-999 pointer-events-none uppercase backdrop border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(249,115,22,0.08)] transition-all duration-500">
           Designed by AinodeArt
         </div>
 
