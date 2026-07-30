@@ -118,13 +118,14 @@ export default function StaffInspectionsPage() {
     return searchString.includes(searchQuery.toLowerCase());
   });
 
-  if (loading) return <div className="flex min-h-[70vh] items-center justify-center flex-col gap-3"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /><p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Records...</p></div>;
+  if (loading) return <div className="flex h-full min-h-[70vh] items-center justify-center flex-col gap-3"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /><p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Records...</p></div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20 w-full select-none relative" onContextMenu={(e) => e.preventDefault()}>
+    // 🌟 SCROLL FIX: Added `h-full overflow-y-auto` to force scroll inside constrained parents!
+    <div className="space-y-6 animate-in fade-in duration-500 pb-24 w-full h-full overflow-y-auto custom-scrollbar select-none relative pr-2" onContextMenu={(e) => e.preventDefault()}>
       
       {/* 🌟 ADVANCED HEADER WITH PREMIUM GLASS THEME */}
-      <div className="relative bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden">
+      <div className="relative bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden shrink-0">
         <div className="absolute top-0 right-0 w-64 h-64 bg-linear-to-br from-orange-400/10 to-purple-500/10 blur-3xl -z-10 rounded-full" />
         <div className="absolute bottom-0 left-0 w-40 h-40 bg-linear-to-tr from-purple-400/10 to-orange-500/10 blur-3xl -z-10 rounded-full" />
         
@@ -132,7 +133,7 @@ export default function StaffInspectionsPage() {
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
             <ClipboardCheck className="text-purple-600" /> Audit Ledger
           </h1>
-          <p className="text-sm font-medium text-slate-500 mt-2">
+          <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
             Review the complete historical log of your device compliance and admin feedback.
           </p>
         </div>
@@ -160,7 +161,7 @@ export default function StaffInspectionsPage() {
       </div>
 
       {/* 🌟 PREMIUM GLASS INSPECTIONS CONTAINER */}
-      <div className="bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative min-h-[50vh]">
+      <div className="bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative">
         
         {isRefreshing && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-purple-100 overflow-hidden z-10 rounded-t-4xl">
@@ -191,7 +192,6 @@ export default function StaffInspectionsPage() {
               const isApproved = statusConfig.label === 'Approved';
               const isRejected = statusConfig.label === 'Refused / Rejected' || statusConfig.label === 'Re-Audit Required';
               
-              // Resolve Dates
               const assignedDate = asset.assigned_date || asset.assignment_date || asset.created_at;
               const agreementDate = asset.handover_signed_date || asset.agreement_date || asset.handover_date;
 
@@ -207,9 +207,8 @@ export default function StaffInspectionsPage() {
               return (
                 <div 
                   key={`${insp.id}-${index}`} 
-                  className="group bg-white/40 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.25)] relative overflow-hidden flex flex-col"
+                  className="group bg-white/40 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.25)] relative overflow-hidden flex flex-col h-full"
                 >
-                  
                   {/* Subtle Background Glow per Card Status */}
                   <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full opacity-20 transition-opacity duration-500 group-hover:opacity-40 pointer-events-none ${isApproved ? 'bg-emerald-400' : isRejected ? 'bg-rose-400' : 'bg-purple-400'}`} />
 
@@ -227,27 +226,27 @@ export default function StaffInspectionsPage() {
                     </span>
                   </div>
 
-                  {/* 🌟 OPTIMIZED COMPACT GRID (Prevents Card Overflow) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 mb-5">
-                    <div>
+                  {/* 🌟 OPTIMIZED COMPACT GRID (Wrap Break Words Added) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-5">
+                    <div className="min-w-0">
                       <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Tag ID</span>
-                      <span className="font-bold text-sm text-slate-900 wrap-break-word">{asset.asset_tag || 'N/A'}</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{asset.asset_tag || 'N/A'}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Assigned</span>
-                      <span className="font-bold text-sm text-slate-900">{formatDate(assignedDate)}</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{formatDate(assignedDate)}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Agreement</span>
-                      <span className="font-bold text-sm text-slate-900">{formatDate(agreementDate)}</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{formatDate(agreementDate)}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Inspected</span>
-                      <span className="font-bold text-sm text-slate-900">{formatDate(insp.created_at)}</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{formatDate(insp.created_at)}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Next Due</span>
-                      <span className={`font-bold text-sm ${isApproved ? 'text-purple-700' : 'text-slate-500'}`}>
+                      <span className={`font-bold text-sm wrap-break-word block ${isApproved ? 'text-purple-700' : 'text-slate-500'}`}>
                         {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending'}
                       </span>
                     </div>
@@ -259,7 +258,7 @@ export default function StaffInspectionsPage() {
                       {isRejected ? <XOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
                       {isRejected ? 'Admin Rejection Reason' : isApproved ? 'Admin Approval Note' : 'Submitted Notes'}
                     </span>
-                    <p className={`text-sm font-semibold whitespace-pre-wrap ${isRejected ? 'text-rose-900' : isApproved ? 'text-emerald-900' : 'text-slate-700'}`}>
+                    <p className={`text-sm font-semibold whitespace-pre-wrap wrap-break-word ${isRejected ? 'text-rose-900' : isApproved ? 'text-emerald-900' : 'text-slate-700'}`}>
                       {insp.notes || 'No specific notes recorded for this transaction.'}
                     </p>
                   </div>
@@ -269,12 +268,12 @@ export default function StaffInspectionsPage() {
                     {safePhotos.length > 0 ? (
                       <button 
                         onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection' })}
-                        className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 cursor-pointer"
+                        className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
                       >
                         <Eye size={16} /> View Encrypted Evidence ({safePhotos.length})
                       </button>
                     ) : (
-                      <div className="px-6 py-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-white/50 text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                      <div className="px-6 py-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-white/50 text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2 w-full sm:w-auto justify-center">
                         <CameraOff size={16} /> No Photos Attached
                       </div>
                     )}
@@ -287,7 +286,7 @@ export default function StaffInspectionsPage() {
         )}
       </div>
 
-      {/* 🌟 SECURE LIGHTBOX (Anti-Screenshot/Download Engine) */}
+      {/* 🌟 SECURE LIGHTBOX (Fixed Sizing & Object Contain) */}
       {photoViewer.isOpen && (
         <div 
           className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-9999 flex flex-col items-center justify-center p-4 select-none"
@@ -304,14 +303,15 @@ export default function StaffInspectionsPage() {
               </div>
             )}
             
-            <div className="flex gap-6 overflow-x-auto max-w-full w-full h-[80vh] items-center px-4 md:px-12 snap-x custom-scrollbar">
+            {/* Gallery Fix: Proper object contain and max height limits */}
+            <div className="flex gap-6 overflow-x-auto max-w-7xl w-full h-fit max-h-[85vh] items-center px-4 md:px-12 snap-x custom-scrollbar pb-12">
               {photoViewer.photos.map((url, i) => (
-                <div key={i} className="relative shrink-0 snap-center h-full flex items-center justify-center pointer-events-none">
+                <div key={i} className="relative shrink-0 snap-center w-[85vw] max-w-4xl h-[60vh] md:h-[70vh] flex items-center justify-center pointer-events-none">
                   <img 
                     src={url} 
                     alt="Secure Evidence" 
                     draggable={false} 
-                    className="max-h-full max-w-full rounded-4xl pointer-events-none select-none border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]" 
+                    className="max-h-full max-w-full object-contain rounded-3xl pointer-events-none select-none border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]" 
                     style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
                   />
                   <div className="absolute inset-0 z-10 bg-transparent"></div>
