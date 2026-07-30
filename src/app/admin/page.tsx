@@ -41,27 +41,14 @@ export default function AdminDashboardPage() {
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
-  // Realtime Presence State
   const [presenceOnlineCount, setPresenceOnlineCount] = useState(0);
 
   const [stats, setStats] = useState({
-    totalAssets: 0,
-    usedAssets: 0,
-    inStockAssets: 0,
-    discardedAssets: 0,
-    totalVerifications: 0,
-    resolvedInspections: 0,
-    pendingInspections: 0,
-    totalTickets: 0,
-    resolvedTickets: 0,
-    pendingTickets: 0,
-    inProcessTickets: 0,
-    totalStaff: 0,
-    onlineStaff: 0,
-    offlineStaff: 0,
-    deactivatedStaff: 0,
-    returnRequests: 0,
-    replacementRequests: 0
+    totalAssets: 0, usedAssets: 0, inStockAssets: 0, discardedAssets: 0,
+    totalVerifications: 0, resolvedInspections: 0, pendingInspections: 0,
+    totalTickets: 0, resolvedTickets: 0, pendingTickets: 0, inProcessTickets: 0,
+    totalStaff: 0, onlineStaff: 0, offlineStaff: 0, deactivatedStaff: 0,
+    returnRequests: 0, replacementRequests: 0
   });
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -72,17 +59,12 @@ export default function AdminDashboardPage() {
       setIsDarkMode(isDark);
       if (isDark) document.documentElement.classList.add('dark');
     };
-    
     syncTheme();
-
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    loadAdminData();
     
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    loadAdminData();
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 
     const handleOpenBroadcast = () => setIsBroadcastModalOpen(true);
     window.addEventListener('open-broadcast-modal', handleOpenBroadcast);
@@ -93,39 +75,23 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // 🌟 SUPABASE REALTIME PRESENCE ENGINE (Tracks online staff browser sessions)
+  // 🌟 SUPABASE REALTIME PRESENCE ENGINE
   useEffect(() => {
     const presenceChannel = supabase.channel('vsit_online_presence');
-
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
         const state = presenceChannel.presenceState();
-        const activeCount = Object.keys(state).length;
-        setPresenceOnlineCount(activeCount);
+        setPresenceOnlineCount(Object.keys(state).length);
       })
       .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({
-            admin: 'admin_dashboard',
-            online_at: new Date().toISOString()
-          });
-        }
+        if (status === 'SUBSCRIBED') await presenceChannel.track({ admin: 'admin_dashboard', online_at: new Date().toISOString() });
       });
-
-    return () => {
-      supabase.removeChannel(presenceChannel);
-    };
+    return () => { supabase.removeChannel(presenceChannel); };
   }, []);
 
   const triggerDesktopAlert = (title: string, body: string) => {
-    try {
-      const audio = new Audio('/alert.mp3');
-      audio.play().catch(e => console.log("Audio blocked", e));
-    } catch (err) {}
-
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/logo.png' });
-    }
+    try { const audio = new Audio('/alert.mp3'); audio.play().catch(() => {}); } catch (err) {}
+    if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/logo.png' });
   };
 
   useEffect(() => {
@@ -139,13 +105,11 @@ export default function AdminDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => loadAdminData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false))
       .subscribe();
-
     return () => { supabase.removeChannel(adminChannel); };
   }, []);
 
   const handleSecureLogout = async () => {
-    localStorage.clear();
-    sessionStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     await supabase.auth.signOut();
     window.location.href = '/'; 
   };
@@ -158,8 +122,7 @@ export default function AdminDashboardPage() {
 
     try {
       let activeUser: any = {};
-      try { activeUser = JSON.parse(rawSession); }
-      catch (e) { activeUser = { name: rawSession.split('@')[0], email: rawSession }; }
+      try { activeUser = JSON.parse(rawSession); } catch (e) { activeUser = { name: rawSession.split('@')[0], email: rawSession }; }
       
       const cleanEmail = activeUser.email?.toLowerCase().trim();
       if (cleanEmail !== 'lakhwinder.bi@outlook.com' && activeUser.role !== 'admin') {
@@ -183,32 +146,27 @@ export default function AdminDashboardPage() {
       const tktData = tickets || [];
       const assetsData = assets || [];
 
-      // Assets
       let usedAssetsCount = 0, inStockAssetsCount = 0, discardedAssetsCount = 0, returnRequestsCount = 0, replacementRequestsCount = 0;
       assetsData.forEach(a => {
         const s = (a.status || '').toLowerCase().trim();
         if (s.includes('return request')) returnRequestsCount++;
         else if (s.includes('replace')) replacementRequestsCount++;
-        
         if (['use', 'assign', 'allocat', 'deploy', 'active'].some(k => s.includes(k))) usedAssetsCount++;
         else if (['discard', 'retire', 'scrap', 'broken', 'lost', 'missing', 'stolen', 'damage'].some(k => s.includes(k))) discardedAssetsCount++;
         else inStockAssetsCount++;
       });
 
-      // Verifications
       let pendingCount = 0, resolvedCount = 0;
       inspData.forEach(i => {
         const s = (i.status || '').toLowerCase().trim();
         const notes = (i.notes || '').toLowerCase();
         const byAdmin = (i.inspected_by || '').toLowerCase() === 'admin';
-        
         if (!byAdmin && !notes.includes('initially registered') && !notes.includes('asset configuration updated')) {
           if (['resolv', 'approv', 'complet', 'clos'].some(k => s.includes(k))) resolvedCount++;
           else pendingCount++;
         }
       });
 
-      // Helpdesk
       let pendingTicketsCount = 0, inProcessTicketsCount = 0, resolvedTicketsCount = 0;
       tktData.forEach(t => {
         const s = (t.status || '').toLowerCase().trim();
@@ -217,41 +175,21 @@ export default function AdminDashboardPage() {
         else pendingTicketsCount++;
       });
 
-      // Staff Network Logic
       let dbOnlineCount = 0, deactivatedCount = 0;
       const now = new Date().getTime();
-
       staffData.forEach(s => {
         const statusStr = (s.status || '').toLowerCase().trim();
         const roleStr = (s.role || '').toLowerCase().trim();
-        
-        const isDeactivated = s.is_active === false || 
-                              ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => statusStr.includes(k)) ||
-                              ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
+        const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
 
-        if (isDeactivated) {
-          deactivatedCount++;
-          return;
-        }
+        if (isDeactivated) { deactivatedCount++; return; }
 
-        let isOnline = s.is_online === true || 
-                       String(s.is_online).toLowerCase() === 'true' || 
-                       s.is_online === 1 || 
-                       statusStr === 'online' || 
-                       statusStr === 'live';
-
+        let isOnline = s.is_online === true || String(s.is_online).toLowerCase() === 'true' || s.is_online === 1 || statusStr === 'online' || statusStr === 'live';
         if (!isOnline) {
-          const hasRecentInspection = inspData.some(i => 
-            (i.user_email?.toLowerCase() === s.email?.toLowerCase() || i.inspected_by === s.id) && 
-            (now - new Date(i.created_at).getTime()) < 30 * 60000
-          );
-          const hasRecentTicket = tktData.some(t => 
-            (t.created_by?.toLowerCase() === s.email?.toLowerCase() || t.user_id === s.id) && 
-            (now - new Date(t.created_at).getTime()) < 30 * 60000
-          );
+          const hasRecentInspection = inspData.some(i => (i.user_email?.toLowerCase() === s.email?.toLowerCase() || i.inspected_by === s.id) && (now - new Date(i.created_at).getTime()) < 30 * 60000);
+          const hasRecentTicket = tktData.some(t => (t.created_by?.toLowerCase() === s.email?.toLowerCase() || t.user_id === s.id) && (now - new Date(t.created_at).getTime()) < 30 * 60000);
           if (hasRecentInspection || hasRecentTicket) isOnline = true;
         }
-
         if (isOnline) dbOnlineCount++;
       });
 
@@ -262,39 +200,23 @@ export default function AdminDashboardPage() {
         const matchedProfile = staffData.find(p => p.email?.toLowerCase() === log.user_email?.toLowerCase() || p.id === log.inspected_by);
         let displayName = log.user_email?.split('@')[0] || 'A user'; 
         if (matchedProfile) displayName = `${matchedProfile.full_name || matchedProfile.name || displayName}`;
-        
         const statusText = (log.status || '').toLowerCase();
-        let logTheme = 'text-[#8B5CF6] bg-[#8B5CF6]/10 border-[#8B5CF6]/20'; 
-        if (statusText.includes('pending') || statusText === '') logTheme = 'text-[#F97316] bg-[#F97316]/10 border-[#F97316]/20';
+        let logTheme = 'text-purple-500 bg-purple-500/10 border-purple-500/20'; 
+        if (statusText.includes('pending') || statusText === '') logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
         if (statusText.includes('resolv') || statusText.includes('approv')) logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-
         return { ...log, displayName, logTheme };
       });
 
       setStats({
-        totalAssets: assetsData.length || 0,
-        usedAssets: usedAssetsCount,
-        inStockAssets: inStockAssetsCount,
-        discardedAssets: discardedAssetsCount,
-        totalVerifications: inspData.length,
-        resolvedInspections: resolvedCount,
-        pendingInspections: pendingCount,
-        totalTickets: tktData.length,
-        resolvedTickets: resolvedTicketsCount,
-        pendingTickets: pendingTicketsCount,
-        inProcessTickets: inProcessTicketsCount,
-        totalStaff: staffData.length,
-        onlineStaff: finalOnlineCount,
-        offlineStaff: offlineCount,
-        deactivatedStaff: deactivatedCount,
-        returnRequests: returnRequestsCount,
-        replacementRequests: replacementRequestsCount
+        totalAssets: assetsData.length || 0, usedAssets: usedAssetsCount, inStockAssets: inStockAssetsCount, discardedAssets: discardedAssetsCount,
+        totalVerifications: inspData.length, resolvedInspections: resolvedCount, pendingInspections: pendingCount,
+        totalTickets: tktData.length, resolvedTickets: resolvedTicketsCount, pendingTickets: pendingTicketsCount, inProcessTickets: inProcessTicketsCount,
+        totalStaff: staffData.length, onlineStaff: finalOnlineCount, offlineStaff: offlineCount, deactivatedStaff: deactivatedCount,
+        returnRequests: returnRequestsCount, replacementRequests: replacementRequestsCount
       });
       
       setRecentActivity(formattedRecentLogs);
-      setLoading(false);
-      setIsRefreshing(false);
-
+      setLoading(false); setIsRefreshing(false);
     } catch (e) { console.error('Data load error:', e); setLoading(false); setIsRefreshing(false); }
   };
 
@@ -302,7 +224,6 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!broadcastMessage.trim() && !broadcastImage) return;
     setIsBroadcasting(true);
-    
     try {
       let finalImageUrl = null;
       if (broadcastImage) {
@@ -318,9 +239,12 @@ export default function AdminDashboardPage() {
     } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
   };
 
+  // 🎨 MAC OS 2026 PREMIUM GLASS THEME CONFIGURATION
   const theme = {
     bg: isDarkMode ? 'bg-[#09090b]' : 'bg-[#F8FAFC]',
-    card: isDarkMode ? 'bg-[#121212] border-zinc-800' : 'bg-white border-slate-200/70',
+    glassCard: isDarkMode 
+      ? 'bg-white/5 backdrop-blur-2xl backdrop-saturate-150 border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)]' 
+      : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
@@ -329,128 +253,135 @@ export default function AdminDashboardPage() {
     <div className={`w-full h-screen flex flex-col items-center justify-center ${theme.bg}`}>
       <AlertTriangle size={48} className="text-rose-500 mb-4" />
       <h1 className={`text-2xl font-bold ${theme.text}`}>Authorization Failed</h1>
-      <button onClick={handleSecureLogout} className={`mt-4 px-6 py-2 rounded-xl font-bold shadow-sm border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-slate-200 text-slate-700'}`}>Secure Logout</button>
+      <button onClick={handleSecureLogout} className="mt-4 px-6 py-2 rounded-xl font-bold bg-white text-slate-700 shadow-sm border border-slate-200">Secure Logout</button>
     </div>
   );
 
   if (loading) return (
     <div className={`w-full h-screen flex flex-col items-center justify-center ${theme.bg}`}>
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#F97316] mb-4"></div>
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mb-4"></div>
       <p className={`text-xs font-bold uppercase tracking-widest ${theme.subText}`}>Loading Enterprise Data...</p>
     </div>
   );
 
   return (
-    /* 🌟 DESKTOP: FIXED SCREEN HEIGHT WITH ZERO OVERFLOW SCROLLING / MOBILE: RESPONSIVE SCROLL */
-    <div className={`h-full lg:h-screen lg:max-h-screen overflow-y-auto lg:overflow-hidden flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
-      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-2.5 sm:p-3 lg:p-4 gap-2.5 lg:gap-3 h-full min-h-0">
+    // 🌟 DESKTOP: FIXED HEIGHT (NO SCROLLING) / MOBILE: RESPONSIVE SCROLL
+    <div className={`h-full lg:h-screen lg:max-h-screen overflow-y-auto lg:overflow-hidden flex flex-col ${theme.bg} transition-colors duration-500 font-sans antialiased relative z-0`}>
+      
+      {/* 🌟 AMBIENT BACKGROUND GLOWS (APPLE STYLE MAC OS) */}
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-400/20 dark:bg-orange-500/10 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/20 dark:bg-purple-600/10 blur-[120px] rounded-full pointer-events-none -z-10" />
+
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-3 sm:p-4 lg:p-6 gap-4 h-full min-h-0 z-10">
         
-        {/* 🌟 HEADER */}
-        <div className={`${theme.card} rounded-xl p-3 border flex items-center justify-between shrink-0 shadow-xs transition-all`}>
-          <Link href="/admin" className="flex items-center gap-3 group">
-            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md ${isDarkMode ? 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]' : 'bg-[#fff7ed] border-[#fed7aa] text-[#F97316]'}`}>
-              <Cpu className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+        {/* 🌟 HEADER WITH SYNC BUTTON */}
+        <div className={`${theme.glassCard} rounded-2xl p-4 border flex items-center justify-between shrink-0 transition-all`}>
+          <Link href="/admin" className="flex items-center gap-4 group">
+            <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-500' : 'bg-orange-50 border-orange-200 text-orange-500'}`}>
+              <Cpu className="w-5 h-5" strokeWidth={2.5} />
             </div>
             <div className="flex flex-col justify-center">
-              <h1 className={`text-sm sm:text-base lg:text-lg font-bold tracking-tight leading-none ${theme.text}`}>IT Asset & Service Management</h1>
-              <p className={`text-[10px] sm:text-[11px] font-medium mt-0.5 ${theme.subText}`}>Welcome back, {adminName}. Here is your live IT infrastructure status.</p>
+              <h1 className={`text-base lg:text-lg font-extrabold tracking-tight leading-none ${theme.text}`}>IT Asset & Service Management</h1>
+              <p className={`text-[11px] font-medium mt-1 ${theme.subText}`}>Welcome back, <span className="font-bold">{adminName}</span>. Here is your live IT infrastructure status.</p>
             </div>
           </Link>
 
           <button 
             onClick={() => loadAdminData(true)} 
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 shrink-0 border border-white/20"
+            className="flex items-center gap-2 px-4 py-2.5 bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-orange-500/20 disabled:opacity-50 shrink-0 border border-white/20 active:scale-95"
             title="Refresh Live Data"
           >
-            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">Sync Feeds</span>
           </button>
         </div>
 
         {/* 📊 THUMBNAIL STAT CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3 shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 shrink-0">
           
-          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
-            <div className="flex justify-between items-start mb-1">
-              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}><Laptop size={15} /></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group`}>
+            <div className="flex justify-between items-start mb-2">
+              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Laptop size={16} /></div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#8B5CF6] leading-none mb-0.5">{stats.totalAssets}</h2>
-              <p className={`text-[9px] font-medium ${theme.subText}`}>Total Assets</p>
+              <h2 className="text-3xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1">{stats.totalAssets}</h2>
+              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Assets</p>
             </div>
-            <div className={`grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Used</span><span className={`text-xs font-bold ${theme.subText}`}>{stats.usedAssets}</span></div>
-              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-xs font-bold text-emerald-500">{stats.inStockAssets}</span></div>
-              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-xs font-bold text-[#F97316]">{stats.discardedAssets}</span></div>
+            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Used</span><span className={`text-xs font-black ${theme.subText}`}>{stats.usedAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-xs font-black text-emerald-500">{stats.inStockAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-xs font-black text-orange-500">{stats.discardedAssets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
-            <div className="flex justify-between items-start mb-1">
-              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={15} /> : <ClipboardCheck size={15} />}</div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group`}>
+            <div className="flex justify-between items-start mb-2">
+              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={16} /> : <ClipboardCheck size={16} />}</div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#F97316] leading-none mb-0.5">{stats.totalVerifications}</h2>
-              <p className={`text-[9px] font-medium ${theme.subText}`}>Total Requests</p>
+              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none mb-1">{stats.totalVerifications}</h2>
+              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Requests</p>
             </div>
-            <div className={`grid grid-cols-2 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
+            <div className={`grid grid-cols-2 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-black text-emerald-500">{stats.resolvedInspections}</span></div>
+              <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-black ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.text}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
-            <div className="flex justify-between items-start mb-1">
-              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}><Ticket size={15} /></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group`}>
+            <div className="flex justify-between items-start mb-2">
+              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Ticket size={16} /></div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#8B5CF6] leading-none mb-0.5">{stats.totalTickets}</h2>
-              <p className={`text-[9px] font-medium ${theme.subText}`}>Total Tickets</p>
+              <h2 className="text-3xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1">{stats.totalTickets}</h2>
+              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Tickets</p>
             </div>
-            <div className={`grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <div className="flex flex-col"><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
-              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-xs font-bold text-[#8B5CF6]">{stats.inProcessTickets}</span></div>
-              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingTickets > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingTickets}</span></div>
+            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-black text-emerald-500">{stats.resolvedTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-xs font-black text-purple-600 dark:text-purple-400">{stats.inProcessTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-black ${stats.pendingTickets > 0 ? 'text-orange-500' : theme.text}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
-            <div className="flex justify-between items-start mb-1">
-              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]'}`}><Users size={15} /></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group`}>
+            <div className="flex justify-between items-start mb-2">
+              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}><Users size={16} /></div>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#F97316] leading-none mb-0.5">{stats.totalStaff}</h2>
-              <p className={`text-[9px] font-medium ${theme.subText}`}>Total Staff</p>
+              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none mb-1">{stats.totalStaff}</h2>
+              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Staff</p>
             </div>
-            <div className={`grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
               <div className="flex flex-col">
-                <span className={`text-[8px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
-                <span className="text-xs font-bold text-emerald-500">{stats.onlineStaff}</span>
+                <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
+                <span className="text-xs font-black text-emerald-500">{stats.onlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                <span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Off</span>
-                <span className={`text-xs font-bold ${theme.subText}`}>{stats.offlineStaff}</span>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
+                <span className={`text-xs font-black ${theme.subText}`}>{stats.offlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                <span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Deact</span>
-                <span className="text-xs font-bold text-rose-500">{stats.deactivatedStaff}</span>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span>
+                <span className="text-xs font-black text-rose-500">{stats.deactivatedStaff}</span>
               </div>
             </div>
           </div>
+
         </div>
 
-        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG (COMPACT & ZERO BOTTOM EMPTY SPACE) */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-2.5 lg:gap-3 min-h-0 overflow-hidden">
+        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG (NO EMPTY SPACE STRETCHING) */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-4 min-h-0 overflow-hidden pt-1">
           
-          <div className="w-full lg:w-[74%] flex flex-col gap-1.5 min-h-0 overflow-hidden">
-            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-0.5 shrink-0 ${theme.subText}`}>System Modules</h3>
+          <div className="w-full lg:w-[74%] flex flex-col gap-2.5 min-h-0 overflow-hidden">
+            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>System Modules</h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-2.5 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+            {/* 🌟 KEY FIX: "content-start" prevents the massive empty space stretching at the bottom of the cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 flex-1 overflow-y-auto custom-scrollbar content-start pr-1 pb-4">
               {[
                 { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
@@ -466,25 +397,25 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    /* 🌟 COMPACT COMPONENT WITH NO STRETCHED EMPTY SPACE AT BOTTOM */
-                    className={`text-left cursor-pointer ${theme.card} p-3 rounded-xl border flex flex-col justify-between h-auto transition-all duration-200 group hover:shadow-md ${isOrange ? (isDarkMode ? 'hover:border-[#F97316]/50' : 'hover:border-[#F97316]/40') : (isDarkMode ? 'hover:border-[#8B5CF6]/50' : 'hover:border-[#8B5CF6]/40')}`}
+                    /* 🌟 h-auto forces the card to wrap the text tightly, eliminating dead space */
+                    className={`text-left cursor-pointer h-auto p-4 rounded-2xl flex flex-col transition-all duration-300 ease-out group ${theme.glassCard} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-500/40' : 'hover:shadow-purple-500/10 hover:border-purple-500/40'}`}
                   >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOrange ? (isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]') : (isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]')}`}>
-                          <m.icon size={16} strokeWidth={2.2} />
-                          {m.badge > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full flex items-center justify-center text-[8px] font-black text-white bg-rose-500 shadow-xs border border-white">
-                              {m.badge}
-                            </span>
-                          )}
-                        </div>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all group-hover:translate-x-0.5 ${isOrange ? 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}>
-                          <ArrowRight size={12} strokeWidth={2.5} />
-                        </div>
+                    <div className="flex items-start justify-between mb-3 w-full">
+                      <div className={`p-2 rounded-xl transition-transform duration-300 group-hover:scale-110 ${isOrange ? (isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-600') : (isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-600')}`}>
+                        <m.icon size={20} strokeWidth={2.2} />
+                        {m.badge > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white bg-rose-500 shadow-md border border-white">
+                            {m.badge}
+                          </span>
+                        )}
                       </div>
-                      <h4 className={`text-xs font-bold tracking-tight ${theme.text}`}>{m.title}</h4>
-                      <p className={`text-[10px] font-medium leading-tight mt-1 line-clamp-2 ${theme.subText}`}>{m.desc}</p>
+                      <div className={`p-1.5 rounded-full transition-colors duration-300 ${isDarkMode ? 'bg-white/5 text-zinc-500 group-hover:bg-white/10 group-hover:text-zinc-200' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
+                        <ArrowRight size={14} strokeWidth={2.5} />
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className={`text-sm font-bold tracking-tight leading-tight ${theme.text}`}>{m.title}</h4>
+                      <p className={`text-[11px] font-medium mt-1.5 leading-relaxed line-clamp-2 ${theme.subText}`}>{m.desc}</p>
                     </div>
                   </button>
                 );
@@ -493,31 +424,31 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* LIVE ACTIVITY LOG SIDEBAR */}
-          <div className="w-full lg:w-[26%] flex flex-col gap-1.5 min-h-0 overflow-hidden">
-            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-0.5 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
-            <div className={`${theme.card} rounded-xl border p-3 flex-1 flex flex-col min-h-0 overflow-hidden shadow-xs`}>
+          <div className="w-full lg:w-[26%] flex flex-col gap-2.5 min-h-0 overflow-hidden">
+            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
+            <div className={`${theme.glassCard} rounded-2xl p-4 flex-1 flex flex-col min-h-0 overflow-hidden`}>
               {recentActivity.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
-                  <Activity size={22} className={`${theme.subText} mb-1.5`} />
-                  <p className={`text-xs font-bold ${theme.subText}`}>Waiting for live events...</p>
+                  <Activity size={24} className={`${theme.subText} mb-2`} />
+                  <p className={`text-xs font-semibold ${theme.subText}`}>Waiting for live events...</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                   {recentActivity.map((log: any, i: number) => (
-                    <div key={i} className={`flex gap-2 relative pb-2 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                      <div className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
-                        <Clock size={11} />
+                    <div key={i} className={`flex gap-3 relative pb-3 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                      <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
+                        <Clock size={12} />
                       </div>
                       <div className="pt-0.5 min-w-0">
-                        <p className={`text-xs font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
+                        <p className={`text-[13px] font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
                         <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.subText}`}>Submitted system request.</p>
-                        <p className={`text-[8px] font-bold uppercase tracking-wider mt-0.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
+                        <p className={`text-[9px] font-bold uppercase tracking-wider mt-1 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-2 w-full py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all hover:bg-slate-50 ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-3 w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all duration-300 cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'}`}>
                 View Entire Log
               </button>
             </div>
@@ -528,56 +459,56 @@ export default function AdminDashboardPage() {
 
       {/* ANNOUNCEMENT MODAL */}
       {isBroadcastModalOpen && (
-        <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className={`rounded-2xl max-w-lg w-full p-5 shadow-2xl border space-y-4 animate-in zoom-in-95 duration-200 ${theme.card}`}>
-            <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-              <h3 className={`text-sm font-extrabold flex items-center gap-2 uppercase tracking-wide ${theme.text}`}>
-                <Megaphone size={18} className="text-[#F97316]" /> Broadcast Announcement
+        <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in">
+          <div className={`rounded-3xl max-w-lg w-full p-6 shadow-2xl border space-y-5 animate-in zoom-in-95 duration-300 ${theme.glassCard}`}>
+            <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+              <h3 className={`text-sm font-black flex items-center gap-2 uppercase tracking-widest ${theme.text}`}>
+                <Megaphone size={18} className="text-orange-500" /> Broadcast Announcement
               </h3>
-              <button onClick={() => setIsBroadcastModalOpen(false)} className={`p-1.5 rounded-full transition-colors hover:scale-110 ${isDarkMode ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+              <button onClick={() => setIsBroadcastModalOpen(false)} className={`p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-slate-100 text-slate-500'}`}>
                 <X size={18} />
               </button>
             </div>
             
-            <form onSubmit={handleSendBroadcast} className="space-y-3">
+            <form onSubmit={handleSendBroadcast} className="space-y-4">
               <div>
-                <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.subText}`}>Message Text *</label>
+                <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Message Text *</label>
                 <textarea 
                   rows={3} 
                   required 
                   placeholder="Type an announcement to broadcast..." 
                   value={broadcastMessage} 
                   onChange={e => setBroadcastMessage(e.target.value)} 
-                  className={`w-full p-2.5 rounded-xl border outline-none text-xs font-medium transition-all resize-none shadow-xs focus:ring-2 focus:ring-[#F97316]/20 focus:text-[#F97316] ${
+                  className={`w-full p-3 rounded-xl border outline-none text-xs font-medium transition-all resize-none shadow-inner focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
                     isDarkMode 
-                      ? 'bg-[#18181b] border-zinc-800 text-zinc-200 focus:bg-[#121212] focus:border-[#F97316]' 
-                      : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-[#F97316]'
+                      ? 'bg-black/20 border-white/10 text-zinc-200' 
+                      : 'bg-white/50 border-slate-200/60 text-slate-800'
                   }`} 
                 />
               </div>
               <div>
-                <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
-                <label className={`cursor-pointer w-full p-3 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-colors ${
+                <label className={`text-[10px] font-bold uppercase tracking-widest block mb-2 ${theme.subText}`}>Attach Graphic / Flyer (Optional)</label>
+                <label className={`cursor-pointer w-full p-4 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all ${
                   isDarkMode 
-                    ? 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:bg-[#121212] hover:border-[#8B5CF6]/50' 
-                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-[#8B5CF6]/50'
+                    ? 'bg-black/20 border-white/10 text-zinc-400 hover:bg-white/5 hover:border-purple-500/50' 
+                    : 'bg-white/50 border-slate-200 text-slate-500 hover:bg-white hover:border-purple-500/50'
                 }`}>
-                  <ImagePlus size={20} className={broadcastImage ? "text-[#8B5CF6]" : ""} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
+                  <ImagePlus size={24} className={broadcastImage ? "text-purple-500" : "opacity-50"} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{broadcastImage ? `Attached: ${broadcastImage.name}` : 'Click to browse image file'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setBroadcastImage(e.target.files ? e.target.files[0] : null)} />
                 </label>
-                {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[9px] text-rose-500 hover:underline mt-1 font-bold uppercase tracking-widest flex items-center gap-1"><X size={10} /> Remove attached file</button>}
+                {broadcastImage && <button type="button" onClick={() => setBroadcastImage(null)} className="text-[10px] text-rose-500 hover:underline mt-2 font-bold uppercase tracking-widest flex items-center gap-1 cursor-pointer"><X size={12} /> Remove attached file</button>}
               </div>
-              <div className={`flex gap-2 pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all shadow-xs ${
+              <div className={`flex gap-3 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all cursor-pointer ${
                   isDarkMode 
-                    ? 'bg-[#18181b] border-zinc-800 text-zinc-300 hover:bg-zinc-800' 
+                    ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' 
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}>
                   Cancel
                 </button>
-                <button disabled={isBroadcasting} type="submit" className="flex-1 py-2.5 bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[10px] uppercase tracking-widest shadow-xs">
-                  {isBroadcasting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Broadcast
+                <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-lg shadow-orange-500/20 cursor-pointer active:scale-95">
+                  {isBroadcasting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Broadcast
                 </button>
               </div>
             </form>
