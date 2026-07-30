@@ -10,8 +10,7 @@ export default function StaffLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Remove dark mode class for the white theme (if you want to force light mode, keep this. 
-  // If you want the new premium dark mode glass to work, you can remove this useEffect eventually)
+  // Remove dark mode class for the white theme
   useEffect(() => {
     document.documentElement.classList.remove('dark'); 
   }, []);
@@ -22,6 +21,7 @@ export default function StaffLoginPage() {
     setError(null);
 
     try {
+      // 1. Authenticate with Supabase
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
         email: email.trim(), 
         password 
@@ -29,6 +29,7 @@ export default function StaffLoginPage() {
       
       if (authError) throw authError;
 
+      // 2. Fetch the user's profile to check if they are disabled
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -38,8 +39,10 @@ export default function StaffLoginPage() {
       if (profileError) throw profileError;
       if (profile?.status === 'Disabled') throw new Error('Account disabled by administrator.');
 
+      // 3. 🌟 THE CRITICAL FIX: Set the exact local storage key your Staff layout expects
       localStorage.setItem('vsit_staff_session', JSON.stringify(profile || authData.user));
 
+      // 4. Force a hard redirect so the layout reads the fresh local storage data
       setTimeout(() => {
         window.location.href = '/staff';
       }, 400);
@@ -51,16 +54,18 @@ export default function StaffLoginPage() {
   };
 
   return (
+    // 🌟 REMOVED solid bg-[#F0F4F8]. Set to bg-transparent so the Layout's light-orange gradient & ambient lights show through.
     <div className="min-h-screen bg-transparent flex items-center justify-center p-4 font-sans antialiased relative overflow-hidden">
       
       <div className="relative w-full max-w-md z-10">
         
-        {/* 🌟 PREMIUM GLOW: Softer ambient diffusion behind the glass */}
+        {/* 🌟 PREMIUM GLOW: Changed from harsh neon to a softer ambient diffusion behind the glass */}
         <div className="absolute -inset-1 bg-linear-to-r from-orange-400/20 via-purple-400/20 to-orange-400/20 rounded-[2.5rem] blur-2xl opacity-60"></div>
         
-        {/* 🌟 MAIN CARD: Removed solid dark backgrounds. Now ultra-premium transparent glass in BOTH themes */}
-        <div className="relative bg-white/20 dark:bg-black/10 backdrop-blur-3xl rounded-4xl p-8 md:p-10 border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col items-center text-center transition-all duration-500">
+        {/* 🌟 MAIN CARD: Ultra Premium Frosted Glass (Mac OS 2026 Style) */}
+        <div className="relative bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-4xl p-8 md:p-10 border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] flex flex-col items-center text-center transition-all duration-500">
           
+          {/* COMPANY LOGO */}
           <img 
             src="/logo.png" 
             alt="Virtual Staffing Solution Logo" 
@@ -68,6 +73,7 @@ export default function StaffLoginPage() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
+          {/* PURPLE ICON: Made slightly glassy */}
           <div className="w-16 h-16 bg-purple-500/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 text-purple-600 border border-purple-500/20 shadow-[0_8px_24px_rgba(168,85,247,0.15)]">
             <Users size={28} />
           </div>
@@ -87,12 +93,12 @@ export default function StaffLoginPage() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Employee Email</label>
               <div className="relative group">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 dark:text-slate-400 transition-colors group-focus-within:text-purple-600 dark:group-focus-within:text-purple-400" />
-                {/* 🌟 INPUTS: Removed solid gray `bg-gray-800`. Now pure glass (`dark:bg-white/5`) */}
+                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 dark:text-slate-400 transition-colors group-focus-within:text-purple-600" />
+                {/* 🌟 INPUTS: Frosted glass integration */}
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="employee@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/40 dark:bg-white/5 backdrop-blur-md border border-white/50 dark:border-white/10 focus:bg-white/60 dark:focus:bg-white/10 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/10 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 dark:placeholder:text-slate-400 shadow-sm"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/50 dark:border-white/10 focus:bg-white/60 dark:focus:bg-black/60 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/10 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
                 />
               </div>
             </div>
@@ -100,16 +106,17 @@ export default function StaffLoginPage() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Password</label>
               <div className="relative group">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 dark:text-slate-400 transition-colors group-focus-within:text-purple-600 dark:group-focus-within:text-purple-400" />
-                {/* 🌟 INPUTS: Removed solid gray `bg-gray-800`. Now pure glass (`dark:bg-white/5`) */}
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 dark:text-slate-400 transition-colors group-focus-within:text-purple-600" />
+                {/* 🌟 INPUTS: Frosted glass integration */}
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/40 dark:bg-white/5 backdrop-blur-md border border-white/50 dark:border-white/10 focus:bg-white/60 dark:focus:bg-white/10 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/10 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 dark:placeholder:text-slate-400 shadow-sm"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/50 dark:border-white/10 focus:bg-white/60 dark:focus:bg-black/60 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/10 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
                 />
               </div>
             </div>
 
+            {/* 🌟 SUBMIT BUTTON: Premium translucent finish */}
             <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600/90 backdrop-blur-md hover:bg-purple-600 border border-purple-500/50 shadow-[0_8px_24px_rgba(168,85,247,0.3)] transition-all duration-300 disabled:opacity-70 cursor-pointer">
               {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={16} /></>}
             </button>
@@ -118,13 +125,13 @@ export default function StaffLoginPage() {
         </div>
       </div>
 
-      {/* 🌟 WINDOWS APP DOWNLOAD: Solid background completely removed. */}
+      {/* 🌟 WINDOWS APP DOWNLOAD BUTTON: 100% Frosted Glass, Black Background Removed */}
       <div className="fixed bottom-5 left-6 z-999">
         <a
           href="https://github.com/biitassets-VSS/VSIT/releases/download/v0.1.0/Virtual.Staffing.Portal.Setup.0.1.0.exe"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 px-5 py-2.5 bg-transparent backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] text-slate-800 dark:text-zinc-100 text-xs font-bold rounded-full transition-all duration-300 hover:bg-white/20 dark:hover:bg-white/5 hover:scale-105 group cursor-pointer"
+          className="flex items-center gap-2 px-5 py-2.5 bg-transparent backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] text-slate-800 dark:text-zinc-100 text-xs font-bold rounded-full transition-all duration-300 hover:bg-white/20 dark:hover:bg-white/5 hover:scale-105 group cursor-pointer"
           title="Download Virtual Staffing Solutions Windows App (.exe)"
         >
           <Monitor size={15} className="text-purple-600 dark:text-purple-400 group-hover:animate-pulse shrink-0" />
