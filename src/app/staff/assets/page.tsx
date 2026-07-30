@@ -218,12 +218,12 @@ export default function StaffAssetsPage() {
 
   return (
     <>
-      {/* 🌟 SCROLL FIX & SPACING: Added max-w-7xl, mx-auto, and pt-8 to center it and push it down from the top! */}
+      {/* 🌟 SCROLL FIX & SPACING */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none">
         
         {/* 🚨 PENDING E-SIGN ALERTS */}
         {pendingAssets.length > 0 && (
-          <div className="bg-white/40 backdrop-blur-xl border border-rose-100 rounded-4xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
+          <div className="bg-white/30 backdrop-blur-xl border border-rose-100/50 rounded-4xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5"><FileSignature size={120} /></div>
             <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
               <div className="flex items-start gap-4">
@@ -243,9 +243,9 @@ export default function StaffAssetsPage() {
               {pendingAssets.map(asset => {
                 const AlertIcon = getAssetIcon(asset.category);
                 return (
-                  <div key={`alert-${asset.id}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-rose-100 shadow-sm gap-4 hover:shadow-md transition-shadow">
+                  <div key={`alert-${asset.id}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white/50 backdrop-blur-md rounded-2xl border border-rose-100/50 shadow-sm gap-4 hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-3">
-                      <AlertIcon size={20} className="text-rose-400 shrink-0" />
+                      <AlertIcon size={20} className="text-rose-500 shrink-0" />
                       <div>
                         <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
                         <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
@@ -274,7 +274,7 @@ export default function StaffAssetsPage() {
         </div>
 
         {assignedAssets.length === 0 ? (
-          <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/30 backdrop-blur-md flex flex-col items-center">
+          <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/20 backdrop-blur-md flex flex-col items-center">
             <Package size={48} className="text-slate-300 mb-4" />
             <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
             <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID.</p>
@@ -290,32 +290,34 @@ export default function StaffAssetsPage() {
               return (
                 <div 
                   key={asset.id} 
-                  className="group bg-white/40 backdrop-blur-xl rounded-4xl p-6 sm:p-8 border-2 border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] relative overflow-hidden"
+                  // 🌟 FIX 1: bg-white/20 instead of /40 for better light-orange blending
+                  className="group bg-white/20 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-all duration-300 hover:border-purple-300/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] relative overflow-hidden"
                 >
                   
-                  {/* Glowing Status Blob behind card */}
-                  <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full opacity-20 transition-opacity duration-500 group-hover:opacity-40 pointer-events-none ${isRejected ? 'bg-rose-400' : isPending ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                  {/* 🌟 FIX 2: Softer, wider background glow so it doesn't wash out the badge */}
+                  <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 group-hover:opacity-20 pointer-events-none ${isRejected ? 'bg-rose-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
 
                   {/* Card Header & Status */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
                     
+                    {/* 🌟 FIX 3: Crisp translucent glass badges instead of solid background */}
                     {isRejected ? (
-                      <span className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-200 shrink-0">
+                      <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30 shrink-0 backdrop-blur-md shadow-sm">
                         Return Rejected
                       </span>
                     ) : isPending ? (
-                      <span className="px-3 py-1.5 bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-200 shrink-0">
+                      <span className="px-3 py-1.5 bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-500/30 shrink-0 backdrop-blur-md shadow-sm">
                         Signature Required
                       </span>
                     ) : (
-                      <span className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-200 shrink-0">
+                      <span className="px-3 py-1.5 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-500/30 shrink-0 backdrop-blur-md shadow-sm">
                         Approved
                       </span>
                     )}
                   </div>
 
-                  {/* 🌟 Grid with Wrap Break Words */}
+                  {/* Grid Specs */}
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
                     <div className="min-w-0">
                       <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span>
@@ -344,20 +346,20 @@ export default function StaffAssetsPage() {
                   </div>
 
                   {/* Card Actions */}
-                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-200/50">
+                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-200/40">
                     {isPending ? (
                       <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2 cursor-pointer">
                         <PenTool size={16} /> Sign Handover Form
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border-2 border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/50 backdrop-blur-sm cursor-pointer">
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border-2 border-orange-200 text-orange-600 hover:bg-orange-50/50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/30 backdrop-blur-md cursor-pointer">
                           Return
                         </button>
-                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border-2 border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/50 backdrop-blur-sm cursor-pointer">
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border-2 border-purple-200 text-purple-600 hover:bg-purple-50/50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/30 backdrop-blur-md cursor-pointer">
                           Replace
                         </button>
-                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/50 backdrop-blur-sm cursor-pointer">
+                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50/50 hover:border-emerald-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/30 backdrop-blur-md cursor-pointer">
                           <Check size={16} /> Audited This Cycle
                         </button>
                       </>
@@ -371,7 +373,7 @@ export default function StaffAssetsPage() {
         )}
       </div>
 
-      {/* 📝 DIGITAL E-SIGN MODAL (PORTAL FIX: Prevents hiding behind sidebar) */}
+      {/* 📝 DIGITAL E-SIGN MODAL (PORTAL FIX) */}
       {mounted && signModalAsset && createPortal(
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200" style={{ zIndex: 2147483647 }}>
           <div className="bg-white/95 backdrop-blur-xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white">
@@ -428,7 +430,6 @@ export default function StaffAssetsPage() {
                   <span className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Asset Photos:</span>
                   {signModalAsset.live_inspection_photos ? (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {/* Note: This is an example, assuming photos is an array */}
                       <p className="text-xs text-slate-500 italic col-span-4">Photos exist but are securely encrypted.</p>
                     </div>
                   ) : (
