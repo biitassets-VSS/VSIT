@@ -319,16 +319,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
-  // 🎨 PURE MAC OS 2026 EYE-COMFORT TRANSPARENT GLASS THEME
+  // 🎨 PURE ULTRA GLASS THEME: Heavily Transparent to let portal orange/purple bleed through!
   const theme = {
-    // 🌟 Warm Light Cream base background
-    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
-    
-    // 🌟 PURE TRANSPARENT GLASS: Beautiful blur, crisp edge, highly transparent
+    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]', // The base portal theme color
     glassPanel: isDarkMode 
-      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-xl' 
-      : 'bg-white/40 backdrop-blur-[40px] border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
-    
+      ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-2xl' 
+      : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
@@ -351,15 +347,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* FLOATING TOASTS (Glass) */}
       <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
-            <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0 border border-rose-200 text-rose-600 dark:bg-rose-500/20 dark:border-rose-500/30">
+          <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 rounded-3xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
+            <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0 border border-rose-500/20 text-rose-600">
               <AlertTriangle size={20} className="animate-pulse" />
             </div>
             <div className="flex-1 pr-2 min-w-0">
               <h4 className={`text-sm font-bold leading-tight truncate ${theme.text}`}>{toast.title}</h4>
               <p className={`text-xs font-medium mt-1 leading-relaxed wrap-break-word ${theme.subText}`}>{toast.message}</p>
             </div>
-            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className={`transition-colors shrink-0 self-start p-1 rounded-lg ${isDarkMode ? 'text-zinc-500 hover:text-rose-400' : 'text-slate-400 hover:text-rose-600'}`}><X size={16} /></button>
+            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className={`transition-colors shrink-0 self-start p-1 rounded-xl bg-white/10 hover:bg-rose-500/10 ${isDarkMode ? 'text-zinc-500 hover:text-rose-400' : 'text-slate-400 hover:text-rose-600'}`}><X size={16} /></button>
           </div>
         ))}
       </div>
@@ -380,7 +376,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             {remoteControlRequest && (
               <div className={`${theme.glassPanel} p-5 rounded-3xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto`}>
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 shadow-sm flex items-center justify-center shrink-0 border border-purple-200 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 shadow-sm flex items-center justify-center shrink-0 border border-purple-500/20">
                     <MousePointer2 size={20} className="animate-bounce" />
                   </div>
                   <div>
@@ -389,8 +385,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   </div>
                 </div>
                 <div className="flex gap-2 w-full mt-1">
-                  <button onClick={handleDeclineControl} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${isDarkMode ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Deny</button>
-                  <button onClick={handleAcceptControl} className="flex-1 py-2.5 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer">
+                  <button onClick={handleDeclineControl} className={`flex-1 py-2.5 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${isDarkMode ? 'border-zinc-700/50 text-zinc-300 hover:bg-zinc-800/50' : 'bg-white/30 border-white/40 text-slate-600 hover:bg-white/50'}`}>Deny</button>
+                  <button onClick={handleAcceptControl} className="flex-1 py-2.5 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer">
                     <Check size={14} /> Allow Access
                   </button>
                 </div>
@@ -399,28 +395,28 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
             {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
             {showChat && (
-              <div className={`w-80 ${theme.glassPanel} rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden`}>
-                <div className={`p-3 border-b text-sm font-bold flex justify-between items-center ${isDarkMode ? 'border-white/10 text-white' : 'border-white/40 text-slate-900'}`}>
+              <div className={`w-80 ${theme.glassPanel} rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border border-white/40`}>
+                <div className={`p-4 border-b text-sm font-bold flex justify-between items-center ${isDarkMode ? 'border-white/10 text-white' : 'border-white/30 text-slate-900'}`}>
                   <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-500" /> Live Support Chat</span>
-                  <button onClick={() => setShowChat(false)} className={`p-1 rounded-md transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-white/50 text-slate-500'}`}><X size={16}/></button>
+                  <button onClick={() => setShowChat(false)} className={`p-1.5 rounded-xl transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-white/30 text-slate-500'}`}><X size={16}/></button>
                 </div>
-                <div className="h-56 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
+                <div className="h-56 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-purple-100 text-purple-800 border border-purple-300 dark:bg-purple-500/30 dark:text-purple-100 self-end rounded-2xl rounded-br-none dark:border-purple-500/40' : 'bg-white text-slate-800 border border-slate-200 dark:bg-white/10 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none dark:border-white/20'}`}>
-                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-purple-600 dark:text-purple-300' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
+                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.isSelf ? 'bg-purple-500/10 text-purple-800 border border-purple-500/20 dark:bg-purple-500/30 dark:text-purple-100 self-end rounded-2xl rounded-br-none' : 'bg-white/40 backdrop-blur-md text-slate-800 border border-white/50 dark:bg-white/10 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none'}`}>
+                      <div className={`font-bold text-[9px] mb-1 uppercase tracking-widest ${msg.isSelf ? 'text-purple-600 dark:text-purple-300' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <form onSubmit={sendChatMessage} className={`p-2 border-t flex gap-2 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'}`}>
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-3 py-2 rounded-xl outline-none transition-all shadow-sm border ${isDarkMode ? 'bg-black/50 text-white border-white/20 focus:border-orange-500' : 'bg-white text-slate-900 border-slate-200 focus:border-orange-400'}`} />
-                  <button type="submit" disabled={!chatInput.trim()} className={`p-2.5 rounded-xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm ${isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'}`}><Send size={14}/></button>
+                <form onSubmit={sendChatMessage} className={`p-3 border-t flex gap-2 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/30 bg-white/20'}`}>
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-2xl outline-none transition-all shadow-inner border ${isDarkMode ? 'bg-black/50 text-white border-white/20 focus:border-orange-500' : 'bg-white/40 backdrop-blur-md text-slate-900 border-white/50 focus:bg-white/60 focus:ring-4 focus:ring-orange-500/10'}`} />
+                  <button type="submit" disabled={!chatInput.trim()} className={`p-3 rounded-2xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm ${isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white/40 text-slate-800 border-white/50 hover:bg-white/60'}`}><Send size={14}/></button>
                 </form>
               </div>
             )}
 
             {/* Floating Action Bar */}
-            <div className={`${theme.glassPanel} p-3 sm:p-4 rounded-3xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto`}>
+            <div className={`${theme.glassPanel} p-3 sm:p-4 rounded-3xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto border-white/40`}>
               <div className="flex items-center gap-3">
                 <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
                 <div>
@@ -431,10 +427,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${showChat ? 'bg-purple-500 text-white border-purple-600 shadow-md' : (isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50')}`}>
+                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${showChat ? 'bg-purple-500 text-white border-purple-600 shadow-md' : (isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white/30 text-slate-700 border-white/50 hover:bg-white/50')}`}>
                   <MessageSquare size={14} /> <span className="hidden sm:inline">Chat</span>
                 </button>
-                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer border border-rose-400"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
+                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer border border-rose-400"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
               </div>
             </div>
           </div>
@@ -444,19 +440,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className={`${theme.glassPanel} rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 ${isDarkMode ? 'border-orange-500/50' : 'border-orange-300'}`}>
-            <div className="w-16 h-16 rounded-2xl bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 flex items-center justify-center mx-auto shadow-sm border border-orange-200 dark:border-orange-500/30 animate-bounce"><Monitor size={32} /></div>
+          <div className={`${theme.glassPanel} rounded-4xl max-w-md w-full p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] space-y-6 animate-in zoom-in-95 border-2 ${isDarkMode ? 'border-orange-500/50' : 'border-white/50'}`}>
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 flex items-center justify-center mx-auto shadow-sm border border-orange-500/20 animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
               <h3 className={`text-xl font-black ${theme.text}`}>Live Support Access Requested</h3>
               <p className={`text-xs sm:text-sm font-medium ${theme.subText}`}><strong className={`font-bold ${theme.text}`}>{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
             </div>
-            <div className={`p-4 rounded-2xl border text-xs font-semibold flex items-center gap-3 ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-800'}`}>
+            <div className={`p-4 rounded-2xl border text-xs font-semibold flex items-center gap-3 ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-300' : 'bg-orange-500/10 border-orange-500/20 text-orange-800'}`}>
               <ShieldAlert size={22} className="shrink-0 text-orange-500" />
               <span>By accepting, they will be able to view your desktop natively.</span>
             </div>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className={`flex-1 py-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Decline</button>
-              <button onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} disabled={isConnecting} className="flex-1 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-extrabold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 border border-orange-400 transition-all cursor-pointer active:scale-95">
+              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className={`flex-1 py-3.5 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white/30 backdrop-blur-md border-white/50 text-slate-600 hover:bg-white/50'}`}>Decline</button>
+              <button onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} disabled={isConnecting} className="flex-1 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-2xl text-[11px] font-extrabold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 border border-orange-400 transition-all cursor-pointer active:scale-95">
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
               </button>
@@ -465,9 +461,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* 🌟 NARROWER SIDEBAR (FROSTED WHITE GLASS) */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-56 z-50 flex flex-col transition-transform duration-300 ${theme.glassPanel} border-y-0 border-l-0 border-r ${isDarkMode ? 'border-r-white/10' : 'border-r-white/60'} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className={`h-16 flex items-center px-5 border-b shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/60'}`}><img src="/logo.png" alt="Logo" className="h-7 w-auto drop-shadow-sm" /></div>
+      {/* 🌟 NARROWER SIDEBAR (FROSTED GLASS) */}
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-56 z-50 flex flex-col transition-transform duration-300 ${theme.glassPanel} border-y-0 border-l-0 border-r ${isDarkMode ? 'border-r-white/10' : 'border-r-white/40'} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className={`h-16 flex items-center px-5 border-b shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/30'}`}><img src="/logo.png" alt="Logo" className="h-7 w-auto drop-shadow-sm" /></div>
         <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto custom-scrollbar">
           {[
             { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
@@ -480,53 +476,53 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             const Icon = link.icon;
             const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);
             return (
-              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[13px] group border ${isActive ? (isDarkMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 font-bold shadow-sm' : 'bg-white/80 text-orange-600 border-white shadow-sm font-bold') : (isDarkMode ? 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200 font-semibold' : 'text-slate-600 border-transparent hover:bg-white/60 hover:text-slate-900 hover:border-white font-semibold')}`}>
-                <Icon size={18} className={`${isActive ? (isDarkMode ? 'text-orange-400' : 'text-orange-500') : 'text-current opacity-70 group-hover:opacity-100'} transition-colors`} /> {link.name}
+              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[13px] group border ${isActive ? (isDarkMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 font-bold shadow-sm' : 'bg-white/50 text-orange-600 border-white/60 shadow-sm font-bold backdrop-blur-md') : (isDarkMode ? 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200 font-semibold' : 'text-slate-600 border-transparent hover:bg-white/30 hover:text-slate-900 hover:border-white/40 font-semibold')}`}>
+                <Icon size={18} className={`${isActive ? (isDarkMode ? 'text-orange-400' : 'text-orange-600') : 'text-current opacity-70 group-hover:opacity-100'} transition-colors`} /> {link.name}
               </Link>
             );
           })}
         </nav>
-        <div className={`p-4 border-t shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/60'}`}>
-          <button onClick={handleLogout} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-xs font-bold cursor-pointer border shadow-sm ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20' : 'bg-white/80 text-rose-600 border-white hover:bg-white hover:shadow-md'}`}><LogOut size={15}/> Logout</button>
+        <div className={`p-4 border-t shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/30'}`}>
+          <button onClick={handleLogout} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-xs font-bold cursor-pointer border shadow-sm ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20' : 'bg-white/30 text-rose-600 border-white/50 hover:bg-white/50 hover:shadow-md'}`}><LogOut size={15}/> Logout</button>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
         
-        {/* 🌟 HEADER (FROSTED WHITE GLASS) */}
-        <header className={`h-16 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} border-x-0 border-t-0 border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/60'}`}>
+        {/* 🌟 HEADER (FROSTED GLASS) */}
+        <header className={`h-16 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} border-x-0 border-t-0 border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/40'}`}>
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-lg transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-slate-500 hover:bg-white/50'}`}><Menu size={20} /></button>
+            <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-xl transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-slate-500 hover:bg-white/30'}`}><Menu size={20} /></button>
             <h2 className={`text-sm lg:text-[15px] font-extrabold tracking-tight hidden sm:block ${theme.text}`}>Virtual Staffing Solutions <span className="opacity-40 px-1">|</span> Staff Dashboard</h2>
           </div>
 
           <div className="relative">
-            <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className={`relative p-2.5 rounded-xl border transition-all shadow-sm cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white/80 border-white text-slate-600 hover:bg-white'}`} title="Session Alerts History">
+            <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className={`relative p-2.5 rounded-xl border transition-all shadow-sm cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white/30 border-white/50 text-slate-600 hover:bg-white/50 backdrop-blur-md'}`} title="Session Alerts History">
               <Bell size={18} />
-              {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white dark:border-zinc-900">{unreadCount}</span>}
+              {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white/50">{unreadCount}</span>}
             </button>
 
             {/* NOTIFICATION DROPDOWN */}
             {isNotifOpen && (
-              <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-3xl overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200 border ${theme.glassPanel}`}>
-                <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/60 border-slate-200/60'}`}>
-                  <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${theme.text}`}><History size={14} className="text-purple-500"/> Session Alerts</h3>
+              <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-4xl overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200 border ${theme.glassPanel}`}>
+                <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/30 border-white/40 backdrop-blur-md'}`}>
+                  <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${theme.text}`}><History size={14} className="text-purple-600"/> Session Alerts</h3>
                 </div>
                 <div className="max-h-96 overflow-y-auto custom-scrollbar">
                   {alertHistory.length === 0 ? (
                     <div className={`px-4 py-10 text-center flex flex-col items-center gap-2 ${theme.subText}`}><Bell size={28} className="opacity-20" /><span className="text-[11px] font-bold uppercase tracking-widest">No alerts recorded yet.</span></div>
                   ) : (
-                    <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-slate-200/50'}`}>
+                    <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-white/30'}`}>
                       {alertHistory.map((notif) => {
                         const isError = (notif.title || '').toLowerCase().includes('error') || (notif.title || '').toLowerCase().includes('cancel') || (notif.title || '').toLowerCase().includes('fail');
                         return (
-                          <div key={notif.id} className={`p-5 transition-colors group relative flex gap-3 ${isError ? (isDarkMode ? 'bg-rose-500/10' : 'bg-rose-50/50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/50')}`}>
+                          <div key={notif.id} className={`p-5 transition-colors group relative flex gap-3 ${isError ? (isDarkMode ? 'bg-rose-500/10' : 'bg-rose-500/10') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/30')}`}>
                             <div className={`mt-0.5 shrink-0 ${isError ? 'text-rose-500' : 'text-orange-500'}`}><AlertTriangle size={16} /></div>
                             <div className="flex-1 pr-6 min-w-0">
                               <div className="flex justify-between items-start mb-0.5"><p className={`text-xs font-bold truncate ${isError ? (isDarkMode ? 'text-rose-400' : 'text-rose-700') : theme.text}`}>{notif.title}</p><span className={`text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>{notif.time}</span></div>
                               <p className={`text-[11px] mt-1.5 leading-relaxed wrap-break-word ${isError ? (isDarkMode ? 'text-rose-300 font-medium' : 'text-rose-600 font-medium') : theme.subText}`}>{notif.message}</p>
                             </div>
-                            <button onClick={() => dismissHistoryAlert(notif.id)} className={`absolute top-5 right-4 p-1.5 rounded-md shadow-sm transition-colors border ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-rose-400 hover:bg-white/10' : 'bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-slate-50'}`} title="Delete from History"><X size={12} /></button>
+                            <button onClick={() => dismissHistoryAlert(notif.id)} className={`absolute top-5 right-4 p-1.5 rounded-xl shadow-sm transition-colors border ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-rose-400 hover:bg-white/10' : 'bg-white/40 border-white/60 text-slate-500 hover:text-rose-600 hover:bg-white/60'}`} title="Delete from History"><X size={12} /></button>
                           </div>
                         );
                       })}
@@ -538,7 +534,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        {/* 🌟 SCROLL FIX: Added overflow-y-auto and h-full here! */}
+        {/* 🌟 MAIN CONTENT AREA (Scrollable) */}
         <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
         </main>
