@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // 🌟 SUPABASE REALTIME PRESENCE ENGINE (Tracks exact online staff browser sessions)
+  // 🌟 SUPABASE REALTIME PRESENCE ENGINE (Tracks online staff browser sessions)
   useEffect(() => {
     const presenceChannel = supabase.channel('vsit_online_presence');
 
@@ -255,7 +255,6 @@ export default function AdminDashboardPage() {
         if (isOnline) dbOnlineCount++;
       });
 
-      // Combine presence online count and database heuristic count
       const finalOnlineCount = Math.max(presenceOnlineCount, dbOnlineCount, 1);
       const offlineCount = Math.max(0, staffData.length - finalOnlineCount - deactivatedCount);
 
@@ -342,103 +341,102 @@ export default function AdminDashboardPage() {
   );
 
   return (
-    /* 🌟 h-screen & overflow-hidden ELIMINATES UNNECESSARY PAGE SCROLLING */
-    <div className={`h-screen max-h-screen overflow-hidden flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
-      <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-3 lg:p-4 gap-2.5 lg:gap-3 h-full overflow-hidden">
+    /* 🌟 DESKTOP: FIXED SCREEN HEIGHT WITH ZERO OVERFLOW SCROLLING / MOBILE: RESPONSIVE SCROLL */
+    <div className={`h-full lg:h-screen lg:max-h-screen overflow-y-auto lg:overflow-hidden flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-2.5 sm:p-3 lg:p-4 gap-2.5 lg:gap-3 h-full min-h-0">
         
-        {/* 🌟 HEADER WITH SYNC / REFRESH BUTTON */}
-        <div className={`${theme.card} rounded-xl p-3 sm:p-4 border flex items-center justify-between shrink-0 shadow-xs transition-all`}>
+        {/* 🌟 HEADER */}
+        <div className={`${theme.card} rounded-xl p-3 border flex items-center justify-between shrink-0 shadow-xs transition-all`}>
           <Link href="/admin" className="flex items-center gap-3 group">
-            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md ${isDarkMode ? 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]' : 'bg-[#fff7ed] border-[#fed7aa] text-[#F97316]'}`}>
-              <Cpu className="w-5 h-5" strokeWidth={2} />
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md ${isDarkMode ? 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]' : 'bg-[#fff7ed] border-[#fed7aa] text-[#F97316]'}`}>
+              <Cpu className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
             </div>
             <div className="flex flex-col justify-center">
-              <h1 className={`text-base lg:text-lg font-bold tracking-tight leading-none ${theme.text}`}>IT Asset & Service Management</h1>
-              <p className={`text-[11px] font-medium mt-1 ${theme.subText}`}>Welcome back, {adminName}. Here is your live IT infrastructure status.</p>
+              <h1 className={`text-sm sm:text-base lg:text-lg font-bold tracking-tight leading-none ${theme.text}`}>IT Asset & Service Management</h1>
+              <p className={`text-[10px] sm:text-[11px] font-medium mt-0.5 ${theme.subText}`}>Welcome back, {adminName}. Here is your live IT infrastructure status.</p>
             </div>
           </Link>
 
           <button 
             onClick={() => loadAdminData(true)} 
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md disabled:opacity-50 shrink-0 border border-white/20"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 shrink-0 border border-white/20"
             title="Refresh Live Data"
           >
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">Sync Feeds</span>
           </button>
         </div>
 
         {/* 📊 THUMBNAIL STAT CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3 shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3 shrink-0">
           
-          <div className={`${theme.card} p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
+          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-1">
-              <div className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}><Laptop size={16} /></div>
+              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}><Laptop size={15} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
             </div>
             <div>
-              <h2 className="text-2xl font-black text-[#8B5CF6] leading-none mb-1">{stats.totalAssets}</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#8B5CF6] leading-none mb-0.5">{stats.totalAssets}</h2>
               <p className={`text-[9px] font-medium ${theme.subText}`}>Total Assets</p>
             </div>
-            <div className={`grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+            <div className={`grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <div className="flex flex-col"><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Used</span><span className={`text-xs font-bold ${theme.subText}`}>{stats.usedAssets}</span></div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-xs font-bold text-emerald-500">{stats.inStockAssets}</span></div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-xs font-bold text-[#F97316]">{stats.discardedAssets}</span></div>
+              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-xs font-bold text-emerald-500">{stats.inStockAssets}</span></div>
+              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-xs font-bold text-[#F97316]">{stats.discardedAssets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
+          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-1">
-              <div className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={16} /> : <ClipboardCheck size={16} />}</div>
+              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={15} /> : <ClipboardCheck size={15} />}</div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
             </div>
             <div>
-              <h2 className="text-2xl font-black text-[#F97316] leading-none mb-1">{stats.totalVerifications}</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#F97316] leading-none mb-0.5">{stats.totalVerifications}</h2>
               <p className={`text-[9px] font-medium ${theme.subText}`}>Total Requests</p>
             </div>
-            <div className={`grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+            <div className={`grid grid-cols-2 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <div className="flex flex-col"><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
+              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingInspections > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.card} p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
+          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-1">
-              <div className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}><Ticket size={16} /></div>
+              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]'}`}><Ticket size={15} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
             </div>
             <div>
-              <h2 className="text-2xl font-black text-[#8B5CF6] leading-none mb-1">{stats.totalTickets}</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#8B5CF6] leading-none mb-0.5">{stats.totalTickets}</h2>
               <p className={`text-[9px] font-medium ${theme.subText}`}>Total Tickets</p>
             </div>
-            <div className={`grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+            <div className={`grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <div className="flex flex-col"><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-xs font-bold text-[#8B5CF6]">{stats.inProcessTickets}</span></div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingTickets > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingTickets}</span></div>
+              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-xs font-bold text-[#8B5CF6]">{stats.inProcessTickets}</span></div>
+              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}><span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingTickets > 0 ? 'text-[#F97316]' : theme.text}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
-          {/* 🌟 NETWORK THUMBNAIL (REALTIME ACTIVE LOGGED-IN STAFF COUNT) */}
-          <div className={`${theme.card} p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
+          <div className={`${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 hover:shadow-md ${isDarkMode ? 'hover:border-zinc-700' : 'hover:border-slate-300'}`}>
             <div className="flex justify-between items-start mb-1">
-              <div className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]'}`}><Users size={16} /></div>
+              <div className={`p-1 rounded-md transition-colors ${isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]'}`}><Users size={15} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
             </div>
             <div>
-              <h2 className="text-2xl font-black text-[#F97316] leading-none mb-1">{stats.totalStaff}</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-[#F97316] leading-none mb-0.5">{stats.totalStaff}</h2>
               <p className={`text-[9px] font-medium ${theme.subText}`}>Total Staff</p>
             </div>
-            <div className={`grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+            <div className={`grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
               <div className="flex flex-col">
                 <span className={`text-[8px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
                 <span className="text-xs font-bold text-emerald-500">{stats.onlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Off</span>
                 <span className={`text-xs font-bold ${theme.subText}`}>{stats.offlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-1.5 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+              <div className={`flex flex-col border-l pl-1 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                 <span className={`text-[8px] uppercase font-bold ${theme.subText}`}>Deact</span>
                 <span className="text-xs font-bold text-rose-500">{stats.deactivatedStaff}</span>
               </div>
@@ -446,41 +444,43 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG (FIT PERFECTLY WITHIN 100VH) */}
+        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG (COMPACT & ZERO BOTTOM EMPTY SPACE) */}
         <div className="flex-1 flex flex-col lg:flex-row gap-2.5 lg:gap-3 min-h-0 overflow-hidden">
           
-          <div className="w-full lg:w-[74%] flex flex-col gap-2 min-h-0 overflow-hidden">
-            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>System Modules</h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-2.5 flex-1 min-h-0 overflow-hidden">
+          <div className="w-full lg:w-[74%] flex flex-col gap-1.5 min-h-0 overflow-hidden">
+            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-0.5 shrink-0 ${theme.subText}`}>System Modules</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-2.5 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
               {[
-                { title: 'Review Inspections', desc: 'Audit visual submissions and approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
-                { title: 'Asset Registry', desc: 'Manage full hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
-                { title: 'Return Requests', desc: 'Manage hardware returns and asset handovers.', icon: LogOut, path: '/admin/returns', color: '#F97316', badge: stats.returnRequests },
-                { title: 'Replacements', desc: 'Process device swap requests and upgrades.', icon: RefreshCw, path: '/admin/replacements', color: '#8B5CF6', badge: stats.replacementRequests },
-                { title: 'IT Helpdesk', desc: 'Resolve staff hardware issues and repair tickets.', icon: Ticket, path: '/admin/tickets', color: '#8B5CF6', badge: stats.pendingTickets },
-                { title: 'Staff Directory', desc: 'Manage employee access codes and profiles.', icon: Users, path: '/admin/staff', color: '#F97316', badge: 0 },
-                { title: 'Remote Access', desc: 'Control staff screens securely for live support.', icon: Monitor, path: '/admin/remote', color: '#8B5CF6', badge: 0 },
-                { title: 'Reports & Analytics', desc: 'Generate hardware breakdowns and PDF exports.', icon: BarChart3, path: '/admin/reports', color: '#8B5CF6', badge: 0 },
+                { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
+                { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
+                { title: 'Return Requests', desc: 'Manage hardware returns & handovers.', icon: LogOut, path: '/admin/returns', color: '#F97316', badge: stats.returnRequests },
+                { title: 'Replacements', desc: 'Process device swaps & hardware upgrades.', icon: RefreshCw, path: '/admin/replacements', color: '#8B5CF6', badge: stats.replacementRequests },
+                { title: 'IT Helpdesk', desc: 'Resolve hardware issues & repair tickets.', icon: Ticket, path: '/admin/tickets', color: '#8B5CF6', badge: stats.pendingTickets },
+                { title: 'Staff Directory', desc: 'Manage employee access codes & profiles.', icon: Users, path: '/admin/staff', color: '#F97316', badge: 0 },
+                { title: 'Remote Access', desc: 'Control staff screens securely for support.', icon: Monitor, path: '/admin/remote', color: '#8B5CF6', badge: 0 },
+                { title: 'Reports & Analytics', desc: 'Generate hardware matrices & PDF exports.', icon: BarChart3, path: '/admin/reports', color: '#8B5CF6', badge: 0 },
               ].map((m, i) => {
                 const isOrange = m.color === '#F97316';
                 return (
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    className={`text-left cursor-pointer ${theme.card} p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-200 group hover:shadow-md ${isOrange ? (isDarkMode ? 'hover:border-[#F97316]/50' : 'hover:border-[#F97316]/40') : (isDarkMode ? 'hover:border-[#8B5CF6]/50' : 'hover:border-[#8B5CF6]/40')}`}
+                    /* 🌟 COMPACT COMPONENT WITH NO STRETCHED EMPTY SPACE AT BOTTOM */
+                    className={`text-left cursor-pointer ${theme.card} p-3 rounded-xl border flex flex-col justify-between h-auto transition-all duration-200 group hover:shadow-md ${isOrange ? (isDarkMode ? 'hover:border-[#F97316]/50' : 'hover:border-[#F97316]/40') : (isDarkMode ? 'hover:border-[#8B5CF6]/50' : 'hover:border-[#8B5CF6]/40')}`}
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className={`relative w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOrange ? (isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]') : (isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]')}`}>
-                          <m.icon size={18} strokeWidth={2.2} />
+                        <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOrange ? (isDarkMode ? 'bg-[#F97316]/10 text-[#F97316]' : 'bg-[#fff7ed] text-[#F97316]') : (isDarkMode ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#f3e8ff] text-[#8B5CF6]')}`}>
+                          <m.icon size={16} strokeWidth={2.2} />
                           {m.badge > 0 && (
-                            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white bg-rose-500 shadow-xs border border-white">
+                            <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full flex items-center justify-center text-[8px] font-black text-white bg-rose-500 shadow-xs border border-white">
                               {m.badge}
                             </span>
                           )}
                         </div>
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all group-hover:translate-x-1 ${isOrange ? 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}>
-                          <ArrowRight size={14} strokeWidth={2.5} />
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all group-hover:translate-x-0.5 ${isOrange ? 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white'}`}>
+                          <ArrowRight size={12} strokeWidth={2.5} />
                         </div>
                       </div>
                       <h4 className={`text-xs font-bold tracking-tight ${theme.text}`}>{m.title}</h4>
@@ -493,31 +493,31 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* LIVE ACTIVITY LOG SIDEBAR */}
-          <div className="w-full lg:w-[26%] flex flex-col gap-2 min-h-0 overflow-hidden">
-            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
+          <div className="w-full lg:w-[26%] flex flex-col gap-1.5 min-h-0 overflow-hidden">
+            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-0.5 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
             <div className={`${theme.card} rounded-xl border p-3 flex-1 flex flex-col min-h-0 overflow-hidden shadow-xs`}>
               {recentActivity.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
-                  <Activity size={24} className={`${theme.subText} mb-2`} />
+                  <Activity size={22} className={`${theme.subText} mb-1.5`} />
                   <p className={`text-xs font-bold ${theme.subText}`}>Waiting for live events...</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
                   {recentActivity.map((log: any, i: number) => (
-                    <div key={i} className={`flex gap-2.5 relative pb-2.5 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                      <div className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
-                        <Clock size={12} />
+                    <div key={i} className={`flex gap-2 relative pb-2 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+                      <div className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
+                        <Clock size={11} />
                       </div>
                       <div className="pt-0.5 min-w-0">
                         <p className={`text-xs font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
                         <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.subText}`}>Submitted system request.</p>
-                        <p className={`text-[8px] font-bold uppercase tracking-wider mt-1 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
+                        <p className={`text-[8px] font-bold uppercase tracking-wider mt-0.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-2.5 w-full py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all hover:bg-slate-50 ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-2 w-full py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all hover:bg-slate-50 ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-white border-slate-200 text-slate-600'}`}>
                 View Entire Log
               </button>
             </div>
