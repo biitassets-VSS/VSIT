@@ -321,7 +321,7 @@ export default function StaffInspectionsPage() {
             <div className="flex items-center justify-between w-full mb-4 sm:mb-6 shrink-0">
                <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/10 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full">
                  <ShieldCheck className="text-purple-400" size={18} />
-                 <span className="text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest truncate max-w-[200px] sm:max-w-md">
+                 <span className="text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest truncate max-w-50 sm:max-w-md">
                    {photoViewer.title} • {photoViewer.photos.length} Secure Images
                  </span>
                </div>
