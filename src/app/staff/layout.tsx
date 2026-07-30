@@ -345,7 +345,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     <div className={`min-h-screen ${theme.bg} flex font-sans relative overflow-hidden transition-colors duration-1000 z-0`}>
       
       {/* 🌟 TRUE LIGHT ORANGE & PURPLE AMBIENT BACKGROUND ORBS */}
-      {/* Reduced the opacity and used a truer orange to eliminate the yellow burn */}
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
@@ -539,8 +538,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        {/* 🌟 MAIN CONTENT AREA (Relative Flex Container) */}
-        <main className="flex-1 relative z-10 w-full">
+        {/* 🌟 SCROLL FIX: Added overflow-y-auto and h-full here! */}
+        <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
         </main>
       </div>
