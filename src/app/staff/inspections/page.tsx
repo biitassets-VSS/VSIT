@@ -125,7 +125,7 @@ export default function StaffInspectionsPage() {
 
   return (
     <>
-      {/* 🌟 MAIN PAGE CONTENT (Unrestricted scrolling layout!) */}
+      {/* 🌟 MAIN PAGE CONTENT (Unrestricted scrolling layout) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 animate-in fade-in duration-500 w-full min-h-screen pb-32 select-none relative" onContextMenu={(e) => e.preventDefault()}>
         
         {/* 🌟 ADVANCED HEADER WITH GLASS THEME */}
@@ -257,7 +257,7 @@ export default function StaffInspectionsPage() {
                     </div>
 
                     {/* Feedback Note */}
-                    <div className={`p-3.5 rounded-xl border flex-1 backdrop-blur-xs shadow-inner mb-4 ${isRejected ? 'bg-rose-50/50 border-rose-200/50' : isApproved ? 'bg-emerald-50/50 border-emerald-200/50' : 'bg-slate-50/50 border-slate-200/50'}`}>
+                    <div className={`p-3.5 rounded-xl border flex-1 backdrop-blur-xs shadow-inner mb-5 ${isRejected ? 'bg-rose-50/50 border-rose-200/50' : isApproved ? 'bg-emerald-50/50 border-emerald-200/50' : 'bg-slate-50/50 border-slate-200/50'}`}>
                       <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-1 ${isRejected ? 'text-rose-600' : isApproved ? 'text-emerald-600' : 'text-slate-500'}`}>
                         {isRejected ? <AlertOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
                         {isRejected ? 'Admin Rejection Reason' : isApproved ? 'Admin Approval Note' : 'Submitted Notes'}
@@ -267,17 +267,35 @@ export default function StaffInspectionsPage() {
                       </p>
                     </div>
 
-                    {/* Evidence Button */}
-                    <div className="pt-3 border-t border-slate-200/50 shrink-0 mt-auto flex justify-end">
+                    {/* 🌟 THUMBNAIL PHOTO GALLERY (Replaced the button) */}
+                    <div className="pt-4 border-t border-slate-200/50 shrink-0 mt-auto">
                       {safePhotos.length > 0 ? (
-                        <button 
-                          onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection' })}
-                          className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
-                        >
-                          <Eye size={15} /> View Encrypted Evidence ({safePhotos.length})
-                        </button>
+                        <div className="flex flex-col gap-2.5">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                            <Eye size={12} /> Attached Evidence ({safePhotos.length})
+                          </span>
+                          <div className="flex items-center gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                            {safePhotos.map((url, i) => (
+                              <button 
+                                key={i}
+                                onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection' })}
+                                className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 border-2 border-white shadow-sm ring-1 ring-slate-200/60 transition-all hover:ring-purple-400 hover:shadow-md cursor-pointer"
+                              >
+                                <img 
+                                  src={url} 
+                                  alt={`Evidence ${i + 1}`} 
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                />
+                                {/* Hover Glass Overlay */}
+                                <div className="absolute inset-0 bg-purple-900/0 group-hover:bg-purple-900/40 transition-colors flex items-center justify-center backdrop-blur-[1px] opacity-0 group-hover:opacity-100">
+                                  <Eye size={20} className="text-white drop-shadow-md" />
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       ) : (
-                        <div className="px-5 py-2 rounded-xl border border-dashed border-slate-300 bg-white/50 text-slate-400 text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 w-full sm:w-auto justify-center">
+                        <div className="px-5 py-3 rounded-xl border border-dashed border-slate-300 bg-white/50 text-slate-400 text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 justify-center w-full">
                           <CameraOff size={15} /> No Photos Attached
                         </div>
                       )}
@@ -291,7 +309,7 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* 🌟 SECURE LIGHTBOX (Completely OUTSIDE the animated wrapper to fix Z-Index & Sidebar Issue!) */}
+      {/* 🌟 SECURE LIGHTBOX (Remains Fixed & Strict Overlay) */}
       {photoViewer.isOpen && (
         <div 
           className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl flex flex-col items-center justify-center p-0 m-0 select-none overflow-hidden z-99999"
@@ -302,7 +320,7 @@ export default function StaffInspectionsPage() {
             {/* Close Button */}
             <button 
               onClick={() => setPhotoViewer({ isOpen: false, photos: [], title: '' })} 
-              className="absolute top-6 right-6 p-4 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors cursor-pointer z-50 border border-white/20 shadow-2xl"
+              className="absolute top-4 right-4 sm:top-8 sm:right-8 p-4 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors cursor-pointer z-50 border border-white/20 shadow-2xl"
             >
               <X size={24}/>
             </button>
@@ -316,15 +334,14 @@ export default function StaffInspectionsPage() {
               </div>
             )}
             
-            {/* 🌟 GALLERY FIX: Forced strict max-height to ensure images NEVER blow up off-screen */}
-            <div className="flex w-full h-[85vh] overflow-x-auto snap-x snap-mandatory items-center custom-scrollbar pb-4">
+            <div className="flex w-full h-dvh overflow-x-auto snap-x snap-mandatory items-center custom-scrollbar">
               {photoViewer.photos.map((url, i) => (
                 <div key={i} className="shrink-0 w-full h-full snap-center flex items-center justify-center p-4 sm:p-12 relative">
                   <img 
                     src={url} 
                     alt="Secure Evidence" 
                     draggable={false} 
-                    className="w-full h-full max-h-full object-contain rounded-2xl drop-shadow-[0_0_35px_rgba(0,0,0,0.4)] pointer-events-none select-none" 
+                    className="w-auto h-auto max-w-full max-h-full object-contain rounded-2xl drop-shadow-[0_0_35px_rgba(0,0,0,0.4)] pointer-events-none select-none" 
                     style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
                   />
                   {/* Invisible shield block over image to prevent right click save */}
@@ -333,7 +350,7 @@ export default function StaffInspectionsPage() {
               ))}
             </div>
             
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 text-white text-xs font-black tracking-widest uppercase shadow-2xl flex items-center gap-2 whitespace-nowrap">
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 text-white text-xs font-black tracking-widest uppercase shadow-2xl flex items-center gap-2 whitespace-nowrap">
               <ShieldCheck size={16} className="text-purple-400" />
               {photoViewer.photos.length} Secure Images • Do Not Distribute
             </div>
