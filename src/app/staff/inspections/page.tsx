@@ -4,9 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ClipboardCheck, Loader2, AlertTriangle, Eye, X, 
-  CameraOff, Bell, CheckCircle2, RefreshCw, Calendar, 
-  Clock, XOctagon, Search, ShieldCheck, Laptop, FileSignature,
-  MessageSquare
+  CameraOff, CheckCircle2, RefreshCw, Calendar, 
+  Clock, XOctagon, Search, ShieldCheck, Laptop, FileSignature
 } from 'lucide-react';
 
 // 🌟 DYNAMIC DUE DATE CALCULATOR
@@ -33,7 +32,6 @@ export default function StaffInspectionsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string>('');
   const [inspections, setInspections] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   // 🌟 SECURE LIGHTBOX STATE
@@ -81,17 +79,6 @@ export default function StaffInspectionsPage() {
 
       if (inspError) throw inspError;
       if (inspData) setInspections(inspData);
-
-      if (currentUserId) {
-        const { data: notifData } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('target_user', currentUserId)
-          .eq('is_read', false)
-          .order('created_at', { ascending: false });
-          
-        if (notifData) setNotifications(notifData);
-      }
       
       setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
@@ -112,20 +99,11 @@ export default function StaffInspectionsPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, fetchRealtimeData)
       .subscribe();
       
-    const subNotif = supabase.channel('staff_notif_page_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, fetchRealtimeData)
-      .subscribe();
-      
     return () => { 
-      supabase.removeChannel(subInsp); supabase.removeChannel(subNotif);
+      supabase.removeChannel(subInsp);
       window.removeEventListener('focus', handleFocus); window.removeEventListener('blur', handleBlur);
     };
   }, []);
-
-  const markNotificationAsRead = async (notifId: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== notifId));
-    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
-  };
 
   const getStatusConfig = (status: string) => {
     const s = (status || '').toLowerCase();
@@ -180,44 +158,6 @@ export default function StaffInspectionsPage() {
           </button>
         </div>
       </div>
-
-      {/* 🌟 ACTION ALERTS (Scrollable to prevent screen takeover) */}
-      {notifications.length > 0 && (
-        <div className="space-y-3 mb-8 animate-in slide-in-from-top-4">
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-            <Bell size={14} className="text-orange-500 animate-bounce" /> Action Alerts ({notifications.length})
-          </h3>
-          <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2 pb-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {notifications.map(notif => {
-                const s = (notif.title || '').toLowerCase();
-                const isReject = s.includes('reject');
-                const isApprove = s.includes('approve');
-                
-                const bgColor = isReject ? 'bg-rose-50/80 border-rose-200' : isApprove ? 'bg-emerald-50/80 border-emerald-200' : 'bg-purple-50/80 border-purple-200';
-                const iconColor = isReject ? 'text-rose-600' : isApprove ? 'text-emerald-600' : 'text-purple-600';
-
-                return (
-                  <div key={notif.id} className={`p-4 rounded-2xl border backdrop-blur-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${bgColor}`}>
-                    <div className="flex items-start sm:items-center gap-3">
-                      <div className={`p-2 bg-white rounded-lg shadow-xs shrink-0 ${iconColor}`}>
-                        {isApprove ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-                      </div>
-                      <div>
-                        <h4 className={`font-bold text-sm ${iconColor}`}>{notif.title || 'System Alert'}</h4>
-                        <p className="text-xs font-medium text-slate-700 mt-0.5">{notif.message || 'Check your dashboard.'}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => markNotificationAsRead(notif.id)} className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-sm">
-                      Dismiss
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 🌟 ADVANCED GRID VIEW (Cards) */}
       <div className="relative min-h-100">
@@ -316,7 +256,7 @@ export default function StaffInspectionsPage() {
                     {/* Admin Feedback Block */}
                     <div className={`p-4 rounded-2xl border flex-1 backdrop-blur-sm shadow-inner ${isRejected ? 'bg-rose-50/50 border-rose-200' : isApproved ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50/50 border-slate-200'}`}>
                       <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-2 opacity-60">
-                        {isRejected ? <XOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <MessageSquare size={12}/>}
+                        {isRejected ? <XOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
                         {isRejected ? 'Admin Rejection Reason' : isApproved ? 'Admin Approval Note' : 'Submitted Notes'}
                       </span>
                       <p className={`text-sm font-semibold whitespace-pre-wrap ${isRejected ? 'text-rose-900' : isApproved ? 'text-emerald-900' : 'text-slate-700'}`}>
