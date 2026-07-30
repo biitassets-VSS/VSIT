@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="transition-colors duration-1000">
       {/* 🌟 BASE THEME: Removed stark whites. Now a pure, soft light-orange blend */}
-      <body className="antialiased bg-linear-to-br from-[#FFF4E6] via-[#FFE8D6] to-[#FFDCC2] dark:from-[#0C0A09] dark:via-[#140F0A] dark:to-[#1C120C] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-orange-500/30 selection:text-orange-900 dark:selection:text-orange-100">
+      <body className="antialiased bg-linear-to-br from-[#e2d1bc] via-[#FFE8D6] to-[#FFDCC2] dark:from-[#0C0A09] dark:via-[#140F0A] dark:to-[#1C120C] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-orange-500/30 selection:text-orange-900 dark:selection:text-orange-100">
         
         {/* 🌟 AMBIENT LIGHT ENGINE */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
