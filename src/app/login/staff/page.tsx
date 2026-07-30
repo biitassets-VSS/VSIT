@@ -54,16 +54,17 @@ export default function StaffLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center p-4 font-sans antialiased">
-      <div className="relative w-full max-w-md">
+    // 🌟 UPGRADE: Removed `bg-[#F0F4F8]` to let the Layout's light engine shine through
+    <div className="min-h-screen bg-transparent flex items-center justify-center p-4 font-sans antialiased relative overflow-hidden">
+      
+      <div className="relative w-full max-w-md z-10">
         
-        {/* 🌟 PURPLE NEON GLOW EFFECT */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 via-fuchsia-400 to-purple-500 rounded-[2.5rem] blur-xl opacity-60 animate-pulse"></div>
+        {/* 🌟 UPGRADE: Changed harsh neon to a massive, soft glowing aura */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-orange-400/20 via-purple-400/20 to-orange-400/20 rounded-[3rem] blur-2xl opacity-80"></div>
         
-        {/* MAIN CARD (WHITE THEME) */}
-        <div className="relative bg-white rounded-[2rem] p-8 md:p-10 border border-white/80 shadow-2xl flex flex-col items-center text-center">
+        {/* 🌟 UPGRADE: The Main Glass Card. High blur, semi-transparent white base, delicate light borders */}
+        <div className="relative bg-white/40 dark:bg-black/20 backdrop-blur-3xl rounded-[2rem] p-8 md:p-10 border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.06)] flex flex-col items-center text-center">
           
-          {/* COMPANY LOGO */}
           <img 
             src="/logo.png" 
             alt="Virtual Staffing Solution Logo" 
@@ -71,17 +72,17 @@ export default function StaffLoginPage() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
-          {/* PURPLE ICON */}
-          <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mb-4 text-purple-600 border border-purple-100 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          {/* 🌟 UPGRADE: Glassy Icon wrapper */}
+          <div className="w-16 h-16 bg-purple-500/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 text-purple-600 border border-purple-500/20 shadow-[0_8px_24px_rgba(168,85,247,0.15)]">
             <Users size={28} />
           </div>
           
           <h2 className="text-sm font-black uppercase tracking-widest text-purple-600 mb-1">Virtual Staffing Solution</h2>
-          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-900">Staff Portal</h1>
-          <p className="text-sm font-semibold tracking-wide text-slate-500 mb-8">View hardware & sign agreements</p>
+          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-800 dark:text-zinc-100">Staff Portal</h1>
+          <p className="text-sm font-semibold tracking-wide text-slate-600 dark:text-slate-400 mb-8">View hardware & sign agreements</p>
 
           {error && (
-            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-50 border border-rose-100 text-rose-600 text-left">
+            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 backdrop-blur-md border border-rose-500/20 text-rose-600 dark:text-rose-400 text-left shadow-sm">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <p className="text-xs font-semibold">{error}</p>
             </div>
@@ -89,30 +90,33 @@ export default function StaffLoginPage() {
 
           <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Employee Email</label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Employee Email</label>
+              <div className="relative group">
+                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 transition-colors group-focus-within:text-purple-600" />
+                {/* 🌟 UPGRADE: Glassy Inputs with beautiful focus states */}
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="employee@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white border border-slate-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-slate-900 placeholder:text-slate-400"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 focus:bg-white/80 dark:focus:bg-white/10 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/15 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Password</label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Password</label>
+              <div className="relative group">
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 transition-colors group-focus-within:text-purple-600" />
+                {/* 🌟 UPGRADE: Glassy Inputs with beautiful focus states */}
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white border border-slate-200 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-slate-900 placeholder:text-slate-400"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 focus:bg-white/80 dark:focus:bg-white/10 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/15 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
                 />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600 hover:bg-purple-700 shadow-[0_4px_20px_rgba(168,85,247,0.4)] transition-all disabled:opacity-70">
+            {/* 🌟 UPGRADE: Translucent premium button with deeper shadows */}
+            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600/90 backdrop-blur-md hover:bg-purple-600 border border-purple-500/50 shadow-[0_8px_24px_rgba(168,85,247,0.3)] transition-all duration-300 disabled:opacity-70 cursor-pointer">
               {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={16} /></>}
             </button>
           </form>
