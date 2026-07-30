@@ -126,7 +126,7 @@ export default function StaffInspectionsPage() {
   );
 
   return (
-    /* 🌟 CENTERED & FULLY SCROLLABLE WRAPPER */
+    /* 🌟 SCROLL & FREEZE FIX: Removed `h-full overflow-y-auto`. Let the parent layout scroll naturally! */
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-24 space-y-6 animate-in fade-in duration-500 w-full select-none relative" onContextMenu={(e) => e.preventDefault()}>
       
       {/* 🌟 ADVANCED HEADER WITH GLASS THEME */}
@@ -231,26 +231,26 @@ export default function StaffInspectionsPage() {
                     </span>
                   </div>
 
-                  {/* Grid Specs */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
+                  {/* 🌟 OPTIMIZED COMPACT GRID */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
                     <div className="min-w-0">
-                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Tag ID</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Tag ID</span>
                       <span className="font-bold text-xs sm:text-sm text-slate-900 wrap-break-word block">{asset.asset_tag || 'N/A'}</span>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Assigned</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Assigned</span>
                       <span className="font-bold text-xs sm:text-sm text-slate-900 wrap-break-word block">{formatDate(assignedDate)}</span>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Agreement</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Agreement</span>
                       <span className="font-bold text-xs sm:text-sm text-slate-900 wrap-break-word block">{formatDate(agreementDate)}</span>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Inspected</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Inspected</span>
                       <span className="font-bold text-xs sm:text-sm text-slate-900 wrap-break-word block">{formatDate(insp.created_at)}</span>
                     </div>
                     <div className="min-w-0">
-                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Next Due</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Next Due</span>
                       <span className={`font-bold text-xs sm:text-sm wrap-break-word block ${isApproved ? 'text-purple-700' : 'text-slate-500'}`}>
                         {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending'}
                       </span>
@@ -291,16 +291,17 @@ export default function StaffInspectionsPage() {
         )}
       </div>
 
-      {/* 🌟 SECURE LIGHTBOX (FULLSCREEN OVERLAY OVER SIDEBAR) */}
+      {/* 🌟 SECURE LIGHTBOX (IMAGE SIZE & OVERFLOW FIX) */}
       {photoViewer.isOpen && (
         <div 
-          className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-99999 flex flex-col items-center justify-center p-4 select-none"
+          className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl flex flex-col items-center justify-center p-4 select-none"
+          style={{ zIndex: 99999 }}
           onContextMenu={(e) => e.preventDefault()} 
         >
           <div className={`w-full h-full flex flex-col items-center justify-center transition-all duration-300 relative ${!isWindowFocused ? 'blur-3xl opacity-0 scale-95' : 'blur-0 opacity-100 scale-100'}`}>
             <button 
               onClick={() => setPhotoViewer({ isOpen: false, photos: [], title: '' })} 
-              className="absolute top-6 right-6 p-3.5 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors cursor-pointer z-50 border border-white/20 shadow-2xl"
+              className="absolute top-4 right-4 sm:top-6 sm:right-6 p-3 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors cursor-pointer z-50 border border-white/20 shadow-2xl"
             >
               <X size={22}/>
             </button>
@@ -313,24 +314,25 @@ export default function StaffInspectionsPage() {
               </div>
             )}
             
-            {/* Gallery Images with Strict Sizing */}
-            <div className="flex gap-6 overflow-x-auto max-w-6xl w-full items-center justify-center px-4 snap-x custom-scrollbar py-6">
+            {/* Gallery Container - Constrained to 75% height max */}
+            <div className="flex gap-4 overflow-x-auto w-full max-w-7xl h-[75vh] items-center px-4 snap-x custom-scrollbar">
               {photoViewer.photos.map((url, i) => (
-                <div key={i} className="relative shrink-0 snap-center max-w-full max-h-[75vh] flex items-center justify-center">
+                <div key={i} className="relative shrink-0 snap-center w-full max-w-3xl h-full flex items-center justify-center mx-auto">
                   <img 
                     src={url} 
                     alt="Secure Evidence" 
                     draggable={false} 
-                    className="max-h-[75vh] w-auto max-w-full object-contain rounded-3xl pointer-events-none select-none border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]" 
+                    className="w-full h-full object-contain rounded-3xl pointer-events-none select-none drop-shadow-[0_0_25px_rgba(0,0,0,0.5)]" 
                     style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
                   />
-                  <div className="absolute inset-0 z-10 bg-transparent" />
+                  {/* Transparent overlay to block drag/saving */}
+                  <div className="absolute inset-0 z-10 bg-transparent w-full h-full" />
                 </div>
               ))}
             </div>
             
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-xl px-5 py-2 rounded-full border border-white/10 text-white text-[10px] font-black tracking-widest uppercase shadow-2xl flex items-center gap-2">
-              <ShieldCheck size={14} className="text-purple-400" />
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 text-white text-[10px] sm:text-xs font-black tracking-widest uppercase shadow-2xl flex items-center gap-2 whitespace-nowrap">
+              <ShieldCheck size={16} className="text-purple-400" />
               {photoViewer.photos.length} Secure Images • Do Not Distribute
             </div>
           </div>
