@@ -239,13 +239,13 @@ export default function AdminDashboardPage() {
     } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
   };
 
-  // 🎨 MAC OS 2026 PREMIUM GLASS THEME CONFIGURATION
+  // 🎨 PURE MAC OS 2026 PREMIUM GLASS THEME CONFIGURATION
   const theme = {
-    bg: isDarkMode ? 'bg-[#09090b]' : 'bg-[#f4f6f9]',
-    // 🌟 TRUE TRANSPARENT GLASS EFFECT: High blur, slight transparency, crisp border
+    bg: isDarkMode ? 'bg-[#050505]' : 'bg-[#eef2f6]',
+    // 🌟 TRUE TRANSPARENT GLASS EFFECT: Pure transparency (white/20), very high blur, and distinct borders
     glassCard: isDarkMode 
-      ? 'bg-[#18181b]/50 backdrop-blur-[24px] backdrop-saturate-[1.5] border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]' 
-      : 'bg-white/30 backdrop-blur-[24px] backdrop-saturate-[1.5] border border-white/50 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]',
+      ? 'bg-black/30 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)]' 
+      : 'bg-white/30 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/50 shadow-[0_8px_32px_0_rgba(31,38,135,0.06)]',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
@@ -266,17 +266,15 @@ export default function AdminDashboardPage() {
   );
 
   return (
-    // 🌟 FULLY RESPONSIVE WRAPPER
-    // Mobile (< lg): min-h-screen, overflow-y-auto (allows the entire page to scroll naturally)
-    // Desktop (lg+): fixed h-screen, overflow-hidden (freezes main page, prevents desktop scroll)
-    <div className={`relative min-h-screen lg:h-screen lg:max-h-screen overflow-y-auto lg:overflow-hidden flex flex-col ${theme.bg} font-sans antialiased z-0`}>
+    // 🌟 100% DESKTOP FREEZE (ABSOLUTE INSET-0 + OVERFLOW-HIDDEN ON DESKTOP)
+    <div className={`absolute inset-0 w-full h-full lg:overflow-hidden overflow-y-auto flex flex-col ${theme.bg} font-sans antialiased z-0`}>
       
-      {/* 🌟 MASSIVE AMBIENT BACKGROUND GLOWS FOR TRUE GLASS EFFECT */}
-      <div className="fixed top-[-10%] left-[-5%] w-[60vw] h-[60vh] bg-orange-400/30 dark:bg-orange-600/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] right-[-5%] w-[60vw] h-[60vh] bg-purple-500/30 dark:bg-purple-600/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      {/* 🌟 ENHANCED AMBIENT NEON ORBS FOR PURE GLASS BLUR */}
+      <div className="fixed top-0 left-[10%] w-[50vw] h-[50vh] bg-orange-400/20 dark:bg-orange-500/15 blur-[120px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen" />
+      <div className="fixed bottom-0 right-[10%] w-[50vw] h-[50vh] bg-purple-500/20 dark:bg-purple-600/15 blur-[120px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen" />
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-4 h-full lg:min-h-0 z-10">
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-3 sm:p-4 lg:p-6 gap-3 lg:gap-5 h-full lg:min-h-0 z-10">
         
         {/* 🌟 HEADER WITH SYNC BUTTON */}
         <div className={`${theme.glassCard} rounded-2xl p-4 border flex items-center justify-between shrink-0 transition-all`}>
@@ -286,7 +284,7 @@ export default function AdminDashboardPage() {
             </div>
             <div className="flex flex-col justify-center">
               <h1 className={`text-base lg:text-lg font-extrabold tracking-tight leading-none ${theme.text}`}>IT Asset & Service Management</h1>
-              <p className={`text-[11px] font-medium mt-1 ${theme.subText}`}>Welcome back, <span className="font-bold">{adminName}</span>. Here is your live IT infrastructure status.</p>
+              <p className={`text-[11px] font-medium mt-1.5 ${theme.subText}`}>Welcome back, <span className="font-bold">{adminName}</span>. Here is your live IT infrastructure status.</p>
             </div>
           </Link>
 
@@ -302,72 +300,77 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* 📊 THUMBNAIL STAT CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 shrink-0">
           
-          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group`}>
-            <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Laptop size={16} /></div>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group relative overflow-hidden`}>
+            {/* Subtle inner card glow */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-400/10 blur-2xl rounded-full pointer-events-none transition-opacity group-hover:opacity-100 opacity-0" />
+            <div className="flex justify-between items-start mb-2 relative z-10">
+              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100/80 text-purple-600'}`}><Laptop size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
             </div>
-            <div>
-              <h2 className="text-3xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1">{stats.totalAssets}</h2>
-              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Assets</p>
+            <div className="relative z-10">
+              <h2 className="text-3xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1.5">{stats.totalAssets}</h2>
+              <p className={`text-[10px] font-bold ${theme.subText}`}>Total Assets</p>
             </div>
-            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Used</span><span className={`text-xs font-black ${theme.subText}`}>{stats.usedAssets}</span></div>
+            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t relative z-10 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Used</span><span className={`text-xs font-black ${theme.text}`}>{stats.usedAssets}</span></div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Stock</span><span className="text-xs font-black text-emerald-500">{stats.inStockAssets}</span></div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Discard</span><span className="text-xs font-black text-orange-500">{stats.discardedAssets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group`}>
-            <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={16} /> : <ClipboardCheck size={16} />}</div>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group relative overflow-hidden`}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/10 blur-2xl rounded-full pointer-events-none transition-opacity group-hover:opacity-100 opacity-0" />
+            <div className="flex justify-between items-start mb-2 relative z-10">
+              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100/80 text-orange-600'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={18} /> : <ClipboardCheck size={18} />}</div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
             </div>
-            <div>
-              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none mb-1">{stats.totalVerifications}</h2>
-              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Requests</p>
+            <div className="relative z-10">
+              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none mb-1.5">{stats.totalVerifications}</h2>
+              <p className={`text-[10px] font-bold ${theme.subText}`}>Total Requests</p>
             </div>
-            <div className={`grid grid-cols-2 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+            <div className={`grid grid-cols-2 gap-2 mt-3 pt-3 border-t relative z-10 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
               <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-black text-emerald-500">{stats.resolvedInspections}</span></div>
               <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-black ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.text}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group`}>
-            <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Ticket size={16} /></div>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group relative overflow-hidden`}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-400/10 blur-2xl rounded-full pointer-events-none transition-opacity group-hover:opacity-100 opacity-0" />
+            <div className="flex justify-between items-start mb-2 relative z-10">
+              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100/80 text-purple-600'}`}><Ticket size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
             </div>
-            <div>
-              <h2 className="text-3xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1">{stats.totalTickets}</h2>
-              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Tickets</p>
+            <div className="relative z-10">
+              <h2 className="text-3xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1.5">{stats.totalTickets}</h2>
+              <p className={`text-[10px] font-bold ${theme.subText}`}>Total Tickets</p>
             </div>
-            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t relative z-10 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
               <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Resolved</span><span className="text-xs font-black text-emerald-500">{stats.resolvedTickets}</span></div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Process</span><span className="text-xs font-black text-purple-600 dark:text-purple-400">{stats.inProcessTickets}</span></div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Pending</span><span className={`text-xs font-black ${stats.pendingTickets > 0 ? 'text-orange-500' : theme.text}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group`}>
-            <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}><Users size={16} /></div>
+          <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group relative overflow-hidden`}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/10 blur-2xl rounded-full pointer-events-none transition-opacity group-hover:opacity-100 opacity-0" />
+            <div className="flex justify-between items-start mb-2 relative z-10">
+              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100/80 text-orange-600'}`}><Users size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
             </div>
-            <div>
-              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none mb-1">{stats.totalStaff}</h2>
-              <p className={`text-[10px] font-semibold ${theme.subText}`}>Total Staff</p>
+            <div className="relative z-10">
+              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none mb-1.5">{stats.totalStaff}</h2>
+              <p className={`text-[10px] font-bold ${theme.subText}`}>Total Staff</p>
             </div>
-            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+            <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t relative z-10 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
               <div className="flex flex-col">
                 <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
                 <span className="text-xs font-black text-emerald-500">{stats.onlineStaff}</span>
               </div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
                 <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
-                <span className={`text-xs font-black ${theme.subText}`}>{stats.offlineStaff}</span>
+                <span className={`text-xs font-black ${theme.text}`}>{stats.offlineStaff}</span>
               </div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
                 <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span>
@@ -379,14 +382,12 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG */}
-        {/* On Mobile: Stacked, natural scroll. On Desktop: side-by-side, locked height, internal scrolling */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:min-h-0 lg:overflow-hidden pt-1">
+        <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:min-h-0 lg:overflow-hidden pt-2">
           
-          <div className="w-full lg:w-[74%] flex flex-col gap-2.5 lg:min-h-0 lg:overflow-hidden">
-            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>System Modules</h3>
+          <div className="w-full lg:w-[72%] flex flex-col gap-3 lg:min-h-0 lg:overflow-hidden">
+            <h3 className={`text-[11px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>System Modules</h3>
             
-            {/* Desktop: Internal Scroll. Mobile: Natural Stack (No forced scrollbox) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 lg:min-h-0 lg:overflow-y-auto custom-scrollbar content-start lg:pr-1 lg:pb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 lg:min-h-0 lg:overflow-y-auto custom-scrollbar content-start pb-4 pr-1">
               {[
                 { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
@@ -402,25 +403,26 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    // COMPACT MODULE CARDS (h-auto ensures no empty space at the bottom)
-                    className={`text-left cursor-pointer h-auto p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 ease-out group ${theme.glassCard} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-500/40' : 'hover:shadow-purple-500/10 hover:border-purple-500/40'}`}
+                    // 🌟 FIXED HEIGHT CARD (h-[135px]) ELIMINATES SHRINKAGE & EMPTY SPACE 
+                    className={`text-left cursor-pointer h-33.75 p-4 rounded-[20px] flex flex-col justify-between transition-all duration-300 ease-out group ${theme.glassCard} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-500/40 hover:bg-white/40 dark:hover:bg-white/10' : 'hover:shadow-purple-500/10 hover:border-purple-500/40 hover:bg-white/40 dark:hover:bg-white/10'}`}
                   >
-                    <div className="flex items-start justify-between mb-3 w-full">
-                      <div className={`p-2 rounded-xl transition-transform duration-300 group-hover:scale-110 ${isOrange ? (isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-600') : (isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-600')}`}>
+                    <div className="flex items-start justify-between w-full">
+                      {/* 🌟 OVERFLOW-VISIBLE PREVENTS BADGE CLIPPING */}
+                      <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${isOrange ? (isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100/80 text-orange-600') : (isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100/80 text-purple-600')}`}>
                         <m.icon size={20} strokeWidth={2.2} />
                         {m.badge > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white bg-rose-500 shadow-md border border-white">
+                          <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-linear-to-br from-rose-500 to-red-600 shadow-md border-2 border-white dark:border-[#18181b] z-20 transform group-hover:scale-110 transition-transform">
                             {m.badge}
                           </span>
                         )}
                       </div>
-                      <div className={`p-1.5 rounded-full transition-colors duration-300 ${isDarkMode ? 'bg-white/5 text-zinc-500 group-hover:bg-white/10 group-hover:text-zinc-200' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
-                        <ArrowRight size={14} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 group-hover:translate-x-1 ${isOrange ? 'bg-[#fff7ed] text-[#F97316] group-hover:bg-[#F97316] group-hover:text-white dark:bg-white/5 dark:text-zinc-500 dark:group-hover:bg-orange-500 dark:group-hover:text-white' : 'bg-[#f3e8ff] text-[#8B5CF6] group-hover:bg-[#8B5CF6] group-hover:text-white dark:bg-white/5 dark:text-zinc-500 dark:group-hover:bg-purple-500 dark:group-hover:text-white'}`}>
+                        <ArrowRight size={14} strokeWidth={2.5} />
                       </div>
                     </div>
                     <div>
-                      <h4 className={`text-sm font-bold tracking-tight leading-tight ${theme.text}`}>{m.title}</h4>
-                      <p className={`text-[11px] font-medium mt-1.5 leading-relaxed line-clamp-2 ${theme.subText}`}>{m.desc}</p>
+                      <h4 className={`text-[14px] font-bold tracking-tight leading-tight ${theme.text}`}>{m.title}</h4>
+                      <p className={`text-[11px] font-medium mt-1 leading-snug line-clamp-2 ${theme.subText}`}>{m.desc}</p>
                     </div>
                   </button>
                 );
@@ -429,31 +431,31 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* LIVE ACTIVITY LOG SIDEBAR */}
-          <div className="w-full lg:w-[26%] flex flex-col gap-2.5 lg:min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
-            <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
-            <div className={`${theme.glassCard} rounded-2xl p-4 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden`}>
+          <div className="w-full lg:w-[28%] flex flex-col gap-3 lg:min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
+            <h3 className={`text-[11px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
+            <div className={`${theme.glassCard} rounded-[20px] p-5 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden`}>
               {recentActivity.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
-                  <Activity size={24} className={`${theme.subText} mb-2`} />
-                  <p className={`text-xs font-semibold ${theme.subText}`}>Waiting for live events...</p>
+                  <Activity size={28} className={`${theme.subText} mb-3`} />
+                  <p className={`text-[13px] font-bold ${theme.subText}`}>Waiting for live events...</p>
                 </div>
               ) : (
-                <div className="flex-1 lg:overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                   {recentActivity.map((log: any, i: number) => (
-                    <div key={i} className={`flex gap-3 relative pb-3 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
-                      <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
-                        <Clock size={12} strokeWidth={2.5} />
+                    <div key={i} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                      <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
+                        <Clock size={14} strokeWidth={2.5} />
                       </div>
                       <div className="pt-0.5 min-w-0">
-                        <p className={`text-[13px] font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
-                        <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.subText}`}>Submitted system request.</p>
-                        <p className={`text-[9px] font-bold uppercase tracking-wider mt-1 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
+                        <p className={`text-[14px] font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
+                        <p className={`text-[11px] font-medium mt-1 truncate ${theme.subText}`}>Submitted system request.</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-wider mt-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-3 w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all duration-300 cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' : 'bg-white/50 border-slate-200/60 hover:bg-white text-slate-600'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 w-full py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all duration-300 cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' : 'bg-white/50 border-slate-200/60 hover:bg-white text-slate-700 hover:shadow-sm'}`}>
                 View Entire Log
               </button>
             </div>
