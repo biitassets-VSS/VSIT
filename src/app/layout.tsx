@@ -52,7 +52,7 @@ export default function RootLayout({
         </main>
 
         {/* 🌟 WATERMARK: Background removed, pure frosted glass with high-contrast text */}
-        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-slate-800 dark:text-orange-50 z-999 pointer-events-none uppercase bg-transparent backdrop-blur-2xl px-5 py-2.5 rounded-full border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] transition-all duration-500">
+        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-orange-500 dark:dark:text-orange-400 z-999 pointer-events-none uppercase bg-transparent backdrop-blur-2xl px-5 py-2.5 rounded-full border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] transition-all duration-500">
           Designed by AinodeArt
         </div>
 
