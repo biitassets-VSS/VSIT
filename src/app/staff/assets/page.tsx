@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, // 🌟 New Asset Icons
+  Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, 
   Loader2, ShieldCheck, AlertTriangle, FileSignature, CheckCircle2, 
-  QrCode, PenTool, X, CalendarClock, AlertCircle
+  PenTool, X, AlertCircle, Check
 } from 'lucide-react';
 
 // 🌟 BULLETPROOF DYNAMIC DUE DATE ENGINE
@@ -16,7 +16,7 @@ function getNextDueDate(category: string, lastDateString: string | null, created
   const getLastSaturday = (targetDate: Date) => {
     const year = targetDate.getFullYear();
     const month = targetDate.getMonth();
-    const date = new Date(year, month + 1, 0); // Last day of target month
+    const date = new Date(year, month + 1, 0); 
     while (date.getDay() !== 6) {
       date.setDate(date.getDate() - 1);
     }
@@ -35,7 +35,7 @@ function getNextDueDate(category: string, lastDateString: string | null, created
 }
 
 const formatDate = (date: Date) => {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '/');
 };
 
 // 🌟 DYNAMIC ASSET ICON HELPER
@@ -49,7 +49,7 @@ const getAssetIcon = (category: string) => {
   if (cat.includes('phone') || cat.includes('mobile')) return Smartphone;
   if (cat.includes('desktop') || cat.includes('cpu')) return Cpu;
   if (cat.includes('drive') || cat.includes('storage')) return HardDrive;
-  return Package; // Default fallback icon
+  return Package; 
 };
 
 export default function StaffAssetsPage() {
@@ -78,19 +78,14 @@ export default function StaffAssetsPage() {
         
         setAssignedAssets([
           { 
-            id: 'demo-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999', 
-            serial_number: 'SN-DEMO-1', category: 'Laptop', live_inspection_status: 'Pending', status: 'Pending Handover',
-            live_inspection_date: null, live_inspection_notes: null, live_inspection_photos: null, created_at: new Date().toISOString()
-          },
-          { 
-            id: 'demo-2', name: 'Demo Dell UltraSharp Monitor', asset_tag: 'MON-8888', 
-            serial_number: 'SN-DEMO-2', category: 'Monitor', live_inspection_status: 'Approved', status: 'Assigned',
+            id: 'demo-1', name: 'Precision 5560', asset_tag: 'VSS-LAP-6570', 
+            serial_number: '5C9X9G3-CN-0K00F5-DES00074F-FQEF-A04', category: 'Laptop', live_inspection_status: 'Approved', status: 'Assigned',
             live_inspection_date: new Date().toISOString(), live_inspection_notes: 'All good', live_inspection_photos: null, created_at: new Date().toISOString()
           },
           { 
-            id: 'demo-3', name: 'Logitech MX Master 3', asset_tag: 'MOU-1111', 
-            serial_number: 'SN-DEMO-3', category: 'Mouse', live_inspection_status: 'Approved', status: 'Assigned',
-            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'Working perfectly', live_inspection_photos: null, created_at: new Date().toISOString()
+            id: 'demo-2', name: 'LOGI Pebble Keys 2 380s', asset_tag: 'VSS-WKM-5335', 
+            serial_number: 'YR0091-M350S', category: 'Wireless Keyboard kit', live_inspection_status: 'Pending', status: 'Pending Handover',
+            live_inspection_date: null, live_inspection_notes: null, live_inspection_photos: null, created_at: new Date().toISOString()
           }
         ]);
         setLoading(false);
@@ -214,31 +209,16 @@ export default function StaffAssetsPage() {
 
   const pendingAssets = assignedAssets.filter(a => 
     !a.live_inspection_date || 
-    ['pending', 'not approved', 're-inspection'].includes((a.live_inspection_status || '').toLowerCase()) || 
+    ['pending', 'not approved', 're-inspection', 'rejected'].includes((a.live_inspection_status || '').toLowerCase()) || 
     (a.status || '').toLowerCase() === 'pending handover'
   );
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       
-      {/* Header */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">My Hardware</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Manage your assigned equipment and sign handover agreements.</p>
-        </div>
-        <div className="flex items-center gap-3 bg-purple-50 px-4 py-2.5 rounded-xl border border-purple-100">
-          <ShieldCheck className="text-purple-600" size={20} />
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-purple-500">Total Units</p>
-            <p className="text-lg font-black text-purple-700 leading-none">{assignedAssets.length}</p>
-          </div>
-        </div>
-      </div>
-
       {/* 🚨 PENDING E-SIGN ALERTS */}
       {pendingAssets.length > 0 && (
-        <div className="bg-rose-50 border-2 border-rose-200 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+        <div className="bg-white/60 backdrop-blur-xl border border-rose-100 rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5"><FileSignature size={120} /></div>
           <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
             <div className="flex items-start gap-4">
@@ -246,7 +226,7 @@ export default function StaffAssetsPage() {
                 <AlertTriangle size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-black text-rose-900">REQUIRES YOUR ATTENTION: Sign Handover Agreement</h3>
+                <h3 className="text-lg font-black text-rose-900">Action Required: Sign Handover Agreement</h3>
                 <p className="text-sm font-medium text-rose-700 mt-1 max-w-lg">
                   You have {pendingAssets.length} new asset(s) assigned to you. You must electronically sign the IT asset handover policy to finalize the assignment.
                 </p>
@@ -258,7 +238,7 @@ export default function StaffAssetsPage() {
             {pendingAssets.map(asset => {
               const AlertIcon = getAssetIcon(asset.category);
               return (
-                <div key={asset.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-rose-100 shadow-sm">
+                <div key={`alert-${asset.id}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white/80 rounded-2xl border border-rose-100 shadow-sm gap-4">
                   <div className="flex items-center gap-3">
                     <AlertIcon size={20} className="text-rose-400 shrink-0" />
                     <div>
@@ -268,7 +248,7 @@ export default function StaffAssetsPage() {
                   </div>
                   <button 
                     onClick={() => setSignModalAsset(asset)}
-                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-md transition-colors"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-colors shrink-0"
                   >
                     <PenTool size={14} /> Review & Sign
                   </button>
@@ -279,96 +259,105 @@ export default function StaffAssetsPage() {
         </div>
       )}
 
-      {/* ASSETS GRID */}
-      {assignedAssets.length === 0 ? (
-        <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
-          <Package size={48} className="text-slate-300 mb-4" />
-          <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
-          <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID. If you recently requested equipment, please wait for IT approval.</p>
+      {/* 🌟 PREMIUM GLASS ASSET CONTAINER */}
+      <div className="bg-white/50 backdrop-blur-2xl rounded-4xl p-4 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+        
+        {/* Container Header */}
+        <div className="flex items-center justify-between mb-8 px-2 sm:px-0">
+          <div className="flex items-center gap-3">
+            <Laptop size={22} className="text-purple-600" />
+            <h2 className="text-lg font-black text-slate-900 tracking-wider uppercase">My Hardware Units</h2>
+          </div>
+          <span className="text-sm font-black text-slate-500">{assignedAssets.length} Total</span>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {assignedAssets.map(asset => {
-            const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((asset.live_inspection_status || '').toLowerCase()) || (asset.status || '').toLowerCase() === 'pending handover';
-            const dueDate = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at);
-            
-            // 🌟 Get Dynamic Icon
-            const AssetIcon = getAssetIcon(asset.category);
 
-            return (
-              <div key={asset.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-slate-300">
-                <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-                      <AssetIcon size={18}/>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900 line-clamp-1">{asset.name || asset.category || 'Hardware Unit'}</h4>
-                      <p className="text-[11px] font-medium text-slate-500 mt-0.5">{asset.brand || 'Standard'}</p>
-                    </div>
-                  </div>
-                  <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm"><QrCode size={16} className="text-slate-400"/></div>
-                </div>
+        {assignedAssets.length === 0 ? (
+          <div className="py-20 text-center border-2 border-dashed border-slate-200/50 rounded-3xl bg-white/50 flex flex-col items-center">
+            <Package size={48} className="text-slate-300 mb-4" />
+            <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {assignedAssets.map(asset => {
+              const statusStr = (asset.live_inspection_status || '').toLowerCase();
+              const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes(statusStr) || (asset.status || '').toLowerCase() === 'pending handover';
+              const isRejected = statusStr === 'rejected';
 
-                <div className="p-5 space-y-3 flex-1">
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tag ID</span>
-                    <span className="font-mono font-bold text-xs text-slate-800">{asset.asset_tag || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Serial No.</span>
-                    <span className="font-mono font-bold text-xs text-slate-800">{asset.serial_number || 'N/A'}</span>
-                  </div>
+              return (
+                <div key={asset.id} className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.02)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden">
                   
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><CalendarClock size={10}/> Last Inspection</span>
-                    <span className="font-bold text-xs text-slate-800">
-                      {asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending Signature'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-50">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><AlertTriangle size={10}/> Next Due Date</span>
-                    <span className={`font-bold text-xs ${dueDate < new Date() ? 'text-rose-600' : 'text-slate-800'}`}>
-                      {formatDate(dueDate)}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</span>
-                    {isPending ? (
-                      <span className="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-wider rounded border border-rose-200 flex items-center gap-1">
-                          Signature Required
+                  {/* Card Header & Status */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
+                    
+                    {isRejected ? (
+                      <span className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-200 shrink-0">
+                        Return Rejected
+                      </span>
+                    ) : isPending ? (
+                      <span className="px-3 py-1.5 bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-200 shrink-0">
+                        Signature Required
                       </span>
                     ) : (
-                      <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-wider rounded border border-emerald-200 flex items-center gap-1">
-                          Active & Assigned
+                      <span className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-200 shrink-0">
+                        Approved
                       </span>
                     )}
                   </div>
+
+                  {/* Asset Details Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word">{asset.asset_tag || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word">{asset.serial_number || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span>
+                      <span className="font-bold text-sm text-slate-900">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Category</span>
+                      <span className="font-bold text-sm text-slate-900">{asset.category || 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  {/* Card Actions */}
+                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-50">
+                    {isPending ? (
+                      <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2">
+                        <PenTool size={16} /> Sign Handover Form
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-[10px] border border-orange-200 text-orange-600 hover:bg-orange-50 text-xs font-bold transition-colors shadow-sm">
+                          Return
+                        </button>
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-[10px] border border-purple-200 text-purple-600 hover:bg-purple-50 text-xs font-bold transition-colors shadow-sm">
+                          Replace
+                        </button>
+                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-[10px] border border-emerald-200 text-emerald-600 hover:bg-emerald-50 text-xs font-bold flex items-center gap-2 transition-colors shadow-sm">
+                          <Check size={16} /> Audited This Cycle
+                        </button>
+                      </>
+                    )}
+                  </div>
+
                 </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-                <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0">
-                  <button 
-                    onClick={() => setSignModalAsset(asset)}
-                    className={`w-full py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
-                      isPending 
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md' 
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-purple-600'
-                    }`}
-                  >
-                    {isPending ? <><PenTool size={14}/> Sign Handover Form</> : <><FileSignature size={14}/> View Agreement</>}
-                  </button>
-                </div>
-
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 📝 DIGITAL E-SIGN MODAL */}
+      {/* 📝 DIGITAL E-SIGN MODAL (Premium Glass Version) */}
       {signModalAsset && (() => {
-        const isModalPending = !signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover';
+        const statusStr = (signModalAsset.live_inspection_status || '').toLowerCase();
+        const isModalPending = !signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes(statusStr) || (signModalAsset.status || '').toLowerCase() === 'pending handover';
         
         let safePhotos: string[] = [];
         try {
@@ -386,12 +375,12 @@ export default function StaffAssetsPage() {
         const ModalAssetIcon = getAssetIcon(signModalAsset.category);
 
         return (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-999 flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white/95 backdrop-blur-xl rounded-4xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white">
               
-              <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
+              <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm">
                     <FileSignature size={20} />
                   </div>
                   <div>
@@ -404,7 +393,6 @@ export default function StaffAssetsPage() {
 
               <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium custom-scrollbar">
                 
-                {/* 🌟 WARNING BOX */}
                 <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex gap-3">
                   <AlertCircle className="text-rose-600 shrink-0" size={20} />
                   <div>
@@ -415,8 +403,7 @@ export default function StaffAssetsPage() {
                   </div>
                 </div>
 
-                {/* ASSET SPECS */}
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-5 bg-slate-50/80 rounded-2xl border border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
                     <ModalAssetIcon size={16} className="text-slate-400 shrink-0" />
                     <div>
@@ -429,17 +416,16 @@ export default function StaffAssetsPage() {
                   <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? formatDate(new Date(signModalAsset.live_inspection_date)) : formatDate(new Date())}</span></div>
                 </div>
 
-                {/* 🌟 EVIDENCE SECTION */}
-                <div className="p-5 border border-slate-200 rounded-2xl space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-slate-100 pb-2">Latest Inspection & Condition Evidence</h4>
+                <div className="p-5 border border-slate-100 rounded-2xl space-y-4 bg-white">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-slate-50 pb-2">Latest Inspection & Condition Evidence</h4>
                   <div>
-                    <span className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Inspector Notes:</span>
+                    <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inspector Notes:</span>
                     <div className="font-mono text-xs bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
                       {signModalAsset.live_inspection_notes || 'No specific notes provided during the last audit.'}
                     </div>
                   </div>
                   <div>
-                    <span className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Asset Photos:</span>
+                    <span className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Asset Photos:</span>
                     {safePhotos.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {safePhotos.slice(0, 4).map((src, idx) => (
@@ -452,54 +438,53 @@ export default function StaffAssetsPage() {
                   </div>
                 </div>
 
-                {/* 🌟 TERMS & POLICIES */}
                 <div className="prose prose-sm prose-slate max-w-none">
-                  <p>I, <strong>{currentUser.name}</strong> (Emp ID: {currentUser.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
+                  <p>I, <strong>{currentUser?.name}</strong> (Emp ID: {currentUser?.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
                   <ul className="space-y-2 mt-4 text-xs font-semibold text-slate-600 leading-relaxed">
                     <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
                     <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-                    <li><strong className="text-slate-800">3. Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months. On your Dashboard, the Device Audit Button will activate 4 days before the due date.</li>
+                    <li><strong className="text-slate-800">3. Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months.</li>
                     <li><strong className="text-slate-800">4. Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
                     <li><strong className="text-slate-800">5. Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
-                    <li><strong>6. Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company, or immediately upon request by IT Management. Gross negligence or unauthorized modifications resulting in hardware damage may result in disciplinary action or financial liability.</li>
+                    <li><strong>6. Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company. Gross negligence may result in disciplinary action or financial liability.</li>
                   </ul>
                 </div>
 
                 {isModalPending ? (
-                  <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-200 space-y-4">
+                  <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-100 space-y-4">
                     <div>
-                      <label className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Electronic Signature</label>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Electronic Signature</label>
                       <input 
                         type="text" 
                         required
                         placeholder="Type your full legal name to sign..."
                         value={signatureName}
                         onChange={(e) => setSignatureName(e.target.value)}
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400"
                       />
                       <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
                         <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
                       </p>
                     </div>
 
-                    <div className="flex gap-3 pt-2">
-                      <button type="button" onClick={() => setSignModalAsset(null)} className="px-6 py-4 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
-                      <button type="submit" disabled={isSigning || !signatureName.trim()} className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button type="button" onClick={() => setSignModalAsset(null)} className="w-full sm:w-auto px-8 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
+                      <button type="submit" disabled={isSigning || !signatureName.trim()} className="w-full sm:flex-1 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-purple-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
                         {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
                         {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
                       </button>
                     </div>
                   </form>
                 ) : (
-                  <div className="pt-4">
-                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                  <div className="pt-4 border-t border-slate-100">
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-start gap-3">
                       <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
                       <div>
                         <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Agreement Signed & Accepted</h4>
                         <p className="text-xs font-medium text-emerald-700 mt-1">This asset is actively assigned to you. The digital handover agreement is legally logged in the system.</p>
                       </div>
                     </div>
-                    <button onClick={() => setSignModalAsset(null)} className="w-full mt-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer">
+                    <button onClick={() => setSignModalAsset(null)} className="w-full mt-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer">
                       Close Document
                     </button>
                   </div>
