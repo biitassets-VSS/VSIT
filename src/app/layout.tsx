@@ -35,10 +35,10 @@ export default function RootLayout({
     <html lang="en" className="transition-colors duration-1000">
       <body className="antialiased bg-[#FCF8F3] dark:bg-[#0D0914] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-purple-500/30 selection:text-purple-900 dark:selection:text-purple-100">
         
-        {/* 🌟 SOFT AMBIENT LIGHT ENGINE (Fixed Saturation & Brightness) */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 flex items-center justify-center opacity-60 dark:opacity-100">
-          <div className="absolute left-[-10%] w-[50vw] h-[70vh] bg-orange-400/20 dark:bg-orange-600/20 blur-[140px] rounded-full transition-all duration-1000" />
-          <div className="absolute right-[-10%] w-[50vw] h-[70vh] bg-purple-400/20 dark:bg-purple-700/20 blur-[140px] rounded-full transition-all duration-1000" />
+        {/* 🌟 SOFT AMBIENT LIGHT ENGINE: Greatly reduced opacity for eye comfort */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 flex items-center justify-center opacity-40 dark:opacity-60">
+          <div className="absolute -left-[10%] w-[50vw] h-[70vh] bg-orange-400/30 dark:bg-orange-600/20 blur-[150px] rounded-full transition-all duration-1000" />
+          <div className="absolute -right-[10%] w-[50vw] h-[70vh] bg-purple-400/30 dark:bg-purple-700/20 blur-[150px] rounded-full transition-all duration-1000" />
         </div>
 
         {/* Main Content Area */}
@@ -47,7 +47,7 @@ export default function RootLayout({
         </main>
 
         {/* 🌟 HIGH VISIBILITY WATERMARK */}
-        <div className="fixed bottom-6 right-6 text-[10px] sm:text-xs font-black tracking-widest text-white dark:text-zinc-900 z-2147483647 pointer-events-none uppercase bg-slate-900/80 dark:bg-white/90 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-xl ring-1 ring-white/20 dark:ring-black/10 transition-all duration-500">
+        <div className="fixed bottom-6 right-6 text-[10px] sm:text-xs font-black tracking-widest text-slate-700 dark:text-zinc-200 z-[2147483647] pointer-events-none uppercase bg-white/60 dark:bg-white/10 backdrop-blur-xl px-5 py-2.5 rounded-full shadow-md ring-1 ring-black/5 dark:ring-white/10 transition-all duration-500">
           Designed by AinodeArt
         </div>
 
