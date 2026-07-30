@@ -62,6 +62,7 @@ export default function StaffDashboardPage() {
   const router = useRouter(); 
   
   const [loading, setLoading] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   const [isAuthorized, setIsAuthorized] = useState(false); 
   
@@ -74,6 +75,19 @@ export default function StaffDashboardPage() {
     isOpen: false,
     type: '',
   });
+
+  // 🌟 THEME SYNC
+  useEffect(() => {
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
+    };
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
@@ -156,9 +170,7 @@ export default function StaffDashboardPage() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(); })
       .subscribe();
 
-    return () => { 
-      supabase.removeChannel(realtimeChannel); 
-    };
+    return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
   const handleRateTicket = async (ticketId: string, rating: number) => {
@@ -166,17 +178,15 @@ export default function StaffDashboardPage() {
       await supabase.from('tickets').update({ rating }).eq('id', ticketId);
       setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, rating } : t));
       toast.success("Thank you for rating our IT support!");
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
   
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
-    if (s === 'open' || s === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
-    if (s === 'in progress') return 'bg-purple-50 text-purple-700 border-purple-200';
-    if (s === 'resolved' || s === 'closed') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    return 'bg-slate-50 text-slate-600 border-slate-200';
+    if (s === 'open' || s === 'pending') return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30';
+    if (s === 'in progress') return 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30';
+    if (s === 'resolved' || s === 'closed') return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30';
+    return 'bg-white/20 text-slate-600 dark:text-slate-300 border border-white/20';
   };
 
   const getAssetAuditState = (asset: any) => {
@@ -184,7 +194,7 @@ export default function StaffDashboardPage() {
     const auditWindow = getAuditWindowInfo(asset.category);
     
     if (asset.status?.toLowerCase().includes('return') || status.includes('return pending')) {
-      return { disabled: true, text: "Return Pending", classes: "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" };
+      return { disabled: true, text: "Return Pending", classes: "bg-white/10 text-slate-400 dark:text-zinc-500 cursor-not-allowed border border-white/10" };
     }
 
     if (status === 'rejected' || status === 'fail') {
@@ -204,17 +214,30 @@ export default function StaffDashboardPage() {
               (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
     });
 
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none" };
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200" };
+    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-not-allowed shadow-none" };
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-white/10 text-slate-400 dark:text-zinc-500 cursor-not-allowed shadow-none border border-white/10" };
     
-    return { disabled: false, text: "Audit Device", classes: "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm" };
+    return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white cursor-pointer shadow-md" };
+  };
+
+  // 🎨 PURE MAC OS 2026 PREMIUM GLASS THEME
+  const theme = {
+    bg: isDarkMode ? 'bg-[#050505]' : 'bg-[#eef2f6]',
+    glassCard: isDarkMode 
+      ? 'bg-black/30 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)]' 
+      : 'bg-white/30 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/50 shadow-[0_8px_32px_0_rgba(31,38,135,0.06)]',
+    glassItem: isDarkMode
+      ? 'bg-white/5 border-white/10 hover:bg-white/10'
+      : 'bg-white/40 border-white/50 hover:bg-white/60',
+    text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 pt-32">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Connecting real-time database...</p>
+      <div className={`flex flex-col items-center justify-center gap-3 w-full h-screen ${theme.bg}`}>
+        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+        <p className={`text-xs font-bold ${theme.subText} tracking-widest uppercase`}>Connecting to portal...</p>
       </div>
     );
   }
@@ -230,236 +253,261 @@ export default function StaffDashboardPage() {
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-500">
-            <span className="text-purple-700 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-purple-50 rounded-md border border-purple-200/60">ID: {currentUser.emp_id}</span>
-            <span>{currentUser.email}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button onClick={loadRealDatabase} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-slate-200 cursor-pointer"><RefreshCw size={14}/> Sync Feeds</button>
-        </div>
-      </div>
+    // 🌟 100% DESKTOP FREEZE (ABSOLUTE INSET-0 + OVERFLOW-HIDDEN)
+    <div className={`absolute inset-0 w-full h-full lg:overflow-hidden overflow-y-auto flex flex-col ${theme.bg} font-sans antialiased z-0`}>
+      
+      {/* 🌟 ENHANCED AMBIENT NEON ORBS FOR PURE GLASS BLUR */}
+      <div className="fixed top-[-10%] left-[10%] w-[50vw] h-[50vh] bg-orange-400/20 dark:bg-orange-500/15 blur-[120px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen" />
+      <div className="fixed bottom-[-10%] right-[10%] w-[50vw] h-[50vh] bg-purple-500/20 dark:bg-purple-600/15 blur-[120px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen" />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600 bg-purple-50 border-purple-100', type: 'TICKET', isActionDisabled: false, badge: null },
-          { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100 border-slate-200'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, badge: null },
-          { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-100', type: 'REQUEST', isActionDisabled: false, badge: null },
-          { 
-            name: 'Team Screen', 
-            desc: 'Remote access', 
-            icon: Monitor, 
-            color: 'text-orange-600 bg-orange-50 border-indigo-100', 
-            type: 'ROUTE', 
-            path: '/staff/dashboard/remote', 
-            isActionDisabled: false,
-            badge: null
-          },
-        ].map((item) => (
-            <button 
-              key={item.name} 
-              onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
-              disabled={item.isActionDisabled}
-              className={`relative bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/80 shadow-xs text-left flex flex-col sm:flex-row items-start gap-3 lg:gap-4 group transition-all ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:shadow-md cursor-pointer'}`}
-            >
-              <div className={`p-3 rounded-xl border shrink-0 transition-transform ${item.isActionDisabled ? '' : 'group-hover:scale-105'} ${item.color}`}>{item.isActionDisabled ? <Lock size={20} /> : <item.icon size={20} />}</div>
-              <div><h3 className={`font-bold text-sm leading-tight ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-purple-600'} transition-colors`}>{item.name}</h3><p className="text-[10px] lg:text-xs font-medium text-slate-500 mt-1 line-clamp-2">{item.desc}</p></div>
-            </button>
-          )
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Hardware</p><h2 className="text-3xl sm:text-4xl font-black text-slate-900 mt-1">{stats.totalAssets}</h2></div>
-          <div className="p-4 rounded-2xl bg-purple-50 text-purple-600 font-bold"><Laptop size={28} /></div>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Action Required</p><h2 className="text-3xl sm:text-4xl font-black text-amber-600 mt-1">{stats.needsInspection}</h2></div>
-          <div className="p-4 rounded-2xl bg-amber-50 text-amber-600"><AlertCircle size={28} /></div>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Open Tickets</p><h2 className="text-3xl sm:text-4xl font-black text-orange-600 mt-1">{stats.openTickets}</h2></div>
-          <div className="p-4 rounded-2xl bg-orange-50 text-orange-600"><Ticket size={28} /></div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      {/* Main Content Wrapper */}
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-5 h-full lg:min-h-0 z-10">
         
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 md:p-8 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800">
-              <Laptop className="text-purple-600 shrink-0" size={18}/> My Hardware Units
+        {/* 🌟 HEADER WITH SYNC BUTTON */}
+        <div className={`${theme.glassCard} rounded-3xl p-5 border flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 transition-all`}>
+          <div>
+            <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${theme.text}`}>Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
+            <div className={`flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold ${theme.subText}`}>
+              <span className="text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider px-2.5 py-0.5 bg-purple-500/10 rounded-md border border-purple-500/20">ID: {currentUser.emp_id}</span>
+              <span>{currentUser.email}</span>
             </div>
-            <span className="text-xs font-bold text-slate-400">{assignedAssets.length} Total</span>
           </div>
-          
-          {assignedAssets.length === 0 ? (
-            <div className="py-10 text-center text-slate-400 font-medium text-xs">No active assets linked to your account.</div>
-          ) : (
-            <div className="space-y-4">
-              {assignedAssets.map(asset => {
-                const btnState = getAssetAuditState(asset);
-                const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
-                const isReturnPending = (asset.status || '').toLowerCase().includes('return');
-                const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
-
-                return (
-                  <div key={asset.id} className={`bg-white p-5 rounded-2xl border ${isReInspect || isReturnRejected ? 'border-rose-200/80 shadow-sm' : 'border-slate-200/80 shadow-sm'} hover:border-slate-300 hover:shadow-md transition-all flex flex-col gap-4`}>
-                    
-                    <div className="flex justify-between items-start gap-3">
-                      <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
-                        {asset.name || asset.asset_name || asset.model || 'Generic Device'}
-                      </h4>
-                      <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border shrink-0 ${
-                        isReturnRejected ? 'bg-rose-50 text-rose-600 border-rose-200' :
-                        isReturnPending ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                        isReInspect ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                        'bg-emerald-50 text-emerald-600 border-emerald-200'
-                      }`}>
-                        {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : (asset.live_inspection_status || 'Pending')}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
-                      <div>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Tag ID</span>
-                        <span className="font-mono text-xs font-semibold text-slate-700">{asset.asset_tag || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Serial S/N</span>
-                        <span className="font-mono text-xs font-semibold text-slate-700 break-all">{asset.serial_number || asset.serial || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Updated</span>
-                        <span className="text-xs font-semibold text-slate-700">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Category</span>
-                        <span className="text-xs font-semibold text-slate-700">{asset.category || 'N/A'}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-2 pt-1 justify-end">
-                      <button 
-                        disabled={isReturnPending && !isReturnRejected}
-                        onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                          (isReturnPending && !isReturnRejected)
-                            ? 'bg-orange-100 text-orange-400 border-orange-100 cursor-not-allowed opacity-60'
-                            : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50 cursor-pointer'
-                        }`}
-                      >
-                        Return
-                      </button>
-
-                      <button 
-                        disabled={isReturnPending && !isReturnRejected}
-                        onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
-                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                          (isReturnPending && !isReturnRejected)
-                            ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                            : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50 cursor-pointer'
-                        }`}
-                      >
-                        Replace
-                      </button>
-
-                      <button 
-                        disabled={btnState.disabled}
-                        onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                        className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm ${btnState.classes}`}
-                      >
-                        {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
-                        {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
-                        <span>{btnState.text}</span>
-                      </button>
-                    </div>
-
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={loadRealDatabase} className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${isDarkMode ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10' : 'bg-white/50 hover:bg-white/80 text-slate-700 border border-slate-200/60'}`}>
+              <RefreshCw size={14}/> Sync Feeds
+            </button>
+          </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-orange-600 shrink-0" size={18}/> My Service Tickets</div>
-            <span className="text-xs font-bold text-slate-400">{myTickets.length} Raised</span>
-          </div>
+        {/* 🌟 ACTION THUMBNAILS & STATS */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 shrink-0">
           
-          {myTickets.length === 0 ? (
-            <div className="py-10 text-center text-slate-400 font-medium text-xs">No service requests submitted yet.</div>
-          ) : (
-            <div className="space-y-3 max-h-150 overflow-y-auto pr-1 custom-scrollbar">
-              {myTickets.map(tix => {
-                const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
-                
-                return (
-                  <div key={tix.id} className="p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-colors bg-white space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-bold text-sm text-slate-900 leading-snug">{tix.title || tix.subject}</span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
-                    </div>
-                    
-                    <p className="text-xs text-slate-600 font-normal">{tix.description || tix.note}</p>
+          {/* Quick Actions (Takes up 7 cols on desktop) */}
+          <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: isDarkMode ? 'text-purple-400 bg-purple-500/10' : 'text-purple-600 bg-purple-100', type: 'TICKET', isActionDisabled: false, path: null },
+              { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? (isDarkMode ? 'text-rose-400 bg-rose-500/10 animate-pulse' : 'text-rose-600 bg-rose-100 animate-pulse') : (isGlobalAuditOpen ? (isDarkMode ? 'text-amber-400 bg-amber-500/10' : 'text-amber-600 bg-amber-100') : (isDarkMode ? 'text-zinc-500 bg-white/5' : 'text-slate-400 bg-slate-100')), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
+              { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: isDarkMode ? 'text-emerald-400 bg-emerald-500/10' : 'text-emerald-600 bg-emerald-100', type: 'REQUEST', isActionDisabled: false, path: null },
+              { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: isDarkMode ? 'text-orange-400 bg-orange-500/10' : 'text-orange-600 bg-orange-100', type: 'ROUTE', isActionDisabled: false, path: '/staff/dashboard/remote' },
+            ].map((item) => (
+              <button 
+                key={item.name} 
+                onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
+                disabled={item.isActionDisabled}
+                className={`relative ${theme.glassCard} p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-xl cursor-pointer hover:border-purple-500/40'}`}
+              >
+                <div className={`p-2.5 rounded-xl transition-transform duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110'} ${item.color}`}>
+                  {item.isActionDisabled ? <Lock size={18} /> : <item.icon size={18} />}
+                </div>
+                <div className="mt-3 text-left">
+                  <h3 className={`font-bold text-[13px] leading-tight transition-colors ${item.isActionDisabled ? theme.subText : `${theme.text} group-hover:text-purple-500`}`}>{item.name}</h3>
+                  <p className={`text-[10px] font-medium mt-1 leading-snug line-clamp-2 ${theme.subText}`}>{item.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
 
-                    {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-700">
-                        <strong className="text-slate-900 block mb-1">Admin Response:</strong>
-                        {tix.admin_remarks || tix.admin_notes || tix.resolution_notes}
-                      </div>
-                    )}
+          {/* Key Stats (Takes up 5 cols on desktop) */}
+          <div className="md:col-span-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between hover:shadow-md transition-shadow`}>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Assigned</p>
+              <div className="flex items-center justify-between mt-2">
+                <h2 className={`text-3xl font-black ${theme.text}`}>{stats.totalAssets}</h2>
+                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'}`}><Laptop size={20} /></div>
+              </div>
+            </div>
+            <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between hover:shadow-md transition-shadow`}>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Action Req.</p>
+              <div className="flex items-center justify-between mt-2">
+                <h2 className="text-3xl font-black text-amber-500">{stats.needsInspection}</h2>
+                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'}`}><AlertCircle size={20} /></div>
+              </div>
+            </div>
+            <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between hover:shadow-md transition-shadow`}>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Open Tix</p>
+              <div className="flex items-center justify-between mt-2">
+                <h2 className="text-3xl font-black text-orange-500">{stats.openTickets}</h2>
+                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600'}`}><Ticket size={20} /></div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                    {isResolved && (
-                      <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-                        {tix.updated_at && (
-                            <div className="text-[10px] font-semibold text-slate-500 uppercase flex items-center gap-1">
-                              <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
-                            </div>
-                        )}
+        {/* 🟢 MAIN SPLIT VIEW (Hardware Units vs Tickets) */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 lg:overflow-hidden pt-2">
+          
+          {/* LEFT: MY HARDWARE UNITS */}
+          <div className="w-full lg:w-[65%] flex flex-col lg:min-h-0 lg:overflow-hidden">
+            <div className={`${theme.glassCard} rounded-3xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden`}>
+              <div className={`flex items-center justify-between border-b pb-4 mb-4 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                <div className={`flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider ${theme.text}`}>
+                  <Laptop className="text-purple-500 shrink-0" size={18}/> My Hardware Units
+                </div>
+                <span className={`text-xs font-bold ${theme.subText}`}>{assignedAssets.length} Total</span>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+                {assignedAssets.length === 0 ? (
+                  <div className={`py-10 text-center font-medium text-xs ${theme.subText}`}>No active assets linked to your account.</div>
+                ) : (
+                  assignedAssets.map(asset => {
+                    const btnState = getAssetAuditState(asset);
+                    const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
+                    const isReturnPending = (asset.status || '').toLowerCase().includes('return');
+                    const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
 
-                        <div className="flex items-center gap-1 mt-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Rate Support:</span>
-                          {[1, 2, 3, 4, 5].map(star => (
-                            <button
-                              key={star}
-                              disabled={!!tix.rating}
-                              onClick={() => handleRateTicket(tix.id, star)}
-                              className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
-                            >
-                              <Star size={14} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-slate-300"} />
-                            </button>
-                          ))}
+                    return (
+                      <div key={asset.id} className={`${theme.glassItem} p-5 rounded-2xl border transition-all flex flex-col gap-4 shadow-sm hover:shadow-md`}>
+                        
+                        <div className="flex justify-between items-start gap-3">
+                          <h4 className={`font-extrabold text-sm leading-tight ${theme.text}`}>
+                            {asset.name || asset.asset_name || asset.model || 'Generic Device'}
+                          </h4>
+                          <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border shrink-0 shadow-sm ${
+                            isReturnRejected ? 'bg-rose-500/20 text-rose-500 border-rose-500/30' :
+                            isReturnPending ? 'bg-orange-500/20 text-orange-500 border-orange-500/30' :
+                            isReInspect ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' :
+                            'bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border-emerald-500/30'
+                          }`}>
+                            {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : (asset.live_inspection_status || 'Pending')}
+                          </span>
+                        </div>
+
+                        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl border ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/40 border-white/60'}`}>
+                          <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-0.5 ${theme.subText}`}>Tag ID</span><span className={`font-mono text-xs font-semibold ${theme.text}`}>{asset.asset_tag || 'N/A'}</span></div>
+                          <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-0.5 ${theme.subText}`}>Serial S/N</span><span className={`font-mono text-xs font-semibold break-all ${theme.text}`}>{asset.serial_number || asset.serial || 'N/A'}</span></div>
+                          <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-0.5 ${theme.subText}`}>Updated</span><span className={`text-xs font-semibold ${theme.text}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span></div>
+                          <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-0.5 ${theme.subText}`}>Category</span><span className={`text-xs font-semibold ${theme.text}`}>{asset.category || 'N/A'}</span></div>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-2.5 pt-1 justify-end">
+                          <button 
+                            disabled={isReturnPending && !isReturnRejected}
+                            onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
+                            className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
+                              (isReturnPending && !isReturnRejected)
+                                ? 'bg-white/5 border-white/10 text-zinc-500 cursor-not-allowed opacity-60'
+                                : 'bg-transparent border-orange-500/50 text-orange-500 hover:bg-orange-500/10 cursor-pointer'
+                            }`}
+                          >
+                            Return
+                          </button>
+
+                          <button 
+                            disabled={isReturnPending && !isReturnRejected}
+                            onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
+                            className={`px-4 py-2 font-bold text-xs rounded-xl transition-all border shadow-sm ${
+                              (isReturnPending && !isReturnRejected)
+                                ? 'bg-white/5 border-white/10 text-zinc-500 cursor-not-allowed opacity-60'
+                                : 'bg-transparent border-purple-500/50 text-purple-500 hover:bg-purple-500/10 cursor-pointer'
+                            }`}
+                          >
+                            Replace
+                          </button>
+
+                          <button 
+                            disabled={btnState.disabled}
+                            onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                            className={`px-4 py-2 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md ${btnState.classes}`}
+                          >
+                            {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} />}
+                            {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} />}
+                            <span>{btnState.text}</span>
+                          </button>
                         </div>
                       </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-medium border-t border-slate-50 mt-2">
-                      <span>Category: <strong className="text-slate-600 font-semibold">{tix.category || 'General'}</strong></span>
-                      <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })
+                )}
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* RIGHT: MY SERVICE TICKETS */}
+          <div className="w-full lg:w-[35%] flex flex-col lg:min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
+            <div className={`${theme.glassCard} rounded-3xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden`}>
+              <div className={`flex items-center justify-between border-b pb-4 mb-4 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                <div className={`flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider ${theme.text}`}><Ticket className="text-orange-500 shrink-0" size={18}/> My Tickets</div>
+                <span className={`text-xs font-bold ${theme.subText}`}>{myTickets.length} Raised</span>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                {myTickets.length === 0 ? (
+                  <div className={`py-10 text-center font-medium text-xs ${theme.subText}`}>No service requests submitted yet.</div>
+                ) : (
+                  myTickets.map(tix => {
+                    const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
+                    return (
+                      <div key={tix.id} className={`p-4 rounded-2xl border transition-colors space-y-3 ${theme.glassItem}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className={`font-bold text-sm leading-snug ${theme.text}`}>{tix.title || tix.subject}</span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase border shrink-0 ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
+                        </div>
+                        
+                        <p className={`text-xs font-normal line-clamp-3 ${theme.subText}`}>{tix.description || tix.note}</p>
+
+                        {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
+                          <div className={`p-3 rounded-xl border text-xs ${isDarkMode ? 'bg-black/20 border-white/10 text-zinc-300' : 'bg-white/50 border-slate-200/60 text-slate-700'}`}>
+                            <strong className={`block mb-1 ${theme.text}`}>Admin Response:</strong>
+                            {tix.admin_remarks || tix.admin_notes || tix.resolution_notes}
+                          </div>
+                        )}
+
+                        {isResolved && (
+                          <div className={`flex flex-col gap-2 pt-2 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+                            {tix.updated_at && (
+                                <div className={`text-[10px] font-semibold uppercase flex items-center gap-1 ${theme.subText}`}>
+                                  <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className={`text-[9px] font-bold uppercase tracking-widest mr-1 ${theme.subText}`}>Rate Support:</span>
+                              {[1, 2, 3, 4, 5].map(star => (
+                                <button
+                                  key={star}
+                                  disabled={!!tix.rating}
+                                  onClick={() => handleRateTicket(tix.id, star)}
+                                  className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
+                                >
+                                  <Star size={14} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-slate-300 dark:text-zinc-600"} />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className={`flex items-center justify-between text-[10px] pt-2 font-medium border-t mt-2 ${isDarkMode ? 'border-white/10 text-zinc-500' : 'border-slate-200/60 text-slate-400'}`}>
+                          <span>Category: <strong className={theme.text}>{tix.category || 'General'}</strong></span>
+                          <span>{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
+      {/* 🌟 GLASS DATABASE MODAL */}
       {modal.isOpen && (
-        <LiveDatabaseModal type={modal.type} asset={modal.targetAsset} user={currentUser} setAssignedAssets={setAssignedAssets} onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} />
+        <LiveDatabaseModal 
+          type={modal.type} 
+          asset={modal.targetAsset} 
+          user={currentUser} 
+          isDarkMode={isDarkMode}
+          setAssignedAssets={setAssignedAssets} 
+          onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} 
+        />
       )}
     </div>
   );
 }
 
-function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: any) {
+function LiveDatabaseModal({ type, asset, user, isDarkMode, setAssignedAssets, onClose }: any) {
   const needsLock = type === 'INSPECTION' || type === 'REPLACEMENT' || type === 'RETURN';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
@@ -474,6 +522,14 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
 
+  const theme = {
+    modalBg: isDarkMode ? 'bg-[#18181b]/80 backdrop-blur-3xl border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' : 'bg-white/80 backdrop-blur-3xl border border-white/60 shadow-2xl',
+    headerBg: isDarkMode ? 'bg-black/30 border-white/10' : 'bg-white/50 border-slate-200/60',
+    text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    inputBg: isDarkMode ? 'bg-black/30 border-white/10 text-zinc-200 focus:border-purple-500' : 'bg-white/50 border-slate-200 focus:border-purple-500 text-slate-800'
+  };
+
   const handleAttemptUnlock = () => {
     if (!asset) { alert("No hardware assigned to test against!"); return; }
     if (user.id === 'guest-mock-uuid') { setLockError(false); setIsUnlocked(true); return; }
@@ -486,8 +542,7 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
     const cat = asset?.category || formCategory;
     const finalNotes = type === 'RETURN' ? `[RETURN REQUEST] ${formText}` : formText;
     const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
-    setQrUrl(url);
-    setShowQR(true);
+    setQrUrl(url); setShowQR(true);
   };
 
   const handleLivePostgresSubmit = async () => {
@@ -495,13 +550,10 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
       if (type === 'RETURN') {
         try {
           await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', asset.id);
-          if (setAssignedAssets) {
-            setAssignedAssets((prev: any[]) => prev.map(a => a.id === asset.id ? { ...a, status: 'Pending Return' } : a));
-          }
-        } catch(e) { console.warn("Failed to mark as Pending Return", e); }
+          if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map(a => a.id === asset.id ? { ...a, status: 'Pending Return' } : a));
+        } catch(e) {}
       }
-      generateMobileHandoff();
-      return;
+      generateMobileHandoff(); return;
     }
 
     setIsTransmitting(true);
@@ -532,38 +584,40 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-9999 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-        <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
+      <div className={`rounded-3xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] ${theme.modalBg}`}>
+        <div className={`p-5 border-b flex items-center justify-between shrink-0 ${theme.headerBg}`}>
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl font-bold ${type === 'RETURN' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{type === 'RETURN' ? <LogOut size={20} /> : <Ticket size={20}/>}</div>
+            <div className={`p-2 rounded-xl font-bold ${type === 'RETURN' ? 'bg-orange-500/20 text-orange-500' : 'bg-purple-500/20 text-purple-500'}`}>
+              {type === 'RETURN' ? <LogOut size={18} /> : <Ticket size={18}/>}
+            </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-sm tracking-tight uppercase">{type === 'REPLACEMENT' ? 'Assets Replacement' : type === 'RETURN' ? 'Asset Return Request' : 'Portal Submission'}</h3>
-              {type !== 'REPLACEMENT' && type !== 'RETURN' && <p className="text-xs text-slate-500 font-medium">{type}</p>}
-              {type === 'RETURN' && <p className="text-xs text-slate-500 font-medium">Initiate IT Handover</p>}
+              <h3 className={`font-extrabold text-sm tracking-tight uppercase ${theme.text}`}>{type === 'REPLACEMENT' ? 'Assets Replacement' : type === 'RETURN' ? 'Asset Return Request' : 'Portal Submission'}</h3>
+              {type !== 'REPLACEMENT' && type !== 'RETURN' && <p className={`text-[10px] font-medium ${theme.subText}`}>{type}</p>}
+              {type === 'RETURN' && <p className={`text-[10px] font-medium ${theme.subText}`}>Initiate IT Handover</p>}
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors"><X size={18}/></button>
+          <button onClick={onClose} className={`p-2 rounded-full cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-black/5 text-slate-500'}`}><X size={18}/></button>
         </div>
 
-        <div className="p-6 sm:p-8 overflow-y-auto space-y-5">
+        <div className="p-6 sm:p-8 overflow-y-auto space-y-5 custom-scrollbar">
           {successDone ? (
-            <div className="py-10 text-center space-y-2">
-              <CheckCircle2 size={48} className="text-emerald-600 mx-auto animate-bounce"/>
-              <h4 className="text-xl font-bold text-slate-900">Database Updated!</h4>
+            <div className="py-10 text-center space-y-3">
+              <CheckCircle2 size={48} className="text-emerald-500 mx-auto animate-bounce"/>
+              <h4 className={`text-xl font-bold ${theme.text}`}>Database Updated!</h4>
             </div>
           ) : showQR ? (
-            <div className="py-6 text-center space-y-6 animate-in zoom-in-95 duration-300">
+            <div className="py-4 text-center space-y-5 animate-in zoom-in-95 duration-300">
               <div>
-                <h4 className="text-lg font-black text-slate-900 uppercase tracking-widest">Mobile Device Handoff</h4>
-                <p className="text-xs text-slate-500 font-semibold mt-1">Scan this code with your phone camera to take certified watermark photos of the asset.</p>
+                <h4 className={`text-lg font-black uppercase tracking-widest ${theme.text}`}>Mobile Device Handoff</h4>
+                <p className={`text-xs font-semibold mt-1 ${theme.subText}`}>Scan this code with your phone camera to take certified watermark photos of the asset.</p>
               </div>
-              <div className="p-4 bg-white border-2 border-slate-200 rounded-3xl inline-block shadow-lg mx-auto">
+              <div className={`p-4 rounded-3xl inline-block shadow-lg mx-auto ${isDarkMode ? 'bg-white' : 'bg-white border-2 border-slate-200'}`}>
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-48 h-48 rounded-xl" />
               </div>
-              <div className="p-4 bg-purple-50 border border-purple-100 rounded-2xl text-left">
-                <h5 className="text-[10px] font-black uppercase text-purple-800 tracking-widest mb-2 flex items-center gap-2"><Camera size={14}/> Photo Requirements</h5>
-                <ul className="text-xs text-purple-900 font-medium space-y-1.5 ml-1">
+              <div className={`p-4 rounded-2xl text-left border ${isDarkMode ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-100'}`}>
+                <h5 className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-800'}`}><Camera size={14}/> Photo Requirements</h5>
+                <ul className={`text-xs font-medium space-y-1.5 ml-1 ${isDarkMode ? 'text-purple-200' : 'text-purple-900'}`}>
                   {(asset?.category || '').toLowerCase().includes('laptop') ? (
                     <><li>✅ Screen & Keypad view</li><li>✅ Top and Bottom (with Tag)</li><li>✅ Left and Right Side Ports</li></>
                   ) : (
@@ -575,45 +629,60 @@ function LiveDatabaseModal({ type, asset, user, setAssignedAssets, onClose }: an
           ) : (
             <div className="space-y-4 text-sm font-medium">
               {needsLock && (
-                <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 space-y-3">
-                  <p className="text-xs font-bold text-purple-900 flex items-center gap-2">🔒 Security Verification Required</p>
+                <div className={`p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200'}`}>
+                  <p className={`text-xs font-bold flex items-center gap-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-900'}`}>🔒 Security Verification Required</p>
                   <div className="flex gap-2">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest mode...' : 'Type exact Tag ID or S/N...'} className="flex-1 p-3 bg-white rounded-xl border border-purple-200 text-xs font-bold outline-none"/>
-                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors">Verify</button>}
+                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className={`flex-1 p-3 rounded-xl text-xs font-bold outline-none ${theme.inputBg}`}/>
+                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-md">Verify</button>}
                   </div>
-                  {lockError && <p className="text-[11px] text-rose-600 font-bold">Incorrect device code.</p>}
+                  {lockError && <p className="text-[11px] text-rose-500 font-bold">Incorrect device code.</p>}
                 </div>
               )}
 
               {type === 'TICKET' && (
                 <>
-                  <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Issue Subject</label><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} placeholder="E.g. Monitor display flickering" className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-purple-600 text-sm font-semibold"/></div>
-                  <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Category</label><select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-200 font-semibold"><option>Hardware</option><option>Software</option><option>Network</option></select></div>
+                  <div><label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 ${theme.subText}`}>Issue Subject</label><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} placeholder="E.g. Monitor display flickering" className={`w-full p-3.5 rounded-xl outline-none text-sm font-semibold transition-all ${theme.inputBg}`}/></div>
+                  <div>
+                    <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 ${theme.subText}`}>Category</label>
+                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className={`w-full p-3.5 rounded-xl font-semibold outline-none transition-all ${theme.inputBg}`}>
+                      <option className={isDarkMode ? 'text-black' : ''}>Hardware</option>
+                      <option className={isDarkMode ? 'text-black' : ''}>Software</option>
+                      <option className={isDarkMode ? 'text-black' : ''}>Network</option>
+                    </select>
+                  </div>
                 </>
               )}
 
               {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
                 <div className="animate-in slide-in-from-top-4 duration-300">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Current Asset Condition</label>
-                  <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full p-3.5 rounded-xl border border-slate-200 font-semibold mb-4 outline-none focus:border-purple-600">
-                    <option>Pristine / Flawless</option><option>Good / Minor Scratches</option><option>Poor / Damaged (Requires Fix)</option><option>Non-Functional / Dead</option>
+                  <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 ${theme.subText}`}>Current Asset Condition</label>
+                  <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className={`w-full p-3.5 rounded-xl font-semibold mb-4 outline-none transition-all ${theme.inputBg}`}>
+                    <option className={isDarkMode ? 'text-black' : ''}>Pristine / Flawless</option>
+                    <option className={isDarkMode ? 'text-black' : ''}>Good / Minor Scratches</option>
+                    <option className={isDarkMode ? 'text-black' : ''}>Poor / Damaged (Requires Fix)</option>
+                    <option className={isDarkMode ? 'text-black' : ''}>Non-Functional / Dead</option>
                   </select>
                 </div>
               )}
 
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">{type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}</label><textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:border-purple-600 text-sm resize-none"/></div>
+              <div>
+                <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 ${theme.subText}`}>
+                  {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}
+                </label>
+                <textarea rows={4} value={formText} onChange={e=>setFormText(e.target.value)} placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full p-3.5 rounded-xl outline-none text-sm resize-none transition-all ${theme.inputBg}`}/>
+              </div>
             </div>
           )}
         </div>
 
         {!successDone && (
-          <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 shrink-0">
+          <div className={`p-5 border-t flex justify-end gap-3 shrink-0 ${theme.headerBg}`}>
             {showQR ? (
-              <button onClick={onClose} className="w-full py-3.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-sm transition-colors">Close Portal (Awaiting Mobile Scan)</button>
+              <button onClick={onClose} className="w-full py-3.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-black text-white cursor-pointer shadow-md transition-all">Close Portal (Awaiting Mobile Scan)</button>
             ) : (
               <>
-                <button onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-200 cursor-pointer transition-colors">Cancel</button>
-                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className={`px-7 py-3 rounded-xl text-xs font-bold text-white cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-colors ${type === 'RETURN' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                <button onClick={onClose} className={`px-6 py-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${isDarkMode ? 'bg-white/5 hover:bg-white/10 text-zinc-300' : 'bg-white/50 hover:bg-white text-slate-600'}`}>Cancel</button>
+                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className={`px-6 py-3 rounded-xl text-xs font-bold text-white cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-all ${type === 'RETURN' ? 'bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90' : 'bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90'}`}>
                   {isTransmitting && <Loader2 size={14} className="animate-spin"/>} {type === 'INSPECTION' || type === 'RETURN' ? 'Generate Camera QR' : 'Transmit'}
                 </button>
               </>
