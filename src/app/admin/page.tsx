@@ -344,7 +344,7 @@ export default function AdminDashboardPage() {
   return (
     /* 🌟 h-screen & overflow-hidden ELIMINATES UNNECESSARY PAGE SCROLLING */
     <div className={`h-screen max-h-screen overflow-hidden flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
-      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-3 lg:p-4 gap-2.5 lg:gap-3 h-full overflow-hidden">
+      <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-3 lg:p-4 gap-2.5 lg:gap-3 h-full overflow-hidden">
         
         {/* 🌟 HEADER WITH SYNC / REFRESH BUTTON */}
         <div className={`${theme.card} rounded-xl p-3 sm:p-4 border flex items-center justify-between shrink-0 shadow-xs transition-all`}>
@@ -361,7 +361,7 @@ export default function AdminDashboardPage() {
           <button 
             onClick={() => loadAdminData(true)} 
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md disabled:opacity-50 shrink-0 border border-white/20"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md disabled:opacity-50 shrink-0 border border-white/20"
             title="Refresh Live Data"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
