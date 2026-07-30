@@ -2,10 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#FCF8F3' },
-    { media: '(prefers-color-scheme: dark)', color: '#0D0914' } 
-  ],
+  themeColor: '#FFF4E6',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -32,13 +29,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="transition-colors duration-1000">
-      <body className="antialiased bg-[#FCF8F3] dark:bg-[#0D0914] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-purple-500/30 selection:text-purple-900 dark:selection:text-purple-100">
+    <html lang="en">
+      {/* 🌟 BASE THEME: Pure Light Orange/Cream background. No black colors. */}
+      <body className="antialiased bg-[#FFF4E6] text-slate-900 min-h-screen flex flex-col relative selection:bg-purple-500/30 selection:text-purple-900">
         
-        {/* 🌟 SOFT AMBIENT LIGHT ENGINE: Smooth, colorful background orbs */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 flex items-center justify-center opacity-70 dark:opacity-100">
-          <div className="absolute -left-[10%] w-[50vw] h-[70vh] bg-orange-400/30 dark:bg-orange-600/20 blur-[120px] rounded-full transition-all duration-1000" />
-          <div className="absolute -right-[10%] w-[50vw] h-[70vh] bg-purple-400/30 dark:bg-purple-700/20 blur-[120px] rounded-full transition-all duration-1000" />
+        {/* 🌟 EXTREMELY SOFT AMBIENT LIGHT: Low opacity, high blur, no harsh saturation */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 flex items-center justify-center opacity-30">
+          <div className="absolute left-[-10%] w-[50vw] h-[70vh] bg-orange-400/50 blur-[160px] rounded-full" />
+          <div className="absolute right-[-10%] w-[50vw] h-[70vh] bg-purple-400/50 blur-[160px] rounded-full" />
         </div>
 
         {/* Main Content Area */}
@@ -46,10 +44,10 @@ export default function RootLayout({
           {children}
         </main>
 
-        {/* 🌟 HIGH VISIBILITY WATERMARK: Fixed to Bottom-Right across the entire portal */}
-        <div className="fixed bottom-6 right-6 z-[2147483647] pointer-events-none">
-          <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl px-5 py-2.5 rounded-full border border-slate-200 dark:border-white/10 shadow-lg flex items-center justify-center">
-            <span className="text-[10px] sm:text-xs font-black tracking-widest text-slate-800 dark:text-zinc-200 uppercase">
+        {/* 🌟 HIGH VISIBILITY WATERMARK: Frosted white glass, sharp text */}
+        <div className="fixed bottom-6 right-6 z-2147483647 pointer-events-none">
+          <div className="bg-white/80 backdrop-blur-2xl px-5 py-2.5 rounded-full border border-white/60 shadow-lg flex items-center justify-center">
+            <span className="text-[10px] sm:text-xs font-black tracking-widest text-slate-800 uppercase">
               Designed by AinodeArt
             </span>
           </div>
