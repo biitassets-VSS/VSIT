@@ -2,63 +2,69 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   🌟 1. GLOBAL LIGHT MODE TOKENS (Default Theme)
+   🌟 1. GLOBAL LIGHT MODE TOKENS (Premium Ultra Glass Theme)
    ========================================================================== */
 :root {
-  --background: #f8fafc;          
-  --foreground: #0f172a;          
-  --surface: #ffffff;             
-  --surface-border: #e2e8f0;      
-  --text-muted: #64748b;          
+  /* Deep Warm Cream Base to enhance glass refraction */
+  --background: #FFF4E6;          
+  --foreground: #1c1917;          
+  
+  /* Pure Glass Surfaces (Replaced solid colors with translucent rgba) */
+  --surface: rgba(255, 255, 255, 0.3);             
+  --surface-border: rgba(255, 255, 255, 0.5);      
+  --text-muted: #78716c;          
 
   /* 🎨 Primary Brand: Light Orange */
-  --primary: #ea580c;             
-  --primary-hover: #c2410c;       
-  --primary-light: #ffedd5;       
+  --primary: #f97316;             
+  --primary-hover: #ea580c;       
+  --primary-light: rgba(249, 115, 22, 0.15);       
   --primary-text: #ffffff;        
 
   /* 🎨 Secondary Brand: Rich Purple */
-  --secondary: #6b21a8;           
-  --secondary-hover: #581c87;     
-  --secondary-light: #f3e8ff;     
-  --secondary-text: #3b0764;      
+  --secondary: #9333ea;           
+  --secondary-hover: #7e22ce;     
+  --secondary-light: rgba(147, 51, 234, 0.15);     
+  --secondary-text: #ffffff;      
 
-  /* 🛡️ Adaptive Form Controls & Input Boxes */
-  --input-bg: #ffffff;            
-  --input-text: #0f172a;          
-  --input-border: #cbd5e1;        
-  --input-placeholder: #94a3b8;   
-  --input-focus: #ea580c;         
+  /* 🛡️ Adaptive Glass Form Controls */
+  --input-bg: rgba(255, 255, 255, 0.4);            
+  --input-text: #1c1917;          
+  --input-border: rgba(255, 255, 255, 0.6);        
+  --input-placeholder: #a8a29e;   
+  --input-focus: #f97316;         
 }
 
 /* ==========================================================================
-   🌙 2. GLOBAL DARK MODE TOKENS (No CSS Nesting to prevent linter errors!)
+   🌙 2. GLOBAL DARK MODE TOKENS (Premium Ultra Glass Theme)
    ========================================================================== */
 :root.dark,
 .dark {
-  --background: #0b0712;        
-  --foreground: #f3e8ff;        
-  --surface: #150f24;           
-  --surface-border: #3b0764;    
-  --text-muted: #c4b5fd;        
+  /* Deep Dark Warm Base */
+  --background: #0C0A09;        
+  --foreground: #f5f5f4;        
+  
+  /* Dark Tinted Glass Surfaces */
+  --surface: rgba(255, 255, 255, 0.05);           
+  --surface-border: rgba(255, 255, 255, 0.1);    
+  --text-muted: #a8a29e;        
 
   /* 🎨 Primary Brand: Light Orange (Brightened for dark mode) */
   --primary: #fb923c;           
-  --primary-hover: #f97316;     
-  --primary-light: #431407;     
-  --primary-text: #0b0712;      
+  --primary-hover: #fdba74;     
+  --primary-light: rgba(251, 146, 60, 0.15);     
+  --primary-text: #0C0A09;      
 
   /* 🎨 Secondary Brand: Rich Purple */
-  --secondary: #a855f7;         
-  --secondary-hover: #c084fc;   
-  --secondary-light: #1e1b4b;   
-  --secondary-text: #e9d5ff;    
+  --secondary: #c084fc;         
+  --secondary-hover: #d8b4fe;   
+  --secondary-light: rgba(192, 132, 252, 0.15);   
+  --secondary-text: #0C0A09;    
 
-  /* 🛡️ Adaptive Form Controls (Forces deep purple-black in dark mode) */
-  --input-bg: #130d24;          
-  --input-text: #f3e8ff;        
-  --input-border: #581c87;      
-  --input-placeholder: #7c3aed; 
+  /* 🛡️ Adaptive Glass Form Controls */
+  --input-bg: rgba(0, 0, 0, 0.2);          
+  --input-text: #f5f5f4;        
+  --input-border: rgba(255, 255, 255, 0.1);      
+  --input-placeholder: #78716c; 
   --input-focus: #fb923c;       
 }
 
@@ -71,15 +77,17 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.8s ease, color 0.8s ease;
 }
 
-/* 🛡️ Apply input colors WITHOUT overriding transparent search bars! */
+/* 🛡️ Apply Glass Input Colors & Blur */
 input:not(.bg-transparent), textarea, select {
   background-color: var(--input-bg);
   color: var(--input-text);
   border-color: var(--input-border);
-  transition: all 0.2s ease;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 input.bg-transparent {
@@ -91,6 +99,7 @@ input::placeholder, textarea::placeholder {
   opacity: 1;
 }
 
+/* Autofill fix adapted for Glass theme */
 input:-webkit-autofill,
 input:-webkit-autofill:hover, 
 input:-webkit-autofill:focus {
@@ -99,6 +108,7 @@ input:-webkit-autofill:focus {
   transition: background-color 5000s ease-in-out 0s;
 }
 
+/* Premium Transparent Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -111,6 +121,7 @@ input:-webkit-autofill:focus {
 ::-webkit-scrollbar-thumb {
   background: var(--surface-border);
   border-radius: 9999px;
+  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
