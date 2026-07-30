@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Users, Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
@@ -10,11 +10,7 @@ export default function StaffLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Note: If you want the dark theme to work, you might want to remove this useEffect eventually.
-  // Right now, it forces the app out of dark mode on load, which can cause color clashes if your OS is in dark mode.
-  useEffect(() => {
-    document.documentElement.classList.remove('dark'); 
-  }, []);
+  // 🚨 REMOVED the useEffect that was forcing light mode and breaking your theme!
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,15 +47,16 @@ export default function StaffLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent flex items-center justify-center p-4 font-sans antialiased relative overflow-hidden">
+    // 🌟 Pure transparent wrapper. NO background colors to mess up your layout.
+    <div className="min-h-screen bg-transparent flex items-center justify-center p-4 font-sans antialiased relative">
       
       <div className="relative w-full max-w-md z-10">
         
-        {/* 🌟 AMBIENT GLOW: Softer, wider spread to illuminate the glass */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-orange-400/30 via-purple-400/30 to-orange-400/30 rounded-[3rem] blur-3xl opacity-80"></div>
+        {/* 🌟 TIGHT, SUBTLE GLOW: Removed the massive blur that was ruining the screen background. */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-orange-500/30 via-purple-500/30 to-orange-500/30 rounded-[2.5rem] blur-xl opacity-50"></div>
         
-        {/* 🌟 FIXED MAIN CARD: Pure transparent frosted glass (bg-white/10), no more muddy dark colors */}
-        <div className="relative bg-white/10 dark:bg-black/20 backdrop-blur-3xl rounded-[2rem] p-8 md:p-10 border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] flex flex-col items-center text-center">
+        {/* 🌟 PURE GLASS CARD: Proper contrast for both light and dark mode without muddy gray */}
+        <div className="relative bg-white/40 dark:bg-black/30 backdrop-blur-[24px] rounded-[2rem] p-8 md:p-10 border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] flex flex-col items-center text-center">
           
           <img 
             src="/logo.png" 
@@ -68,16 +65,16 @@ export default function StaffLoginPage() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
-          <div className="w-16 h-16 bg-purple-500/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 text-purple-600 border border-purple-500/20 shadow-[0_8px_24px_rgba(168,85,247,0.15)]">
+          <div className="w-16 h-16 bg-purple-500/15 dark:bg-purple-500/20 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 text-purple-700 dark:text-purple-400 border border-purple-500/20 shadow-sm">
             <Users size={28} />
           </div>
           
-          <h2 className="text-sm font-black uppercase tracking-widest text-purple-600 mb-1">Virtual Staffing Solution</h2>
-          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-900 dark:text-zinc-100">Staff Portal</h1>
-          <p className="text-sm font-semibold tracking-wide text-slate-600 dark:text-slate-400 mb-8">View hardware & sign agreements</p>
+          <h2 className="text-sm font-black uppercase tracking-widest text-purple-700 dark:text-purple-400 mb-1">Virtual Staffing Solution</h2>
+          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-900 dark:text-white">Staff Portal</h1>
+          <p className="text-sm font-semibold tracking-wide text-slate-600 dark:text-slate-300 mb-8">View hardware & sign agreements</p>
 
           {error && (
-            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 backdrop-blur-md border border-rose-500/20 text-rose-600 dark:text-rose-400 text-left shadow-sm">
+            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/15 backdrop-blur-md border border-rose-500/30 text-rose-700 dark:text-rose-400 text-left shadow-sm">
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <p className="text-xs font-semibold">{error}</p>
             </div>
@@ -87,12 +84,12 @@ export default function StaffLoginPage() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">Employee Email</label>
               <div className="relative group">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 transition-colors group-focus-within:text-purple-600" />
-                {/* 🌟 FIXED INPUTS: bg-white/10 ensures it is clear glass, not solid gray */}
+                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-purple-600 dark:group-focus-within:text-purple-400" />
+                {/* 🌟 GLASS INPUTS: Properly tinted for light and dark modes */}
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="employee@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/10 dark:bg-white/5 backdrop-blur-xl border border-white/30 dark:border-white/10 focus:bg-white/20 dark:focus:bg-white/10 focus:border-purple-400/60 focus:ring-4 focus:ring-purple-400/20 text-slate-900 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-inner"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/60 dark:bg-black/40 backdrop-blur-md border border-white/80 dark:border-white/10 focus:bg-white/90 dark:focus:bg-black/60 focus:border-purple-500/60 focus:ring-4 focus:ring-purple-500/20 text-slate-900 dark:text-white placeholder:text-slate-500 shadow-inner"
                 />
               </div>
             </div>
@@ -100,12 +97,11 @@ export default function StaffLoginPage() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">Password</label>
               <div className="relative group">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 transition-colors group-focus-within:text-purple-600" />
-                {/* 🌟 FIXED INPUTS: bg-white/10 ensures it is clear glass, not solid gray */}
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-purple-600 dark:group-focus-within:text-purple-400" />
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/10 dark:bg-white/5 backdrop-blur-xl border border-white/30 dark:border-white/10 focus:bg-white/20 dark:focus:bg-white/10 focus:border-purple-400/60 focus:ring-4 focus:ring-purple-400/20 text-slate-900 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-inner"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/60 dark:bg-black/40 backdrop-blur-md border border-white/80 dark:border-white/10 focus:bg-white/90 dark:focus:bg-black/60 focus:border-purple-500/60 focus:ring-4 focus:ring-purple-500/20 text-slate-900 dark:text-white placeholder:text-slate-500 shadow-inner"
                 />
               </div>
             </div>
