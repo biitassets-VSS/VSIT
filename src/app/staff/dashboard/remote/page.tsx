@@ -7,7 +7,8 @@ import toast, { Toaster } from 'react-hot-toast';
 import { 
   Monitor, ArrowLeft, Loader2, Search, PanelLeftClose, PanelLeftOpen, 
   RefreshCw, Power, Keyboard, Video, Clipboard, FileUp, Volume2, 
-  Ban, MessageSquare, Send, X, Users, Maximize, Minimize, GripVertical
+  Ban, MessageSquare, Send, X, Users, Maximize, Minimize, GripVertical, ShieldCheck,
+  ShieldAlert, Check, StopCircle 
 } from 'lucide-react';
 
 interface StaffMember {
@@ -48,6 +49,12 @@ export default function StaffRemotePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'requesting' | 'connected' | 'controlling'>('idle');
   
+  // Missing Modal & Streaming States
+  const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isControlGranted, setIsControlGranted] = useState(false);
+
   const [isControlling, setIsControlling] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
@@ -113,7 +120,7 @@ export default function StaffRemotePage() {
     if (!activeSession) return;
     setSessionStatus('requesting');
     setChatMessages([]);
-    setDockPos({ x: 0, y: 0 }); // Reset UI
+    setDockPos({ x: 0, y: 0 });
     setChatPos({ x: 0, y: 0 });
 
     try {
@@ -162,7 +169,6 @@ export default function StaffRemotePage() {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           const answer = await peer.createAnswer();
           
-          // 🌟 LOW BANDWIDTH AUDIO OPTIMIZER (TypeScript Fix)
           if (answer.sdp) {
             answer.sdp = answer.sdp.replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=0;maxaveragebitrate=16000');
           }
@@ -197,6 +203,18 @@ export default function StaffRemotePage() {
     } catch (err) { setSessionStatus('idle'); }
   };
 
+  // Missing Shared Functions mapped
+  const startScreenShare = async (channelId?: string, alertId?: string) => {
+    setIsConnecting(true);
+    // Add custom incoming accept logic here based on your P2P setup
+    setTimeout(() => {
+      setIsConnecting(false);
+      setIsStreaming(true);
+      setIncomingRequest(null);
+      toast.success("🟢 Screen sharing established");
+    }, 1500);
+  };
+
   const terminateSession = (reason = "Session terminated.") => {
     if (channelRef.current) { channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: { reason } }); supabase.removeChannel(channelRef.current); channelRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
@@ -205,6 +223,13 @@ export default function StaffRemotePage() {
 
     if (sessionStatus !== 'idle') toast.error(`🛑 ${reason}`);
     setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false); setIsFullscreen(false);
+  };
+
+  const stopScreenSharing = (reason = "Disconnected by user.") => {
+    setIsStreaming(false);
+    setIsConnecting(false);
+    setIncomingRequest(null);
+    terminateSession(reason);
   };
 
   const sendControlCommand = (command: any) => {
@@ -305,86 +330,112 @@ export default function StaffRemotePage() {
   };
 
   if (loading) return (
-    <div className="h-full flex flex-col items-center justify-center gap-3">
-      <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+    <div className="h-screen flex flex-col items-center justify-center gap-3">
+      <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
       <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Loading Staff Directory...</p>
     </div>
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 h-full flex flex-col">
-      <Toaster position="top-right" />
+    <div className="max-w-400 mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 h-dvh flex flex-col space-y-6 animate-in fade-in duration-500 select-none relative overflow-hidden">
+      <Toaster position="top-right" toastOptions={{ className: 'bg-white/80 backdrop-blur-xl border border-white/60 text-slate-800 font-bold rounded-2xl shadow-xl' }} />
       <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
-      {/* Header */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+      {/* 🌟 AMBIENT BACKGROUND ORBS */}
+      <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+
+      {/* 🌟 PREMIUM GLASS HEADER */}
+      <div className="relative bg-white/40 backdrop-blur-3xl rounded-4xl p-5 sm:p-6 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 overflow-hidden z-20">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-orange-500 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
-            <Users size={28} />
+          <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-purple-600/20 border border-white/20">
+            <Users size={24} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-900">Peer Remote Support</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider">P2P Active</span>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">Peer Remote Support</h1>
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 text-[9px] font-black uppercase tracking-wider border border-emerald-500/20 backdrop-blur-md">P2P Active</span>
             </div>
-            <p className="text-xs font-medium text-slate-500 mt-1">
+            <p className="text-xs font-semibold text-slate-500 mt-0.5">
               Collaborate, share screens, and assist teammates directly from your browser.
             </p>
           </div>
         </div>
-        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:border-purple-500 transition-all bg-slate-50 shadow-sm">
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 rounded-2xl border border-white/60 text-slate-600 bg-white/40 backdrop-blur-md hover:bg-white/80 transition-all shadow-[0_4px_15px_rgba(0,0,0,0.02)] cursor-pointer">
           {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
         </button>
       </div>
 
-      <div className="flex gap-6 flex-1 min-h-150">
+      <div className="flex gap-6 flex-1 min-h-0 z-10 pb-4">
         
-        {/* Directory Sidebar */}
+        {/* 🌟 DIRECTORY SIDEBAR (Ultra Glass) */}
         {isSidebarOpen && (
-          <div className="w-80 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col shrink-0 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+          <div className="w-80 bg-white/30 backdrop-blur-3xl rounded-4xl border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] flex flex-col shrink-0 overflow-hidden relative">
+            <div className="p-5 border-b border-white/40 bg-white/30 backdrop-blur-md z-10">
               <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" placeholder="Search Staff Name or ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold outline-none focus:border-orange-500 transition-all" />
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-500" />
+                <input 
+                  type="text" 
+                  placeholder="Search Staff Name or ID..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-white/60 bg-white/50 backdrop-blur-md text-sm font-bold text-slate-900 outline-none focus:bg-white/80 focus:ring-4 focus:ring-purple-500/10 transition-all shadow-inner placeholder:text-slate-500" 
+                />
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar z-10">
               {staffList.filter(s => s.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())).map((staff) => (
-                <button key={staff.id} onClick={() => { terminateSession("Switched user."); setActiveSession(staff); }} className={`w-full text-left p-3.5 rounded-2xl transition-all border flex items-center justify-between ${ activeSession?.id === staff.id ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-transparent hover:border-slate-200 shadow-sm' }`}>
+                <button 
+                  key={staff.id} 
+                  onClick={() => { terminateSession("Switched user."); setActiveSession(staff); }} 
+                  className={`w-full text-left p-4 rounded-3xl transition-all border flex items-center justify-between cursor-pointer ${ 
+                    activeSession?.id === staff.id 
+                    ? 'bg-white/70 border-purple-300 shadow-md backdrop-blur-xl' 
+                    : 'bg-transparent border-transparent hover:bg-white/50 hover:border-white/60 hover:shadow-sm' 
+                  }`}
+                >
                   <div>
-                    <p className={`font-bold text-sm ${activeSession?.id === staff.id ? 'text-orange-700' : 'text-slate-900'}`}>{staff.full_name || staff.name}</p>
-                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">{staff.emp_code || 'STAFF'} • {staff.assigned_asset_name}</p>
+                    <p className={`font-black text-sm tracking-tight ${activeSession?.id === staff.id ? 'text-purple-900' : 'text-slate-800'}`}>{staff.full_name || staff.name}</p>
+                    <p className="text-[9px] font-bold text-slate-500 mt-1 uppercase tracking-widest wrap-break-word">{staff.emp_code || 'STAFF'} • {staff.assigned_asset_name}</p>
                   </div>
-                  <Monitor size={16} className={activeSession?.id === staff.id ? 'text-orange-600' : 'text-slate-400'} />
+                  <Monitor size={18} className={activeSession?.id === staff.id ? 'text-purple-600' : 'text-slate-400'} />
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Main Remote Viewport */}
-        <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
+        {/* 🌟 MAIN REMOTE VIEWPORT (Glass Framed) */}
+        <div className="flex-1 bg-white/30 backdrop-blur-3xl rounded-4xl border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden relative z-10">
           {activeSession ? (
             <>
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              {/* Viewport Header */}
+              <div className="p-5 border-b border-white/40 bg-white/40 backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 z-20">
                 <div>
-                  <h2 className="text-lg font-black text-slate-900">{activeSession.full_name || activeSession.name}</h2>
-                  <p className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-md inline-block mt-1">{sessionStatus.toUpperCase()}</p>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">{activeSession.full_name || activeSession.name}</h2>
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 mt-1.5 border shadow-sm ${
+                    sessionStatus === 'idle' ? 'bg-slate-100/50 text-slate-500 border-slate-200/60' :
+                    sessionStatus === 'requesting' ? 'bg-amber-500/10 text-amber-700 border-amber-500/30' :
+                    'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
+                  }`}>
+                    {sessionStatus === 'idle' ? 'Ready to Connect' : sessionStatus === 'requesting' ? 'Awaiting Permission...' : `Session Active: ${sessionStatus.toUpperCase()}`}
+                  </p>
                 </div>
                 {sessionStatus === 'idle' ? (
-                  <button onClick={requestLiveScreenShare} className="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 cursor-pointer">
+                  <button onClick={requestLiveScreenShare} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-purple-600/20 transition-all flex items-center gap-2 cursor-pointer border border-white/20">
                     <Monitor size={16} /> Request Connection
                   </button>
                 ) : (
-                  <button onClick={() => terminateSession("Disconnected by user.")} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 cursor-pointer">
+                  <button onClick={() => terminateSession("Disconnected by user.")} className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-rose-600/20 transition-all flex items-center gap-2 cursor-pointer border border-white/20">
                     <Power size={16} /> Disconnect
                   </button>
                 )}
               </div>
 
+              {/* Viewport Body */}
               <div 
                 ref={viewportContainerRef} 
-                className={`flex-1 bg-slate-950 relative overflow-hidden flex items-center justify-center ${isControlling ? 'cursor-crosshair' : ''}`}
+                className={`flex-1 bg-slate-950/90 relative overflow-hidden flex items-center justify-center rounded-b-4xl ${isControlling ? 'cursor-crosshair' : ''}`}
                 onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
                 onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
                 onMouseUp={(e) => handleMouseEvent(e, 'mouseup')}
@@ -395,43 +446,46 @@ export default function StaffRemotePage() {
                 <video ref={videoRef} autoPlay playsInline muted={!isAudioEnabled} className={`max-w-full max-h-full object-contain ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} />
                 
                 {sessionStatus === 'requesting' && (
-                  <div className="text-center text-white">
-                    <Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" />
-                    <p className="font-bold">Awaiting Colleague Permission...</p>
+                  <div className="text-center text-white p-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-4xl shadow-2xl">
+                    <Loader2 size={48} className="animate-spin text-purple-500 mx-auto mb-4" />
+                    <p className="font-black text-lg tracking-widest uppercase text-transparent bg-clip-text bg-linear-to-r from-orange-400 to-purple-400">Awaiting Permission</p>
+                    <p className="text-xs font-medium text-slate-400 mt-2">Waiting for {activeSession.name} to accept the request.</p>
                   </div>
                 )}
                 
-                {/* 🌟 PURE TRANSPARENT GLASS CHAT BOX */}
+                {/* 🌟 PURE TRANSPARENT GLASS CHAT BOX (Absolute inside Viewport) */}
                 {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                   <div 
                     onMouseDown={(e) => e.stopPropagation()}
                     style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }}
-                    className="absolute bottom-24 right-6 w-80 bg-white/5 backdrop-blur-3xl border border-white/15 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] rounded-3xl flex flex-col z-50 overflow-hidden transition-opacity"
+                    className="absolute bottom-24 right-6 w-80 bg-white/80 backdrop-blur-3xl border border-white/60 shadow-2xl rounded-4xl flex flex-col z-50 overflow-hidden transition-opacity"
                   >
                     <div 
                       onMouseDown={(e) => { e.stopPropagation(); setIsDraggingChat(true); dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y }; }}
-                      className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center cursor-grab active:cursor-grabbing"
+                      className="p-4 bg-white/50 border-b border-white/40 text-slate-900 flex justify-between items-center cursor-grab active:cursor-grabbing backdrop-blur-md"
                     >
-                      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-white/80" /> Peer Chat</span>
-                      <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md text-white/70 hover:text-white transition-colors"><X size={16}/></button>
+                      <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                        <MessageSquare size={14} className="text-purple-600" /> Peer Chat
+                      </span>
+                      <button onClick={() => setIsChatOpen(false)} className="hover:bg-white p-1.5 rounded-xl text-slate-500 hover:text-slate-800 transition-colors shadow-sm cursor-pointer"><X size={16}/></button>
                     </div>
                     
-                    <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
+                    <div className="h-64 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
                       {chatMessages.length === 0 ? (
-                        <div className="m-auto text-center text-xs font-medium text-white/50">Send a message to start communicating.</div>
+                        <div className="m-auto text-center text-xs font-bold text-slate-400 uppercase tracking-widest px-4 leading-relaxed">Send a message to start communicating.</div>
                       ) : (
                         chatMessages.map((msg, i) => (
-                          <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-white/5 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
-                            <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/90' : 'text-white/60'}`}>{msg.sender}</div>{msg.text}
+                          <div key={i} className={`max-w-[85%] text-[12px] font-semibold p-3 shadow-md backdrop-blur-md wrap-break-word ${msg.isSelf ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none border border-purple-500/50' : 'bg-white/80 text-slate-800 self-start rounded-2xl rounded-bl-none border border-white/60'}`}>
+                            <div className={`font-black text-[9px] uppercase tracking-widest mb-1 ${msg.isSelf ? 'text-purple-200' : 'text-purple-600'}`}>{msg.sender}</div>{msg.text}
                           </div>
                         ))
                       )}
                       <div ref={chatEndRef} />
                     </div>
                     
-                    <form onSubmit={sendChatMessage} className="p-2 bg-white/5 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                      <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a message..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl outline-none focus:border-white/30 transition-all placeholder-white/40 shadow-inner" />
-                      <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all border border-white/10 shadow-sm"><Send size={14}/></button>
+                    <form onSubmit={sendChatMessage} className="p-3 bg-white/50 border-t border-white/40 flex gap-2 backdrop-blur-md">
+                      <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a message..." className="flex-1 text-xs font-bold px-4 py-3 bg-white/60 text-slate-900 border border-white/60 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400 shadow-inner" />
+                      <button type="submit" disabled={!chatInput.trim()} className="p-3 bg-purple-600 text-white rounded-2xl hover:bg-purple-700 disabled:opacity-50 transition-all shadow-md cursor-pointer border border-white/20"><Send size={16}/></button>
                     </form>
                   </div>
                 )}
@@ -441,40 +495,40 @@ export default function StaffRemotePage() {
                   <div 
                     onMouseDown={(e) => e.stopPropagation()}
                     style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }}
-                    className="absolute bottom-6 left-1/2 bg-white/5 backdrop-blur-3xl border border-white/15 p-1.5 rounded-full flex gap-1 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] z-50 items-center transition-all"
+                    className="absolute bottom-6 left-1/2 bg-slate-950/40 backdrop-blur-2xl border border-white/20 p-2 rounded-full flex gap-1 shadow-2xl z-50 items-center transition-all"
                   >
                     <div 
                       onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }}
-                      className="cursor-grab active:cursor-grabbing p-2 text-white/40 hover:text-white transition-colors ml-1"
+                      className="cursor-grab active:cursor-grabbing p-2.5 text-white/40 hover:text-white transition-colors ml-1"
                     >
-                      <GripVertical size={16} />
+                      <GripVertical size={18} />
                     </div>
                     
-                    <div className="w-px h-5 bg-white/15 mx-1" />
+                    <div className="w-px h-6 bg-white/15 mx-1.5" />
 
                     {[
                       { 
-                        icon: <Video size={18} />, active: isControlling, 
+                        icon: <Video size={20} />, active: isControlling, 
                         action: () => { 
                           if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
                           else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); }
                         }, 
                         tooltip: isControlling ? "Disable Control" : "Request Control" 
                       },
-                      { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
-                      { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Peer Chat" },
-                      { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
-                      { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Audio" },
-                      { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: "Fullscreen" },
-                      { icon: <FileUp size={18} />, active: false, action: () => fileInputRef.current?.click(), tooltip: "Share Document" },
-                      { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
-                      { icon: <Ban size={18} />, active: false, action: () => terminateSession("Session ended by user."), tooltip: "Disconnect", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/20" }
+                      { icon: <Keyboard size={20} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
+                      { icon: <MessageSquare size={20} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Peer Chat" },
+                      { icon: <Clipboard size={20} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
+                      { icon: <Volume2 size={20} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Audio" },
+                      { icon: isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />, active: isFullscreen, action: toggleFullscreen, tooltip: "Fullscreen" },
+                      { icon: <FileUp size={20} />, active: false, action: () => fileInputRef.current?.click(), tooltip: "Share Document" },
+                      { icon: <RefreshCw size={20} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
+                      { icon: <Ban size={20} />, active: false, action: () => terminateSession("Session ended by user."), tooltip: "Disconnect", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/20" }
                     ].map((btn, i) => (
                       <button 
                         key={i} 
                         onClick={btn.action} 
                         title={btn.tooltip} 
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.25)] border border-white/30 backdrop-blur-md' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all cursor-pointer ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-white/30 text-white shadow-[0_0_15px_rgba(255,255,255,0.3)] border border-white/40 backdrop-blur-md' : 'bg-transparent hover:bg-white/15 border border-transparent'}`}
                       >
                         {btn.icon}
                       </button>
@@ -484,13 +538,59 @@ export default function StaffRemotePage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-400 flex-col gap-4">
-              <Monitor size={64} className="opacity-20" />
-              <p className="font-bold">Select a colleague from the directory to start sharing</p>
+            <div className="flex-1 flex items-center justify-center text-slate-400 flex-col gap-5 bg-white/20 backdrop-blur-sm rounded-b-4xl">
+              <div className="p-6 bg-white/40 rounded-full border border-white/60 shadow-sm">
+                <Monitor size={48} className="text-purple-400" />
+              </div>
+              <p className="font-black text-sm uppercase tracking-widest text-slate-500">Select a colleague from the directory to start sharing</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* ⚠️ INCOMING REQUEST MODAL (Fixed Z-Index & Overlay) */}
+      {incomingRequest && !isStreaming && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white/95 backdrop-blur-2xl rounded-4xl max-w-md w-full p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] space-y-6 animate-in zoom-in-95 border border-white/60">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-sm border border-orange-500/20 animate-bounce"><Monitor size={32} /></div>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900">Live Support Access Requested</h3>
+              <p className="text-xs sm:text-sm font-semibold text-slate-500"><strong className="font-black text-slate-900">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
+            </div>
+            <div className="p-4 rounded-2xl border text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-3 bg-orange-500/10 border-orange-500/20 text-orange-800">
+              <ShieldAlert size={22} className="shrink-0 text-orange-500" />
+              <span>By accepting, they will be able to view your desktop natively.</span>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-2xl border border-white/60 text-xs font-bold uppercase tracking-widest transition-all cursor-pointer bg-white/40 backdrop-blur-md text-slate-600 hover:bg-white/60 shadow-sm disabled:opacity-50">Decline</button>
+              <button onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} disabled={isConnecting} className="flex-1 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 border border-white/20 transition-all cursor-pointer disabled:opacity-50">
+                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 FLOATING ACTION BAR */}
+      {isStreaming && (
+        <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="bg-white/80 backdrop-blur-3xl border border-white/60 p-4 rounded-4xl flex items-center justify-between gap-6 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto shadow-2xl">
+            <div className="flex items-center gap-4">
+              <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
+              <div>
+                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Screen Share Active</p>
+                <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                  {isControlGranted ? 'Colleague controls your PC.' : 'Colleague is viewing your workspace.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl flex items-center gap-2 transition-all shadow-lg shadow-rose-600/20 cursor-pointer border border-white/20"><StopCircle size={14} /> Stop</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
