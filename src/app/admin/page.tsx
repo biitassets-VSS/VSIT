@@ -9,7 +9,7 @@ import {
   Activity, ArrowRight, AlertCircle, Clock,
   AlertTriangle, Monitor, Megaphone, 
   Send, Loader2, ImagePlus, X, LogOut, RefreshCw, 
-  BarChart3, Settings, Cpu
+  BarChart3, Cpu
 } from 'lucide-react';
 
 const timeAgo = (dateString: string) => {
@@ -201,7 +201,7 @@ export default function AdminDashboardPage() {
         let displayName = log.user_email?.split('@')[0] || 'A user'; 
         if (matchedProfile) displayName = `${matchedProfile.full_name || matchedProfile.name || displayName}`;
         const statusText = (log.status || '').toLowerCase();
-        let logTheme = 'text-purple-500 bg-purple-500/10 border-purple-500/20'; 
+        let logTheme = 'text-purple-600 bg-purple-500/10 border-purple-500/20'; 
         if (statusText.includes('pending') || statusText === '') logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
         if (statusText.includes('resolv') || statusText.includes('approv')) logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
         return { ...log, displayName, logTheme };
@@ -242,9 +242,10 @@ export default function AdminDashboardPage() {
   // 🎨 MAC OS 2026 PREMIUM GLASS THEME CONFIGURATION
   const theme = {
     bg: isDarkMode ? 'bg-[#09090b]' : 'bg-[#F8FAFC]',
+    // 🌟 TRUE TRANSPARENT GLASS EFFECT
     glassCard: isDarkMode 
-      ? 'bg-white/5 backdrop-blur-2xl backdrop-saturate-150 border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)]' 
-      : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]',
+      ? 'bg-black/30 backdrop-blur-2xl backdrop-saturate-200 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.2)]' 
+      : 'bg-white/40 backdrop-blur-2xl backdrop-saturate-200 border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)]',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
@@ -265,14 +266,14 @@ export default function AdminDashboardPage() {
   );
 
   return (
-    // 🌟 DESKTOP: FIXED HEIGHT (NO SCROLLING) / MOBILE: RESPONSIVE SCROLL
-    <div className={`h-full lg:h-screen lg:max-h-screen overflow-y-auto lg:overflow-hidden flex flex-col ${theme.bg} transition-colors duration-500 font-sans antialiased relative z-0`}>
+    // 🌟 FIXED SCREEN LAYOUT (ABSOLUTE INSET-0 KILLS SCROLLING COMPLETELY ON DESKTOP)
+    <div className={`absolute inset-0 lg:p-4 overflow-y-auto lg:overflow-hidden flex flex-col ${theme.bg} font-sans antialiased z-0`}>
       
-      {/* 🌟 AMBIENT BACKGROUND GLOWS (APPLE STYLE MAC OS) */}
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-orange-400/20 dark:bg-orange-500/10 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/20 dark:bg-purple-600/10 blur-[120px] rounded-full pointer-events-none -z-10" />
+      {/* 🌟 MASSIVE AMBIENT BACKGROUND GLOWS FOR TRUE GLASS EFFECT */}
+      <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-3 sm:p-4 lg:p-6 gap-4 h-full min-h-0 z-10">
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-3 lg:p-2 gap-3 lg:gap-4 h-full min-h-0 z-10">
         
         {/* 🌟 HEADER WITH SYNC BUTTON */}
         <div className={`${theme.glassCard} rounded-2xl p-4 border flex items-center justify-between shrink-0 transition-all`}>
@@ -302,7 +303,7 @@ export default function AdminDashboardPage() {
           
           <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Laptop size={16} /></div>
+              <div className={`p-1.5 rounded-lg transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Laptop size={16} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Inventory</span>
             </div>
             <div>
@@ -318,7 +319,7 @@ export default function AdminDashboardPage() {
 
           <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={16} /> : <ClipboardCheck size={16} />}</div>
+              <div className={`p-1.5 rounded-lg transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={16} /> : <ClipboardCheck size={16} />}</div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Verifications</span>
             </div>
             <div>
@@ -333,7 +334,7 @@ export default function AdminDashboardPage() {
 
           <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Ticket size={16} /></div>
+              <div className={`p-1.5 rounded-lg transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}><Ticket size={16} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Helpdesk</span>
             </div>
             <div>
@@ -349,7 +350,7 @@ export default function AdminDashboardPage() {
 
           <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-1.5 rounded-lg transition-colors duration-300 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}><Users size={16} /></div>
+              <div className={`p-1.5 rounded-lg transition-all duration-300 group-hover:scale-110 ${isDarkMode ? 'bg-orange-500/10 text-orange-400 group-hover:bg-orange-500 group-hover:text-white' : 'bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}><Users size={16} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText}`}>Network</span>
             </div>
             <div>
@@ -374,14 +375,14 @@ export default function AdminDashboardPage() {
 
         </div>
 
-        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG (NO EMPTY SPACE STRETCHING) */}
+        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG */}
         <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-4 min-h-0 overflow-hidden pt-1">
           
-          <div className="w-full lg:w-[74%] flex flex-col gap-2.5 min-h-0 overflow-hidden">
+          <div className="w-full lg:w-[74%] flex flex-col gap-2 min-h-0 overflow-hidden">
             <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>System Modules</h3>
             
-            {/* 🌟 KEY FIX: "content-start" prevents the massive empty space stretching at the bottom of the cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 flex-1 overflow-y-auto custom-scrollbar content-start pr-1 pb-4">
+            {/* 🌟 ZERO EMPTY SPACE AT BOTTOM (Tight wrapping) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
               {[
                 { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
@@ -397,25 +398,25 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    /* 🌟 h-auto forces the card to wrap the text tightly, eliminating dead space */
-                    className={`text-left cursor-pointer h-auto p-4 rounded-2xl flex flex-col transition-all duration-300 ease-out group ${theme.glassCard} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-500/40' : 'hover:shadow-purple-500/10 hover:border-purple-500/40'}`}
+                    // Compact padding and tight height to remove bottom white space
+                    className={`text-left cursor-pointer h-30 p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 ease-out group ${theme.glassCard} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-500/40' : 'hover:shadow-purple-500/10 hover:border-purple-500/40'}`}
                   >
-                    <div className="flex items-start justify-between mb-3 w-full">
+                    <div className="flex items-start justify-between mb-2 w-full">
                       <div className={`p-2 rounded-xl transition-transform duration-300 group-hover:scale-110 ${isOrange ? (isDarkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-600') : (isDarkMode ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-600')}`}>
-                        <m.icon size={20} strokeWidth={2.2} />
+                        <m.icon size={18} strokeWidth={2.5} />
                         {m.badge > 0 && (
                           <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px] font-black text-white bg-rose-500 shadow-md border border-white">
                             {m.badge}
                           </span>
                         )}
                       </div>
-                      <div className={`p-1.5 rounded-full transition-colors duration-300 ${isDarkMode ? 'bg-white/5 text-zinc-500 group-hover:bg-white/10 group-hover:text-zinc-200' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
-                        <ArrowRight size={14} strokeWidth={2.5} />
+                      <div className={`p-1 rounded-full transition-colors duration-300 ${isDarkMode ? 'bg-white/5 text-zinc-500 group-hover:bg-white/10 group-hover:text-zinc-200' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-700'}`}>
+                        <ArrowRight size={14} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
                       </div>
                     </div>
                     <div>
-                      <h4 className={`text-sm font-bold tracking-tight leading-tight ${theme.text}`}>{m.title}</h4>
-                      <p className={`text-[11px] font-medium mt-1.5 leading-relaxed line-clamp-2 ${theme.subText}`}>{m.desc}</p>
+                      <h4 className={`text-[13px] font-bold tracking-tight leading-tight ${theme.text}`}>{m.title}</h4>
+                      <p className={`text-[10px] font-medium mt-1 leading-snug line-clamp-2 ${theme.subText}`}>{m.desc}</p>
                     </div>
                   </button>
                 );
@@ -424,23 +425,23 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* LIVE ACTIVITY LOG SIDEBAR */}
-          <div className="w-full lg:w-[26%] flex flex-col gap-2.5 min-h-0 overflow-hidden">
+          <div className="w-full lg:w-[26%] flex flex-col gap-2 min-h-0 overflow-hidden">
             <h3 className={`text-[10px] font-extrabold uppercase tracking-widest pl-1 shrink-0 ${theme.subText}`}>Live Activity Log</h3>
             <div className={`${theme.glassCard} rounded-2xl p-4 flex-1 flex flex-col min-h-0 overflow-hidden`}>
               {recentActivity.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
                   <Activity size={24} className={`${theme.subText} mb-2`} />
-                  <p className={`text-xs font-semibold ${theme.subText}`}>Waiting for live events...</p>
+                  <p className={`text-[11px] font-semibold ${theme.subText}`}>Waiting for live events...</p>
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                   {recentActivity.map((log: any, i: number) => (
                     <div key={i} className={`flex gap-3 relative pb-3 border-b last:border-0 last:pb-0 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
                       <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center border transition-all ${log.logTheme}`}>
-                        <Clock size={12} />
+                        <Clock size={12} strokeWidth={2.5} />
                       </div>
                       <div className="pt-0.5 min-w-0">
-                        <p className={`text-[13px] font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
+                        <p className={`text-[12px] font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
                         <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.subText}`}>Submitted system request.</p>
                         <p className={`text-[9px] font-bold uppercase tracking-wider mt-1 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
@@ -448,7 +449,7 @@ export default function AdminDashboardPage() {
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-3 w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all duration-300 cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-3 w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all duration-300 cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' : 'bg-white/50 border-slate-200/60 hover:bg-white text-slate-600'}`}>
                 View Entire Log
               </button>
             </div>
@@ -465,7 +466,7 @@ export default function AdminDashboardPage() {
               <h3 className={`text-sm font-black flex items-center gap-2 uppercase tracking-widest ${theme.text}`}>
                 <Megaphone size={18} className="text-orange-500" /> Broadcast Announcement
               </h3>
-              <button onClick={() => setIsBroadcastModalOpen(false)} className={`p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+              <button onClick={() => setIsBroadcastModalOpen(false)} className={`p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-white/50 text-slate-500'}`}>
                 <X size={18} />
               </button>
             </div>
@@ -503,7 +504,7 @@ export default function AdminDashboardPage() {
                 <button type="button" onClick={() => setIsBroadcastModalOpen(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all cursor-pointer ${
                   isDarkMode 
                     ? 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-300' 
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    : 'bg-white/50 border-slate-200/60 hover:bg-white text-slate-600'
                 }`}>
                   Cancel
                 </button>
