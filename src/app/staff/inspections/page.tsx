@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ClipboardCheck, Loader2, AlertTriangle, Eye, X, 
   CameraOff, CheckCircle2, RefreshCw, Calendar, 
-  Clock, AlertOctagon, Search, ShieldCheck, Laptop, History
+  Clock, AlertOctagon, Search, ShieldCheck, Laptop, History, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 // 🌟 DYNAMIC DUE DATE CALCULATOR
@@ -29,15 +30,20 @@ const formatDate = (dateString: string | null | undefined) => {
 
 export default function StaffInspectionsPage() {
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [inspections, setInspections] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 🌟 SECURE LIGHTBOX STATE
-  const [photoViewer, setPhotoViewer] = useState<{ isOpen: boolean; photos: string[]; title: string }>({
-    isOpen: false, photos: [], title: ''
+  // 🌟 SECURE LIGHTBOX STATE (Added currentIndex for Gallery)
+  const [photoViewer, setPhotoViewer] = useState<{ isOpen: boolean; photos: string[]; title: string; currentIndex: number }>({
+    isOpen: false, photos: [], title: '', currentIndex: 0
   });
   const [isWindowFocused, setIsWindowFocused] = useState(true);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchRealtimeData = async () => {
     setIsRefreshing(true);
@@ -125,7 +131,6 @@ export default function StaffInspectionsPage() {
 
   return (
     <>
-      {/* 🌟 MAIN PAGE CONTENT (Unrestricted scrolling layout) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 animate-in fade-in duration-500 w-full min-h-screen pb-32 select-none relative" onContextMenu={(e) => e.preventDefault()}>
         
         {/* 🌟 ADVANCED HEADER WITH GLASS THEME */}
@@ -173,7 +178,6 @@ export default function StaffInspectionsPage() {
             </div>
           )}
 
-          {/* Container Header */}
           <div className="flex items-center justify-between mb-6 px-1">
             <div className="flex items-center gap-2.5">
               <History size={20} className="text-slate-800" />
@@ -213,10 +217,8 @@ export default function StaffInspectionsPage() {
                     key={`${insp.id}-${index}`} 
                     className="group bg-white/40 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-white/60 shadow-[0_8px_25px_rgba(0,0,0,0.02)] transition-all duration-300 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] relative overflow-hidden flex flex-col"
                   >
-                    {/* Status Glow */}
                     <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full opacity-20 transition-opacity duration-500 group-hover:opacity-40 pointer-events-none ${isApproved ? 'bg-emerald-400' : isRejected ? 'bg-rose-400' : 'bg-purple-400'}`} />
 
-                    {/* Header & Status Badge */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                       <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-purple-100/80 text-purple-600 flex items-center justify-center shadow-xs shrink-0">
@@ -230,7 +232,6 @@ export default function StaffInspectionsPage() {
                       </span>
                     </div>
 
-                    {/* 🌟 COMPACT GRID */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
                       <div className="min-w-0">
                         <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Tag ID</span>
@@ -256,7 +257,6 @@ export default function StaffInspectionsPage() {
                       </div>
                     </div>
 
-                    {/* Feedback Note */}
                     <div className={`p-3.5 rounded-xl border flex-1 backdrop-blur-xs shadow-inner mb-5 ${isRejected ? 'bg-rose-50/50 border-rose-200/50' : isApproved ? 'bg-emerald-50/50 border-emerald-200/50' : 'bg-slate-50/50 border-slate-200/50'}`}>
                       <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-1 ${isRejected ? 'text-rose-600' : isApproved ? 'text-emerald-600' : 'text-slate-500'}`}>
                         {isRejected ? <AlertOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
@@ -267,7 +267,7 @@ export default function StaffInspectionsPage() {
                       </p>
                     </div>
 
-                    {/* 🌟 THUMBNAIL PHOTO GALLERY (Replaced the button) */}
+                    {/* 🌟 THUMBNAIL PHOTO GALLERY (Replaces Button) */}
                     <div className="pt-4 border-t border-slate-200/50 shrink-0 mt-auto">
                       {safePhotos.length > 0 ? (
                         <div className="flex flex-col gap-2.5">
@@ -278,7 +278,7 @@ export default function StaffInspectionsPage() {
                             {safePhotos.map((url, i) => (
                               <button 
                                 key={i}
-                                onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection' })}
+                                onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection', currentIndex: i })}
                                 className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 border-2 border-white shadow-sm ring-1 ring-slate-200/60 transition-all hover:ring-purple-400 hover:shadow-md cursor-pointer"
                               >
                                 <img 
@@ -286,7 +286,6 @@ export default function StaffInspectionsPage() {
                                   alt={`Evidence ${i + 1}`} 
                                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                                 />
-                                {/* Hover Glass Overlay */}
                                 <div className="absolute inset-0 bg-purple-900/0 group-hover:bg-purple-900/40 transition-colors flex items-center justify-center backdrop-blur-[1px] opacity-0 group-hover:opacity-100">
                                   <Eye size={20} className="text-white drop-shadow-md" />
                                 </div>
@@ -309,54 +308,85 @@ export default function StaffInspectionsPage() {
         </div>
       </div>
 
-      {/* 🌟 SECURE LIGHTBOX (Remains Fixed & Strict Overlay) */}
-      {photoViewer.isOpen && (
+      {/* 🌟 PORTAL: SECURE MODERN GALLERY LIGHTBOX (Escapes Stacking Context completely!) */}
+      {mounted && photoViewer.isOpen && createPortal(
         <div 
-          className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl flex flex-col items-center justify-center p-0 m-0 select-none overflow-hidden z-99999"
+          className="fixed inset-0 bg-slate-950/95 backdrop-blur-3xl flex flex-col items-center justify-center p-4 sm:p-8 select-none"
+          style={{ zIndex: 2147483647 }} // Maximum z-index to overlay EVERYTHING including layout sidebar
           onContextMenu={(e) => e.preventDefault()} 
         >
-          <div className={`w-full h-full flex flex-col items-center justify-center transition-all duration-300 relative ${!isWindowFocused ? 'blur-3xl opacity-0 scale-95' : 'blur-0 opacity-100 scale-100'}`}>
+          <div className={`w-full h-full max-w-6xl mx-auto flex flex-col transition-all duration-300 relative ${!isWindowFocused ? 'blur-3xl opacity-0 scale-95' : 'blur-0 opacity-100 scale-100'}`}>
             
-            {/* Close Button */}
-            <button 
-              onClick={() => setPhotoViewer({ isOpen: false, photos: [], title: '' })} 
-              className="absolute top-4 right-4 sm:top-8 sm:right-8 p-4 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors cursor-pointer z-50 border border-white/20 shadow-2xl"
-            >
-              <X size={24}/>
-            </button>
-            
-            {/* Anti-screenshot blur screen */}
+            {/* Top Bar: Title & Close */}
+            <div className="flex items-center justify-between w-full mb-4 sm:mb-6 shrink-0">
+               <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/10 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full">
+                 <ShieldCheck className="text-purple-400" size={18} />
+                 <span className="text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest truncate max-w-[200px] sm:max-w-md">
+                   {photoViewer.title} • {photoViewer.photos.length} Secure Images
+                 </span>
+               </div>
+               <button 
+                 onClick={() => setPhotoViewer({ isOpen: false, photos: [], title: '', currentIndex: 0 })} 
+                 className="p-3 bg-white/10 hover:bg-rose-500 text-white rounded-full transition-colors border border-white/20 shadow-2xl cursor-pointer"
+               >
+                 <X size={20} />
+               </button>
+            </div>
+
             {!isWindowFocused && (
-              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center text-white bg-slate-950">
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center text-white bg-slate-950/80 rounded-4xl">
                 <CameraOff size={60} className="text-orange-500 mb-3 animate-pulse"/>
                 <h2 className="font-black text-2xl tracking-widest uppercase text-transparent bg-clip-text bg-linear-to-r from-orange-400 to-purple-500">Capture Blocked</h2>
                 <p className="text-slate-400 mt-2 text-sm font-medium">Please return focus to this window to view secure evidence.</p>
               </div>
             )}
             
-            <div className="flex w-full h-dvh overflow-x-auto snap-x snap-mandatory items-center custom-scrollbar">
-              {photoViewer.photos.map((url, i) => (
-                <div key={i} className="shrink-0 w-full h-full snap-center flex items-center justify-center p-4 sm:p-12 relative">
-                  <img 
-                    src={url} 
-                    alt="Secure Evidence" 
-                    draggable={false} 
-                    className="w-auto h-auto max-w-full max-h-full object-contain rounded-2xl drop-shadow-[0_0_35px_rgba(0,0,0,0.4)] pointer-events-none select-none" 
-                    style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
-                  />
-                  {/* Invisible shield block over image to prevent right click save */}
-                  <div className="absolute inset-0 z-10 bg-transparent w-full h-full" />
-                </div>
-              ))}
-            </div>
-            
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 text-white text-xs font-black tracking-widest uppercase shadow-2xl flex items-center gap-2 whitespace-nowrap">
-              <ShieldCheck size={16} className="text-purple-400" />
-              {photoViewer.photos.length} Secure Images • Do Not Distribute
+            {/* Main Image Frame (Constrained to prevent overflow) */}
+            <div className="flex-1 w-full bg-black/40 border border-white/10 rounded-4xl relative overflow-hidden flex items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+               <img 
+                  src={photoViewer.photos[photoViewer.currentIndex]} 
+                  className="w-full h-full object-contain pointer-events-none drop-shadow-2xl p-2 sm:p-6" 
+                  alt="Secure Evidence" 
+               />
+               <div className="absolute inset-0 z-10 bg-transparent" /> {/* Right click shield */}
+
+               {/* Navigation Arrows */}
+               {photoViewer.photos.length > 1 && (
+                 <>
+                   <button 
+                      onClick={(e) => { e.stopPropagation(); setPhotoViewer(p => ({ ...p, currentIndex: p.currentIndex === 0 ? p.photos.length - 1 : p.currentIndex - 1 })) }} 
+                      className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-black/50 hover:bg-purple-600 text-white rounded-full backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer"
+                   >
+                     <ChevronLeft size={24} />
+                   </button>
+                   <button 
+                      onClick={(e) => { e.stopPropagation(); setPhotoViewer(p => ({ ...p, currentIndex: p.currentIndex === p.photos.length - 1 ? 0 : p.currentIndex + 1 })) }} 
+                      className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-black/50 hover:bg-purple-600 text-white rounded-full backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer"
+                   >
+                     <ChevronRight size={24} />
+                   </button>
+                 </>
+               )}
             </div>
 
+            {/* Bottom Thumbnail Strip */}
+            {photoViewer.photos.length > 1 && (
+              <div className="mt-4 sm:mt-6 flex items-center justify-center gap-3 overflow-x-auto w-full pb-2 custom-scrollbar shrink-0">
+                {photoViewer.photos.map((url, i) => (
+                   <button 
+                     key={i}
+                     onClick={() => setPhotoViewer(p => ({ ...p, currentIndex: i }))}
+                     className={`relative w-14 h-14 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 transition-all cursor-pointer border-2 ${i === photoViewer.currentIndex ? 'border-purple-500 scale-110 shadow-[0_0_20px_rgba(168,85,247,0.4)] z-10' : 'border-white/20 opacity-50 hover:opacity-100 hover:scale-105'}`}
+                   >
+                     <img src={url} className="w-full h-full object-cover pointer-events-none" alt={`Thumb ${i + 1}`} />
+                   </button>
+                ))}
+              </div>
+            )}
+
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
