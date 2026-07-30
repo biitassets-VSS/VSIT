@@ -435,10 +435,10 @@ function AssetRegistryContent() {
     bg: 'bg-transparent',
     // Card uses bg-white/80 in light mode for total readability, bg-white/5 in dark mode
     card: 'bg-white/80 dark:bg-white/5 backdrop-blur-3xl border-white/60 dark:border-white/10 shadow-lg',
+    iconBgBrand: 'bg-slate-100 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-white',
     textMain: 'text-slate-900 dark:text-white', // Deep slate for light mode
     textSub: 'text-slate-600 dark:text-slate-400', // Clear slate for light mode
     cardHover: 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(249,115,22,0.4)] hover:-translate-y-1 transition-all duration-300',
-    iconBgBrand: 'bg-slate-100 text-slate-800 border border-slate-300 dark:bg-white/10 dark:text-white dark:border-white/20',
     modalBody: 'bg-white/95 dark:bg-zinc-900/95 backdrop-blur-3xl border-white/60 dark:border-white/10 shadow-2xl',
   };
 
