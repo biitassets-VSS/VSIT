@@ -19,12 +19,12 @@ const calculateNextDueDate = (lastInspectionDate: string, category: string = 'La
   const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0);
   const lastSaturday = new Date(lastDayOfTargetMonth);
   while (lastSaturday.getDay() !== 6) { lastSaturday.setDate(lastSaturday.getDate() - 1); }
-  return lastSaturday.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '/');
+  return lastSaturday.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
 };
 
 const formatDate = (dateString: string | null | undefined) => {
   if (!dateString) return 'Pending';
-  return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '/');
+  return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
 };
 
 export default function StaffInspectionsPage() {
@@ -121,11 +121,10 @@ export default function StaffInspectionsPage() {
   if (loading) return <div className="flex min-h-[70vh] items-center justify-center flex-col gap-3"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /><p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Records...</p></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12 w-full select-none relative" onContextMenu={(e) => e.preventDefault()}>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20 w-full select-none relative" onContextMenu={(e) => e.preventDefault()}>
       
       {/* 🌟 ADVANCED HEADER WITH PREMIUM GLASS THEME */}
-      <div className="relative bg-white/50 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden">
-        {/* Subtle background glow blobs */}
+      <div className="relative bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-linear-to-br from-orange-400/10 to-purple-500/10 blur-3xl -z-10 rounded-full" />
         <div className="absolute bottom-0 left-0 w-40 h-40 bg-linear-to-tr from-purple-400/10 to-orange-500/10 blur-3xl -z-10 rounded-full" />
         
@@ -161,19 +160,19 @@ export default function StaffInspectionsPage() {
       </div>
 
       {/* 🌟 PREMIUM GLASS INSPECTIONS CONTAINER */}
-      <div className="bg-white/50 backdrop-blur-2xl rounded-4xl p-4 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden min-h-[50vh]">
+      <div className="bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative min-h-[50vh]">
         
         {isRefreshing && (
-          <div className="absolute top-0 left-0 right-0 h-1 bg-purple-100 overflow-hidden z-10">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-purple-100 overflow-hidden z-10 rounded-t-4xl">
             <div className="w-1/3 h-full bg-linear-to-r from-orange-400 to-purple-500 animate-[pulse_1s_ease-in-out_infinite] translate-x-full" />
           </div>
         )}
 
         {/* Container Header */}
-        <div className="flex items-center justify-between mb-8 px-2 sm:px-0">
+        <div className="flex items-center justify-between mb-6 px-1">
           <div className="flex items-center gap-3">
-            <History size={22} className="text-purple-600" />
-            <h2 className="text-lg font-black text-slate-900 tracking-wider uppercase">Inspection History</h2>
+            <History size={22} className="text-slate-800" />
+            <h2 className="text-base font-black text-slate-900 tracking-widest uppercase">Inspection History</h2>
           </div>
           <span className="text-sm font-black text-slate-500">{filteredInspections.length} Records</span>
         </div>
@@ -185,7 +184,7 @@ export default function StaffInspectionsPage() {
             <p className="text-sm text-slate-500 mt-1 max-w-sm">There are no historical audit logs found matching your search.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredInspections.map((insp, index) => {
               const asset = insp.assets || {};
               const statusConfig = getStatusConfig(insp.status);
@@ -208,17 +207,17 @@ export default function StaffInspectionsPage() {
               return (
                 <div 
                   key={`${insp.id}-${index}`} 
-                  className="group bg-white/40 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.25)] relative overflow-hidden flex flex-col"
+                  className="group bg-white/40 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.25)] relative overflow-hidden flex flex-col"
                 >
                   
                   {/* Subtle Background Glow per Card Status */}
                   <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full opacity-20 transition-opacity duration-500 group-hover:opacity-40 pointer-events-none ${isApproved ? 'bg-emerald-400' : isRejected ? 'bg-rose-400' : 'bg-purple-400'}`} />
 
                   {/* Card Header & Status */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-100/80 text-purple-600 flex items-center justify-center shadow-sm shrink-0">
-                        <Laptop size={18} />
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-100/80 text-purple-600 flex items-center justify-center shadow-sm shrink-0">
+                        <Laptop size={16} />
                       </div>
                       <span className="line-clamp-1">{asset.name || asset.asset_name || 'Hardware Device'}</span>
                     </h3>
@@ -228,35 +227,35 @@ export default function StaffInspectionsPage() {
                     </span>
                   </div>
 
-                  {/* 🌟 EXPANDED Asset Details Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-6">
+                  {/* 🌟 OPTIMIZED COMPACT GRID (Prevents Card Overflow) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 mb-5">
                     <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Tag ID</span>
                       <span className="font-bold text-sm text-slate-900 wrap-break-word">{asset.asset_tag || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Assigned</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Assigned</span>
                       <span className="font-bold text-sm text-slate-900">{formatDate(assignedDate)}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Agreement</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Agreement</span>
                       <span className="font-bold text-sm text-slate-900">{formatDate(agreementDate)}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Inspected</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Inspected</span>
                       <span className="font-bold text-sm text-slate-900">{formatDate(insp.created_at)}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Next Due</span>
+                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Next Due</span>
                       <span className={`font-bold text-sm ${isApproved ? 'text-purple-700' : 'text-slate-500'}`}>
-                        {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending Apprvl'}
+                        {isApproved ? calculateNextDueDate(insp.created_at, asset.category) : 'Pending'}
                       </span>
                     </div>
                   </div>
 
                   {/* Admin Feedback Block */}
-                  <div className={`p-4 rounded-2xl border flex-1 backdrop-blur-sm shadow-inner mb-6 ${isRejected ? 'bg-rose-50/50 border-rose-200/50' : isApproved ? 'bg-emerald-50/50 border-emerald-200/50' : 'bg-slate-50/50 border-slate-200/50'}`}>
-                    <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-2 ${isRejected ? 'text-rose-600' : isApproved ? 'text-emerald-600' : 'text-slate-500'}`}>
+                  <div className={`p-4 rounded-xl border flex-1 backdrop-blur-sm shadow-inner mb-5 ${isRejected ? 'bg-rose-50/50 border-rose-200/50' : isApproved ? 'bg-emerald-50/50 border-emerald-200/50' : 'bg-slate-50/50 border-slate-200/50'}`}>
+                    <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${isRejected ? 'text-rose-600' : isApproved ? 'text-emerald-600' : 'text-slate-500'}`}>
                       {isRejected ? <XOctagon size={12}/> : isApproved ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
                       {isRejected ? 'Admin Rejection Reason' : isApproved ? 'Admin Approval Note' : 'Submitted Notes'}
                     </span>
@@ -266,16 +265,16 @@ export default function StaffInspectionsPage() {
                   </div>
 
                   {/* BOTTOM: Evidence Button */}
-                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-200/50 shrink-0">
+                  <div className="pt-4 border-t border-slate-200/50 shrink-0 mt-auto flex justify-end">
                     {safePhotos.length > 0 ? (
                       <button 
                         onClick={() => setPhotoViewer({ isOpen: true, photos: safePhotos, title: asset.name || 'Inspection' })}
-                        className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 cursor-pointer"
+                        className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-md shadow-slate-900/20 flex items-center gap-2 cursor-pointer"
                       >
                         <Eye size={16} /> View Encrypted Evidence ({safePhotos.length})
                       </button>
                     ) : (
-                      <div className="px-6 py-2.5 rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                      <div className="px-6 py-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-white/50 text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
                         <CameraOff size={16} /> No Photos Attached
                       </div>
                     )}
