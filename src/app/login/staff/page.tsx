@@ -51,80 +51,83 @@ export default function StaffLoginPage() {
     <div className="min-h-screen w-full bg-transparent flex items-center justify-center p-4 sm:p-8 font-sans antialiased relative overflow-hidden selection:bg-purple-500/30">
       <Toaster position="top-center" toastOptions={{ className: 'bg-white/95 backdrop-blur-xl border border-white/80 text-slate-900 font-bold rounded-2xl shadow-xl' }} />
 
-      <div className="relative w-full max-w-md z-10">
+      {/* Increased max-width to max-w-lg to comfortably hold the bigger text */}
+      <div className="relative w-full max-w-lg z-10">
         
-        {/* 🌟 PURE WHITE FROSTED GLASS CARD: No black colors allowed! */}
-        <div className="relative bg-white/70 backdrop-blur-3xl rounded-4xl p-8 sm:p-10 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.08)] flex flex-col items-center text-center ring-1 ring-slate-900/5">
+        {/* 🌟 FULL FROSTED GLASS EFFECT: bg-white/35 creates deep transparency, backdrop-blur-3xl blurs what's behind it */}
+        <div className="relative bg-white/35 backdrop-blur-3xl rounded-[2.5rem] p-8 sm:p-12 border border-white/60 shadow-[0_15px_50px_rgba(0,0,0,0.05)] flex flex-col items-center text-center ring-1 ring-white/80">
           
           <img 
             src="/logo.png" 
             alt="Virtual Staffing Solution Logo" 
-            className="h-10 w-auto mb-6 object-contain drop-shadow-sm"
+            className="h-12 w-auto mb-6 object-contain drop-shadow-sm"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
-          <div className="w-16 h-16 bg-purple-100/80 rounded-2xl flex items-center justify-center mb-5 text-purple-600 border border-purple-200 shadow-inner">
-            <Users size={28} />
+          <div className="w-20 h-20 bg-white/50 backdrop-blur-md rounded-3xl flex items-center justify-center mb-6 text-purple-600 border border-white/80 shadow-sm">
+            <Users size={32} />
           </div>
           
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-purple-700 mb-1.5">Virtual Staffing Solution</h2>
+          {/* Bigger, clearer headings */}
+          <h2 className="text-xs font-black uppercase tracking-widest text-purple-700 mb-2 drop-shadow-sm">Virtual Staffing Solution</h2>
           
-          {/* Maximum contrast text for absolute readability */}
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2 text-slate-900">Staff Portal</h1>
-          <p className="text-xs font-bold tracking-wide text-slate-600 mb-8">View hardware & sign agreements</p>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-3 text-slate-900">Staff Portal</h1>
+          <p className="text-sm font-bold tracking-wide text-slate-600 mb-8">View hardware & sign agreements</p>
 
           {error && (
-            <div className="w-full p-4 mb-6 rounded-2xl flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-700 text-left shadow-sm">
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
-              <p className="text-xs font-bold">{error}</p>
+            <div className="w-full p-4 mb-8 rounded-2xl flex items-start gap-3 bg-rose-50 border border-rose-200 text-rose-700 text-left shadow-sm">
+              <AlertCircle size={20} className="shrink-0 mt-0.5" />
+              <p className="text-sm font-bold">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-700 ml-1 block">Employee Email</label>
+          <form onSubmit={handleLogin} className="w-full space-y-6 text-left">
+            <div className="space-y-2">
+              {/* Bigger labels */}
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-800 ml-1 block drop-shadow-sm">Employee Email</label>
               <div className="relative group">
-                <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-purple-600" />
+                <Mail size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-purple-600" />
                 
-                {/* Crisp, frosted white inputs */}
+                {/* Bigger, highly readable inputs: text-base, py-4, thicker borders */}
                 <input 
                   type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="employee@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/60 border border-white/80 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-900 placeholder:text-slate-400 shadow-sm"
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl text-base font-semibold outline-none transition-all bg-white/60 backdrop-blur-md border border-white/80 focus:bg-white focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 text-slate-900 placeholder:text-slate-400 shadow-sm"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-700 ml-1 block">Password</label>
+            <div className="space-y-2">
+              {/* Bigger labels */}
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-800 ml-1 block drop-shadow-sm">Password</label>
               <div className="relative group">
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-purple-600" />
+                <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-purple-600" />
                 
-                {/* Crisp, frosted white inputs */}
                 <input 
                   type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/60 border border-white/80 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-slate-900 placeholder:text-slate-400 shadow-sm"
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl text-base font-semibold outline-none transition-all bg-white/60 backdrop-blur-md border border-white/80 focus:bg-white focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 text-slate-900 placeholder:text-slate-400 shadow-sm"
                 />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-4 mt-4 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 text-white bg-purple-600 hover:bg-purple-700 shadow-md transition-all duration-300 disabled:opacity-70 cursor-pointer">
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={16} /></>}
+            {/* Bigger, more prominent button */}
+            <button type="submit" disabled={loading} className="w-full py-4 mt-6 rounded-2xl text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/25 transition-all duration-300 disabled:opacity-70 cursor-pointer">
+              {loading ? <><Loader2 size={20} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={18} /></>}
             </button>
           </form>
           
         </div>
       </div>
 
-      {/* 🌟 BOTTOM LEFT: Light Frosted Glass Button (No Black) */}
+      {/* 🌟 BOTTOM LEFT: Increased scale for the desktop app button */}
       <div className="absolute bottom-6 left-6 z-20">
         <a 
           href="/downloads/VSIT-Desktop-App.exe" 
           download
-          className="flex items-center gap-2.5 px-5 py-3.5 bg-white/80 backdrop-blur-xl border border-white/80 text-purple-700 rounded-xl text-xs font-bold transition-all hover:bg-white hover:scale-105 shadow-md cursor-pointer"
+          className="flex items-center gap-2.5 px-6 py-4 bg-white/50 backdrop-blur-2xl border border-white/80 text-purple-800 rounded-2xl text-sm font-bold transition-all hover:bg-white/80 hover:scale-105 shadow-md cursor-pointer"
         >
-          <MonitorDown size={16} className="text-purple-600" />
+          <MonitorDown size={18} className="text-purple-600" />
           Download Desktop App (.exe)
         </a>
       </div>

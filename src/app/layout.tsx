@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const viewport: Viewport = {
-  themeColor: '#FFF4E6',
+  themeColor: '#FCF9F5',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -30,13 +30,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      {/* 🌟 BASE THEME: Pure Light Orange/Cream background. No black colors. */}
-      <body className="antialiased bg-[#FFF4E6] text-slate-900 min-h-screen flex flex-col relative selection:bg-purple-500/30 selection:text-purple-900">
+      {/* 🌟 DECREASED BRIGHTNESS: Very soft, soothing cream base */}
+      <body className="antialiased bg-[#FCF9F5] text-slate-900 min-h-screen flex flex-col relative selection:bg-purple-500/30 selection:text-purple-900">
         
-        {/* 🌟 EXTREMELY SOFT AMBIENT LIGHT: Low opacity, high blur, no harsh saturation */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 flex items-center justify-center opacity-30">
-          <div className="absolute left-[-10%] w-[50vw] h-[70vh] bg-orange-400/50 blur-[160px] rounded-full" />
-          <div className="absolute right-[-10%] w-[50vw] h-[70vh] bg-purple-400/50 blur-[160px] rounded-full" />
+        {/* 🌟 EXTREMELY SOFT AMBIENT LIGHT: Low opacity (20%), massive blur for eye comfort */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 flex items-center justify-center opacity-20">
+          <div className="absolute left-[-10%] w-[50vw] h-[70vh] bg-orange-500 blur-[180px] rounded-full" />
+          <div className="absolute right-[-10%] w-[50vw] h-[70vh] bg-purple-600 blur-[180px] rounded-full" />
         </div>
 
         {/* Main Content Area */}
@@ -44,10 +44,10 @@ export default function RootLayout({
           {children}
         </main>
 
-        {/* 🌟 HIGH VISIBILITY WATERMARK: Frosted white glass, sharp text */}
+        {/* 🌟 HIGH VISIBILITY WATERMARK: Larger text, frosted white glass pill */}
         <div className="fixed bottom-6 right-6 z-2147483647 pointer-events-none">
-          <div className="bg-white/80 backdrop-blur-2xl px-5 py-2.5 rounded-full border border-white/60 shadow-lg flex items-center justify-center">
-            <span className="text-[10px] sm:text-xs font-black tracking-widest text-slate-800 uppercase">
+          <div className="bg-white/60 backdrop-blur-2xl px-6 py-3 rounded-full border border-white/80 shadow-sm flex items-center justify-center">
+            <span className="text-[11px] sm:text-xs font-black tracking-widest text-slate-800 uppercase drop-shadow-sm">
               Designed by AinodeArt
             </span>
           </div>
