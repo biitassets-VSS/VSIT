@@ -20,7 +20,6 @@ interface ChatMessage {
 
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-// 🌟 UPGRADED STUN SERVERS FOR INSTANT P2P HANDSHAKE WITHOUT TIMEOUTS
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' }, 
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -51,8 +50,10 @@ export default function AdminRemotePage() {
   const [chatPos, setChatPos] = useState({ x: 0, y: 0 });
   const [isDraggingDock, setIsDraggingDock] = useState(false);
   const [isDraggingChat, setIsDraggingChat] = useState(false);
+  
   const dragStartDock = useRef({ x: 0, y: 0 });
   const dragStartChat = useRef({ x: 0, y: 0 });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -94,9 +95,7 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
-      // 🌟 LENIENT CONNECTION TIMEOUT HANDLER (Prevents 5-sec false dropouts)
       peer.onconnectionstatechange = () => {
-        console.log("Admin ICE Connection State:", peer.iceConnectionState, "Connection State:", peer.connectionState);
         if (peer.connectionState === 'failed') {
           terminateSession();
           toast.error("Network connection failed.");
@@ -105,6 +104,16 @@ export default function AdminRemotePage() {
 
       const dataChannel = peer.createDataChannel('enterprise_channel', { ordered: true });
       dataChannelRef.current = dataChannel;
+      
+      // Handle Incoming P2P Files
+      dataChannel.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'file_meta') toast(`Receiving file: ${msg.name}...`);
+          } catch(e) {}
+        }
+      };
 
       peer.ontrack = (event) => {
         if (videoRef.current && event.streams[0]) {
@@ -128,6 +137,10 @@ export default function AdminRemotePage() {
         try {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           const answer = await peer.createAnswer();
+          
+          // 🌟 LOW BANDWIDTH AUDIO OPTIMIZER (Force 16Kbps Mono Opus)
+          answer.sdp = answer.sdp.replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=0;maxaveragebitrate=16000');
+          
           await peer.setLocalDescription(answer);
           await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
         } catch (rtcError) { console.error("SDP offer error:", rtcError); }
@@ -173,6 +186,37 @@ export default function AdminRemotePage() {
     if (isControlling && dataChannelRef.current?.readyState === 'open') {
       dataChannelRef.current.send(JSON.stringify(command));
     }
+  };
+
+  // 🌟 P2P CHUNKED DOCUMENT TRANSFER
+  const sendFileP2P = (file: File) => {
+    if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
+      toast.error("P2P Data Tunnel not open");
+      return;
+    }
+    toast.loading(`Uploading ${file.name}...`);
+    dataChannelRef.current.send(JSON.stringify({ type: 'file_meta', name: file.name, size: file.size, fileType: file.type }));
+    
+    const CHUNK_SIZE = 16384; // 16KB for extreme low bandwidth stability
+    const reader = new FileReader();
+    let offset = 0;
+
+    reader.onload = (e) => {
+      if (e.target?.result && dataChannelRef.current) {
+        dataChannelRef.current.send(e.target.result as ArrayBuffer);
+        offset += (e.target.result as ArrayBuffer).byteLength;
+        if (offset < file.size) {
+          readSlice(offset);
+        } else {
+          toast.success("Document Sent Successfully!");
+        }
+      }
+    };
+    const readSlice = (o: number) => {
+      const slice = file.slice(o, o + CHUNK_SIZE);
+      reader.readAsArrayBuffer(slice);
+    };
+    readSlice(0);
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
@@ -238,6 +282,8 @@ export default function AdminRemotePage() {
   return (
     <div className="h-screen bg-slate-50 font-sans flex flex-col overflow-hidden">
       <Toaster position="top-right" />
+      <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
+
       <div className="w-full max-w-[1600px] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4">
         
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between shrink-0">
@@ -310,18 +356,19 @@ export default function AdminRemotePage() {
                   
                   {sessionStatus === 'requesting' && <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold">Awaiting Staff Approval...</p></div>}
                   
+                  {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div 
                       onMouseDown={(e) => e.stopPropagation()}
                       style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }}
-                      className="absolute bottom-24 right-6 w-80 bg-black/20 backdrop-blur-[40px] border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.6)] rounded-2xl flex flex-col z-50 overflow-hidden"
+                      className="absolute bottom-24 right-6 w-80 bg-white/5 backdrop-blur-3xl border border-white/15 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] rounded-3xl flex flex-col z-50 overflow-hidden"
                     >
                       <div 
                         onMouseDown={(e) => { e.stopPropagation(); setIsDraggingChat(true); dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y }; }}
                         className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center cursor-grab active:cursor-grabbing"
                       >
-                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Chat</span>
-                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md text-white/70 hover:text-white"><X size={16}/></button>
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-white/80" /> Live Chat</span>
+                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-md text-white/70 hover:text-white transition-colors"><X size={16}/></button>
                       </div>
                       
                       <div className="h-60 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
@@ -329,55 +376,61 @@ export default function AdminRemotePage() {
                           <div className="m-auto text-center text-xs font-medium text-white/50">Send a message to start communicating.</div>
                         ) : (
                           chatMessages.map((msg, i) => (
-                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-black/40 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
-                              <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/80' : 'text-orange-400'}`}>{msg.sender}</div>{msg.text}
+                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-white/5 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
+                              <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/90' : 'text-white/60'}`}>{msg.sender}</div>{msg.text}
                             </div>
                           ))
                         )}
                         <div ref={chatEndRef} />
                       </div>
                       
-                      <form onSubmit={sendChatMessage} className="p-2 bg-black/20 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/40 text-white border border-white/10 rounded-xl outline-none focus:border-white/35 transition-all placeholder-white/40 shadow-inner" />
-                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all border border-white/10"><Send size={14}/></button>
+                      <form onSubmit={sendChatMessage} className="p-2 bg-white/5 border-t border-white/10 flex gap-2 backdrop-blur-md">
+                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl outline-none focus:border-white/30 transition-all placeholder-white/40 shadow-inner" />
+                        <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all border border-white/10 shadow-sm"><Send size={14}/></button>
                       </form>
                     </div>
                   )}
 
+                  {/* 🌟 PURE GLASS TRANSPARENT MAC-OS DOCK */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div 
                       onMouseDown={(e) => e.stopPropagation()}
                       style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }}
-                      className="absolute bottom-6 left-1/2 bg-black/20 backdrop-blur-[40px] border border-white/20 p-1.5 rounded-full flex gap-1 shadow-[0_16px_40px_rgba(0,0,0,0.6)] z-50 items-center"
+                      className="absolute bottom-6 left-1/2 bg-white/5 backdrop-blur-3xl border border-white/15 p-1.5 rounded-full flex gap-1 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] z-50 items-center transition-all"
                     >
                       <div 
                         onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }}
-                        className="cursor-grab active:cursor-grabbing p-2 text-white/30 hover:text-white/80 transition-colors ml-1"
+                        className="cursor-grab active:cursor-grabbing p-2 text-white/40 hover:text-white transition-colors ml-1"
                       >
                         <GripVertical size={16} />
                       </div>
                       
-                      <div className="w-px h-6 bg-white/10 mx-1" />
+                      <div className="w-px h-5 bg-white/15 mx-1" />
 
                       {[
                         { 
                           icon: <Video size={18} />, active: isControlling, 
                           action: () => { 
                             if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
-                            else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control permission..."); }
+                            else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); }
                           }, 
-                          tooltip: isControlling ? "Disable Control" : "Request Remote Control" 
+                          tooltip: isControlling ? "Disable Control" : "Request Control" 
                         },
-                        { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Passthrough" },
+                        { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
                         { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
-                        { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Pull Remote Clipboard" },
+                        { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
                         { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
-                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen" },
-                        { icon: <FileUp size={18} />, active: false, action: () => toast("File transfer ready via DataChannel."), tooltip: "Transfer File" },
-                        { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Force App Refresh" },
-                        { icon: <Ban size={18} />, active: false, action: terminateSession, tooltip: "Terminate Session", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/30 border-transparent hover:border-rose-500/50" }
+                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: "Fullscreen" },
+                        { icon: <FileUp size={18} />, active: false, action: () => fileInputRef.current?.click(), tooltip: "Share Document" },
+                        { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
+                        { icon: <Ban size={18} />, active: false, action: terminateSession, tooltip: "Disconnect", color: "text-rose-400 hover:text-rose-300 hover:bg-rose-500/20" }
                       ].map((btn, i) => (
-                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-white/20 text-white shadow-inner border border-white/20' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}>
+                        <button 
+                          key={i} 
+                          onClick={btn.action} 
+                          title={btn.tooltip} 
+                          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.25)] border border-white/30 backdrop-blur-md' : 'bg-transparent hover:bg-white/10 border border-transparent'}`}
+                        >
                           {btn.icon}
                         </button>
                       ))}
