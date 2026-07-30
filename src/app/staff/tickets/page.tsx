@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Ticket, Plus, X, Clock, CheckCircle2, 
-  MessageSquare, Laptop, AlertCircle, Send, Star, Loader2, Timer
+  MessageSquare, Laptop, AlertCircle, Send, Star, Loader2, Timer, ShieldCheck
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 // 🌟 TIME CALCULATION ENGINE
 const calculateResolutionTime = (raisedAt: string, closedAt: string | null) => {
@@ -93,20 +93,20 @@ function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRating
 
   if (ticket.rating && ticket.rating > 0) {
     return (
-      <div className="mt-5 p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl flex flex-col gap-2">
+      <div className="mt-5 p-4 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/30 rounded-2xl flex flex-col gap-2 shadow-sm">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="text-emerald-500" size={18} />
+          <CheckCircle2 className="text-emerald-600" size={18} />
           <span className="text-sm font-bold text-emerald-800">You rated this solution {ticket.rating} Stars.</span>
         </div>
         {ticket.rating_feedback && (
-          <p className="text-xs text-emerald-700 italic border-l-2 border-emerald-300 pl-2 ml-1">"{ticket.rating_feedback}"</p>
+          <p className="text-xs text-emerald-700 italic border-l-2 border-emerald-400 pl-2 ml-1">"{ticket.rating_feedback}"</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className="mt-5 p-5 bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in">
+    <div className="mt-5 p-5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-sm animate-in fade-in">
       <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-1">Rate this solution</h4>
       <p className="text-[11px] font-semibold text-slate-500 mb-4">{getFeedbackHint(hoverRating || rating)}</p>
       
@@ -121,7 +121,7 @@ function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRating
           >
             <Star 
               size={28} 
-              className={`${(hoverRating || rating) >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} 
+              className={`${(hoverRating || rating) >= star ? 'fill-amber-400 text-amber-400 drop-shadow-sm' : 'text-slate-300'}`} 
             />
           </button>
         ))}
@@ -133,12 +133,12 @@ function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRating
             placeholder="Any additional feedback? (Optional)"
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            className="w-full p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-amber-400 resize-none h-20 bg-slate-50 focus:bg-white transition-colors"
+            className="w-full p-4 rounded-2xl border border-white/60 text-sm outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10 resize-none h-24 bg-white/50 backdrop-blur-md focus:bg-white/80 transition-all placeholder:text-slate-400"
           />
           <button 
             onClick={submitRating}
             disabled={isSubmitting}
-            className="px-6 py-2.5 bg-slate-900 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 text-white font-bold text-xs uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
           >
             {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             {isSubmitting ? 'Submitting...' : 'Submit Rating'}
@@ -151,6 +151,7 @@ function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRating
 
 export default function StaffTicketsPage() {
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [tickets, setTickets] = useState<any[]>([]);
@@ -165,18 +166,17 @@ export default function StaffTicketsPage() {
   // Form State
   const [formData, setFormData] = useState({ assetId: '', issue: '' });
 
-  // 🌟 FIX: Separated the initial fetch from the timer interval to prevent infinite loops
   useEffect(() => {
+    setMounted(true);
     fetchData();
-  }, []); // Run only ONCE on mount
+  }, []);
 
   useEffect(() => {
-    // Refresh waiting times every minute without re-fetching everything
     const interval = setInterval(() => {
       setTickets(prevTickets => [...prevTickets]); 
     }, 60000);
     return () => clearInterval(interval);
-  }, []); // Set up timer only ONCE
+  }, []); 
 
   const fetchData = async () => {
     setLoading(true);
@@ -292,7 +292,7 @@ export default function StaffTicketsPage() {
     }
   };
 
-  const formatDate = (dateString: string | null) => {
+  const formatDisplayDate = (dateString: string | null) => {
     if (!dateString) return '---';
     const date = new Date(dateString);
     return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -305,250 +305,274 @@ export default function StaffTicketsPage() {
   const filteredTickets = tickets.filter(t => activeTab === 'All' ? true : t.status === activeTab);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      
-      {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2"><Ticket className="text-purple-600"/> My IT Tickets</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Report broken assets or request repairs from the Admin team.</p>
-        </div>
-        <button 
-          onClick={() => setIsRaiseModalOpen(true)} 
-          className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 shadow-sm transition-all cursor-pointer"
-        >
-          <Plus size={18} /> Raise Ticket
-        </button>
-      </div>
-
-      {/* TABS */}
-      <div className="flex bg-white p-2 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
-        {['All', 'Open', 'Closed'].map((tab) => (
+    <>
+      {/* 🌟 SCROLL FIX & SPACING */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none">
+        
+        {/* 🌟 PREMIUM GLASS HEADER */}
+        <div className="relative bg-white/50 backdrop-blur-2xl rounded-4xl p-5 sm:p-7 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-linear-to-br from-orange-400/10 to-purple-500/10 blur-3xl -z-10 rounded-full" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-linear-to-tr from-purple-400/10 to-orange-500/10 blur-3xl -z-10 rounded-full" />
+          
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <Ticket className="text-purple-600" /> My IT Tickets
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
+              Report broken assets or request repairs from the Admin team.
+            </p>
+          </div>
+          
           <button 
-            key={tab} 
-            onClick={() => setActiveTab(tab as any)} 
-            className={`flex-1 sm:flex-none sm:w-32 py-2 px-4 text-sm font-bold rounded-xl transition-all cursor-pointer ${activeTab === tab ? 'bg-purple-50 text-purple-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+            onClick={() => setIsRaiseModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-purple-600/20 shrink-0 border border-white/20"
           >
-            {tab}
+            <Plus size={18} /> Raise Ticket
           </button>
-        ))}
-      </div>
-
-      {/* 🌟 NEW CARD GRID LAYOUT */}
-      {filteredTickets.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center flex flex-col items-center">
-          <CheckCircle2 size={40} className="text-slate-300 mb-3" />
-          <p className="text-slate-500 font-bold">You have no {activeTab === 'All' ? '' : activeTab.toLowerCase()} tickets.</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTickets.map((ticket) => (
-            <div key={ticket.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col hover:shadow-md hover:border-slate-300 transition-all overflow-hidden">
-              
-              {/* Card Header */}
-              <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
-                <div>
-                  <span className="font-black text-slate-900 text-lg">{ticket.token}</span>
-                  <p className="text-xs font-mono text-slate-500 mt-1">Tag: {ticket.tagId}</p>
-                </div>
-                <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg border flex items-center gap-1 ${ticket.status === 'Open' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                  {ticket.status === 'Open' ? <Clock size={12}/> : <CheckCircle2 size={12}/>} 
-                  {ticket.status}
-                </span>
-              </div>
 
-              {/* Card Body */}
-              <div className="p-5 flex-1 flex flex-col gap-4">
-                <div>
-                  <h4 className="font-bold text-slate-800 text-sm line-clamp-1" title={ticket.assetName}>{ticket.assetName}</h4>
-                  <p className="text-slate-500 text-xs mt-1.5 line-clamp-2" title={ticket.issue}>{ticket.issue}</p>
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 mt-auto">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-semibold text-slate-500">Raised On:</span>
-                    <span className="font-bold text-slate-800">{formatDate(ticket.raisedAt)}</span>
-                  </div>
-                  
-                  {ticket.status === 'Closed' ? (
-                    <>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-semibold text-slate-500">Resolution Time:</span>
-                        <span className="font-bold text-emerald-600 flex items-center gap-1"><Timer size={12}/> {calculateResolutionTime(ticket.raisedAt, ticket.closedAt)}</span>
-                      </div>
-                      {/* Rating Preview */}
-                      <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
-                        <span className="font-semibold text-slate-500">Your Rating:</span>
-                        {ticket.rating > 0 ? (
-                          <div className="flex gap-0.5">
-                            {[1,2,3,4,5].map(star => <Star key={star} size={12} className={star <= ticket.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}/>)}
-                          </div>
-                        ) : (
-                          <span className="text-amber-500 font-bold text-[10px] uppercase">Pending Rating</span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
-                      <span className="font-semibold text-slate-500 flex items-center gap-1"><AlertCircle size={12}/> Waiting Time:</span>
-                      <span className="font-bold text-amber-600 animate-pulse">{calculateWaitingTime(ticket.raisedAt)}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Admin Note Preview (If Closed) */}
-                {ticket.status === 'Closed' && (
-                  <div className="text-xs">
-                    <span className="font-bold text-slate-700 block mb-1">Admin Note:</span>
-                    <p className="text-slate-500 italic line-clamp-1 border-l-2 border-slate-200 pl-2">"{ticket.adminNotes}"</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Card Footer Button */}
-              <button 
-                onClick={() => setViewTicket(ticket)} 
-                className={`w-full p-3.5 text-xs font-bold uppercase tracking-widest transition-colors ${ticket.status === 'Closed' && ticket.rating === 0 ? 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'}`}
-              >
-                {ticket.status === 'Closed' && ticket.rating === 0 ? 'Rate Solution' : 'View Full Details'}
-              </button>
-            </div>
+        {/* 🌟 GLASS TABS */}
+        <div className="flex bg-white/40 backdrop-blur-xl p-1.5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-white/60 overflow-x-auto max-w-fit">
+          {['All', 'Open', 'Closed'].map((tab) => (
+            <button 
+              key={tab} 
+              onClick={() => setActiveTab(tab as any)} 
+              className={`flex-1 sm:flex-none sm:w-32 py-2 px-4 text-xs font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer ${activeTab === tab ? 'bg-white shadow-sm text-purple-700 border border-white/80' : 'text-slate-500 hover:text-slate-800 hover:bg-white/50 border border-transparent'}`}
+            >
+              {tab}
+            </button>
           ))}
         </div>
+
+        {/* 🌟 PREMIUM CARD GRID LAYOUT */}
+        {filteredTickets.length === 0 ? (
+          <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/20 backdrop-blur-md flex flex-col items-center">
+            <CheckCircle2 size={48} className="text-slate-300 mb-4" />
+            <h3 className="text-lg font-bold text-slate-700">All Caught Up!</h3>
+            <p className="text-sm text-slate-500 mt-1">You have no {activeTab === 'All' ? '' : activeTab.toLowerCase()} support tickets.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredTickets.map((ticket) => {
+              const isOpen = ticket.status === 'Open';
+
+              return (
+                <div key={ticket.id} className="group bg-white/20 backdrop-blur-2xl rounded-4xl p-6 border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-all duration-300 hover:border-purple-300/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] relative overflow-hidden flex flex-col h-full">
+                  
+                  {/* Glowing Status Blob behind card */}
+                  <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full opacity-20 transition-opacity duration-500 group-hover:opacity-40 pointer-events-none ${isOpen ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+
+                  {/* Card Header */}
+                  <div className="flex justify-between items-start mb-5">
+                    <div>
+                      <span className="font-black text-slate-900 text-lg sm:text-xl tracking-tight block">{ticket.token}</span>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">Tag: {ticket.tagId}</p>
+                    </div>
+                    <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-md border flex items-center gap-1.5 backdrop-blur-md shadow-sm ${isOpen ? 'bg-amber-500/10 text-amber-700 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'}`}>
+                      {isOpen ? <Clock size={12}/> : <CheckCircle2 size={12}/>} 
+                      {ticket.status}
+                    </span>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="flex-1 flex flex-col gap-4">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm line-clamp-1" title={ticket.assetName}>{ticket.assetName}</h4>
+                      <p className="text-slate-600 text-xs mt-1.5 line-clamp-2 leading-relaxed" title={ticket.issue}>{ticket.issue}</p>
+                    </div>
+
+                    <div className="bg-white/30 backdrop-blur-sm p-4 rounded-2xl border border-white/50 space-y-3 mt-auto shadow-inner">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-bold uppercase tracking-widest text-slate-400">Raised On:</span>
+                        <span className="font-bold text-slate-800">{formatDisplayDate(ticket.raisedAt)}</span>
+                      </div>
+                      
+                      {!isOpen ? (
+                        <>
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="font-bold uppercase tracking-widest text-slate-400">Resolution Time:</span>
+                            <span className="font-black text-emerald-600 flex items-center gap-1"><Timer size={12}/> {calculateResolutionTime(ticket.raisedAt, ticket.closedAt)}</span>
+                          </div>
+                          {/* Rating Preview */}
+                          <div className="flex justify-between items-center text-[11px] pt-3 border-t border-white/40">
+                            <span className="font-bold uppercase tracking-widest text-slate-400">Your Rating:</span>
+                            {ticket.rating > 0 ? (
+                              <div className="flex gap-0.5">
+                                {[1,2,3,4,5].map(star => <Star key={star} size={12} className={star <= ticket.rating ? 'fill-amber-400 text-amber-400 drop-shadow-sm' : 'text-slate-300'}/>)}
+                              </div>
+                            ) : (
+                              <span className="text-amber-500 font-black uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">Pending Rating</span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between items-center text-[11px] pt-3 border-t border-white/40">
+                          <span className="font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1"><AlertCircle size={12}/> Wait Time:</span>
+                          <span className="font-black text-amber-600 animate-pulse bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">{calculateWaitingTime(ticket.raisedAt)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Admin Note Preview (If Closed) */}
+                    {!isOpen && ticket.adminNotes && (
+                      <div className="text-xs mt-1">
+                        <span className="font-black uppercase tracking-widest text-slate-800 block mb-1 text-[9px]">Admin Note:</span>
+                        <p className="text-slate-600 italic line-clamp-1 border-l-2 border-emerald-400 pl-2">"{ticket.adminNotes}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Footer Button */}
+                  <div className="pt-5 mt-auto">
+                    <button 
+                      onClick={() => setViewTicket(ticket)} 
+                      className={`w-full p-3.5 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all border shadow-sm cursor-pointer ${!isOpen && ticket.rating === 0 ? 'bg-slate-900 text-white hover:bg-slate-800 border-slate-900' : 'bg-white/50 text-slate-700 border-white/80 hover:bg-white hover:shadow-md'}`}
+                    >
+                      {!isOpen && ticket.rating === 0 ? 'Rate Solution' : 'View Full Details'}
+                    </button>
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 🌟 MODALS (Wrapped in Portals to fix Z-Index & Sidebar issues) */}
+      
+      {/* RAISE TICKET MODAL */}
+      {mounted && isRaiseModalOpen && createPortal(
+        <div className="fixed inset-0 z-99999 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white/95 backdrop-blur-2xl rounded-4xl w-full max-w-lg shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col my-8 border border-white/60 animate-in zoom-in-95 duration-200">
+            
+            <div className="px-6 py-5 border-b border-slate-200/60 flex justify-between items-center bg-white/50 sticky top-0 z-10">
+              <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest flex items-center gap-2.5">
+                <Ticket className="text-purple-600" size={20} /> Raise Ticket
+              </h2>
+              <button onClick={() => setIsRaiseModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200/50 rounded-full transition-colors cursor-pointer"><X size={20}/></button>
+            </div>
+
+            <form onSubmit={handleRaiseTicket} className="p-6 sm:p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5"><Laptop size={14} className="text-purple-500"/> Which Asset has an issue?</label>
+                <select 
+                  required 
+                  value={formData.assetId} 
+                  onChange={(e) => setFormData({...formData, assetId: e.target.value})}
+                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/60 backdrop-blur-md focus:bg-white focus:ring-4 focus:ring-purple-500/10 focus:border-purple-400 outline-none font-bold text-sm text-slate-900 transition-all shadow-inner"
+                >
+                  <option value="" disabled>Select an assigned asset...</option>
+                  {myAssignedAssets.map(asset => (
+                    <option key={asset.id} value={asset.id}>{asset.name || asset.category} ({asset.asset_tag || 'N/A'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5"><MessageSquare size={14} className="text-purple-500"/> Describe the problem</label>
+                <textarea 
+                  required 
+                  value={formData.issue}
+                  onChange={(e) => setFormData({...formData, issue: e.target.value})}
+                  placeholder="e.g. The screen flickers every 10 minutes..." 
+                  rows={4} 
+                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/60 backdrop-blur-md focus:bg-white focus:ring-4 focus:ring-purple-500/10 focus:border-purple-400 outline-none resize-none font-medium text-sm text-slate-900 transition-all shadow-inner placeholder:text-slate-400"
+                ></textarea>
+              </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer">Cancel</button>
+                <button type="submit" className="w-full sm:flex-1 py-3.5 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest bg-purple-600 text-white hover:bg-purple-700 rounded-2xl shadow-lg shadow-purple-600/20 transition-all cursor-pointer">
+                  <Send size={16} /> Submit Ticket
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>,
+        document.body
       )}
 
-      {/* MODALS */}
-      <AnimatePresence>
-        
-        {/* RAISE TICKET MODAL */}
-        {isRaiseModalOpen && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-              
-              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h2 className="text-xl font-black text-slate-900">Raise Support Ticket</h2>
-                <button onClick={() => setIsRaiseModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full cursor-pointer"><X size={20}/></button>
+      {/* VIEW TICKET DETAILS MODAL WITH RATING SYSTEM */}
+      {mounted && viewTicket && createPortal(
+        <div className="fixed inset-0 z-99999 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/60" onClick={() => setViewTicket(null)} />
+          <div className="relative bg-white/95 backdrop-blur-2xl w-full max-w-lg rounded-4xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col my-8 border border-white/60 animate-in zoom-in-95 duration-200">
+            
+            <div className="px-6 py-5 border-b border-slate-200/60 flex justify-between items-center bg-white/50 sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest">Ticket Record</h2>
+                <span className="bg-purple-100/80 text-purple-700 px-2.5 py-1 rounded-md text-[10px] font-black border border-purple-200/50 shadow-sm">{viewTicket.token}</span>
+              </div>
+              <button onClick={() => setViewTicket(null)} className="p-2 text-slate-400 hover:bg-slate-200/50 rounded-full transition-colors cursor-pointer"><X size={20}/></button>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6 overflow-y-auto max-h-[80vh] custom-scrollbar">
+              <div>
+                <h3 className="font-black text-xl text-slate-900 tracking-tight leading-tight">{viewTicket.assetName}</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Asset Tag: <span className="font-mono text-slate-700">{viewTicket.tagId}</span></p>
               </div>
 
-              <form onSubmit={handleRaiseTicket} className="p-6 space-y-5">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><Laptop size={16} className="text-purple-500"/> Which Asset has an issue?</label>
-                  <select 
-                    required 
-                    value={formData.assetId} 
-                    onChange={(e) => setFormData({...formData, assetId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm"
-                  >
-                    <option value="" disabled>Select an assigned asset...</option>
-                    {myAssignedAssets.map(asset => (
-                      <option key={asset.id} value={asset.id}>{asset.name || asset.category} ({asset.asset_tag || 'N/A'})</option>
-                    ))}
-                  </select>
+              <div className="bg-white/40 backdrop-blur-md border border-white/60 p-5 rounded-3xl shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1.5"><Clock size={14}/> Reported On</p>
+                <p className="text-sm font-bold text-slate-900">{formatDisplayDate(viewTicket.raisedAt)}</p>
+                
+                <div className="mt-5 pt-5 border-t border-slate-200/50">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Your Issue Description:</p>
+                  <p className="text-sm font-semibold text-slate-800 leading-relaxed whitespace-pre-wrap wrap-break-word">{viewTicket.issue}</p>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5"><MessageSquare size={16} className="text-purple-500"/> Describe the problem</label>
-                  <textarea 
-                    required 
-                    value={formData.issue}
-                    onChange={(e) => setFormData({...formData, issue: e.target.value})}
-                    placeholder="e.g. The screen flickers every 10 minutes..." 
-                    rows={4} 
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-medium text-sm"
-                  ></textarea>
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer">Cancel</button>
-                  <button type="submit" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 rounded-xl shadow-sm cursor-pointer">
-                    <Send size={18} /> Submit Ticket
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-
-        {/* VIEW TICKET DETAILS MODAL WITH RATING SYSTEM */}
-        {viewTicket && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewTicket(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-              
-              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-black text-slate-900">Ticket Record</h2>
-                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs font-black border border-purple-200">{viewTicket.token}</span>
-                </div>
-                <button onClick={() => setViewTicket(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full cursor-pointer"><X size={20}/></button>
               </div>
 
-              <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh]">
-                <div>
-                  <h3 className="font-black text-lg text-slate-900">{viewTicket.assetName}</h3>
-                  <p className="text-sm font-medium text-slate-500">Asset Tag: {viewTicket.tagId}</p>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                  <p className="text-xs text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={12}/> Reported On</p>
-                  <p className="text-sm font-bold text-slate-900">{formatDate(viewTicket.raisedAt)}</p>
+              {viewTicket.status === 'Closed' ? (
+                <div className="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-3xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 size={20} className="text-emerald-600" />
+                    <p className="text-sm font-black uppercase tracking-widest text-emerald-900">Resolved by Admin</p>
+                  </div>
+                  <p className="text-sm font-semibold text-emerald-800 whitespace-pre-wrap wrap-break-word border-l-2 border-emerald-400 pl-3">{viewTicket.adminNotes}</p>
                   
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <p className="text-xs text-slate-500 font-bold mb-1">Your Issue Description:</p>
-                    <p className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">{viewTicket.issue}</p>
+                  <div className="flex justify-between items-center mt-5 pt-4 border-t border-emerald-500/20">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70 mb-1">Closed On</p>
+                      <p className="text-xs font-bold text-emerald-800">{formatDisplayDate(viewTicket.closedAt)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600/70 mb-1">Time to Resolve</p>
+                      <p className="text-[11px] font-black text-emerald-700 bg-emerald-500/10 px-2.5 py-1 rounded-md flex items-center justify-end gap-1.5 border border-emerald-500/20 shadow-sm">
+                        <Timer size={14} /> {calculateResolutionTime(viewTicket.raisedAt, viewTicket.closedAt)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-
-                {viewTicket.status === 'Closed' ? (
-                  <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 size={18} className="text-emerald-600" />
-                      <p className="text-sm font-bold text-emerald-900">Resolved by Admin</p>
-                    </div>
-                    <p className="text-sm font-medium text-emerald-800 whitespace-pre-wrap">{viewTicket.adminNotes}</p>
-                    
-                    {/* 🌟 INCORPORATED RESOLUTION TIME METRIC */}
-                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-emerald-200/50">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 mb-0.5">Closed On</p>
-                        <p className="text-xs font-bold text-emerald-700">{formatDate(viewTicket.closedAt)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/70 mb-0.5">Time to Resolve</p>
-                        <p className="text-xs font-bold text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded-md flex items-center justify-end gap-1 border border-emerald-200/50">
-                          <Timer size={12} /> {calculateResolutionTime(viewTicket.raisedAt, viewTicket.closedAt)}
-                        </p>
-                      </div>
-                    </div>
+              ) : (
+                <div className="bg-purple-500/10 border border-purple-500/20 p-5 rounded-3xl flex items-start sm:items-center gap-4 shadow-sm">
+                  <Clock size={24} className="text-purple-600 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-purple-900 leading-tight">This ticket is currently open. An admin will review it shortly.</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-purple-700 mt-2 flex items-center gap-1.5"><AlertCircle size={12}/> Wait Time: <span className="bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 animate-pulse">{calculateWaitingTime(viewTicket.raisedAt)}</span></p>
                   </div>
-                ) : (
-                  <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl flex items-center gap-3">
-                    <Clock size={20} className="text-purple-500 shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-purple-800">This ticket is currently open. An admin will review it shortly.</p>
-                      <p className="text-[10px] font-bold text-purple-600 mt-1 flex items-center gap-1"><AlertCircle size={10}/> Wait Time: {calculateWaitingTime(viewTicket.raisedAt)}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* 🌟 RATING FORM COMPONENT */}
-                {viewTicket.status === 'Closed' && (
-                  <TicketRatingForm 
-                    ticket={viewTicket} 
-                    onRatingSubmitted={(newRating, newFeedback) => {
-                      const updated = { ...viewTicket, rating: newRating, rating_feedback: newFeedback };
-                      setViewTicket(updated);
-                      setTickets(tickets.map(t => t.id === updated.id ? updated : t));
-                    }} 
-                  />
-                )}
-                
-              </div>
-            </motion.div>
+                </div>
+              )}
+              
+              {/* 🌟 RATING FORM COMPONENT */}
+              {viewTicket.status === 'Closed' && (
+                <TicketRatingForm 
+                  ticket={viewTicket} 
+                  onRatingSubmitted={(newRating, newFeedback) => {
+                    const updated = { ...viewTicket, rating: newRating, rating_feedback: newFeedback };
+                    setViewTicket(updated);
+                    setTickets(tickets.map(t => t.id === updated.id ? updated : t));
+                  }} 
+                />
+              )}
+              
+            </div>
           </div>
-        )}
-      </AnimatePresence>
-    </div>
+        </div>,
+        document.body
+      )}
+
+    </>
   );
 }
