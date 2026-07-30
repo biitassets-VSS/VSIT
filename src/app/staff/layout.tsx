@@ -5,14 +5,15 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Laptop, ClipboardCheck, 
-  LogOut, Menu, X, Loader2, ChevronDown, Ticket, PlusCircle, Bell, History, AlertTriangle,
-  Monitor, ShieldAlert, Check, Radio, StopCircle, MessageSquare, Send, MousePointer2
+  LogOut, Menu, X, Loader2, Ticket, PlusCircle, Bell, History, AlertTriangle,
+  Monitor, ShieldAlert, Check, StopCircle, MessageSquare, Send, MousePointer2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
 ];
@@ -187,7 +188,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         };
       };
 
-      // ANTI-DROP: Only drop on hard failure
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
           stopScreenSharing("Network connection failed.");
@@ -295,7 +295,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
       
       {/* FLOATING TOASTS */}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
             <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
@@ -314,13 +314,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {isStreaming && (
         <>
           {adminPing && (
-            <div className="fixed z-[99999] pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
+            <div className="fixed z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
               <div className="relative w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(225,29,72,1)]" />
             </div>
           )}
           
-          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
             
             {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
@@ -343,24 +343,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
             )}
 
-            {/* 🌟 HIGH-READABILITY GLASS CHAT FOR STAFF */}
+            {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
             {showChat && (
-              <div className="w-80 bg-slate-900/85 backdrop-blur-2xl border border-slate-700 shadow-2xl rounded-2xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden">
-                <div className="p-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white flex justify-between items-center shadow-sm">
-                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} /> Live Support Chat</span>
-                  <button onClick={() => setShowChat(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white"><X size={16}/></button>
+              <div className="w-80 bg-white/5 backdrop-blur-3xl border border-white/15 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden">
+                <div className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center shadow-sm">
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Support Chat</span>
+                  <button onClick={() => setShowChat(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white/70 hover:text-white cursor-pointer"><X size={16}/></button>
                 </div>
                 <div className="h-56 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm ${msg.isSelf ? 'bg-orange-600 text-white self-end rounded-2xl rounded-br-none border border-orange-500' : 'bg-slate-800 text-white self-start rounded-2xl rounded-bl-none border border-slate-600'}`}>
-                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-orange-200' : 'text-purple-400'}`}>{msg.sender}</div>{msg.text}
+                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-white/5 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
+                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/90' : 'text-purple-400'}`}>{msg.sender}</div>{msg.text}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <form onSubmit={sendChatMessage} className="p-2 bg-slate-800/80 border-t border-slate-700 flex gap-2 backdrop-blur-md">
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-950 text-white border border-slate-600 rounded-xl outline-none focus:border-orange-500 transition-all placeholder-slate-500" />
-                  <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 disabled:opacity-50 cursor-pointer transition-colors shadow-md"><Send size={14}/></button>
+                <form onSubmit={sendChatMessage} className="p-2 bg-white/5 border-t border-white/10 flex gap-2 backdrop-blur-md">
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl outline-none focus:border-orange-500 transition-all placeholder-white/40 shadow-inner" />
+                  <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 cursor-pointer transition-all border border-white/10 shadow-sm"><Send size={14}/></button>
                 </form>
               </div>
             )}
@@ -389,16 +389,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
-              <h3 className="text-xl font-black text-slate-900">Live IT Support Access Requested</h3>
+              <h3 className="text-xl font-black text-slate-900">Live Support Access Requested</h3>
               <p className="text-xs sm:text-sm font-medium text-slate-500"><strong className="text-slate-900 font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
             </div>
             <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-orange-800 flex items-center gap-3">
               <ShieldAlert size={22} className="shrink-0 text-orange-600" />
-              <span>By accepting, IT will be able to view your desktop natively.</span>
+              <span>By accepting, they will be able to view your desktop natively.</span>
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer">Decline</button>
@@ -421,8 +421,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             { name: 'My Inspections', href: '/staff/inspections', icon: ClipboardCheck },
             { name: 'IT Tickets', href: '/staff/tickets', icon: Ticket },
             { name: 'Asset Requests', href: '/staff/requests', icon: PlusCircle },
-            { name: 'Replacement Log', href: '/staff/replacements', icon: History },
-            { name: 'Peer Remote Support', href: '/staff/remote', icon: Monitor } // <-- Added Link here
+            { name: 'Replacement Log', href: '/staff/replacements', icon: History }
           ].map((link) => {
             const Icon = link.icon;
             const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);
@@ -452,7 +451,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </button>
 
             {isNotifOpen && (
-              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><History size={14} className="text-purple-600"/> Session Alerts History</h3>
                 </div>
