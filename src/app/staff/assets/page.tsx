@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, 
   Loader2, ShieldCheck, AlertTriangle, FileSignature, CheckCircle2, 
-  PenTool, X, AlertCircle, Check
+  PenTool, X, AlertCircle, Check, Eye
 } from 'lucide-react';
 
 // 🌟 BULLETPROOF DYNAMIC DUE DATE ENGINE
@@ -83,7 +83,7 @@ export default function StaffAssetsPage() {
           { 
             id: 'demo-1', name: 'Precision 5560', asset_tag: 'VSS-LAP-6570', 
             serial_number: '5C9X9G3-CN-0K00F5-DES00074F-FQEF-A04', category: 'Laptop', live_inspection_status: 'Approved', status: 'Assigned',
-            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'All good', live_inspection_photos: null, created_at: new Date().toISOString()
+            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'Digitally Signed Handover Agreement by Demo Guest', live_inspection_photos: null, created_at: new Date().toISOString()
           },
           { 
             id: 'demo-2', name: 'LOGI Pebble Keys 2 380s', asset_tag: 'VSS-WKM-5335', 
@@ -155,7 +155,7 @@ export default function StaffAssetsPage() {
 
       if (currentUser.id === 'guest-mock-uuid') {
         setTimeout(() => {
-          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
+          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned', live_inspection_notes: `Digitally Signed Handover Agreement by ${signatureName}` } : a));
           setSignModalAsset(null);
           setIsSigning(false);
           setSignatureName('');
@@ -174,13 +174,15 @@ export default function StaffAssetsPage() {
 
       if (assetError) throw assetError;
 
+      const signatureNote = `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`;
+
       await supabase.from('inspections').insert({
         asset_id: signModalAsset.id,
         inspected_by: currentUser.id || currentUser.emp_id,
         user_email: currentUser.email,
         condition: 'Pristine / Flawless',
         status: 'Approved',
-        notes: `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`
+        notes: signatureNote
       });
 
       await supabase.from('notifications').insert({
@@ -190,7 +192,7 @@ export default function StaffAssetsPage() {
         is_read: false
       });
 
-      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned' } : a));
+      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned', live_inspection_notes: signatureNote } : a));
       setSignModalAsset(null);
       setSignatureName('');
 
@@ -218,7 +220,6 @@ export default function StaffAssetsPage() {
 
   return (
     <>
-      {/* 🌟 SCROLL FIX & SPACING */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none">
         
         {/* 🚨 PENDING E-SIGN ALERTS */}
@@ -290,18 +291,16 @@ export default function StaffAssetsPage() {
               return (
                 <div 
                   key={asset.id} 
-                  // 🌟 FIX 1: bg-white/20 instead of /40 for better light-orange blending
                   className="group bg-white/20 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-all duration-300 hover:border-purple-300/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] relative overflow-hidden"
                 >
                   
-                  {/* 🌟 FIX 2: Softer, wider background glow so it doesn't wash out the badge */}
+                  {/* Glowing Status Blob behind card */}
                   <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 group-hover:opacity-20 pointer-events-none ${isRejected ? 'bg-rose-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
 
                   {/* Card Header & Status */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
                     
-                    {/* 🌟 FIX 3: Crisp translucent glass badges instead of solid background */}
                     {isRejected ? (
                       <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30 shrink-0 backdrop-blur-md shadow-sm">
                         Return Rejected
@@ -345,22 +344,22 @@ export default function StaffAssetsPage() {
                     </div>
                   </div>
 
-                  {/* Card Actions */}
-                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-200/40">
+                  {/* 🌟 ACTION BUTTONS (Added View Agreement functionality here) */}
+                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-white/40">
                     {isPending ? (
                       <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2 cursor-pointer">
                         <PenTool size={16} /> Sign Handover Form
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border-2 border-orange-200 text-orange-600 hover:bg-orange-50/50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/30 backdrop-blur-md cursor-pointer">
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border border-orange-200/60 text-orange-600 hover:bg-orange-50/50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
                           Return
                         </button>
-                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border-2 border-purple-200 text-purple-600 hover:bg-purple-50/50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/30 backdrop-blur-md cursor-pointer">
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border border-purple-200/60 text-purple-600 hover:bg-purple-50/50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
                           Replace
                         </button>
-                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50/50 hover:border-emerald-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/30 backdrop-blur-md cursor-pointer">
-                          <Check size={16} /> Audited This Cycle
+                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border border-blue-200/60 text-blue-600 hover:bg-blue-50/50 hover:border-blue-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
+                          <Eye size={16} /> View Agreement
                         </button>
                       </>
                     )}
@@ -373,12 +372,12 @@ export default function StaffAssetsPage() {
         )}
       </div>
 
-      {/* 📝 DIGITAL E-SIGN MODAL (PORTAL FIX) */}
+      {/* 📝 DIGITAL E-SIGN / REVIEW MODAL (PORTAL FIX) */}
       {mounted && signModalAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200" style={{ zIndex: 2147483647 }}>
-          <div className="bg-white/95 backdrop-blur-xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200 z-2147483647">
+          <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white/60">
             
-            <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center shrink-0">
+            <div className="p-6 bg-white/50 backdrop-blur-md border-b border-white/60 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm">
                   <FileSignature size={20} />
@@ -388,25 +387,38 @@ export default function StaffAssetsPage() {
                   <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
                 </div>
               </div>
-              <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer"><X size={20}/></button>
+              <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-white/60 text-slate-500 transition-colors cursor-pointer"><X size={20}/></button>
             </div>
 
             <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium custom-scrollbar">
               
-              <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex gap-3">
-                <AlertCircle className="text-rose-600 shrink-0" size={20} />
-                <div>
-                  <h4 className="text-rose-700 font-black text-xs uppercase tracking-widest mb-1">Attention Required</h4>
-                  <p className="text-xs font-semibold text-rose-800 leading-relaxed">
-                    Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.
-                  </p>
+              {/* Conditional Attention Box based on Status */}
+              {(!signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover') ? (
+                <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex gap-3">
+                  <AlertCircle className="text-rose-600 shrink-0" size={20} />
+                  <div>
+                    <h4 className="text-rose-700 font-black text-xs uppercase tracking-widest mb-1">Attention Required</h4>
+                    <p className="text-xs font-semibold text-rose-800 leading-relaxed">
+                      Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex gap-3">
+                  <CheckCircle2 className="text-emerald-600 shrink-0" size={20} />
+                  <div>
+                    <h4 className="text-emerald-700 font-black text-xs uppercase tracking-widest mb-1">Digitally Signed & Verified</h4>
+                    <p className="text-xs font-semibold text-emerald-800 leading-relaxed">
+                      This handover agreement has been legally signed and securely logged. You are currently accountable for this assigned asset.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Specs Grid */}
-              <div className="p-5 bg-slate-50/80 rounded-2xl border border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-5 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 grid grid-cols-2 sm:grid-cols-4 gap-4 shadow-sm">
                 <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
-                  <Laptop size={16} className="text-slate-400 shrink-0" />
+                  <Laptop size={16} className="text-purple-500 shrink-0" />
                   <div>
                     <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Asset Name</span>
                     <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span>
@@ -418,11 +430,11 @@ export default function StaffAssetsPage() {
               </div>
 
               {/* Evidence Section */}
-              <div className="p-5 border border-slate-100 rounded-2xl space-y-4 bg-white">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-slate-50 pb-2">Latest Inspection & Condition Evidence</h4>
+              <div className="p-5 border border-white/60 rounded-2xl space-y-4 bg-white/30 backdrop-blur-md shadow-sm">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-white/50 pb-2">Latest Inspection & Condition Evidence</h4>
                 <div>
                   <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inspector Notes:</span>
-                  <div className="font-mono text-xs bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap wrap-break-word">
+                  <div className="font-mono text-xs bg-white/50 p-3 rounded-xl border border-white/60 whitespace-pre-wrap wrap-break-word shadow-inner">
                     {signModalAsset.live_inspection_notes || 'No specific notes provided during the last audit.'}
                   </div>
                 </div>
@@ -430,7 +442,9 @@ export default function StaffAssetsPage() {
                   <span className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Asset Photos:</span>
                   {signModalAsset.live_inspection_photos ? (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <p className="text-xs text-slate-500 italic col-span-4">Photos exist but are securely encrypted.</p>
+                      <p className="text-xs text-purple-600 font-bold col-span-4 flex items-center gap-1.5 bg-purple-500/10 px-3 py-2 rounded-lg border border-purple-500/20 w-fit">
+                        <ShieldCheck size={14}/> Photos exist but are securely encrypted.
+                      </p>
                     </div>
                   ) : (
                     <p className="text-xs text-slate-400 italic">No inspection photos available on record.</p>
@@ -451,7 +465,7 @@ export default function StaffAssetsPage() {
               </div>
 
               {(!signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover') ? (
-                <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-100 space-y-4">
+                <form onSubmit={handleSignAgreement} className="pt-6 border-t border-white/50 space-y-4">
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Electronic Signature</label>
                     <input 
@@ -460,7 +474,7 @@ export default function StaffAssetsPage() {
                       placeholder="Type your full legal name to sign..."
                       value={signatureName}
                       onChange={(e) => setSignatureName(e.target.value)}
-                      className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400 shadow-inner"
+                      className="w-full p-4 bg-white/60 border border-white/60 rounded-2xl font-bold text-slate-900 outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400 shadow-inner"
                     />
                     <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
                       <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
@@ -468,7 +482,7 @@ export default function StaffAssetsPage() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                    <button type="button" onClick={() => setSignModalAsset(null)} className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer">Cancel</button>
+                    <button type="button" onClick={() => setSignModalAsset(null)} className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-white/60 transition-colors cursor-pointer border border-transparent hover:border-white/60 shadow-sm">Cancel</button>
                     <button type="submit" disabled={isSigning || !signatureName.trim()} className="w-full sm:flex-1 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-purple-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer">
                       {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
                       {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
@@ -476,15 +490,14 @@ export default function StaffAssetsPage() {
                   </div>
                 </form>
               ) : (
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-start gap-3">
-                    <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Agreement Signed & Accepted</h4>
-                      <p className="text-xs font-medium text-emerald-700 mt-1">This asset is actively assigned to you. The digital handover agreement is legally logged in the system.</p>
-                    </div>
+                <div className="pt-4 border-t border-white/50">
+                  <div className="mt-2 inline-flex items-center gap-2 bg-white/50 px-4 py-2 rounded-xl border border-emerald-500/20 shadow-sm">
+                    <ShieldCheck size={16} className="text-emerald-600"/>
+                    <span className="text-xs font-bold text-emerald-900 uppercase tracking-widest">
+                      Confirmed on: {formatDate(new Date(signModalAsset.live_inspection_date || new Date()))}
+                    </span>
                   </div>
-                  <button onClick={() => setSignModalAsset(null)} className="w-full mt-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer">
+                  <button onClick={() => setSignModalAsset(null)} className="w-full mt-6 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer shadow-lg shadow-slate-900/20">
                     Close Document
                   </button>
                 </div>
