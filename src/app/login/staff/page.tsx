@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Users, Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Users, Mail, Lock, ArrowRight, Loader2, AlertCircle, Download, Monitor } from 'lucide-react';
 
 export default function StaffLoginPage() {
   const [email, setEmail] = useState('');
@@ -54,14 +54,15 @@ export default function StaffLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center p-4 font-sans antialiased">
-      <div className="relative w-full max-w-md">
+    <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center p-4 font-sans antialiased relative overflow-hidden">
+      
+      <div className="relative w-full max-w-md z-10">
         
         {/* 🌟 PURPLE NEON GLOW EFFECT */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 via-fuchsia-400 to-purple-500 rounded-[2.5rem] blur-xl opacity-60 animate-pulse"></div>
+        <div className="absolute -inset-1 bg-linear-to-r from-purple-500 via-fuchsia-400 to-purple-500 rounded-[2.5rem] blur-xl opacity-60 animate-pulse"></div>
         
         {/* MAIN CARD (WHITE THEME) */}
-        <div className="relative bg-white rounded-[2rem] p-8 md:p-10 border border-white/80 shadow-2xl flex flex-col items-center text-center">
+        <div className="relative bg-white rounded-4xl p-8 md:p-10 border border-white/80 shadow-2xl flex flex-col items-center text-center">
           
           {/* COMPANY LOGO */}
           <img 
@@ -112,13 +113,30 @@ export default function StaffLoginPage() {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600 hover:bg-purple-700 shadow-[0_4px_20px_rgba(168,85,247,0.4)] transition-all disabled:opacity-70">
+            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600 hover:bg-purple-700 shadow-[0_4px_20px_rgba(168,85,247,0.4)] transition-all disabled:opacity-70 cursor-pointer">
               {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={16} /></>}
             </button>
           </form>
           
         </div>
       </div>
+
+      {/* 💻 WINDOWS APP DOWNLOAD BUTTON (Only on Login Page) */}
+      <div className="fixed bottom-4 left-5 z-50">
+        <a
+          href="https://github.com/biitassets-VSS/VSIT/releases/download/v0.1.0/Virtual.Staffing.Portal.Setup.0.1.0.exe"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-lg transition-all transform hover:scale-105 border border-slate-700 group cursor-pointer"
+          title="Download Virtual Staffing Solutions Windows App (.exe)"
+        >
+          <Monitor size={15} className="text-purple-400 group-hover:animate-pulse shrink-0" />
+          <span className="hidden sm:inline">Download Desktop App (.exe)</span>
+          <span className="sm:hidden">App (.exe)</span>
+          <Download size={14} className="opacity-80 shrink-0" />
+        </a>
+      </div>
+
     </div>
   );
 }
