@@ -1,146 +1,62 @@
-'use client';
+import type { Metadata, Viewport } from 'next';
+import './globals.css';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { Users, Mail, Lock, ArrowRight, Loader2, AlertCircle, Download, Monitor } from 'lucide-react';
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#FFF0E0' },
+    { media: '(prefers-color-scheme: dark)', color: '#0C0A09' }
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
-export default function StaffLoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const metadata: Metadata = {
+  title: 'VSIT - Enterprise Portal',
+  description: 'Virtual Staffing IT Infrastructure & Hardware Management',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'VSIT Portal',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
 
-  // Remove dark mode class for the white theme
-  useEffect(() => {
-    document.documentElement.classList.remove('dark'); 
-  }, []);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      // 1. Authenticate with Supabase
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
-        email: email.trim(), 
-        password 
-      });
-      
-      if (authError) throw authError;
-
-      // 2. Fetch the user's profile to check if they are disabled
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-      if (profile?.status === 'Disabled') throw new Error('Account disabled by administrator.');
-
-      // 3. 🌟 THE CRITICAL FIX: Set the exact local storage key your Staff layout expects
-      localStorage.setItem('vsit_staff_session', JSON.stringify(profile || authData.user));
-
-      // 4. Force a hard redirect so the layout reads the fresh local storage data
-      setTimeout(() => {
-        window.location.href = '/staff';
-      }, 400);
-
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed.');
-      setLoading(false);
-    }
-  };
-
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    // 🌟 REMOVED solid bg-[#F0F4F8]. Set to bg-transparent so the Layout's light-orange gradient & ambient lights show through.
-    <div className="min-h-screen bg-transparent flex items-center justify-center p-4 font-sans antialiased relative overflow-hidden">
-      
-      <div className="relative w-full max-w-md z-10">
+    <html lang="en" className="transition-colors duration-1000">
+      {/* 🌟 BASE THEME: Pure, soft light-orange blend */}
+      <body className="antialiased bg-gradient-to-br from-[#f8ebdc] via-[#FFE8D6] to-[#FFDCC2] dark:from-[#0C0A09] dark:via-[#140F0A] dark:to-[#1C120C] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-orange-500/30 selection:text-orange-900 dark:selection:text-orange-100">
         
-        {/* 🌟 PREMIUM GLOW: Changed from harsh neon to a softer ambient diffusion behind the glass */}
-        <div className="absolute -inset-1 bg-linear-to-r from-orange-400/20 via-purple-400/20 to-orange-400/20 rounded-[2.5rem] blur-2xl opacity-60"></div>
-        
-        {/* 🌟 MAIN CARD: Ultra Premium Frosted Glass (Mac OS 2026 Style) */}
-        <div className="relative bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-4xl p-8 md:p-10 border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] flex flex-col items-center text-center transition-all duration-500">
-          
-          {/* COMPANY LOGO */}
-          <img 
-            src="/logo.png" 
-            alt="Virtual Staffing Solution Logo" 
-            className="h-12 w-auto mb-5 object-contain"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-
-          {/* PURPLE ICON: Made slightly glassy */}
-          <div className="w-16 h-16 bg-purple-500/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 text-purple-600 border border-purple-500/20 shadow-[0_8px_24px_rgba(168,85,247,0.15)]">
-            <Users size={28} />
-          </div>
-          
-          <h2 className="text-sm font-black uppercase tracking-widest text-purple-600 mb-1">Virtual Staffing Solution</h2>
-          <h1 className="text-2xl font-bold tracking-tight mb-2 text-slate-800 dark:text-zinc-100">Staff Portal</h1>
-          <p className="text-sm font-semibold tracking-wide text-slate-600/80 dark:text-slate-400 mb-8">View hardware & sign agreements</p>
-
-          {error && (
-            <div className="w-full p-4 mb-6 rounded-xl flex items-start gap-3 bg-rose-500/10 backdrop-blur-md border border-rose-500/20 text-rose-600 dark:text-rose-400 text-left shadow-sm">
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
-              <p className="text-xs font-semibold">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="w-full space-y-5 text-left">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Employee Email</label>
-              <div className="relative group">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 dark:text-slate-400 transition-colors group-focus-within:text-purple-600" />
-                {/* 🌟 INPUTS: Frosted glass integration */}
-                <input 
-                  type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="employee@virtualstaffing.com"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/50 dark:border-white/10 focus:bg-white/60 dark:focus:bg-black/60 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/10 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Password</label>
-              <div className="relative group">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500/70 dark:text-slate-400 transition-colors group-focus-within:text-purple-600" />
-                {/* 🌟 INPUTS: Frosted glass integration */}
-                <input 
-                  type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl text-sm font-semibold outline-none transition-all bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/50 dark:border-white/10 focus:bg-white/60 dark:focus:bg-black/60 focus:border-purple-400/50 focus:ring-4 focus:ring-purple-400/10 text-slate-800 dark:text-zinc-100 placeholder:text-slate-500/70 shadow-sm"
-                />
-              </div>
-            </div>
-
-            {/* 🌟 SUBMIT BUTTON: Premium translucent finish */}
-            <button type="submit" disabled={loading} className="w-full py-4 mt-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 text-white bg-purple-600/90 backdrop-blur-md hover:bg-purple-600 border border-purple-500/50 shadow-[0_8px_24px_rgba(168,85,247,0.3)] transition-all duration-300 disabled:opacity-70 cursor-pointer">
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Authenticating...</> : <>Access Portal <ArrowRight size={16} /></>}
-            </button>
-          </form>
-          
+        {/* 🌟 AMBIENT LIGHT ENGINE */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+          <div className="absolute top-[-10%] left-[-10%] w-[70vw] h-[70vh] bg-orange-400/20 dark:bg-orange-600/15 blur-[160px] rounded-full mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
+          <div className="absolute top-[15%] right-[-10%] w-[60vw] h-[60vh] bg-purple-400/15 dark:bg-purple-600/15 blur-[160px] rounded-full mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
+          <div className="absolute bottom-[-15%] left-[15%] w-[70vw] h-[70vh] bg-rose-400/15 dark:bg-rose-600/10 blur-[160px] rounded-full mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
         </div>
-      </div>
 
-      {/* 🌟 WINDOWS APP DOWNLOAD BUTTON: 100% Frosted Glass, Black Background Removed */}
-      <div className="fixed bottom-5 left-6 z-999">
-        <a
-          href="https://github.com/biitassets-VSS/VSIT/releases/download/v0.1.0/Virtual.Staffing.Portal.Setup.0.1.0.exe"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 px-5 py-2.5 bg-transparent backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] text-slate-800 dark:text-zinc-100 text-xs font-bold rounded-full transition-all duration-300 hover:bg-white/20 dark:hover:bg-white/5 hover:scale-105 group cursor-pointer"
-          title="Download Virtual Staffing Solutions Windows App (.exe)"
-        >
-          <Monitor size={15} className="text-purple-600 dark:text-purple-400 group-hover:animate-pulse shrink-0" />
-          <span className="hidden sm:inline">Download Desktop App (.exe)</span>
-          <span className="sm:hidden">App (.exe)</span>
-          <Download size={14} className="opacity-70 shrink-0" />
-        </a>
-      </div>
+        {/* 🌟 NEON OUTER FRAME: Fixed Z-index syntax */}
+        <div className="fixed inset-0 pointer-events-none z-[999] border-[1.5px] border-white/40 dark:border-white/5 shadow-[inset_0_0_100px_rgba(249,115,22,0.03)] dark:shadow-[inset_0_0_100px_rgba(249,115,22,0.05)] transition-all duration-1000" />
 
-    </div>
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col w-full h-full relative z-10">
+          {children}
+        </main>
+
+        {/* 🌟 WATERMARK: Absolutely NO background, pure floating text */}
+        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-orange-500 dark:text-orange-400 z-[999] pointer-events-none uppercase drop-shadow-sm transition-all duration-500">
+          Designed by AinodeArt
+        </div>
+
+      </body>
+    </html>
   );
 }
