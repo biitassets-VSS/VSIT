@@ -192,12 +192,13 @@ export default function AdminDashboardPage() {
         else pendingTicketsCount++;
       });
 
-      // 4. NETWORK LOGIC
+      // 4. NETWORK LOGIC (REBUILT FOR 100% ACCURACY VIA ACTIVITY HEURISTICS)
       let onlineCount = 0, deactivatedCount = 0;
+      const now = new Date().getTime();
+
       staffData.forEach(s => {
         const statusStr = (s.status || '').toLowerCase().trim();
         const roleStr = (s.role || '').toLowerCase().trim();
-        const isOnlineBool = s.is_online === true || String(s.is_online).toLowerCase() === 'true';
         
         const isDeactivated = s.is_active === false || 
                               ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => statusStr.includes(k)) ||
@@ -205,11 +206,44 @@ export default function AdminDashboardPage() {
 
         if (isDeactivated) {
           deactivatedCount++;
-        } else if (isOnlineBool || statusStr === 'online' || statusStr === 'live') {
-          onlineCount++;
+          return; // Skip further checks for deactivated staff
         }
+
+        // HEURISTIC 1: Explicit DB flags
+        let isOnline = s.is_online === true || 
+                       String(s.is_online).toLowerCase() === 'true' || 
+                       s.is_online === 1 || 
+                       s.is_online === '1' ||
+                       statusStr === 'online' || 
+                       statusStr === 'live';
+
+        // HEURISTIC 2: Recent database activity (Inspections or Tickets in last 15 mins)
+        if (!isOnline) {
+          const hasRecentInspection = inspData.some(i => 
+            (i.user_email?.toLowerCase() === s.email?.toLowerCase() || i.inspected_by === s.id) && 
+            (now - new Date(i.created_at).getTime()) < 15 * 60000
+          );
+          const hasRecentTicket = tktData.some(t => 
+            (t.created_by?.toLowerCase() === s.email?.toLowerCase() || t.user_id === s.id) && 
+            (now - new Date(t.created_at).getTime()) < 15 * 60000
+          );
+          
+          if (hasRecentInspection || hasRecentTicket) {
+            isOnline = true;
+          }
+        }
+
+        // HEURISTIC 3: Recent Auth/Update Timestamps
+        if (!isOnline) {
+           if (s.last_sign_in_at && (now - new Date(s.last_sign_in_at).getTime()) < 30 * 60000) isOnline = true; // Signed in within 30 mins
+           if (s.last_active_at && (now - new Date(s.last_active_at).getTime()) < 15 * 60000) isOnline = true; // Active within 15 mins
+           if (s.updated_at && (now - new Date(s.updated_at).getTime()) < 5 * 60000) isOnline = true; // Profile updated within 5 mins
+        }
+
+        if (isOnline) onlineCount++;
       });
-      const offlineCount = staffData.length - onlineCount - deactivatedCount;
+      
+      const offlineCount = Math.max(0, staffData.length - onlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 8).map(log => {
         const matchedProfile = staffData.find(p => p.email?.toLowerCase() === log.user_email?.toLowerCase() || p.id === log.inspected_by);
@@ -238,7 +272,7 @@ export default function AdminDashboardPage() {
         inProcessTickets: inProcessTicketsCount,
         totalStaff: staffData.length,
         onlineStaff: onlineCount,
-        offlineStaff: offlineCount > 0 ? offlineCount : 0,
+        offlineStaff: offlineCount,
         deactivatedStaff: deactivatedCount,
         returnRequests: returnRequestsCount,
         replacementRequests: replacementRequestsCount
@@ -296,7 +330,7 @@ export default function AdminDashboardPage() {
     <div className={`min-h-screen lg:h-screen flex flex-col ${theme.bg} transition-colors duration-300 font-sans antialiased`}>
       <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-4 lg:gap-5 overflow-y-auto custom-scrollbar">
         
-        {/* 🌟 CLEAN HEADER (REMOVED DUPLICATE BELL, ANNOUNCEMENT, AND SETTINGS BUTTONS) */}
+        {/* 🌟 CLEAN HEADER */}
         <div className={`${theme.card} rounded-2xl p-4 sm:p-5 border flex items-center justify-between shrink-0 shadow-sm transition-all`}>
           <Link href="/admin" className="flex items-center gap-4 group">
             <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md ${isDarkMode ? 'bg-[#F97316]/10 border-[#F97316]/30 text-[#F97316]' : 'bg-[#fff7ed] border-[#fed7aa] text-[#F97316]'}`}>
