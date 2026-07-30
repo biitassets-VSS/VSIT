@@ -33,8 +33,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="transition-colors duration-1000">
-      {/* 🌟 BASE THEME: Removed stark whites. Now a pure, soft light-orange blend */}
-      <body className="antialiased bg-linear-to-br from-[#e2d1bc] via-[#FFE8D6] to-[#FFDCC2] dark:from-[#0C0A09] dark:via-[#140F0A] dark:to-[#1C120C] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-orange-500/30 selection:text-orange-900 dark:selection:text-orange-100">
+      {/* 🌟 BASE THEME: Pure, soft light-orange blend */}
+      <body className="antialiased bg-linear-to-br from-[#f8ebdc] via-[#FFE8D6] to-[#FFDCC2] dark:from-[#0C0A09] dark:via-[#140F0A] dark:to-[#1C120C] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col transition-colors duration-1000 relative selection:bg-orange-500/30 selection:text-orange-900 dark:selection:text-orange-100">
         
         {/* 🌟 AMBIENT LIGHT ENGINE */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
@@ -43,7 +43,7 @@ export default function RootLayout({
           <div className="absolute bottom-[-15%] left-[15%] w-[70vw] h-[70vh] bg-rose-400/15 dark:bg-rose-600/10 blur-[160px] rounded-full mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
         </div>
 
-        {/* 🌟 NEON OUTER FRAME */}
+        {/* 🌟 NEON OUTER FRAME: Fixed Z-index syntax */}
         <div className="fixed inset-0 pointer-events-none z-999 border-[1.5px] border-white/40 dark:border-white/5 shadow-[inset_0_0_100px_rgba(249,115,22,0.03)] dark:shadow-[inset_0_0_100px_rgba(249,115,22,0.05)] transition-all duration-1000" />
 
         {/* Main Content Area */}
@@ -51,8 +51,8 @@ export default function RootLayout({
           {children}
         </main>
 
-        {/* 🌟 WATERMARK: Background removed, pure frosted glass with high-contrast text */}
-        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-orange-500 dark:dark:text-orange-400 z-999 pointer-events-none uppercase bg-transparent backdrop-blur-2xl px-5 py-2.5 rounded-full border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] transition-all duration-500">
+        {/* 🌟 WATERMARK: Absolutely NO background, pure floating text */}
+        <div className="fixed bottom-5 right-6 text-[9px] sm:text-[10px] font-black tracking-widest text-orange-500 dark:text-orange-400 z-999 pointer-events-none uppercase drop-shadow-sm transition-all duration-500">
           Designed by AinodeArt
         </div>
 
