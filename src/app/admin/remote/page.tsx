@@ -105,7 +105,6 @@ export default function AdminRemotePage() {
       const dataChannel = peer.createDataChannel('enterprise_channel', { ordered: true });
       dataChannelRef.current = dataChannel;
       
-      // Handle Incoming P2P Files
       dataChannel.onmessage = (event) => {
         if (typeof event.data === 'string') {
           try {
@@ -138,8 +137,10 @@ export default function AdminRemotePage() {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           const answer = await peer.createAnswer();
           
-          // 🌟 LOW BANDWIDTH AUDIO OPTIMIZER (Force 16Kbps Mono Opus)
-          answer.sdp = answer.sdp.replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=0;maxaveragebitrate=16000');
+          // 🌟 LOW BANDWIDTH AUDIO OPTIMIZER (TypeScript Fix)
+          if (answer.sdp) {
+            answer.sdp = answer.sdp.replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=0;maxaveragebitrate=16000');
+          }
           
           await peer.setLocalDescription(answer);
           await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
@@ -188,7 +189,6 @@ export default function AdminRemotePage() {
     }
   };
 
-  // 🌟 P2P CHUNKED DOCUMENT TRANSFER
   const sendFileP2P = (file: File) => {
     if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
       toast.error("P2P Data Tunnel not open");
@@ -197,7 +197,7 @@ export default function AdminRemotePage() {
     toast.loading(`Uploading ${file.name}...`);
     dataChannelRef.current.send(JSON.stringify({ type: 'file_meta', name: file.name, size: file.size, fileType: file.type }));
     
-    const CHUNK_SIZE = 16384; // 16KB for extreme low bandwidth stability
+    const CHUNK_SIZE = 16384; 
     const reader = new FileReader();
     let offset = 0;
 
@@ -354,7 +354,12 @@ export default function AdminRemotePage() {
                 >
                   <video ref={videoRef} autoPlay playsInline muted={!isAudioEnabled} className={`max-w-full max-h-full object-contain ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} />
                   
-                  {sessionStatus === 'requesting' && <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold">Awaiting Staff Approval...</p></div>}
+                  {sessionStatus === 'requesting' && (
+                    <div className="text-center text-white">
+                      <Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" />
+                      <p className="font-bold">Awaiting Staff Approval...</p>
+                    </div>
+                  )}
                   
                   {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (

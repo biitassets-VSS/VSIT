@@ -30,16 +30,12 @@ interface ChatMessage {
 
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-// 🌟 UPGRADED STUN/TURN CONFIGURATION
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' }, 
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun.services.mozilla.com' },
-  // Replace these with your dedicated Metered.ca credentials for worldwide support
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+  { urls: 'stun:stun.services.mozilla.com' }
 ];
 
 export default function StaffRemotePage() {
@@ -52,23 +48,19 @@ export default function StaffRemotePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'requesting' | 'connected' | 'controlling'>('idle');
   
-  // Enterprise Controls State
   const [isControlling, setIsControlling] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
-  // Floating Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
 
-  // 🌟 DRAG & DROP STATE
   const [dockPos, setDockPos] = useState({ x: 0, y: 0 });
   const [chatPos, setChatPos] = useState({ x: 0, y: 0 });
   const [isDraggingDock, setIsDraggingDock] = useState(false);
   const [isDraggingChat, setIsDraggingChat] = useState(false);
-  
   const dragStartDock = useRef({ x: 0, y: 0 });
   const dragStartChat = useRef({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -140,7 +132,6 @@ export default function StaffRemotePage() {
       const dataChannel = peer.createDataChannel('enterprise_control', { ordered: true });
       dataChannelRef.current = dataChannel;
 
-      // Handle Incoming P2P Files
       dataChannel.onmessage = (event) => {
         if (typeof event.data === 'string') {
           try {
@@ -163,9 +154,7 @@ export default function StaffRemotePage() {
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
-        }
+        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
@@ -173,16 +162,16 @@ export default function StaffRemotePage() {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
           const answer = await peer.createAnswer();
           
-          // 🌟 LOW BANDWIDTH AUDIO OPTIMIZER (Force 16Kbps Mono Opus)
-          answer.sdp = answer.sdp.replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=0;maxaveragebitrate=16000');
+          // 🌟 LOW BANDWIDTH AUDIO OPTIMIZER (TypeScript Fix)
+          if (answer.sdp) {
+            answer.sdp = answer.sdp.replace(/useinbandfec=1/g, 'useinbandfec=1;stereo=0;maxaveragebitrate=16000');
+          }
 
           await peer.setLocalDescription(answer);
           await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
         } catch (rtcError) {}
       }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload?.candidate) {
-          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
-        }
+        if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
       }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
         terminateSession("Remote colleague stopped sharing their screen.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
@@ -224,7 +213,6 @@ export default function StaffRemotePage() {
     }
   };
 
-  // 🌟 P2P CHUNKED DOCUMENT TRANSFER
   const sendFileP2P = (file: File) => {
     if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
       toast.error("P2P Data Tunnel not open");
@@ -233,7 +221,7 @@ export default function StaffRemotePage() {
     toast.loading(`Uploading ${file.name}...`);
     dataChannelRef.current.send(JSON.stringify({ type: 'file_meta', name: file.name, size: file.size, fileType: file.type }));
     
-    const CHUNK_SIZE = 16384; // 16KB chunks
+    const CHUNK_SIZE = 16384; 
     const reader = new FileReader();
     let offset = 0;
 
@@ -256,7 +244,6 @@ export default function StaffRemotePage() {
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
-    // 🌟 INTERCEPT DRAG MOTIONS
     if (type === 'mousemove') {
       if (isDraggingDock) {
         setDockPos({ x: e.clientX - dragStartDock.current.x, y: e.clientY - dragStartDock.current.y });
@@ -332,7 +319,7 @@ export default function StaffRemotePage() {
       {/* Header */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
+          <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-orange-500 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
             <Users size={28} />
           </div>
           <div>
@@ -350,7 +337,7 @@ export default function StaffRemotePage() {
         </button>
       </div>
 
-      <div className="flex gap-6 flex-1 min-h-[600px]">
+      <div className="flex gap-6 flex-1 min-h-150">
         
         {/* Directory Sidebar */}
         {isSidebarOpen && (
