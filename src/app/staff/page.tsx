@@ -272,7 +272,7 @@ export default function StaffDashboardPage() {
       <div className="fixed bottom-[-10%] right-[-5%] w-[60vw] h-[60vh] bg-purple-500/15 dark:bg-purple-700/10 blur-[130px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col max-w-[1600px] mx-auto w-full p-4 lg:p-6 gap-5 h-full lg:min-h-0 z-10">
+      <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-5 h-full lg:min-h-0 z-10">
         
         {/* 🌟 HEADER WITH SYNC BUTTON */}
         <div className={`${theme.glassCard} rounded-3xl p-5 md:px-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 transition-all`}>
@@ -288,7 +288,7 @@ export default function StaffDashboardPage() {
             <button 
               onClick={() => loadRealDatabase(true)} 
               disabled={isRefreshing}
-              className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 active:scale-95 ${isDarkMode ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white shadow-orange-500/30 border-transparent'}`}
+              className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 active:scale-95 ${isDarkMode ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 text-white shadow-orange-500/30 border-transparent'}`}
             >
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Sync Feeds
             </button>
@@ -311,7 +311,7 @@ export default function StaffDashboardPage() {
                 key={item.name} 
                 onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
                 disabled={item.isActionDisabled}
-                className={`relative ${theme.glassCard} h-[120px] p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-xl cursor-pointer hover:border-purple-300'}`}
+                className={`relative ${theme.glassCard} h-30 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-xl cursor-pointer hover:border-purple-300'}`}
               >
                 <div className="flex items-start justify-between w-full">
                   <div className={`p-2.5 rounded-xl border transition-transform duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110'} ${item.color}`}>
@@ -333,7 +333,7 @@ export default function StaffDashboardPage() {
 
           {/* Key Stats */}
           <div className="xl:w-[35%] grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-slate-200 dark:border-white/10">
-            <div className={`${theme.glassCard} h-[120px] p-4 rounded-2xl flex flex-col justify-between shadow-sm`}>
+            <div className={`${theme.glassCard} h-30 p-4 rounded-2xl flex flex-col justify-between shadow-sm`}>
               <div className="flex justify-between items-start">
                 <div className={`p-2 rounded-lg border shadow-[0_0_15px_rgba(168,85,247,0.2)] ${isDarkMode ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-purple-50 border-purple-300 text-purple-600'}`}><Laptop size={16} /></div>
                 <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Assigned</span>
@@ -344,10 +344,10 @@ export default function StaffDashboardPage() {
               </div>
             </div>
             
-            <div className={`${theme.glassCard} h-[120px] p-4 rounded-2xl flex flex-col justify-between shadow-sm`}>
+            <div className={`${theme.glassCard} h-30 p-4 rounded-2xl flex flex-col justify-between shadow-sm`}>
               <div className="flex justify-between items-start">
                 <div className={`p-2 rounded-lg border shadow-[0_0_15px_rgba(245,158,11,0.2)] ${isDarkMode ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-600'}`}><AlertCircle size={16} /></div>
-                <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Action Req.</span>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Action Require</span>
               </div>
               <div>
                 <h2 className="text-3xl font-black text-amber-500 leading-none mb-1">{stats.needsInspection}</h2>
@@ -355,10 +355,10 @@ export default function StaffDashboardPage() {
               </div>
             </div>
 
-            <div className={`${theme.glassCard} h-[120px] p-4 rounded-2xl flex flex-col justify-between shadow-sm`}>
+            <div className={`${theme.glassCard} h-30 p-4 rounded-2xl flex flex-col justify-between shadow-sm`}>
               <div className="flex justify-between items-start">
                 <div className={`p-2 rounded-lg border shadow-[0_0_15px_rgba(249,115,22,0.2)] ${isDarkMode ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-orange-50 border-orange-300 text-orange-600'}`}><Ticket size={16} /></div>
-                <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Open Tix</span>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Open TiCKET</span>
               </div>
               <div>
                 <h2 className="text-3xl font-black text-orange-500 leading-none mb-1">{stats.openTickets}</h2>
@@ -629,7 +629,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, setAssignedAssets, o
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
       <div className={`rounded-3xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] ${theme.modalBg}`}>
         
         <div className={`p-6 border-b flex items-center justify-between shrink-0 ${theme.headerBg}`}>
@@ -679,7 +679,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, setAssignedAssets, o
                   <p className={`text-xs font-bold flex items-center gap-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-700'}`}>🔒 Security Verification Required</p>
                   <div className="flex gap-3">
                     <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className={`flex-1 p-3.5 rounded-2xl text-xs font-bold outline-none transition-all ${theme.inputBg}`}/>
-                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-6 bg-gradient-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white font-bold text-xs rounded-2xl cursor-pointer transition-all shadow-lg shadow-purple-500/20 border border-purple-400/50">Verify</button>}
+                    {!isUnlocked && <button onClick={handleAttemptUnlock} className="px-6 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white font-bold text-xs rounded-2xl cursor-pointer transition-all shadow-lg shadow-purple-500/20 border border-purple-400/50">Verify</button>}
                   </div>
                   {lockError && <p className="text-[11px] text-rose-500 font-bold px-1">Incorrect device code.</p>}
                 </div>
@@ -728,7 +728,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, setAssignedAssets, o
             ) : (
               <>
                 <button onClick={onClose} className={`px-6 py-3.5 rounded-2xl text-xs font-bold cursor-pointer transition-all border ${isDarkMode ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/10' : 'bg-white/50 hover:bg-white text-slate-700 border-white/70 shadow-[0_4px_15px_rgba(0,0,0,0.05)]'}`}>Cancel</button>
-                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className={`px-8 py-3.5 rounded-2xl text-[12px] font-extrabold text-white cursor-pointer shadow-xl disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-all ${type === 'RETURN' ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:opacity-90 shadow-orange-500/30 border border-orange-400' : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:opacity-90 shadow-purple-500/30 border border-purple-400'}`}>
+                <button disabled={isTransmitting || (needsLock && !isUnlocked)} onClick={handleLivePostgresSubmit} className={`px-8 py-3.5 rounded-2xl text-[12px] font-extrabold text-white cursor-pointer shadow-xl disabled:opacity-50 flex items-center gap-2 uppercase tracking-widest transition-all ${type === 'RETURN' ? 'bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 shadow-orange-500/30 border border-orange-400' : 'bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 shadow-purple-500/30 border border-purple-400'}`}>
                   {isTransmitting && <Loader2 size={16} className="animate-spin"/>} {type === 'INSPECTION' || type === 'RETURN' ? 'Generate Camera QR' : 'Transmit'}
                 </button>
               </>

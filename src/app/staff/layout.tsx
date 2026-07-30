@@ -47,6 +47,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
   const [listenerKey, setListenerKey] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -68,6 +69,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const channelRef = useRef<any>(null);
 
   const [staffProfile, setStaffProfile] = useState<any>({ id: '', name: 'Loading...', email: '...', initials: 'ST' });
+
+  // 🌟 THEME SYNC
+  useEffect(() => {
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
+    };
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const verifyStaff = async () => {
@@ -91,6 +105,28 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   }, [router]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, showChat]);
+
+  // 🌟 LIVE STAFF ONLINE PRESENCE TRACKING
+  useEffect(() => {
+    if (!staffProfile.id) return;
+    
+    const presenceChannel = supabase.channel('vsit_online_presence', {
+      config: { presence: { key: staffProfile.id || staffProfile.email } }
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({
+          user_id: staffProfile.id,
+          email: staffProfile.email,
+          name: staffProfile.name,
+          online_at: new Date().toISOString()
+        });
+      }
+    });
+
+    return () => { supabase.removeChannel(presenceChannel); };
+  }, [staffProfile]);
 
   const addSystemAlert = (title: string, message: string, playSound = true) => {
     if (playSound) playAlertSound();
@@ -283,29 +319,43 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
+  // 🎨 GLOBAL MAC OS 2026 EYE-COMFORT GLASS THEME
+  const theme = {
+    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFFBF7]',
+    glassPanel: isDarkMode 
+      ? 'bg-zinc-900/60 backdrop-blur-[50px] backdrop-saturate-[1.5] border-zinc-700/50' 
+      : 'bg-white/60 backdrop-blur-[50px] backdrop-saturate-[1.5] border-white shadow-[0_8px_30px_rgba(0,0,0,0.03)]',
+    text: isDarkMode ? 'text-zinc-100' : 'text-stone-900',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-stone-500',
+  };
+
   if (isCheckingAuth) return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+    <div className={`min-h-screen ${theme.bg} flex items-center justify-center`}>
+      <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
     </div>
   );
 
   const unreadCount = alertHistory.filter(a => !a.read).length;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-hidden">
+    <div className={`min-h-screen ${theme.bg} flex font-sans relative overflow-hidden transition-colors duration-1000 z-0`}>
       
-      {/* FLOATING TOASTS */}
-      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      {/* 🌟 GLOBAL AMBIENT NEON ORBS */}
+      <div className="fixed top-[-10%] left-[-5%] w-[60vw] h-[60vh] bg-orange-400/15 dark:bg-orange-600/10 blur-[140px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
+      <div className="fixed bottom-[-10%] right-[-5%] w-[60vw] h-[60vh] bg-purple-500/15 dark:bg-purple-700/10 blur-[140px] rounded-full pointer-events-none -z-10 mix-blend-multiply dark:mix-blend-screen transition-all duration-1000" />
+
+      {/* FLOATING TOASTS (Glass) */}
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto bg-white border-l-4 border-rose-500 shadow-2xl rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300">
-            <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+          <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 shadow-2xl rounded-2xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
+            <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0 border border-rose-500/30">
               <AlertTriangle size={20} className="animate-pulse" />
             </div>
             <div className="flex-1 pr-2 min-w-0">
-              <h4 className="text-sm font-bold text-slate-900 leading-tight truncate">{toast.title}</h4>
-              <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed wrap-break-word">{toast.message}</p>
+              <h4 className={`text-sm font-bold leading-tight truncate ${theme.text}`}>{toast.title}</h4>
+              <p className={`text-xs font-medium mt-1 leading-relaxed wrap-break-word ${theme.subText}`}>{toast.message}</p>
             </div>
-            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-400 hover:text-rose-600 transition-colors shrink-0 self-start p-1 rounded-lg hover:bg-slate-100"><X size={16} /></button>
+            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className={`transition-colors shrink-0 self-start p-1 rounded-lg ${isDarkMode ? 'text-zinc-500 hover:text-rose-400' : 'text-stone-400 hover:text-rose-600'}`}><X size={16} /></button>
           </div>
         ))}
       </div>
@@ -314,29 +364,29 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       {isStreaming && (
         <>
           {adminPing && (
-            <div className="fixed z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
+            <div className="fixed z-[99999] pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
-              <div className="relative w-4 h-4 bg-rose-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(225,29,72,1)]" />
+              <div className="relative w-4 h-4 bg-rose-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
             </div>
           )}
           
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
             
             {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
-              <div className="bg-slate-900/90 backdrop-blur-xl border-2 border-purple-500 p-5 rounded-3xl shadow-2xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto">
+              <div className={`${isDarkMode ? 'bg-zinc-900/90 border-purple-500/50' : 'bg-white/90 border-purple-300'} backdrop-blur-3xl border-2 p-5 rounded-3xl shadow-2xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto`}>
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/30">
                     <MousePointer2 size={20} className="animate-bounce" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-white leading-tight">Remote Control Requested</h3>
-                    <p className="text-[11px] text-slate-300 mt-1 font-medium leading-relaxed">IT Admin wants to temporarily control your mouse and keyboard.</p>
+                    <h3 className={`text-sm font-black leading-tight ${theme.text}`}>Remote Control Requested</h3>
+                    <p className={`text-[11px] mt-1 font-medium leading-relaxed ${theme.subText}`}>IT Admin wants to temporarily control your mouse and keyboard.</p>
                   </div>
                 </div>
                 <div className="flex gap-2 w-full mt-1">
-                  <button onClick={handleDeclineControl} className="flex-1 py-2.5 rounded-xl border border-slate-600 text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all cursor-pointer">Deny</button>
-                  <button onClick={handleAcceptControl} className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer">
+                  <button onClick={handleDeclineControl} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${isDarkMode ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}>Deny</button>
+                  <button onClick={handleAcceptControl} className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer">
                     <Check size={14} /> Allow Access
                   </button>
                 </div>
@@ -345,42 +395,42 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
             {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
             {showChat && (
-              <div className="w-80 bg-white/5 backdrop-blur-3xl border border-white/15 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden">
-                <div className="p-3 bg-white/5 border-b border-white/10 text-white flex justify-between items-center shadow-sm">
-                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-400" /> Live Support Chat</span>
-                  <button onClick={() => setShowChat(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors text-white/70 hover:text-white cursor-pointer"><X size={16}/></button>
+              <div className={`w-80 ${theme.glassPanel} rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border`}>
+                <div className={`p-3 border-b text-sm font-bold flex justify-between items-center ${isDarkMode ? 'border-white/10 text-white' : 'border-stone-200 text-stone-900'}`}>
+                  <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-500" /> Live Support Chat</span>
+                  <button onClick={() => setShowChat(false)} className={`p-1 rounded-md transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-stone-100 text-stone-500'}`}><X size={16}/></button>
                 </div>
                 <div className="h-56 p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-white/20 text-white self-end rounded-2xl rounded-br-none border border-white/30' : 'bg-white/5 text-white self-start rounded-2xl rounded-bl-none border border-white/10'}`}>
-                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-white/90' : 'text-purple-400'}`}>{msg.sender}</div>{msg.text}
+                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-2.5 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-purple-500/20 text-purple-900 dark:text-purple-100 self-end rounded-2xl rounded-br-none border border-purple-500/30' : 'bg-stone-100 dark:bg-white/10 text-stone-800 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none border border-stone-200 dark:border-white/20'}`}>
+                      <div className={`font-bold text-[9px] mb-1 ${msg.isSelf ? 'text-purple-600 dark:text-purple-300' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <form onSubmit={sendChatMessage} className="p-2 bg-white/5 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl outline-none focus:border-orange-500 transition-all placeholder-white/40 shadow-inner" />
-                  <button type="submit" disabled={!chatInput.trim()} className="p-2.5 bg-white/10 text-white rounded-xl hover:bg-white/20 disabled:opacity-50 cursor-pointer transition-all border border-white/10 shadow-sm"><Send size={14}/></button>
+                <form onSubmit={sendChatMessage} className={`p-2 border-t flex gap-2 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-stone-200 bg-white/50'}`}>
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-3 py-2 rounded-xl outline-none transition-all shadow-inner border ${isDarkMode ? 'bg-black/50 text-white border-white/20 focus:border-orange-500' : 'bg-white text-stone-900 border-stone-200 focus:border-orange-500'}`} />
+                  <button type="submit" disabled={!chatInput.trim()} className={`p-2.5 rounded-xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm ${isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white text-stone-800 border-stone-200 hover:bg-stone-50'}`}><Send size={14}/></button>
                 </form>
               </div>
             )}
 
             {/* Floating Action Bar */}
-            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700 text-white p-3 sm:p-4 rounded-3xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto">
+            <div className={`${theme.glassPanel} p-3 sm:p-4 rounded-3xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto border`}>
               <div className="flex items-center gap-3">
                 <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
                 <div>
-                  <p className="text-xs font-black text-orange-400 uppercase tracking-wider">Screen Share Active</p>
-                  <p className="text-[10px] text-zinc-300 font-medium">
+                  <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">Screen Share Active</p>
+                  <p className={`text-[10px] font-semibold ${theme.subText}`}>
                     {isControlGranted ? 'Admin controls your PC.' : 'IT Support is viewing your workspace.'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer relative ${showChat ? 'bg-slate-700 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-600'}`}>
+                <button onClick={() => setShowChat(!showChat)} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${showChat ? 'bg-purple-500 text-white border-purple-600 shadow-md' : (isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50')}`}>
                   <MessageSquare size={14} /> <span className="hidden sm:inline">Chat</span>
                 </button>
-                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
+                <button onClick={() => stopScreenSharing("Disconnected by user.")} className="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer border border-rose-400"><StopCircle size={15} /> <span className="hidden sm:inline">Stop</span></button>
               </div>
             </div>
           </div>
@@ -389,20 +439,20 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 border-orange-500">
-            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center mx-auto shadow-inner animate-bounce"><Monitor size={32} /></div>
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className={`${theme.glassPanel} rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 border-2 ${isDarkMode ? 'border-orange-500/50' : 'border-orange-400'}`}>
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner border border-orange-500/30 animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
-              <h3 className="text-xl font-black text-slate-900">Live Support Access Requested</h3>
-              <p className="text-xs sm:text-sm font-medium text-slate-500"><strong className="text-slate-900 font-bold">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
+              <h3 className={`text-xl font-black ${theme.text}`}>Live Support Access Requested</h3>
+              <p className={`text-xs sm:text-sm font-medium ${theme.subText}`}><strong className={`font-bold ${theme.text}`}>{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view your screen.</p>
             </div>
-            <div className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-orange-800 flex items-center gap-3">
-              <ShieldAlert size={22} className="shrink-0 text-orange-600" />
+            <div className={`p-4 rounded-2xl border text-xs font-semibold flex items-center gap-3 ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-800'}`}>
+              <ShieldAlert size={22} className="shrink-0 text-orange-500" />
               <span>By accepting, they will be able to view your desktop natively.</span>
             </div>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer">Decline</button>
-              <button onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} disabled={isConnecting} className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95">
+              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className={`flex-1 py-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50'}`}>Decline</button>
+              <button onClick={() => startScreenShare(incomingRequest.channelId, incomingRequest.alertId)} disabled={isConnecting} className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-extrabold uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 border border-orange-400 transition-all cursor-pointer active:scale-95">
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
               </button>
@@ -411,10 +461,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* SIDEBAR */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-200/70 z-50 flex flex-col transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.02)] ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="h-16 flex items-center px-5 border-b border-slate-100 shrink-0"><img src="/logo.png" alt="Logo" className="h-7 w-auto" /></div>
-        <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto custom-scrollbar">
+      {/* 🌟 SIDEBAR (FROSTED GLASS) */}
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 border-r z-50 flex flex-col transition-transform duration-300 ${theme.glassPanel} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className={`h-16 flex items-center px-5 border-b shrink-0 ${isDarkMode ? 'border-white/10' : 'border-stone-200/60'}`}><img src="/logo.png" alt="Logo" className="h-7 w-auto" /></div>
+        <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto custom-scrollbar">
           {[
             { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
             { name: 'My Assets', href: '/staff/assets', icon: Laptop },
@@ -426,50 +476,53 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             const Icon = link.icon;
             const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);
             return (
-              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm group ${isActive ? 'bg-orange-50 text-orange-700 font-semibold shadow-sm border border-orange-100/50' : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900'}`}>
-                <Icon size={18} className={`${isActive ? 'text-orange-600' : 'text-slate-400 group-hover:text-slate-600'} transition-colors`} /> {link.name}
+              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[13px] group border ${isActive ? (isDarkMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 font-bold shadow-[0_0_10px_rgba(249,115,22,0.15)]' : 'bg-white/80 text-orange-600 border-white shadow-sm font-bold') : (isDarkMode ? 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200 font-semibold' : 'text-stone-600 border-transparent hover:bg-white/50 hover:text-stone-900 hover:border-white font-semibold')}`}>
+                <Icon size={18} className={`${isActive ? (isDarkMode ? 'text-orange-400' : 'text-orange-500') : 'text-current opacity-70 group-hover:opacity-100'} transition-colors`} /> {link.name}
               </Link>
             );
           })}
         </nav>
-        <div className="p-3 border-t border-slate-100 shrink-0 relative bg-slate-50/50">
-          <button onClick={handleLogout} className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white border border-slate-200 text-rose-600 text-xs font-bold cursor-pointer"><LogOut size={14}/> Logout</button>
+        <div className={`p-4 border-t shrink-0 ${isDarkMode ? 'border-white/10' : 'border-stone-200/60'}`}>
+          <button onClick={handleLogout} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-xs font-bold cursor-pointer border shadow-sm ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20' : 'bg-white/80 text-rose-600 border-white hover:bg-white hover:shadow-md'}`}><LogOut size={15}/> Logout</button>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F8FAFC]">
-        <header className="h-16 bg-white border-b border-slate-200/70 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
+        
+        {/* 🌟 HEADER (FROSTED GLASS) */}
+        <header className={`h-16 border-b shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} ${isDarkMode ? 'border-white/10' : 'border-stone-200/60'}`}>
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 lg:hidden rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"><Menu size={20} /></button>
-            <h2 className="text-sm lg:text-base font-bold text-slate-800 tracking-tight hidden sm:block">Virtual Staffing Solutions | Staff Dashboard</h2>
+            <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-lg transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-stone-500 hover:bg-white/50'}`}><Menu size={20} /></button>
+            <h2 className={`text-sm lg:text-[15px] font-extrabold tracking-tight hidden sm:block ${theme.text}`}>Virtual Staffing Solutions <span className="opacity-40 px-1">|</span> Staff Dashboard</h2>
           </div>
 
           <div className="relative">
-            <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className="relative p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm cursor-pointer" title="Session Alerts History">
+            <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className={`relative p-2.5 rounded-xl border transition-all shadow-sm cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white/80 border-white text-stone-600 hover:bg-white'}`} title="Session Alerts History">
               <Bell size={18} />
-              {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-sm ring-2 ring-white">{unreadCount}</span>}
+              {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white dark:border-zinc-900">{unreadCount}</span>}
             </button>
 
+            {/* NOTIFICATION DROPDOWN */}
             {isNotifOpen && (
-              <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/80 overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
-                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2"><History size={14} className="text-purple-600"/> Session Alerts History</h3>
+              <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-3xl overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200 border ${theme.glassPanel} ${isDarkMode ? 'border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' : 'border-white shadow-2xl'}`}>
+                <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/60 border-stone-200/60'}`}>
+                  <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${theme.text}`}><History size={14} className="text-purple-500"/> Session Alerts</h3>
                 </div>
-                <div className="max-h-100 overflow-y-auto custom-scrollbar bg-white">
+                <div className="max-h-96 overflow-y-auto custom-scrollbar">
                   {alertHistory.length === 0 ? (
-                    <div className="px-4 py-10 text-center text-slate-400 flex flex-col items-center gap-2"><Bell size={24} className="opacity-20" /><span className="text-xs font-medium">No alerts recorded yet.</span></div>
+                    <div className={`px-4 py-10 text-center flex flex-col items-center gap-2 ${theme.subText}`}><Bell size={28} className="opacity-20" /><span className="text-[11px] font-bold uppercase tracking-widest">No alerts recorded yet.</span></div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-stone-200/50'}`}>
                       {alertHistory.map((notif) => {
                         const isError = (notif.title || '').toLowerCase().includes('error') || (notif.title || '').toLowerCase().includes('cancel') || (notif.title || '').toLowerCase().includes('fail');
                         return (
-                          <div key={notif.id} className={`p-4 hover:bg-slate-50 transition-colors group relative flex gap-3 ${isError ? 'bg-rose-50/30' : ''}`}>
+                          <div key={notif.id} className={`p-5 transition-colors group relative flex gap-3 ${isError ? (isDarkMode ? 'bg-rose-500/10' : 'bg-rose-50/50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/50')}`}>
                             <div className={`mt-0.5 shrink-0 ${isError ? 'text-rose-500' : 'text-orange-500'}`}><AlertTriangle size={16} /></div>
                             <div className="flex-1 pr-6 min-w-0">
-                              <div className="flex justify-between items-start mb-0.5"><p className={`text-xs font-bold truncate ${isError ? 'text-rose-700' : 'text-slate-900'}`}>{notif.title}</p><span className="text-[9px] font-bold text-slate-400">{notif.time}</span></div>
-                              <p className={`text-[11px] mt-1.5 leading-relaxed wrap-break-word ${isError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>{notif.message}</p>
+                              <div className="flex justify-between items-start mb-0.5"><p className={`text-xs font-bold truncate ${isError ? (isDarkMode ? 'text-rose-400' : 'text-rose-700') : theme.text}`}>{notif.title}</p><span className={`text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>{notif.time}</span></div>
+                              <p className={`text-[11px] mt-1.5 leading-relaxed wrap-break-word ${isError ? (isDarkMode ? 'text-rose-300 font-medium' : 'text-rose-600 font-medium') : theme.subText}`}>{notif.message}</p>
                             </div>
-                            <button onClick={() => dismissHistoryAlert(notif.id)} className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-100 rounded-md shadow-sm" title="Delete from History"><X size={12} /></button>
+                            <button onClick={() => dismissHistoryAlert(notif.id)} className={`absolute top-5 right-4 p-1.5 rounded-md shadow-sm transition-colors border ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-rose-400 hover:bg-white/10' : 'bg-white border-stone-200 text-stone-400 hover:text-rose-500 hover:bg-stone-50'}`} title="Delete from History"><X size={12} /></button>
                           </div>
                         );
                       })}
@@ -481,8 +534,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8 relative custom-scrollbar">
-          <div className="max-w-7xl mx-auto h-full">{children}</div>
+        {/* 🌟 MAIN CONTENT AREA (Relative Flex Container) */}
+        <main className="flex-1 relative z-10 w-full">
+          {children}
         </main>
       </div>
     </div>
