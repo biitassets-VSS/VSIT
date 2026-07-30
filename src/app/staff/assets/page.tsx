@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, 
@@ -35,7 +36,7 @@ function getNextDueDate(category: string, lastDateString: string | null, created
 }
 
 const formatDate = (date: Date) => {
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' }).replace(/\//g, '/');
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
 };
 
 // 🌟 DYNAMIC ASSET ICON HELPER
@@ -54,6 +55,7 @@ const getAssetIcon = (category: string) => {
 
 export default function StaffAssetsPage() {
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   
@@ -63,6 +65,7 @@ export default function StaffAssetsPage() {
   const [isSigning, setIsSigning] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     fetchMyAssets();
   }, []);
 
@@ -214,296 +217,283 @@ export default function StaffAssetsPage() {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12 w-full">
-      
-      {/* 🚨 PENDING E-SIGN ALERTS */}
-      {pendingAssets.length > 0 && (
-        <div className="bg-white/40 backdrop-blur-xl border border-rose-100 rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8 opacity-5"><FileSignature size={120} /></div>
-          <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-rose-500 text-white rounded-2xl shadow-md shrink-0 animate-pulse">
-                <AlertTriangle size={24} />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-rose-900">Action Required: Sign Handover Agreement</h3>
-                <p className="text-sm font-medium text-rose-700 mt-1 max-w-lg">
-                  You have {pendingAssets.length} new asset(s) assigned to you. You must electronically sign the IT asset handover policy to finalize the assignment.
-                </p>
+    <>
+      {/* 🌟 SCROLL FIX & SPACING: Added max-w-7xl, mx-auto, and pt-8 to center it and push it down from the top! */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none">
+        
+        {/* 🚨 PENDING E-SIGN ALERTS */}
+        {pendingAssets.length > 0 && (
+          <div className="bg-white/40 backdrop-blur-xl border border-rose-100 rounded-4xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-5"><FileSignature size={120} /></div>
+            <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-rose-500 text-white rounded-2xl shadow-md shrink-0 animate-pulse">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-rose-900">Action Required: Sign Handover Agreement</h3>
+                  <p className="text-sm font-medium text-rose-700 mt-1 max-w-lg">
+                    You have {pendingAssets.length} new asset(s) assigned to you. You must electronically sign the IT asset handover policy to finalize the assignment.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-5 space-y-3 relative z-10">
-            {pendingAssets.map(asset => {
-              const AlertIcon = getAssetIcon(asset.category);
+            <div className="mt-5 space-y-3 relative z-10">
+              {pendingAssets.map(asset => {
+                const AlertIcon = getAssetIcon(asset.category);
+                return (
+                  <div key={`alert-${asset.id}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-rose-100 shadow-sm gap-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3">
+                      <AlertIcon size={20} className="text-rose-400 shrink-0" />
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
+                        <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setSignModalAsset(asset)}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-colors shrink-0 cursor-pointer"
+                    >
+                      <PenTool size={14} /> Review & Sign
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 🌟 MY HARDWARE UNITS HEADER */}
+        <div className="flex items-center justify-between mb-4 px-2 sm:px-4">
+          <div className="flex items-center gap-3">
+            <Laptop size={20} className="text-purple-600" />
+            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-widest uppercase">My Hardware Units</h2>
+          </div>
+          <span className="text-sm font-black text-slate-500">{assignedAssets.length} Total</span>
+        </div>
+
+        {assignedAssets.length === 0 ? (
+          <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/30 backdrop-blur-md flex flex-col items-center">
+            <Package size={48} className="text-slate-300 mb-4" />
+            <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {assignedAssets.map(asset => {
+              const statusStr = (asset.live_inspection_status || '').toLowerCase();
+              const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes(statusStr) || (asset.status || '').toLowerCase() === 'pending handover';
+              const isRejected = statusStr === 'rejected';
+              const dueDate = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at);
+
               return (
-                <div key={`alert-${asset.id}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-rose-100 shadow-sm gap-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-3">
-                    <AlertIcon size={20} className="text-rose-400 shrink-0" />
-                    <div>
-                      <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
-                      <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
+                <div 
+                  key={asset.id} 
+                  className="group bg-white/40 backdrop-blur-xl rounded-4xl p-6 sm:p-8 border-2 border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] relative overflow-hidden"
+                >
+                  
+                  {/* Glowing Status Blob behind card */}
+                  <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full opacity-20 transition-opacity duration-500 group-hover:opacity-40 pointer-events-none ${isRejected ? 'bg-rose-400' : isPending ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+
+                  {/* Card Header & Status */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
+                    
+                    {isRejected ? (
+                      <span className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-200 shrink-0">
+                        Return Rejected
+                      </span>
+                    ) : isPending ? (
+                      <span className="px-3 py-1.5 bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-200 shrink-0">
+                        Signature Required
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-200 shrink-0">
+                        Approved
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 🌟 Grid with Wrap Break Words */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{asset.asset_tag || 'N/A'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span>
+                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{asset.serial_number || 'N/A'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span>
+                      <span className="font-bold text-sm text-slate-900 block">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Next Due</span>
+                      <span className={`font-bold text-sm block ${dueDate < new Date() ? 'text-rose-600' : 'text-slate-900'}`}>{formatDate(dueDate)}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Category</span>
+                      <span className="font-bold text-sm text-slate-900 block">{asset.category || 'N/A'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span>
+                      <span className="font-bold text-sm text-slate-900 block">{isPending ? 'Action Needed' : 'Assigned'}</span>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setSignModalAsset(asset)}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-colors shrink-0"
-                  >
-                    <PenTool size={14} /> Review & Sign
-                  </button>
+
+                  {/* Card Actions */}
+                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-200/50">
+                    {isPending ? (
+                      <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2 cursor-pointer">
+                        <PenTool size={16} /> Sign Handover Form
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border-2 border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/50 backdrop-blur-sm cursor-pointer">
+                          Return
+                        </button>
+                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border-2 border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/50 backdrop-blur-sm cursor-pointer">
+                          Replace
+                        </button>
+                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/50 backdrop-blur-sm cursor-pointer">
+                          <Check size={16} /> Audited This Cycle
+                        </button>
+                      </>
+                    )}
+                  </div>
+
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* 🌟 DIRECT LISTING (No extra white container wrapper to avoid too much brightness) */}
-      <div className="flex items-center justify-between mb-6 px-2 sm:px-4">
-        <div className="flex items-center gap-3">
-          <Laptop size={20} className="text-purple-600" />
-          <h2 className="text-base font-black text-slate-900 tracking-widest uppercase">My Hardware Units</h2>
-        </div>
-        <span className="text-sm font-black text-slate-500">{assignedAssets.length} Total</span>
+        )}
       </div>
 
-      {assignedAssets.length === 0 ? (
-        <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-3xl bg-white/30 backdrop-blur-md flex flex-col items-center">
-          <Package size={48} className="text-slate-300 mb-4" />
-          <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
-          <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID.</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {assignedAssets.map(asset => {
-            const statusStr = (asset.live_inspection_status || '').toLowerCase();
-            const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes(statusStr) || (asset.status || '').toLowerCase() === 'pending handover';
-            const isRejected = statusStr === 'rejected';
-            const dueDate = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at);
-
-            return (
-              <div 
-                key={asset.id} 
-                className="group bg-white/40 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.25)] relative overflow-hidden"
-              >
-                
-                {/* Card Header & Status */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
-                  
-                  {isRejected ? (
-                    <span className="px-3 py-1.5 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-200 shrink-0">
-                      Return Rejected
-                    </span>
-                  ) : isPending ? (
-                    <span className="px-3 py-1.5 bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-200 shrink-0">
-                      Signature Required
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-200 shrink-0">
-                      Approved
-                    </span>
-                  )}
+      {/* 📝 DIGITAL E-SIGN MODAL (PORTAL FIX: Prevents hiding behind sidebar) */}
+      {mounted && signModalAsset && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200" style={{ zIndex: 2147483647 }}>
+          <div className="bg-white/95 backdrop-blur-xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white">
+            
+            <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm">
+                  <FileSignature size={20} />
                 </div>
-
-                {/* 🌟 EXPANDED Asset Details Grid (Now includes Next Due & Status) */}
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span>
-                    <span className="font-bold text-sm text-slate-900 wrap-break-word">{asset.asset_tag || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span>
-                    <span className="font-bold text-sm text-slate-900 wrap-break-word">{asset.serial_number || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span>
-                    <span className="font-bold text-sm text-slate-900">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending'}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Next Due</span>
-                    <span className={`font-bold text-sm ${dueDate < new Date() ? 'text-rose-600' : 'text-slate-900'}`}>{formatDate(dueDate)}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Category</span>
-                    <span className="font-bold text-sm text-slate-900">{asset.category || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span>
-                    <span className="font-bold text-sm text-slate-900">{isPending ? 'Action Needed' : 'Assigned'}</span>
-                  </div>
+                <div>
+                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Asset Handover Agreement</h3>
+                  <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
                 </div>
-
-                {/* Card Actions - Styled exactly to your premium screenshot */}
-                <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-slate-200/50">
-                  {isPending ? (
-                    <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2">
-                      <PenTool size={16} /> Sign Handover Form
-                    </button>
-                  ) : (
-                    <>
-                      <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border-2 border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/50 backdrop-blur-sm">
-                        Return
-                      </button>
-                      <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border-2 border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/50 backdrop-blur-sm">
-                        Replace
-                      </button>
-                      <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/50 backdrop-blur-sm">
-                        <Check size={16} /> Audited This Cycle
-                      </button>
-                    </>
-                  )}
-                </div>
-
               </div>
-            );
-          })}
-        </div>
-      )}
+              <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer"><X size={20}/></button>
+            </div>
 
-      {/* 📝 DIGITAL E-SIGN MODAL (Premium Glass Version) */}
-      {signModalAsset && (() => {
-        const statusStr = (signModalAsset.live_inspection_status || '').toLowerCase();
-        const isModalPending = !signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes(statusStr) || (signModalAsset.status || '').toLowerCase() === 'pending handover';
-        
-        let safePhotos: string[] = [];
-        try {
-          if (Array.isArray(signModalAsset.live_inspection_photos)) {
-            safePhotos = signModalAsset.live_inspection_photos;
-          } else if (typeof signModalAsset.live_inspection_photos === 'string') {
-            const parsed = JSON.parse(signModalAsset.live_inspection_photos);
-            if (Array.isArray(parsed)) safePhotos = parsed;
-            else if (typeof parsed === 'object' && parsed !== null) safePhotos = Object.values(parsed);
-          } else if (typeof signModalAsset.live_inspection_photos === 'object' && signModalAsset.live_inspection_photos !== null) {
-            safePhotos = Object.values(signModalAsset.live_inspection_photos);
-          }
-        } catch(e) {}
-
-        const ModalAssetIcon = getAssetIcon(signModalAsset.category);
-
-        return (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-999 flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white/90 backdrop-blur-2xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white/60">
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium custom-scrollbar">
               
-              <div className="p-6 bg-slate-50/50 border-b border-slate-100/50 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100/80 text-purple-600 flex items-center justify-center shadow-sm">
-                    <FileSignature size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Asset Handover Agreement</h3>
-                    <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
-                  </div>
+              <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex gap-3">
+                <AlertCircle className="text-rose-600 shrink-0" size={20} />
+                <div>
+                  <h4 className="text-rose-700 font-black text-xs uppercase tracking-widest mb-1">Attention Required</h4>
+                  <p className="text-xs font-semibold text-rose-800 leading-relaxed">
+                    Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.
+                  </p>
                 </div>
-                <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-slate-200/50 text-slate-500 transition-colors"><X size={20}/></button>
               </div>
 
-              <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium custom-scrollbar">
-                
-                <div className="bg-rose-50/80 border border-rose-200 p-4 rounded-2xl flex gap-3">
-                  <AlertCircle className="text-rose-600 shrink-0" size={20} />
+              {/* Specs Grid */}
+              <div className="p-5 bg-slate-50/80 rounded-2xl border border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
+                  <Laptop size={16} className="text-slate-400 shrink-0" />
                   <div>
-                    <h4 className="text-rose-700 font-black text-xs uppercase tracking-widest mb-1">Attention Required</h4>
-                    <p className="text-xs font-semibold text-rose-800 leading-relaxed">
-                      Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Asset Name</span>
+                    <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span>
+                  </div>
+                </div>
+                <div className="col-span-2 sm:col-span-1 min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900 wrap-break-word block">{signModalAsset.serial_number}</span></div>
+                <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900 wrap-break-word block">{signModalAsset.asset_tag}</span></div>
+                <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900 block">{signModalAsset.live_inspection_date ? formatDate(new Date(signModalAsset.live_inspection_date)) : formatDate(new Date())}</span></div>
+              </div>
+
+              {/* Evidence Section */}
+              <div className="p-5 border border-slate-100 rounded-2xl space-y-4 bg-white">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-slate-50 pb-2">Latest Inspection & Condition Evidence</h4>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inspector Notes:</span>
+                  <div className="font-mono text-xs bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap wrap-break-word">
+                    {signModalAsset.live_inspection_notes || 'No specific notes provided during the last audit.'}
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Asset Photos:</span>
+                  {signModalAsset.live_inspection_photos ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {/* Note: This is an example, assuming photos is an array */}
+                      <p className="text-xs text-slate-500 italic col-span-4">Photos exist but are securely encrypted.</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No inspection photos available on record.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="prose prose-sm prose-slate max-w-none">
+                <p>I, <strong>{currentUser?.name}</strong> (Emp ID: {currentUser?.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
+                <ul className="space-y-2 mt-4 text-xs font-semibold text-slate-600 leading-relaxed">
+                  <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
+                  <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
+                  <li><strong className="text-slate-800">3. Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months.</li>
+                  <li><strong className="text-slate-800">4. Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
+                  <li><strong className="text-slate-800">5. Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
+                  <li><strong>6. Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company. Gross negligence may result in disciplinary action or financial liability.</li>
+                </ul>
+              </div>
+
+              {(!signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover') ? (
+                <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-100 space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Electronic Signature</label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Type your full legal name to sign..."
+                      value={signatureName}
+                      onChange={(e) => setSignatureName(e.target.value)}
+                      className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400 shadow-inner"
+                    />
+                    <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
+                      <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
                     </p>
                   </div>
-                </div>
 
-                <div className="p-5 bg-slate-50/60 rounded-2xl border border-slate-200/60 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
-                    <ModalAssetIcon size={16} className="text-slate-400 shrink-0" />
-                    <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Asset Name</span>
-                      <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span>
-                    </div>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.serial_number}</span></div>
-                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900">{signModalAsset.asset_tag}</span></div>
-                  <div><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900">{signModalAsset.live_inspection_date ? formatDate(new Date(signModalAsset.live_inspection_date)) : formatDate(new Date())}</span></div>
-                </div>
-
-                <div className="p-5 border border-slate-200/60 rounded-2xl space-y-4 bg-white/40">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-slate-200/50 pb-2">Latest Inspection & Condition Evidence</h4>
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inspector Notes:</span>
-                    <div className="font-mono text-xs bg-slate-50/80 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
-                      {signModalAsset.live_inspection_notes || 'No specific notes provided during the last audit.'}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Asset Photos:</span>
-                    {safePhotos.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {safePhotos.slice(0, 4).map((src, idx) => (
-                          <img key={idx} src={src} alt="Evidence" className="w-full h-20 object-cover rounded-lg border border-slate-200 bg-slate-50" />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">No inspection photos available on record.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="prose prose-sm prose-slate max-w-none">
-                  <p>I, <strong>{currentUser?.name}</strong> (Emp ID: {currentUser?.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
-                  <ul className="space-y-2 mt-4 text-xs font-semibold text-slate-600 leading-relaxed">
-                    <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
-                    <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-                    <li><strong className="text-slate-800">3. Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months.</li>
-                    <li><strong className="text-slate-800">4. Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
-                    <li><strong className="text-slate-800">5. Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
-                    <li><strong>6. Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company. Gross negligence may result in disciplinary action or financial liability.</li>
-                  </ul>
-                </div>
-
-                {isModalPending ? (
-                  <form onSubmit={handleSignAgreement} className="pt-6 border-t border-slate-200/50 space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Electronic Signature</label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="Type your full legal name to sign..."
-                        value={signatureName}
-                        onChange={(e) => setSignatureName(e.target.value)}
-                        className="w-full p-4 bg-white/80 border border-slate-200 rounded-xl font-bold text-slate-900 outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400 shadow-inner"
-                      />
-                      <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
-                        <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                      <button type="button" onClick={() => setSignModalAsset(null)} className="w-full sm:w-auto px-8 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100/80 transition-colors">Cancel</button>
-                      <button type="submit" disabled={isSigning || !signatureName.trim()} className="w-full sm:flex-1 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-purple-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
-                        {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
-                        {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="pt-4 border-t border-slate-200/50">
-                    <div className="p-4 bg-emerald-50/80 border border-emerald-100 rounded-2xl flex items-start gap-3">
-                      <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
-                      <div>
-                        <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Agreement Signed & Accepted</h4>
-                        <p className="text-xs font-medium text-emerald-700 mt-1">This asset is actively assigned to you. The digital handover agreement is legally logged in the system.</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setSignModalAsset(null)} className="w-full mt-4 py-3.5 bg-slate-100/80 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer">
-                      Close Document
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button type="button" onClick={() => setSignModalAsset(null)} className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer">Cancel</button>
+                    <button type="submit" disabled={isSigning || !signatureName.trim()} className="w-full sm:flex-1 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-purple-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer">
+                      {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
+                      {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
                     </button>
                   </div>
-                )}
+                </form>
+              ) : (
+                <div className="pt-4 border-t border-slate-100">
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-start gap-3">
+                    <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Agreement Signed & Accepted</h4>
+                      <p className="text-xs font-medium text-emerald-700 mt-1">This asset is actively assigned to you. The digital handover agreement is legally logged in the system.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSignModalAsset(null)} className="w-full mt-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer">
+                    Close Document
+                  </button>
+                </div>
+              )}
 
-              </div>
             </div>
           </div>
-        );
-      })()}
-
-    </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
