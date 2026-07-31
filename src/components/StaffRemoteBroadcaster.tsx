@@ -79,28 +79,11 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      let stream: MediaStream;
-      
-      // 🌟 DIRECT ELECTRON CAPTURE BYPASS (Fixes Admin Mode Video Crash)
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.getDesktopSourceId) {
-        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
-        if (!sourceId) throw new Error("Could not fetch screen source ID from OS.");
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sourceId,
-              minFrameRate: 30,
-              maxFrameRate: 60
-            }
-          } as any // Bypass TS typing for Electron-specific constraints
-        });
-      } else {
-        // Fallback for standard browsers
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      }
+      // 🌟 Safe WebRTC Capture linked to Electron's DisplayMediaRequestHandler
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      });
 
       streamRef.current = stream;
 
@@ -196,7 +179,9 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       });
 
     } catch (err: any) {
-      toast.error(`Screen share failed: ${err.message}`);
+      // 🌟 Detailed Error Reporting so we aren't blind
+      console.error("Capture Error:", err);
+      toast.error(`Video Error: ${err.name} - ${err.message}`, { duration: 6000 });
       setIsConnecting(false);
     }
   };

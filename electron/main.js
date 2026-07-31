@@ -5,21 +5,25 @@ const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js');
 
 // -------------------------------------------------------------
-// 1. HARDWARE & SANDBOX SETTINGS (Crucial for Admin Mode)
+// 1. THE ADMINISTRATOR VIDEO FIX FLAGS
 // -------------------------------------------------------------
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
+
+// These two flags bypass the Windows UIPI texture block in Admin mode
+app.commandLine.appendSwitch('in-process-gpu'); 
+app.commandLine.appendSwitch('disable-direct-composition');
+
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-media-stream');
-app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 
 // Configure Nut.js input speeds for zero-latency control
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 5000;
 
 // -------------------------------------------------------------
-// 2. KEYBOARD MAPPING (Browser Strings -> OS Keys)
+// 2. KEYBOARD MAPPING
 // -------------------------------------------------------------
 const KEY_MAP = {
   'Backspace': Key.Backspace, 'Tab': Key.Tab, 'Enter': Key.Enter,
@@ -45,7 +49,7 @@ function resolveNutKey(keyStr) {
 }
 
 // -------------------------------------------------------------
-// 3. WINDOW SETUP
+// 3. WINDOW SETUP & DISPLAY MEDIA HANDLER
 // -------------------------------------------------------------
 let mainWindow;
 
@@ -59,12 +63,24 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); 
+
+  // 🌟 Admin-Safe Screen Capture Router
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    desktopCapturer.getSources({ types: ['screen'] })
+      .then((sources) => {
+        if (sources && sources.length > 0) {
+          callback({ video: sources[0] });
+        } else {
+          callback();
+        }
+      })
+      .catch(() => callback());
+  });
 
   session.defaultSession.setPermissionCheckHandler(() => true);
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
@@ -73,23 +89,7 @@ function createWindow() {
 app.whenReady().then(createWindow);
 
 // -------------------------------------------------------------
-// 4. DESKTOP CAPTURE (BYPASS FOR ADMIN MODE)
-// -------------------------------------------------------------
-ipcMain.handle('get-desktop-source-id', async () => {
-  try {
-    const sources = await desktopCapturer.getSources({ types: ['screen'] });
-    if (sources && sources.length > 0) {
-      return sources[0].id;
-    }
-    return null;
-  } catch (err) {
-    console.error("Error fetching desktop sources:", err);
-    return null;
-  }
-});
-
-// -------------------------------------------------------------
-// 5. OS REMOTE CONTROL HANDLERS
+// 4. OS REMOTE CONTROL HANDLERS
 // -------------------------------------------------------------
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   try {
@@ -141,7 +141,7 @@ ipcMain.on('remote-key-up', async (event, { key }) => {
 });
 
 // -------------------------------------------------------------
-// 6. CLIPBOARD & SYSTEM COMMANDS
+// 5. CLIPBOARD & SYSTEM COMMANDS
 // -------------------------------------------------------------
 ipcMain.on('sync-clipboard-write', (event, { text }) => { if (text) clipboard.writeText(text); });
 ipcMain.handle('sync-clipboard-read', () => clipboard.readText());
