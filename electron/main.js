@@ -2,14 +2,18 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
-const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js'); // 🌟 Added 'Key' Enum
+const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js'); 
 
-// 🌟 FIX 1: REMOVED app.disableHardwareAcceleration() so DXGI GPU Capture works in Admin mode!
+// 🌟 THE WGC BYPASS: Disable Windows Graphics Capture
+// This forces Electron to use DirectX (DXGI) which allows Administrator screen recording!
+app.commandLine.appendSwitch(
+  'disable-features', 
+  'WebRtcAllowWgcScreenCapturer,WebRtcAllowWgcWindowCapturer,WebRtcAllowWgcDesktopCapturer'
+);
+
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
-
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
-app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-media-stream');
 
 // Zero-delay for instant mouse control
@@ -50,43 +54,39 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
+// Fallback Handler for React Frontend
+ipcMain.handle('get-desktop-source-id', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen'] });
+    return sources.length > 0 ? sources[0].id : null;
+  } catch (e) {
+    return null;
+  }
+});
+
 // -------------------------------------------------------------
-// 🌟 FIX 2: BROWSER TO NUT.JS KEYBOARD MAPPER
+// ⌨️ BROWSER TO NUT.JS KEYBOARD MAPPER
 // -------------------------------------------------------------
 const DOM_TO_NUTJS_KEY = {
-  'Backspace': Key.Backspace,
-  'Tab': Key.Tab,
-  'Enter': Key.Enter,
-  'Escape': Key.Escape,
-  ' ': Key.Space,
-  'ArrowUp': Key.Up,
-  'ArrowDown': Key.Down,
-  'ArrowLeft': Key.Left,
-  'ArrowRight': Key.Right,
-  'Shift': Key.LeftShift,
-  'Control': Key.LeftControl,
-  'Alt': Key.LeftAlt,
-  'Meta': Key.LeftSuper,
-  'Delete': Key.Delete
+  'Backspace': Key.Backspace, 'Tab': Key.Tab, 'Enter': Key.Enter,
+  'Escape': Key.Escape, ' ': Key.Space, 'ArrowUp': Key.Up,
+  'ArrowDown': Key.Down, 'ArrowLeft': Key.Left, 'ArrowRight': Key.Right,
+  'Shift': Key.LeftShift, 'Control': Key.LeftControl, 'Alt': Key.LeftAlt,
+  'Meta': Key.LeftSuper, 'Delete': Key.Delete
 };
 
 function mapWebKeyToNutJs(webKey) {
-  // 1. Check if it's a special key mapped above
   if (DOM_TO_NUTJS_KEY[webKey]) return DOM_TO_NUTJS_KEY[webKey];
-  
-  // 2. Check if it's a standard letter or number (e.g., 'a' -> Key.A)
   if (webKey && webKey.length === 1) {
     const upper = webKey.toUpperCase();
     if (Key[upper]) return Key[upper];
   }
-  
-  return null; // Ignore unmapped keys to prevent crashes
+  return null; 
 }
 
 // -------------------------------------------------------------
 // 🎮 OS CONTROL LISTENERS 
 // -------------------------------------------------------------
-
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   try {
     const { width, height } = screen.getPrimaryDisplay().size;
@@ -105,29 +105,29 @@ ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
 ipcMain.on('remote-mouse-down', async (event, { button }) => { 
   try { await mouse.pressButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {} 
 });
+
 ipcMain.on('remote-mouse-up', async (event, { button }) => { 
   try { await mouse.releaseButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {} 
 });
+
 ipcMain.on('remote-scroll', async (event, { deltaY }) => { 
   try { await mouse.scrollDown(deltaY > 0 ? -2 : 2); } catch (e) {} 
 });
 
-// 🌟 APPLIED KEYBOARD MAPPER
 ipcMain.on('remote-key-down', async (event, { key }) => { 
   try { 
     const nutKey = mapWebKeyToNutJs(key);
     if (nutKey !== null) await keyboard.pressKey(nutKey); 
-  } catch (e) { console.error("Key press failed:", e); } 
+  } catch (e) {} 
 });
 
 ipcMain.on('remote-key-up', async (event, { key }) => { 
   try { 
     const nutKey = mapWebKeyToNutJs(key);
     if (nutKey !== null) await keyboard.releaseKey(nutKey); 
-  } catch (e) { console.error("Key release failed:", e); } 
+  } catch (e) {} 
 });
 
-// Clipboard and System Commands
 ipcMain.on('sync-clipboard-write', (event, { text }) => { clipboard.writeText(text); });
 ipcMain.handle('sync-clipboard-read', () => { return clipboard.readText(); });
 
