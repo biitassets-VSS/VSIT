@@ -42,17 +42,9 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const executeAdminCommand = async (cmd: any) => {
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
-        if (cmd.type === 'mousemove') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-        }
-        else if (cmd.type === 'mousedown') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-          (window as any).electronAPI.sendMouseDown(cmd.button);
-        }
-        else if (cmd.type === 'mouseup') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-          (window as any).electronAPI.sendMouseUp(cmd.button);
-        }
+        if (cmd.type === 'mousemove') { (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); }
+        else if (cmd.type === 'mousedown') { (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); (window as any).electronAPI.sendMouseDown(cmd.button); }
+        else if (cmd.type === 'mouseup') { (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); (window as any).electronAPI.sendMouseUp(cmd.button); }
         else if (cmd.type === 'keydown') (window as any).electronAPI.sendKeyDown(cmd.key);
         else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
         else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
@@ -60,12 +52,9 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         else if (cmd.type === 'sync_clipboard') {
           if ((window as any).electronAPI.readClipboard) {
             const text = await (window as any).electronAPI.readClipboard();
-            // Try UDP Data Channel First
             if (dataChannelRef.current?.readyState === 'open') {
               dataChannelRef.current.send(JSON.stringify({ type: 'clipboard_data', text }));
-            } 
-            // Fallback to Supabase
-            else if (channelRef.current) {
+            } else if (channelRef.current) {
               channelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
             }
             toast.success("Clipboard securely synced to IT Admin.");
@@ -82,22 +71,17 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 THE FIX: Clean standard API. Electron's main.js will perfectly intercept this.
+      // 🌟 Clean API: Electron will securely handle this in the background
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       streamRef.current = stream;
 
-      stream.getVideoTracks()[0].onended = () => {
-        stopSharing();
-        toast.error("Screen sharing stopped by user.");
-      };
+      stream.getVideoTracks()[0].onended = () => { stopSharing(); toast.error("Screen sharing stopped by user."); };
 
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
       peerRef.current = peer;
 
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed') {
-          toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });
-        }
+        if (peer.connectionState === 'failed') toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });
       };
 
       peer.ondatachannel = (event) => {
@@ -108,36 +92,20 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
           if (typeof e.data === 'string') {
             try {
               const data = JSON.parse(e.data);
-              if (['mousemove', 'mousedown', 'mouseup', 'keydown', 'keyup', 'scroll', 'refresh', 'sync_clipboard'].includes(data.type)) {
-                executeAdminCommand(data);
-              } 
-              else if (data.type === 'ping') {
-                receiveChannel.send(JSON.stringify({ type: 'pong' }));
-              }
-              else if (data.type === 'file_meta') {
-                incomingFileMeta.current = data;
-                fileBuffer.current = [];
-                toast.loading(`Receiving file: ${data.name}...`);
-              }
+              if (['mousemove', 'mousedown', 'mouseup', 'keydown', 'keyup', 'scroll', 'refresh', 'sync_clipboard'].includes(data.type)) executeAdminCommand(data);
+              else if (data.type === 'ping') receiveChannel.send(JSON.stringify({ type: 'pong' }));
+              else if (data.type === 'file_meta') { incomingFileMeta.current = data; fileBuffer.current = []; toast.loading(`Receiving file: ${data.name}...`); }
             } catch (err) {}
           } 
           else if (e.data instanceof ArrayBuffer) {
             fileBuffer.current.push(e.data);
             const currentSize = fileBuffer.current.reduce((acc, chunk) => acc + chunk.byteLength, 0);
-            
             if (incomingFileMeta.current && currentSize >= incomingFileMeta.current.size) {
               const blob = new Blob(fileBuffer.current, { type: incomingFileMeta.current.fileType });
               const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = incomingFileMeta.current.name;
-              a.click();
-              URL.revokeObjectURL(url);
-              
-              toast.dismiss();
-              toast.success(`File downloaded: ${incomingFileMeta.current.name}`);
-              incomingFileMeta.current = null;
-              fileBuffer.current = [];
+              const a = document.createElement('a'); a.href = url; a.download = incomingFileMeta.current.name; a.click(); URL.revokeObjectURL(url);
+              toast.dismiss(); toast.success(`File downloaded: ${incomingFileMeta.current.name}`);
+              incomingFileMeta.current = null; fileBuffer.current = [];
             }
           }
         };
@@ -148,16 +116,12 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       const sessionChannel = supabase.channel(incomingRequest.channelId);
       channelRef.current = sessionChannel;
 
-      peer.onicecandidate = (event) => {
-        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
-      };
+      peer.onicecandidate = (event) => { if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } }); };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
         if (peer.signalingState === 'have-local-offer') {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
-          setIsConnecting(false);
-          setIsStreaming(true);
-          setIncomingRequest(null);
+          setIsConnecting(false); setIsStreaming(true); setIncomingRequest(null);
           toast.success("🟢 Live WebRTC Screen Share Established!");
           sessionChannel.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
         }
@@ -186,11 +150,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const stopSharing = () => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
-    if (channelRef.current) {
-      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
+    if (channelRef.current) { channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} }); supabase.removeChannel(channelRef.current); channelRef.current = null; }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null);
   };
 

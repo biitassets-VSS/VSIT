@@ -4,18 +4,16 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 THE ULTIMATE ADMIN VIDEO FIX: 
-// Force CPU rendering so Windows doesn't block the GPU in Administrator Mode!
+// 🌟 FORCE CPU RENDERING (Bypasses Admin Video Crash)
 app.disableHardwareAcceleration();
-
-// Bypass Sandboxes
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
+
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-media-stream');
 
-// Remove forced delays for instant mouse control
+// Fix nut.js freezing
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 5000;
 
@@ -38,7 +36,7 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
-  // 🌟 CLEAN MEDIA INTERCEPTOR (Safe for Admin Mode with CPU Rendering)
+  // Clean Media Handler (Safe for Admin)
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] })
       .then((sources) => {
@@ -66,66 +64,28 @@ ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
     await mouse.click(Button.LEFT);
   } catch (e) {}
 });
-
-ipcMain.on('remote-type', async (event, { text }) => {
-  try { await keyboard.type(text); } catch (e) {}
-});
-
+ipcMain.on('remote-type', async (event, { text }) => { try { await keyboard.type(text); } catch (e) {} });
 ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
   try {
     const { width, height } = screen.getPrimaryDisplay().size;
     await mouse.setPosition(new Point(Math.round((xPercent / 100) * width), Math.round((yPercent / 100) * height)));
   } catch (e) {}
 });
-
-ipcMain.on('remote-mouse-down', async (event, { button }) => {
-  try { await mouse.pressButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {}
-});
-
-ipcMain.on('remote-mouse-up', async (event, { button }) => {
-  try { await mouse.releaseButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {}
-});
-
-ipcMain.on('remote-scroll', async (event, { deltaY }) => {
-  try { await mouse.scrollDown(deltaY > 0 ? -2 : 2); } catch (e) {}
-});
-
-ipcMain.on('remote-key-down', async (event, { key }) => {
-  try { await keyboard.pressKey(key); } catch (e) {}
-});
-
-ipcMain.on('remote-key-up', async (event, { key }) => {
-  try { await keyboard.releaseKey(key); } catch (e) {}
-});
-
-ipcMain.on('sync-clipboard-write', (event, { text }) => {
-  clipboard.writeText(text);
-});
-
-ipcMain.handle('sync-clipboard-read', () => {
-  return clipboard.readText();
-});
+ipcMain.on('remote-mouse-down', async (event, { button }) => { try { await mouse.pressButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {} });
+ipcMain.on('remote-mouse-up', async (event, { button }) => { try { await mouse.releaseButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {} });
+ipcMain.on('remote-scroll', async (event, { deltaY }) => { try { await mouse.scrollDown(deltaY > 0 ? -2 : 2); } catch (e) {} });
+ipcMain.on('remote-key-down', async (event, { key }) => { try { await keyboard.pressKey(key); } catch (e) {} });
+ipcMain.on('remote-key-up', async (event, { key }) => { try { await keyboard.releaseKey(key); } catch (e) {} });
+ipcMain.on('sync-clipboard-write', (event, { text }) => { clipboard.writeText(text); });
+ipcMain.handle('sync-clipboard-read', () => { return clipboard.readText(); });
 
 ipcMain.on('system-command', async (event, { command }) => {
   try {
-    const allowedCommands = {
-      'lock_windows': 'rundll32.exe user32.dll,LockWorkStation',
-      'open_explorer': 'explorer.exe'
-    };
-    if (command === 'refresh_app') {
-      if (mainWindow) mainWindow.webContents.reloadIgnoringCache();
-    } else if (command === 'clear_cache') {
-      if (mainWindow) {
-        await mainWindow.webContents.session.clearCache();
-        await mainWindow.webContents.session.clearStorageData();
-        mainWindow.webContents.reload();
-      }
-    } else if (allowedCommands[command]) {
-      exec(allowedCommands[command]);
-    }
+    const allowedCommands = { 'lock_windows': 'rundll32.exe user32.dll,LockWorkStation', 'open_explorer': 'explorer.exe' };
+    if (command === 'refresh_app') { if (mainWindow) mainWindow.webContents.reloadIgnoringCache(); } 
+    else if (command === 'clear_cache') { if (mainWindow) { await mainWindow.webContents.session.clearCache(); await mainWindow.webContents.session.clearStorageData(); mainWindow.webContents.reload(); } } 
+    else if (allowedCommands[command]) { exec(allowedCommands[command]); }
   } catch (err) {}
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

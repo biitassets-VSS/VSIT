@@ -2,9 +2,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // 🎯 Desktop Source ID
-  getDesktopSourceId: () => ipcRenderer.invoke('get-desktop-source-id'),
-
   // 🖱️ Mouse Control
   sendRemoteClick: (xPercent, yPercent) => ipcRenderer.send('remote-click', { xPercent, yPercent }),
   sendMouseMove: (xPercent, yPercent) => ipcRenderer.send('remote-mouse-move', { xPercent, yPercent }),
