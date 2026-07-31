@@ -19,6 +19,7 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: "Virtual Staffing Portal",
+    icon: path.join(__dirname, '../build/icon.ico'), // 🌟 ADDED: Custom Taskbar & Window Icon
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

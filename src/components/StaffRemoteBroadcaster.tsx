@@ -156,7 +156,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     <>
       {/* 🟢 ACTIVE STREAMING FLOATING BADGE */}
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 border-2 border-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-6">
+        <div className="fixed bottom-6 right-6 z-9999 bg-slate-900 border-2 border-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-6">
           <div className="flex items-center gap-2.5">
             <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
             <div>
@@ -172,7 +172,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
 
       {/* ⚠️ INCOMING SCREEN SHARE REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-[#150f24] border border-orange-500/50 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95">
             <div className="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner animate-bounce">
               <Monitor size={28} />
