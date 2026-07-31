@@ -61,9 +61,12 @@ export default function AdminRemotePage() {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  
+  // 🌟 ANTI-DISCONNECT HEARTBEAT REFERENCE
+  const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { 
-    document.documentElement.classList.remove('dark'); // Enforce light matte glass
+    document.documentElement.classList.remove('dark'); 
     loadStaffAndAdminData(); 
     return () => terminateSession(); 
   }, []);
@@ -101,21 +104,34 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
+      // 🌟 IMPROVED CONNECTION STABILITY MONITORING
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed') {
+        if (peer.connectionState === 'disconnected') {
+          console.warn("WebRTC temporarily disconnected. Awaiting ICE restart...");
+        } else if (peer.connectionState === 'failed') {
           terminateSession();
-          toast.error("Network connection failed.");
+          toast.error("Network connection dropped by firewall or timeout.");
         }
       };
 
       const dataChannel = peer.createDataChannel('enterprise_channel', { ordered: true });
       dataChannelRef.current = dataChannel;
       
+      // 🌟 WEBRTC KEEP-ALIVE HEARTBEAT (Prevents Firewall Timeouts)
+      dataChannel.onopen = () => {
+        keepAliveIntervalRef.current = setInterval(() => {
+          if (dataChannel.readyState === 'open') {
+            dataChannel.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 3000); // Pulse every 3 seconds
+      };
+
       dataChannel.onmessage = (event) => {
         if (typeof event.data === 'string') {
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === 'file_meta') toast(`Receiving file: ${msg.name}...`);
+            if (msg.type === 'pong') console.log("Heartbeat acknowledged"); // Ignore pongs
           } catch(e) {}
         }
       };
@@ -181,6 +197,7 @@ export default function AdminRemotePage() {
   };
 
   const terminateSession = () => {
+    if (keepAliveIntervalRef.current) { clearInterval(keepAliveIntervalRef.current); keepAliveIntervalRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (channelRef.current) { channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: {} }); supabase.removeChannel(channelRef.current); channelRef.current = null; }
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -188,7 +205,6 @@ export default function AdminRemotePage() {
     setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false); setIsFullscreen(false);
   };
 
-  // 🌟 FIX 1: SUPABASE WEBSOCKET FALLBACK FOR STRICT NETWORKS
   const sendControlCommand = (command: any) => {
     if (isControlling) {
       if (dataChannelRef.current?.readyState === 'open') {
@@ -230,7 +246,6 @@ export default function AdminRemotePage() {
     readSlice(0);
   };
 
-  // 🌟 FIX 2: ASPECT RATIO CORRECTED MOUSE COORDINATES
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
     if (type === 'mousemove') {
       if (isDraggingDock) {
@@ -253,8 +268,6 @@ export default function AdminRemotePage() {
     if (!video) return;
 
     const rect = video.getBoundingClientRect();
-    
-    // Protect against division by zero if video hasn't fully loaded dimensions
     if (!video.videoWidth || !video.videoHeight) return;
 
     const videoRatio = video.videoWidth / video.videoHeight;
@@ -265,7 +278,6 @@ export default function AdminRemotePage() {
     let offsetX = 0;
     let offsetY = 0;
 
-    // Calculate actual letterboxed/pillarboxed boundaries
     if (viewRatio > videoRatio) {
       actualWidth = rect.height * videoRatio;
       offsetX = (rect.width - actualWidth) / 2;
@@ -277,7 +289,6 @@ export default function AdminRemotePage() {
     const clickX = e.clientX - rect.left - offsetX;
     const clickY = e.clientY - rect.top - offsetY;
 
-    // Reject clicks that hit the black bars outside the actual video feed
     if (clickX < 0 || clickX > actualWidth || clickY < 0 || clickY > actualHeight) return;
 
     const xPercent = (clickX / actualWidth) * 100;
@@ -343,7 +354,7 @@ export default function AdminRemotePage() {
 
       <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
-      <div className="w-full max-w-[100rem] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
+      <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
         
         {/* HEADER */}
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
