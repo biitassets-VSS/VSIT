@@ -71,8 +71,9 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 Clean API: Electron will securely handle this in the background
+      // 🌟 THE CLEAN API: Electron's main.js perfectly intercepts this in Admin mode!
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      
       streamRef.current = stream;
 
       stream.getVideoTracks()[0].onended = () => { stopSharing(); toast.error("Screen sharing stopped by user."); };

@@ -4,16 +4,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 FORCE CPU RENDERING (Bypasses Admin Video Crash)
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-
-app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
-app.commandLine.appendSwitch('allow-http-screen-capture');
-app.commandLine.appendSwitch('enable-media-stream');
-
-// Fix nut.js freezing
+// 🌟 Remove all delay so the mouse doesn't freeze
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 5000;
 
@@ -29,21 +20,26 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
-  // Clean Media Handler (Safe for Admin)
+  // 🌟 Clean, Modern Media Handler (Works perfectly in Admin Mode)
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] })
       .then((sources) => {
-        if (sources && sources.length > 0) callback({ video: sources[0] }); 
-        else callback();
+        if (sources && sources.length > 0) {
+          callback({ video: sources[0] }); 
+        } else {
+          callback();
+        }
       })
-      .catch((err) => callback());
+      .catch((err) => {
+        console.error("Capture failed:", err);
+        callback();
+      });
   });
 
   session.defaultSession.setPermissionCheckHandler(() => true);
