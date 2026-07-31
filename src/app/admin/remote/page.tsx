@@ -188,15 +188,21 @@ export default function AdminRemotePage() {
     setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false); setIsFullscreen(false);
   };
 
+  // 🌟 FIX 1: SUPABASE WEBSOCKET FALLBACK FOR STRICT NETWORKS
   const sendControlCommand = (command: any) => {
-    if (isControlling && dataChannelRef.current?.readyState === 'open') {
-      dataChannelRef.current.send(JSON.stringify(command));
+    if (isControlling) {
+      if (dataChannelRef.current?.readyState === 'open') {
+        dataChannelRef.current.send(JSON.stringify(command));
+      } else if (channelRef.current) {
+        // Fallback to signaling channel if P2P UDP tunnel is blocked
+        channelRef.current.send({ type: 'broadcast', event: 'control_command', payload: command });
+      }
     }
   };
 
   const sendFileP2P = (file: File) => {
     if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
-      toast.error("P2P Data Tunnel not open");
+      toast.error("P2P Data Tunnel not open. Cannot send files.");
       return;
     }
     toast.loading(`Uploading ${file.name}...`);
@@ -224,6 +230,7 @@ export default function AdminRemotePage() {
     readSlice(0);
   };
 
+  // 🌟 FIX 2: ASPECT RATIO CORRECTED MOUSE COORDINATES
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
     if (type === 'mousemove') {
       if (isDraggingDock) {
@@ -241,20 +248,52 @@ export default function AdminRemotePage() {
 
     if (!isControlling) return;
     e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const rect = video.getBoundingClientRect();
+    
+    // Protect against division by zero if video hasn't fully loaded dimensions
+    if (!video.videoWidth || !video.videoHeight) return;
+
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const viewRatio = rect.width / rect.height;
+
+    let actualWidth = rect.width;
+    let actualHeight = rect.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    // Calculate actual letterboxed/pillarboxed boundaries
+    if (viewRatio > videoRatio) {
+      actualWidth = rect.height * videoRatio;
+      offsetX = (rect.width - actualWidth) / 2;
+    } else {
+      actualHeight = rect.width / videoRatio;
+      offsetY = (rect.height - actualHeight) / 2;
+    }
+
+    const clickX = e.clientX - rect.left - offsetX;
+    const clickY = e.clientY - rect.top - offsetY;
+
+    // Reject clicks that hit the black bars outside the actual video feed
+    if (clickX < 0 || clickX > actualWidth || clickY < 0 || clickY > actualHeight) return;
+
+    const xPercent = (clickX / actualWidth) * 100;
+    const yPercent = (clickY / actualHeight) * 100;
+
     sendControlCommand({ type, xPercent, yPercent, button: e.button });
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => { 
-      if (isKeyboardEnabled && document.activeElement?.tagName !== 'INPUT') { 
+      if (isKeyboardEnabled && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') { 
         e.preventDefault(); sendControlCommand({ type: 'keydown', key: e.key }); 
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => { 
-      if (isKeyboardEnabled && document.activeElement?.tagName !== 'INPUT') { 
+      if (isKeyboardEnabled && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') { 
         e.preventDefault(); sendControlCommand({ type: 'keyup', key: e.key }); 
       }
     };
@@ -273,7 +312,7 @@ export default function AdminRemotePage() {
     if (!chatInput.trim() || !channelRef.current) return;
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    setChatMessages(prev => [...prev, { sender: 'Me', text: chatInput, time: timeString, isSelf: true }]);
+    setChatMessages(prev => [...prev, { sender: 'IT Admin', text: chatInput, time: timeString, isSelf: true }]);
     channelRef.current.send({ type: 'broadcast', event: 'chat_message', payload: { sender: 'IT Admin', text: chatInput, time: timeString } });
     setChatInput('');
   };
@@ -304,7 +343,7 @@ export default function AdminRemotePage() {
 
       <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
-      <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
+      <div className="w-full max-w-[100rem] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
         
         {/* HEADER */}
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
@@ -416,80 +455,83 @@ export default function AdminRemotePage() {
                     </div>
                   )}
                   
-                  {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
+                  {/* 🌟 VIBRANT OPAQUE GLASS CHAT BOX */}
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div 
                       onMouseDown={(e) => e.stopPropagation()}
                       style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }}
-                      className="absolute bottom-24 right-6 w-80 bg-white/10 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] rounded-3xl flex flex-col z-50 overflow-hidden"
+                      className="absolute bottom-24 right-6 w-80 bg-white/95 backdrop-blur-3xl border border-white shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden"
                     >
                       <div 
                         onMouseDown={(e) => { e.stopPropagation(); setIsDraggingChat(true); dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y }; }}
-                        className="p-4 border-b border-white/10 text-white flex justify-between items-center cursor-grab active:cursor-grabbing bg-black/10"
+                        className="p-4 border-b border-slate-100 text-slate-800 flex justify-between items-center cursor-grab active:cursor-grabbing bg-slate-50/50"
                       >
-                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-white/80" /> Live Chat</span>
-                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1.5 rounded-md text-white/70 hover:text-white transition-colors cursor-pointer"><X size={16}/></button>
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-purple-600" /> Live Chat</span>
+                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-slate-200 p-1.5 rounded-md text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"><X size={16}/></button>
                       </div>
                       
                       <div className="h-60 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
                         {chatMessages.length === 0 ? (
-                          <div className="m-auto text-center text-xs font-medium text-white/50">Send a message to start communicating.</div>
+                          <div className="m-auto text-center text-xs font-medium text-slate-400">Send a message to start communicating.</div>
                         ) : (
                           chatMessages.map((msg, i) => (
-                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm backdrop-blur-md ${msg.isSelf ? 'bg-orange-500/80 text-white self-end rounded-2xl rounded-br-none border border-orange-400/50' : 'bg-white/10 text-white self-start rounded-2xl rounded-bl-none border border-white/20'}`}>
-                              <div className={`font-bold text-[9px] mb-1 uppercase tracking-wider ${msg.isSelf ? 'text-white/90' : 'text-white/60'}`}>{msg.sender}</div>{msg.text}
+                            <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.isSelf ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none border border-purple-500' : 'bg-slate-100 text-slate-800 self-start rounded-2xl rounded-bl-none border border-slate-200'}`}>
+                              <div className={`font-bold text-[9px] mb-1 uppercase tracking-wider ${msg.isSelf ? 'text-purple-200' : 'text-slate-500'}`}>{msg.sender}</div>{msg.text}
                             </div>
                           ))
                         )}
                         <div ref={chatEndRef} />
                       </div>
                       
-                      <form onSubmit={sendChatMessage} className="p-3 bg-black/20 border-t border-white/10 flex gap-2 backdrop-blur-md">
-                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-4 py-2.5 bg-black/40 text-white border border-white/10 rounded-xl outline-none focus:border-orange-400/50 transition-all placeholder-white/40 shadow-inner" />
-                        <button type="submit" disabled={!chatInput.trim()} className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-500 disabled:opacity-50 transition-all border border-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.3)] cursor-pointer"><Send size={14}/></button>
+                      <form onSubmit={sendChatMessage} className="p-3 bg-slate-50/80 border-t border-slate-100 flex gap-2">
+                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-purple-400 transition-all placeholder-slate-400 shadow-sm" />
+                        <button type="submit" disabled={!chatInput.trim()} className="p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-all border border-purple-500 shadow-sm cursor-pointer"><Send size={14}/></button>
                       </form>
                     </div>
                   )}
 
-                  {/* 🌟 PURE GLASS TRANSPARENT MAC-OS DOCK */}
+                  {/* 🌟 COLORFUL OPAQUE FROSTED MAC-OS DOCK */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div 
                       onMouseDown={(e) => e.stopPropagation()}
                       style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }}
-                      className="absolute bottom-6 left-1/2 bg-white/10 backdrop-blur-2xl border border-white/20 p-2 rounded-full flex gap-1 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] z-50 items-center transition-all"
+                      className="absolute bottom-6 left-1/2 bg-white/80 backdrop-blur-2xl border border-white p-2 rounded-full flex gap-1 shadow-2xl z-50 items-center transition-all"
                     >
                       <div 
                         onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }}
-                        className="cursor-grab active:cursor-grabbing p-2 text-white/40 hover:text-white transition-colors ml-1"
+                        className="cursor-grab active:cursor-grabbing p-2 text-slate-400 hover:text-slate-800 transition-colors ml-1"
                       >
                         <GripVertical size={18} />
                       </div>
                       
-                      <div className="w-px h-6 bg-white/20 mx-1.5" />
+                      <div className="w-px h-6 bg-slate-200 mx-1.5" />
 
                       {[
                         { 
                           icon: <Video size={18} />, active: isControlling, 
+                          color: 'text-blue-500 hover:bg-blue-50', activeClass: 'text-blue-600 bg-blue-50 border-blue-400 shadow-sm',
                           action: () => { 
                             if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
                             else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); }
                           }, 
                           tooltip: isControlling ? "Disable Control" : "Request Control" 
                         },
-                        { icon: <Keyboard size={18} />, active: isKeyboardEnabled, action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
-                        { icon: <MessageSquare size={18} />, active: isChatOpen, action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
-                        { icon: <Clipboard size={18} />, active: false, action: requestClipboardSync, tooltip: "Sync Clipboard" },
-                        { icon: <Volume2 size={18} />, active: isAudioEnabled, action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
-                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, action: toggleFullscreen, tooltip: "Fullscreen" },
-                        { icon: <FileUp size={18} />, active: false, action: () => fileInputRef.current?.click(), tooltip: "Share Document" },
-                        { icon: <RefreshCw size={18} />, active: false, action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
-                        { icon: <Ban size={18} />, active: false, action: terminateSession, tooltip: "Disconnect", color: "text-rose-400 hover:text-white hover:bg-rose-500/80" }
+                        { icon: <Keyboard size={18} />, active: isKeyboardEnabled, color: 'text-purple-500 hover:bg-purple-50', activeClass: 'text-purple-600 bg-purple-50 border-purple-400 shadow-sm', action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
+                        { icon: <MessageSquare size={18} />, active: isChatOpen, color: 'text-emerald-500 hover:bg-emerald-50', activeClass: 'text-emerald-600 bg-emerald-50 border-emerald-400 shadow-sm', action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
+                        { icon: <Clipboard size={18} />, active: false, color: 'text-amber-500 hover:bg-amber-50', action: requestClipboardSync, tooltip: "Sync Clipboard" },
+                        { icon: <Volume2 size={18} />, active: isAudioEnabled, color: 'text-teal-500 hover:bg-teal-50', activeClass: 'text-teal-600 bg-teal-50 border-teal-400 shadow-sm', action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
+                        { icon: isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />, active: isFullscreen, color: 'text-slate-500 hover:bg-slate-100', activeClass: 'text-slate-700 bg-slate-100 border-slate-300 shadow-sm', action: toggleFullscreen, tooltip: "Fullscreen" },
+                        { icon: <FileUp size={18} />, active: false, color: 'text-orange-500 hover:bg-orange-50', action: () => fileInputRef.current?.click(), tooltip: "Share Document" },
+                        { icon: <RefreshCw size={18} />, active: false, color: 'text-indigo-500 hover:bg-indigo-50', action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
+                        { icon: <Ban size={18} />, active: false, color: "text-rose-500 hover:text-white hover:bg-rose-500", action: terminateSession, tooltip: "Disconnect" }
                       ].map((btn, i) => (
                         <button 
                           key={i} 
                           onClick={btn.action} 
                           title={btn.tooltip} 
-                          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all cursor-pointer ${btn.color || 'text-white/80 hover:text-white'} ${btn.active ? 'bg-orange-600 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)] border border-orange-500 backdrop-blur-md' : 'bg-transparent hover:bg-white/20 border border-transparent'}`}
+                          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all cursor-pointer border ${
+                            btn.active ? btn.activeClass : `border-transparent ${btn.color}`
+                          }`}
                         >
                           {btn.icon}
                         </button>
@@ -500,8 +542,8 @@ export default function AdminRemotePage() {
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-slate-400 flex-col gap-4">
-                <Monitor size={64} className="opacity-20" />
-                <p className="font-bold tracking-widest uppercase text-sm">Select a user to begin remote session</p>
+                <Monitor size={64} className="opacity-20 text-orange-600" />
+                <p className="font-bold tracking-widest uppercase text-sm text-slate-500">Select a user to begin remote session</p>
               </div>
             )}
           </div>
