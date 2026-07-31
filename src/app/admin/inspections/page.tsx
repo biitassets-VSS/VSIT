@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
   Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
-  X, Image as ImageIcon, History, FilterX, ExternalLink, Settings,
+  X, Image as ImageIcon, History as HistoryIcon, FilterX, ExternalLink, Settings,
   Bell, Send, ShieldCheck, Check, AlertTriangle
 } from 'lucide-react';
 
@@ -26,31 +26,10 @@ function AdminInspectionReviewContent() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [sendingAlertId, setSendingAlertId] = useState<string | null>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // 🌟 REAL-TIME GLOBAL THEME LISTENER (FIXES WHITE SEARCH BAR & NAVBAR SYNC!)
   useEffect(() => {
-    const checkTheme = () => {
-      const savedTheme = localStorage.getItem('vsit_theme');
-      const isDark = savedTheme === 'dark' || document.documentElement.classList.contains('dark');
-      setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    };
-
-    checkTheme();
-    window.addEventListener('storage', checkTheme);
-    const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
+    document.documentElement.classList.remove('dark'); // Enforce light glass theme
     fetchVerificationLedger();
-    return () => {
-      window.removeEventListener('storage', checkTheme);
-      observer.disconnect();
-    };
   }, []);
 
   useEffect(() => {
@@ -93,23 +72,25 @@ function AdminInspectionReviewContent() {
       rawInspections.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
         
+        // 🌟 CRITICAL FIX: Only match the profile of the person who actually submitted the record. 
+        // We DO NOT fall back to `matchedAsset.assigned_to` here, as that breaks historical integrity when reassigned.
         const matchedProfile = profilesData.find(p => 
           (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
           (insp.inspected_by && String(p.id) === String(insp.inspected_by)) ||
-          (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase()) ||
-          (matchedAsset.assigned_to && String(p.id) === String(matchedAsset.assigned_to))
-        ) || {};
+          (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase())
+        );
 
         processedAssetIds.add(String(matchedAsset.id));
         const itemIdentifier = insp.id || `insp-${insp.asset_id}-${idx}-${Date.now()}`;
         
-        const isProfileAdmin = 
+        const isProfileAdmin = matchedProfile && (
           matchedProfile.role?.toLowerCase() === 'admin' || 
           matchedProfile.user_type?.toLowerCase() === 'admin' || 
           matchedProfile.is_admin === true ||
           String(matchedProfile.emp_code || '').toUpperCase() === 'ADMIN' ||
           String(matchedProfile.emp_code || '').toUpperCase() === 'SYS' ||
-          String(matchedProfile.emp_code || '').toUpperCase().startsWith('ADM');
+          String(matchedProfile.emp_code || '').toUpperCase().startsWith('ADM')
+        );
 
         const inspByLower = String(insp.inspected_by || '').toLowerCase().trim();
         const emailLower = String(insp.user_email || '').toLowerCase().trim();
@@ -125,11 +106,12 @@ function AdminInspectionReviewContent() {
           statusLower === 'stock intake';
 
         const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
-        const isUnmappedAdminAction = !matchedProfile.id && (!!insp.user_email || !!insp.inspected_by) && 
+        const isUnmappedAdminAction = !matchedProfile && (!!insp.user_email || !!insp.inspected_by) && 
           (isSystemOrAdminKeyword || photosArray.length === 0);
 
         const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
 
+        // Recover name from notes or email if profile is missing
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
         if (!recoveredName && insp.notes) {
           const match = insp.notes.match(/by\s+(.*?)\s+on/i);
@@ -151,12 +133,19 @@ function AdminInspectionReviewContent() {
           if (normalizedStatus === 'Pending' || !insp.status) {
             normalizedStatus = 'Admin Update';
           }
+        } else if (matchedProfile) {
+          finalName = matchedProfile.full_name || matchedProfile.name;
+          finalEmpCode = matchedProfile.emp_code || insp.emp_code;
         } else {
-          isDeletedUser = !matchedProfile.id && (!!insp.user_email || !!insp.inspected_by);
-          finalName = matchedProfile.full_name || matchedProfile.name || recoveredName || (isDeletedUser ? 'Former Staff' : 'Unassigned Staff');
-          
-          const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(insp.inspected_by || '');
-          finalEmpCode = (!isUuid && insp.inspected_by && insp.inspected_by !== 'ARCHIVED') ? insp.inspected_by : (matchedProfile.emp_code || insp.emp_code || (isDeletedUser ? 'ARCHIVED' : 'NO-EMP-RECORD'));
+          // 🌟 REMOVED USER DETECTED: A record exists, but the profile is gone from the database
+          if (insp.inspected_by || insp.user_email) {
+            isDeletedUser = true;
+            finalName = recoveredName || 'Deactivated Staff';
+            finalEmpCode = insp.emp_code || 'REMOVED-ID';
+          } else {
+            finalName = 'Unassigned Staff';
+            finalEmpCode = 'NO-EMP-RECORD';
+          }
         }
 
         masterLedger.push({
@@ -164,7 +153,7 @@ function AdminInspectionReviewContent() {
           id: itemIdentifier,
           is_submission: !isAdminAction,
           is_admin_action: isAdminAction,
-          staff_id: matchedProfile.id || insp.inspected_by,
+          staff_id: matchedProfile?.id || insp.inspected_by, // Retain for audit history
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
           category: matchedAsset.category || 'Laptop', 
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
@@ -214,10 +203,9 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // 🌟 ONE-CLICK DIRECT STAFF AUDIT REMINDER & RE-INSPECTION ALERT ENGINE
   const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, isReInspection: boolean = false) => {
-    if (!staffId || staffId.includes('ARCHIVED') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN')) {
-      return alert("Cannot send alert: No valid employee profile ID attached to this record.");
+    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN')) {
+      return alert("Cannot send alert: No valid active employee profile ID attached to this record.");
     }
 
     setSendingAlertId(staffId);
@@ -232,7 +220,7 @@ function AdminInspectionReviewContent() {
         title: title,
         message: message,
         is_read: false,
-        type: isReInspection ? 'warning' : 'alert'
+        type: isReInspection ? 'warning' : 'info'
       }]);
 
       if (error) throw error;
@@ -244,8 +232,7 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // 🌟 EXECUTE VERDICT
-  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string) => {
+  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string, isDeletedUser: boolean) => {
     if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
 
     let remarks = '';
@@ -283,7 +270,8 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      if (staffId && !staffId.includes('ARCHIVED') && !staffId.includes('NO-EMP-RECORD') && !staffId.includes('ADMIN')) {
+      // Only alert if the staff member is still active
+      if (staffId && !isDeletedUser && !staffId.includes('ADMIN')) {
         try {
           await supabase.from('notifications').insert([{
             target_user: staffId,
@@ -292,9 +280,7 @@ function AdminInspectionReviewContent() {
             is_read: false,
             type: verdict === 'Approved' ? 'success' : 'warning'
           }]);
-        } catch (notifError) {
-          console.warn("Non-fatal notification error:", notifError);
-        }
+        } catch (notifError) {}
       }
 
       setInspections(prev => prev.map(item => 
@@ -345,26 +331,6 @@ function AdminInspectionReviewContent() {
     return (st === 'pending' || st === 'awaiting staff action') && !item.is_admin_action;
   }).length;
 
-  const theme = {
-    bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
-    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
-    textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
-    cardHover: isDarkMode ? 'hover:border-orange-500/60 hover:bg-[#1c1430]' : 'hover:border-orange-400 hover:shadow-lg hover:-translate-y-1',
-    iconBgPrimary: isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600',
-    iconBgPurple: isDarkMode ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700',
-  };
-
-  const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
-    if (isAdminAction) return isDarkMode ? 'text-purple-300 bg-purple-950/60 border-purple-800/60' : 'text-purple-700 bg-purple-50 border-purple-200';
-    const s = (status || '').toLowerCase().trim();
-    if (s === 'approved') return isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    if (s === 're-inspection') return isDarkMode ? 'text-orange-400 bg-orange-500/10 border-orange-500/20 animate-pulse' : 'text-orange-700 bg-orange-50 border-orange-300 animate-pulse';
-    if (s === 'rejected') return isDarkMode ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-rose-700 bg-rose-50 border-rose-200';
-    if (!isSubmission || s.includes('awaiting')) return isDarkMode ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200'; 
-    return isDarkMode ? 'text-orange-300 bg-orange-950/60 border-orange-700/60' : 'text-orange-800 bg-orange-100 border-orange-300'; 
-  };
-
   const calculateNextDueDate = (lastInspectionDate: string, category: string = 'Laptop') => {
     if (!lastInspectionDate) return 'N/A';
     const baseDate = new Date(lastInspectionDate);
@@ -380,25 +346,51 @@ function AdminInspectionReviewContent() {
     router.replace('/admin/inspections'); 
   };
 
+  // 🌟 COOL, MATTE FROSTED GLASS THEME
+  const theme = {
+    bg: 'bg-[#F1F5F9]',
+    card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', 
+    cardHover: 'hover:bg-white/80 hover:border-orange-300 hover:shadow-md hover:-translate-y-1 transition-all duration-300',
+    modalBody: 'bg-[#F8FAFC]/95 backdrop-blur-2xl rounded-3xl border border-white shadow-xl',
+    textMain: 'text-slate-800',
+    textSub: 'text-slate-500',
+  };
+
+  // Neon Glow Outlines
+  const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
+    if (isAdminAction) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
+    const s = (status || '').toLowerCase().trim();
+    if (s === 'approved') return 'bg-transparent border border-emerald-400 text-emerald-600 shadow-[0_0_8px_rgba(52,211,153,0.4)] group-hover:shadow-[0_0_12px_rgba(52,211,153,0.7)]';
+    if (s === 're-inspection') return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.4)] group-hover:shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse';
+    if (s === 'rejected') return 'bg-transparent border border-rose-400 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.4)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.7)]';
+    if (!isSubmission || s.includes('awaiting')) return 'bg-transparent border border-amber-400 text-amber-600 shadow-[0_0_8px_rgba(251,191,36,0.4)] group-hover:shadow-[0_0_12px_rgba(251,191,36,0.7)]'; 
+    return 'bg-transparent border border-slate-400 text-slate-500 shadow-[0_0_8px_rgba(148,163,184,0.3)] group-hover:shadow-[0_0_12px_rgba(148,163,184,0.5)]'; 
+  };
+
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
-      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+      {/* 🌟 SOFT, LOW-OPACITY ORBS */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-225 h-125 pointer-events-none z-0 flex justify-between items-center opacity-30">
+        <div className="w-112.5 h-112.5 bg-[#FFD1B3] rounded-full blur-[120px]"></div>
+        <div className="w-112.5 h-112.5 bg-[#D8B4FE] rounded-full blur-[120px]"></div>
+      </div>
+
+      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
-        {/* Dynamic Header */}
-        <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
+        {/* HEADER */}
+        <div className={`${theme.card} p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
           <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}>
+            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm rounded-2xl text-slate-600 transition-all cursor-pointer`}>
               <ArrowLeft size={18} />
             </button>
             <div>
               <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
-                <h1 className={`text-xl sm:text-3xl font-black tracking-tight ${theme.textMain} flex items-center gap-2`}>
-                  <ShieldCheck className="text-orange-600 dark:text-orange-400 w-6 h-6 shrink-0" />
+                <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
+                  <ShieldCheck className="text-orange-600 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
                   <span>Inspection Command Center</span>
                 </h1>
                 {pendingCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-linear-to-r from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-md shadow-orange-500/20">
+                  <span className="px-3 py-1 bg-orange-600 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-sm">
                     {pendingCount} Action Required
                   </span>
                 )}
@@ -410,31 +402,31 @@ function AdminInspectionReviewContent() {
           <button 
             onClick={fetchVerificationLedger} 
             disabled={loading}
-            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm disabled:opacity-50 hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 ${theme.card} ${theme.textMain} shrink-0`}
+            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0`}
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin text-orange-600' : 'text-purple-600 dark:text-purple-400'} />
+            <RefreshCw size={16} className={loading ? 'animate-spin text-orange-600' : 'text-purple-600'} />
             <span>Sync Database</span>
           </button>
         </div>
 
         {assetFilter && (
-          <div className={`border p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4 ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-orange-50/70 border-orange-200'}`}>
-             <div className={`flex items-center gap-4 ${isDarkMode ? 'text-orange-400' : 'text-orange-900'}`}>
-                <div className={`p-3 border rounded-xl shadow-sm ${isDarkMode ? 'bg-[#18181b] border-orange-500/30 text-orange-400' : 'bg-white border-orange-200/80 text-orange-600'}`}>
-                  <History size={24} />
+          <div className={`border p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 shadow-sm bg-orange-50/70 border-orange-200`}>
+             <div className={`flex items-center gap-4 text-orange-900`}>
+                <div className={`p-3 border rounded-xl shadow-sm bg-white border-orange-200/80 text-orange-600`}>
+                  <HistoryIcon size={24} />
                 </div>
                 <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${isDarkMode ? 'text-orange-500' : 'text-orange-700'}`}>Asset Timeline Filter Active</p>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 text-orange-700`}>Asset Timeline Filter Active</p>
                   <p className="text-sm font-bold">Showing complete historical track record for selected hardware.</p>
                 </div>
              </div>
-             <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-sm cursor-pointer transition-all duration-200 flex items-center justify-center gap-2">
+             <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm cursor-pointer transition-all duration-200 flex items-center justify-center gap-2">
                <FilterX size={16}/> Clear Filter
              </button>
           </div>
         )}
 
-        {/* 🌟 BRAND COLOR NAVIGATION TABS & 100% ADAPTIVE SEARCH BAR (ZERO WHITE BOX IN DARK MODE!) */}
+        {/* TABS & SEARCH */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {[
@@ -451,45 +443,41 @@ function AdminInspectionReviewContent() {
                   key={tab.id} onClick={() => setFilterTab(tab.id as any)}
                   className={`group flex items-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer transition-all duration-200 border ${
                     isActive 
-                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/25 border-orange-600 scale-[1.02]' 
-                      : `${theme.card} ${theme.textSub} hover:text-purple-600 hover:border-purple-300 dark:hover:text-purple-300 dark:hover:border-purple-700`
+                      ? 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border-purple-600' 
+                      : `bg-white/60 border border-slate-200 text-slate-700 hover:bg-white/90 shadow-sm`
                   }`}
                 >
-                  <span className={isActive ? 'text-white' : 'text-purple-500 dark:text-purple-400 group-hover:text-orange-500 transition-colors'}>{tab.icon}</span>
+                  <span className={isActive ? 'text-white' : 'text-purple-600 group-hover:text-purple-700 transition-colors'}>{tab.icon}</span>
                   <span>{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* 🌟 100% ADAPTIVE SEARCH BAR (NO BLINDING WHITE BOX IN DARK MODE!) */}
-          <div 
-            style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
-            className="p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 hover:border-orange-300"
-          >
+          <div className="p-2.5 bg-white/80 border border-slate-200 text-slate-800 focus-within:bg-white focus-within:border-purple-400 focus-within:ring-4 focus-within:ring-purple-500/10 rounded-2xl transition-all shadow-sm flex items-center">
             <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 text-slate-400`} />
               <input 
                 type="text" 
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', colorScheme: isDarkMode ? 'dark' : 'light' }}
-                className="w-full pl-12 pr-4 py-3 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all bg-transparent border-0 shadow-none"
+                className="w-full pl-12 pr-4 py-1.5 text-sm font-semibold outline-none bg-transparent placeholder:text-slate-400"
               />
             </div>
           </div>
         </div>
 
+        {/* LOG GRID */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-10 w-10 border-b-2 ${isDarkMode ? 'border-orange-400' : 'border-orange-600'}`}></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-600"></div>
             <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Fetching Submissions...</span>
           </div>
         ) : filteredList.length === 0 ? (
           <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.card}`}>
-            <ClipboardCheck size={48} className={`mx-auto ${isDarkMode ? 'text-zinc-700' : 'text-purple-200'}`} />
-            <h3 className={`text-base font-black uppercase tracking-widest ${theme.textMain}`}>No Logs Found</h3>
+            <ClipboardCheck size={48} className="mx-auto text-purple-600 opacity-60" />
+            <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Logs Found</h3>
             <p className={`text-xs font-semibold ${theme.textSub}`}>The tracking timeline is clear for these parameters.</p>
           </div>
         ) : (
@@ -506,61 +494,62 @@ function AdminInspectionReviewContent() {
                   id={`inspection-${item.id}`}
                   className={`p-6 md:p-8 rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.card} ${
                     isHighlighted 
-                      ? (isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-purple-950/40!' : 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-50/20!') 
+                      ? 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' 
                       : (isPending && item.is_submission && !item.is_admin_action) 
-                        ? (isDarkMode ? 'border-orange-500/50 shadow-orange-600/10' : 'border-orange-300 shadow-orange-600/5') 
+                        ? 'ring-2 ring-orange-400/50 bg-white/70'
                         : theme.cardHover
                   }`}
                 >
                   {/* Left: Information Workspace Pane */}
-                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
+                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 border-slate-200`}>
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shrink-0 shadow-sm ${
-                        item.is_admin_action ? theme.iconBgPurple : 
-                        item.is_submission ? theme.iconBgPrimary : (isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-100 text-slate-500')
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${
+                        item.is_admin_action ? 'bg-purple-100 text-purple-700 border border-purple-200' : 
+                        item.is_submission ? 'bg-white border border-slate-200 text-orange-600' : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}>
                         {item.is_admin_action ? <Settings size={20} /> : <User size={20} />}
                       </div>
                       <div className="overflow-hidden">
-                        <h3 className={`text-lg font-extrabold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
+                        <div className="flex items-center gap-2">
+                           <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
+                           {/* 🌟 CRITICAL BADGE FOR DELETED USERS IN HISTORY */}
+                           {item.is_deleted_user && (
+                             <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 border border-rose-200 text-rose-700 uppercase tracking-widest shadow-sm">Removed</span>
+                           )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-2xs ${
-                            item.is_admin_action ? (isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800' : 'bg-purple-100 text-purple-900 border border-purple-200') : (isDarkMode ? 'bg-[#18181b] text-zinc-300' : 'bg-slate-100 text-slate-700')
+                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-sm border ${
+                            item.is_admin_action ? 'bg-purple-50 text-purple-900 border-purple-200' : 'bg-white text-slate-700 border-slate-200'
                           }`}>
                             {item.emp_code}
                           </span>
                           {item.is_admin_action && (
-                            <span className="text-[9px] bg-purple-600 text-white px-2 py-0.5 rounded font-black uppercase tracking-widest shadow-2xs">
+                            <span className="text-[9px] bg-purple-600 text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-sm">
                               Admin Action
-                            </span>
-                          )}
-                          {!item.is_admin_action && item.is_deleted_user && (
-                            <span className={`text-[9px] border px-2 py-0.5 rounded font-black uppercase tracking-widest ${isDarkMode ? 'bg-[#18181b] text-zinc-500 border-zinc-700' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                              Former Staff
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    <div className={`p-5 rounded-2xl border space-y-3 shadow-2xs ${isDarkMode ? 'bg-[#0f0a1c]/80 border-purple-900/50' : 'bg-slate-50/80 border-slate-200'}`}>
-                      <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-wider ${theme.textMain}`}>
-                        <Laptop size={14} className="text-orange-600 dark:text-orange-400 shrink-0" />
+                    <div className={`p-5 rounded-2xl border space-y-3 shadow-sm bg-white/60 border-slate-200`}>
+                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
+                        <Laptop size={14} className="text-orange-600 shrink-0" />
                         <button 
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
                           }}
-                          className={`truncate cursor-pointer text-left font-black transition-colors ${isDarkMode ? 'hover:text-orange-400 hover:underline' : 'hover:text-orange-600 hover:underline'}`}
+                          className={`truncate cursor-pointer text-left font-bold transition-colors hover:text-orange-600 hover:underline`}
                           title="View Asset Details"
                         >
                           {item.asset_name}
                         </button>
                       </div>
-                      <div className={`flex justify-between items-center text-[11px] border-t pt-2.5 mt-2.5 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-200/60'}`}>
+                      <div className={`flex justify-between items-center text-[11px] border-t border-slate-200 pt-2.5 mt-2.5`}>
                         <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
-                        <span className={`font-mono font-black ${theme.textMain}`}>{item.serial_number}</span>
+                        <span className={`font-mono font-bold ${theme.textMain}`}>{item.serial_number}</span>
                       </div>
                       <div className="flex justify-between items-center text-[11px]">
                         <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>TAG:</span>
@@ -570,7 +559,7 @@ function AdminInspectionReviewContent() {
                             e.stopPropagation();
                             router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
                           }}
-                          className={`font-mono font-black cursor-pointer flex items-center gap-1 transition-colors ${isDarkMode ? 'text-purple-400 hover:text-purple-300 hover:underline' : 'text-purple-700 hover:text-purple-800 hover:underline'}`}
+                          className={`font-mono font-bold cursor-pointer flex items-center gap-1 transition-colors text-purple-700 hover:text-purple-800 hover:underline`}
                           title="View Asset Details"
                         >
                           {item.asset_tag} <ExternalLink size={10} className="mb-0.5" />
@@ -581,8 +570,8 @@ function AdminInspectionReviewContent() {
                     <div className="space-y-3 text-[12px]">
                       <div className="flex items-center justify-between">
                         <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Clock size={14} className="text-purple-600 dark:text-purple-400" /> 
-                          <span className="text-[10px] font-black uppercase tracking-widest">
+                          <Clock size={14} className="text-purple-600" /> 
+                          <span className="text-[10px] font-bold uppercase tracking-widest">
                             {item.is_submission ? 'Recorded Date' : 'Last Inspection'}
                           </span>
                         </div>
@@ -590,8 +579,8 @@ function AdminInspectionReviewContent() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Calendar size={14} className="text-orange-600 dark:text-orange-400" /> 
-                          <span className="text-[10px] font-black uppercase tracking-widest">Upcoming Due</span>
+                          <Calendar size={14} className="text-orange-600" /> 
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Upcoming Due</span>
                         </div>
                         <span className={`font-bold ${theme.textMain}`}>
                           {calculateNextDueDate(item.created_at, item.category)}
@@ -599,7 +588,6 @@ function AdminInspectionReviewContent() {
                       </div>
                     </div>
 
-                    {/* 🌟 DIRECT ONE-CLICK STAFF AUDIT REMINDER BUTTON */}
                     {canSendReminder && (isPending || item.status === 'Re-Inspection') && (
                       <button
                         type="button"
@@ -607,8 +595,8 @@ function AdminInspectionReviewContent() {
                         onClick={() => sendStaffAuditReminder(item.staff_id, item.asset_name, item.asset_tag, item.status === 'Re-Inspection')}
                         className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 ${
                           item.status === 'Re-Inspection'
-                            ? 'bg-linear-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/20'
-                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20'
+                            ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)]'
+                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)]'
                         }`}
                       >
                         <Send size={14} className={sendingAlertId === item.staff_id ? 'animate-bounce' : ''} />
@@ -620,20 +608,20 @@ function AdminInspectionReviewContent() {
                   {/* Right: Condition & Action Evidence Workspace Pane */}
                   <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <h4 className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Compliance Evaluation Workspace</h4>
-                      <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-2xs w-fit ${getSemanticColor(item.status, item.is_submission, item.is_admin_action)}`}>
+                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Compliance Evaluation Workspace</h4>
+                      <span className={`px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 shadow-sm cursor-default w-fit ${getSemanticColor(item.status, item.is_submission, item.is_admin_action)}`}>
                         {item.status === 'Pending' ? 'Ready For Review' : item.status}
                       </span>
                     </div>
 
                     <div className="space-y-2.5">
-                      <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className="text-orange-600 dark:text-orange-400"/> Photographic Evidence ({photosArray.length})</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className="text-orange-600"/> Photographic Evidence ({photosArray.length})</span>
                       {!item.is_submission ? (
-                        <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 ${isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-amber-200 bg-amber-50/50 text-amber-800'}`}>
+                        <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 border-amber-300 bg-amber-50/50 text-amber-800`}>
                           <Clock size={14} /> Awaiting staff member to upload smartphone verification photos.
                         </div>
                       ) : photosArray.length === 0 ? (
-                        <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 ${isDarkMode ? 'border-purple-900/40 bg-[#0f0a1c] text-purple-300/70' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                        <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 border-slate-200 bg-white/60 text-slate-500`}>
                           <ShieldAlert size={14} /> No graphical assets required or attached to this registry record log.
                         </div>
                       ) : (
@@ -643,12 +631,12 @@ function AdminInspectionReviewContent() {
                               key={idx}
                               type="button"
                               onClick={() => setPreviewPhotoModal(url)}
-                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 ${isDarkMode ? 'border-purple-900/60 hover:border-orange-500' : 'border-slate-200 hover:border-orange-500 bg-slate-50'}`}
+                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 border-slate-200 hover:border-orange-400 bg-white`}
                             >
                               <img src={url} alt={`Evidence Shot ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                              <div className="absolute inset-0 bg-purple-950/75 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-xs">
+                              <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
                                 <Eye size={20} className="mb-1 text-orange-400" />
-                                <span className="text-[9px] font-black uppercase tracking-widest px-1 text-center leading-tight">Shot {idx + 1}</span>
+                                <span className="text-[9px] font-bold uppercase tracking-widest px-1 text-center leading-tight">Shot {idx + 1}</span>
                               </div>
                             </button>
                           ))}
@@ -657,31 +645,31 @@ function AdminInspectionReviewContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>{item.is_admin_action ? 'System Log Notes' : item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
-                      <div className={`p-4 border rounded-2xl text-xs font-medium italic leading-relaxed shadow-inner ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50 text-purple-100' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>{item.is_admin_action ? 'System Log Notes' : item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
+                      <div className={`p-4 border rounded-2xl text-xs font-semibold italic leading-relaxed shadow-sm bg-white border-slate-200 text-slate-800`}>
                         "{item.notes || 'No comments or written declaration provided.'}"
                       </div>
                     </div>
 
                     {item.admin_remarks && (
-                      <div className={`p-4 border rounded-2xl text-xs font-semibold shadow-2xs ${isDarkMode ? 'bg-purple-950/40 border-purple-800/50' : 'bg-purple-50/70 border-purple-100'}`}>
-                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 ${isDarkMode ? 'text-orange-400' : 'text-purple-800'}`}>Administrative Action Remarks:</span>
+                      <div className={`p-4 border rounded-2xl text-xs font-semibold shadow-sm bg-white/80 border-slate-200`}>
+                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 text-purple-700`}>Administrative Action Remarks:</span>
                         <p className={theme.textMain}>"{item.admin_remarks}"</p>
                       </div>
                     )}
 
-                    <div className={`pt-4 border-t mt-auto ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
+                    <div className={`pt-4 border-t mt-auto border-slate-200`}>
                       {item.is_admin_action ? (
-                        <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-2xs ${isDarkMode ? 'bg-purple-950/30 border-purple-800/50' : 'bg-purple-50 border-purple-200'}`}>
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-purple-300' : 'text-purple-900'}`}>System Registry Asset Audit</span>
-                          <div className={`flex items-center gap-1.5 text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                        <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-purple-50/50 border-purple-200`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest text-purple-800`}>System Registry Asset Audit</span>
+                          <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-orange-600`}>
                             <CheckCircle2 size={14} /> Log Sealed Automatically
                           </div>
                         </div>
                       ) : !item.is_submission ? (
-                         <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-2xs ${isDarkMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50/50 border-amber-200/60'}`}>
-                           <span className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>Pending Staff Action</span>
-                           <div className={`flex items-center gap-1.5 text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>
+                         <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-amber-50/50 border-amber-200`}>
+                           <span className={`text-[10px] font-bold uppercase tracking-widest text-amber-800`}>Pending Staff Action</span>
+                           <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700`}>
                              <Clock size={14} /> Waiting on Employee
                            </div>
                          </div>
@@ -690,8 +678,8 @@ function AdminInspectionReviewContent() {
                           <button
                             type="button"
                             disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id)}
-                            className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id, item.is_deleted_user)}
+                            className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(5,150,105,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
                           >
                             <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
                           </button>
@@ -699,8 +687,8 @@ function AdminInspectionReviewContent() {
                           <button
                             type="button"
                             disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id)}
-                            className="flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-orange-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id, item.is_deleted_user)}
+                            className="flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
                           >
                             <RefreshCw size={16} /> Re-Inspect
                           </button>
@@ -708,23 +696,23 @@ function AdminInspectionReviewContent() {
                           <button
                             type="button"
                             disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id)}
-                            className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-rose-600/20 cursor-pointer disabled:opacity-50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id, item.is_deleted_user)}
+                            className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(225,29,72,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
                           >
                             <XCircle size={16} /> Reject
                           </button>
                         </div>
                       ) : (
-                        <div className={`flex items-center justify-between px-5 py-4 border rounded-xl shadow-2xs ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200'}`}>
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Adjudication Complete</span>
-                          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
-                            {item.status === 'Approved' && <CheckCircle2 size={14} className={isDarkMode ? "text-emerald-400" : "text-emerald-700"}/>}
-                            {item.status === 'Re-Inspection' && <RefreshCw size={14} className={isDarkMode ? "text-orange-400" : "text-orange-600"}/>}
-                            {item.status === 'Rejected' && <XCircle size={14} className={isDarkMode ? "text-rose-400" : "text-rose-700"}/>}
+                        <div className={`flex items-center justify-between px-5 py-4 border rounded-xl shadow-sm bg-white border-slate-200`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Adjudication Complete</span>
+                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
+                            {item.status === 'Approved' && <CheckCircle2 size={14} className={"text-emerald-600"}/>}
+                            {item.status === 'Re-Inspection' && <RefreshCw size={14} className={"text-orange-600"}/>}
+                            {item.status === 'Rejected' && <XCircle size={14} className={"text-rose-600"}/>}
                             <span className={
-                              item.status === 'Approved' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-700') : 
-                              item.status === 'Re-Inspection' ? (isDarkMode ? 'text-orange-400' : 'text-orange-700') : 
-                              (isDarkMode ? 'text-rose-400' : 'text-rose-700')
+                              item.status === 'Approved' ? 'text-emerald-700' : 
+                              item.status === 'Re-Inspection' ? 'text-orange-700' : 
+                              'text-rose-700'
                             }>
                               {item.status}
                             </span>
@@ -744,11 +732,11 @@ function AdminInspectionReviewContent() {
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
-              className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-orange-600 text-white rounded-full flex items-center justify-center transition-all cursor-pointer border border-white/20 hover:scale-110 active:scale-95"
+              className="absolute top-6 right-6 w-12 h-12 bg-white/80 hover:bg-white text-slate-800 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg border border-white/80 hover:scale-110 active:scale-95"
             >
               <X size={20} />
             </button>
@@ -757,7 +745,7 @@ function AdminInspectionReviewContent() {
               <img 
                 src={previewPhotoModal} 
                 alt="Hardware High-Res Verification" 
-                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" 
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/60 bg-white/20 p-2" 
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
@@ -772,9 +760,9 @@ function AdminInspectionReviewContent() {
 export default function AdminInspectionReviewPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0b0712] flex flex-col items-center justify-center gap-4 text-slate-400 transition-colors">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
-        <span className="text-[11px] font-black tracking-widest uppercase text-slate-500 dark:text-purple-300">Loading Core Engine...</span>
+      <div className="min-h-screen bg-[#F1F5F9] flex flex-col items-center justify-center gap-4 transition-colors">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-orange-600"></div>
+        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500">Loading Core Engine...</span>
       </div>
     }>
       <AdminInspectionReviewContent />
