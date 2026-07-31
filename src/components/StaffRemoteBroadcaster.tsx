@@ -42,20 +42,33 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const executeAdminCommand = async (cmd: any) => {
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
-        if (cmd.type === 'mousemove') (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-        else if (cmd.type === 'mousedown') (window as any).electronAPI.sendMouseDown(cmd.button);
-        else if (cmd.type === 'mouseup') (window as any).electronAPI.sendMouseUp(cmd.button);
+        if (cmd.type === 'mousemove') {
+          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+        }
+        // 🌟 FIX 1: Force mouse to move to exact spot before clicking to bypass throttle lag
+        else if (cmd.type === 'mousedown') {
+          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+          (window as any).electronAPI.sendMouseDown(cmd.button);
+        }
+        else if (cmd.type === 'mouseup') {
+          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+          (window as any).electronAPI.sendMouseUp(cmd.button);
+        }
         else if (cmd.type === 'keydown') (window as any).electronAPI.sendKeyDown(cmd.key);
         else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
         else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
         else if (cmd.type === 'refresh') (window as any).electronAPI.sendSystemCommand('refresh_app');
+        
+        // 🌟 FIX 2: Clipboard Supabase Fallback Routing
         else if (cmd.type === 'sync_clipboard') {
           if ((window as any).electronAPI.readClipboard) {
             const text = await (window as any).electronAPI.readClipboard();
             if (dataChannelRef.current?.readyState === 'open') {
               dataChannelRef.current.send(JSON.stringify({ type: 'clipboard_data', text }));
-              toast.success("Clipboard securely synced to IT Admin.");
+            } else if (channelRef.current) {
+              channelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
             }
+            toast.success("Clipboard securely synced to IT Admin.");
           }
         }
       } catch (e) {
@@ -71,26 +84,14 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     try {
       let stream;
 
-      // 🌟 THE ULTIMATE FIX: HARDWARE ID CAPTURE (Bypasses Admin Restrictions)
       if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
-        
-        // 1. Get the raw hardware source ID directly from the OS
         const sourceId = await (window as any).electronAPI.getDesktopSourceId();
         if (!sourceId) throw new Error("Hardware Source ID not found.");
-
-        // 2. Force the WebRTC engine to hook the hardware directly, bypassing the web sandbox
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: false, // Keep audio false here to guarantee video doesn't crash
-          video: {
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sourceId
-            }
-          } as any 
+          audio: false,
+          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
         });
-
       } else {
-        // Fallback if tested in a standard Chrome browser instead of the .exe
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       }
 

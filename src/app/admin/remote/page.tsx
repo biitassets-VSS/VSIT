@@ -111,7 +111,6 @@ export default function AdminRemotePage() {
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === 'file_meta') toast(`Receiving file: ${msg.name}...`);
-            // 🌟 NEW: INCOMING CLIPBOARD RECEIVER
             if (msg.type === 'clipboard_data') {
                navigator.clipboard.writeText(msg.text).then(() => {
                  toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
@@ -156,7 +155,14 @@ export default function AdminRemotePage() {
         setIsControlling(true); setSessionStatus('controlling'); toast.success("✅ Staff granted remote control access!");
       }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Staff declined remote control.");
-      }).subscribe(async (status) => {
+      })
+      // 🌟 FIX 2: Supabase Fallback Receiver for Clipboard Data
+      .on('broadcast', { event: 'clipboard_data' }, (payload) => {
+        navigator.clipboard.writeText(payload.payload.text).then(() => {
+          toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
+        });
+      })
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           const pingChannel = supabase.channel(backgroundChannelId);
           pingChannel.subscribe(async (pingStatus) => {
@@ -310,7 +316,7 @@ export default function AdminRemotePage() {
       </div>
       <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
-      <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
+      <div className="w-full max-w-[100rem] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-white border border-white/80 text-orange-600 flex items-center justify-center shadow-sm"><Monitor size={20} /></div>
@@ -426,7 +432,17 @@ export default function AdminRemotePage() {
                             else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); }
                           }, tooltip: isControlling ? "Disable Control" : "Request Control" 
                         },
-                        { icon: <Keyboard size={20} strokeWidth={isKeyboardEnabled ? 2.5 : 2} />, active: isKeyboardEnabled, color: 'text-purple-500 hover:bg-purple-100 hover:text-purple-700', activeClass: 'text-purple-700 bg-white border-[3px] border-purple-600 shadow-lg shadow-purple-600/30 scale-[1.15]', action: () => { if(isControlling) setIsKeyboardEnabled(!isKeyboardEnabled); else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
+                        { 
+                          icon: <Keyboard size={20} strokeWidth={isKeyboardEnabled ? 2.5 : 2} />, active: isKeyboardEnabled, 
+                          color: 'text-purple-500 hover:bg-purple-100 hover:text-purple-700', activeClass: 'text-purple-700 bg-white border-[3px] border-purple-600 shadow-lg shadow-purple-600/30 scale-[1.15]', 
+                          action: () => { 
+                            // 🌟 FIX 3: Keyboard Toggle Notification Added
+                            if(isControlling) { 
+                              setIsKeyboardEnabled(!isKeyboardEnabled); 
+                              toast.success(!isKeyboardEnabled ? "Keyboard Control Enabled ⌨️" : "Keyboard Control Disabled", { id: 'kb' });
+                            } else toast.error("Request control first!"); 
+                          }, tooltip: "Keyboard Input" 
+                        },
                         { icon: <MessageSquare size={20} strokeWidth={isChatOpen ? 2.5 : 2} />, active: isChatOpen, color: 'text-emerald-500 hover:bg-emerald-100 hover:text-emerald-700', activeClass: 'text-emerald-700 bg-white border-[3px] border-emerald-600 shadow-lg shadow-emerald-600/30 scale-[1.15]', action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
                         { icon: <Clipboard size={20} />, active: false, color: 'text-amber-500 hover:bg-amber-100 hover:text-amber-700', action: requestClipboardSync, tooltip: "Sync Clipboard" },
                         { icon: <Volume2 size={20} strokeWidth={isAudioEnabled ? 2.5 : 2} />, active: isAudioEnabled, color: 'text-teal-500 hover:bg-teal-100 hover:text-teal-700', activeClass: 'text-teal-700 bg-white border-[3px] border-teal-600 shadow-lg shadow-teal-600/30 scale-[1.15]', action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
