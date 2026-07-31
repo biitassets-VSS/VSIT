@@ -13,14 +13,16 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+
+  // 🌟 FILE SHARING RECEIVER MEMORY
+  const incomingFileMeta = useRef<any>(null);
+  const fileBuffer = useRef<ArrayBuffer[]>([]);
 
   useEffect(() => {
     if (!staffId) return;
-
-    // Enforce light glass theme locally if needed
     document.documentElement.classList.remove('dark'); 
 
-    // 1. Listen for WebRTC Screen Share Requests from IT Admin
     const signalingChannel = supabase.channel(`webrtc_signaling_${staffId}`)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
         setIncomingRequest({
@@ -38,37 +40,36 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     };
   }, [staffId]);
 
-  // 🌟 HELPER: Translates Admin Web Clicks -> Physical OS Control via preload.js
-  const executeAdminCommand = (cmd: any) => {
-    // Check if running inside Electron and the API is available
+  // 🌟 THE EXECUTION HELPER (Now with Clipboard Sync!)
+  const executeAdminCommand = async (cmd: any) => {
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
-        if (cmd.type === 'mousemove') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-        } 
-        else if (cmd.type === 'mousedown') {
-          (window as any).electronAPI.sendMouseDown(cmd.button);
-        } 
-        else if (cmd.type === 'mouseup') {
-          (window as any).electronAPI.sendMouseUp(cmd.button);
-        } 
-        else if (cmd.type === 'keydown') {
-          (window as any).electronAPI.sendKeyDown(cmd.key);
-        } 
-        else if (cmd.type === 'keyup') {
-          (window as any).electronAPI.sendKeyUp(cmd.key);
-        } 
-        else if (cmd.type === 'scroll') {
-          (window as any).electronAPI.sendScroll(cmd.deltaY);
-        }
-        else if (cmd.type === 'refresh') {
-          (window as any).electronAPI.sendSystemCommand('refresh_app');
+        if (cmd.type === 'mousemove') (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+        else if (cmd.type === 'mousedown') (window as any).electronAPI.sendMouseDown(cmd.button);
+        else if (cmd.type === 'mouseup') (window as any).electronAPI.sendMouseUp(cmd.button);
+        else if (cmd.type === 'keydown') (window as any).electronAPI.sendKeyDown(cmd.key);
+        else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
+        else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
+        else if (cmd.type === 'refresh') (window as any).electronAPI.sendSystemCommand('refresh_app');
+        
+        // 🌟 NEW: CLIPBOARD SYNC
+        else if (cmd.type === 'sync_clipboard') {
+          if ((window as any).electronAPI.readClipboard) {
+            const text = await (window as any).electronAPI.readClipboard();
+            if (dataChannelRef.current?.readyState === 'open') {
+              dataChannelRef.current.send(JSON.stringify({ type: 'clipboard_data', text }));
+              toast.success("Clipboard securely synced to IT Admin.");
+            }
+          }
         }
       } catch (e) {
         console.error("OS execution failed:", e);
       }
     } else {
-      console.warn("Control blocked: User is in a standard web browser, not the Electron App.");
+      // Alert the staff member if they accepted via Chrome instead of the .exe
+      if (['mousemove', 'keydown', 'sync_clipboard'].includes(cmd.type)) {
+         console.warn("Control blocked: User is not in the Electron App.");
+      }
     }
   };
 
@@ -77,11 +78,15 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 Using Electron's desktopCapturer bypass (handled in main process)
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false 
-      });
+      let stream;
+      try {
+        // 🌟 NEW: Attempt to capture Audio + Video for the Admin's Audio toggle
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      } catch (audioErr) {
+        // Fallback if OS blocks audio capture
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        toast('System audio sharing not supported by OS. Video only.', { icon: '🔇' });
+      }
 
       streamRef.current = stream;
 
@@ -90,9 +95,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         toast.error("Screen sharing stopped by user.");
       };
 
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
-      });
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
       peerRef.current = peer;
 
       peer.onconnectionstatechange = () => {
@@ -102,39 +105,62 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         }
       };
 
-      // 🌟 LISTEN FOR ADMIN'S WEBRTC DATA CHANNEL (For Zero-Latency Control & Heartbeats)
+      // 🌟 FILE & DATA RECEIVER
       peer.ondatachannel = (event) => {
         const receiveChannel = event.channel;
+        dataChannelRef.current = receiveChannel;
+
         receiveChannel.onmessage = (e) => {
+          // 1. Handle Standard JSON Commands
           if (typeof e.data === 'string') {
             try {
               const data = JSON.parse(e.data);
               
-              // 1. Pass OS Control commands
-              if (['mousemove', 'mousedown', 'mouseup', 'keydown', 'keyup', 'scroll', 'refresh'].includes(data.type)) {
+              if (['mousemove', 'mousedown', 'mouseup', 'keydown', 'keyup', 'scroll', 'refresh', 'sync_clipboard'].includes(data.type)) {
                 executeAdminCommand(data);
               } 
-              // 2. Bounce back heartbeat to keep firewall open
               else if (data.type === 'ping') {
                 receiveChannel.send(JSON.stringify({ type: 'pong' }));
               }
-            } catch (err) {
-              console.error("Data channel parse error:", err);
+              // 🌟 NEW: File Metadata Receiver
+              else if (data.type === 'file_meta') {
+                incomingFileMeta.current = data;
+                fileBuffer.current = [];
+                toast.loading(`Receiving file: ${data.name}...`);
+              }
+            } catch (err) {}
+          } 
+          // 🌟 NEW: File Chunk ArrayBuffer Receiver
+          else if (e.data instanceof ArrayBuffer) {
+            fileBuffer.current.push(e.data);
+            const currentSize = fileBuffer.current.reduce((acc, chunk) => acc + chunk.byteLength, 0);
+            
+            if (incomingFileMeta.current && currentSize >= incomingFileMeta.current.size) {
+              // Assemble file and trigger download
+              const blob = new Blob(fileBuffer.current, { type: incomingFileMeta.current.fileType });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = incomingFileMeta.current.name;
+              a.click();
+              URL.revokeObjectURL(url);
+              
+              toast.dismiss();
+              toast.success(`File downloaded: ${incomingFileMeta.current.name}`);
+              incomingFileMeta.current = null;
+              fileBuffer.current = [];
             }
           }
         };
       };
 
-      // Add local screen video track to peer connection
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
 
       const sessionChannel = supabase.channel(incomingRequest.channelId);
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
-        }
+        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
@@ -144,26 +170,17 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
           setIsStreaming(true);
           setIncomingRequest(null);
           toast.success("🟢 Live WebRTC Screen Share Established!");
-          
-          // Auto-Accept remote control for enterprise environments
           sessionChannel.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
         }
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload.candidate) {
-          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
-        }
+        if (peer.remoteDescription && payload.payload.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
       }).on('broadcast', { event: 'terminate_session' }, () => {
-        stopSharing();
-        toast("🛑 IT Admin ended the remote session.", { icon: 'ℹ️' });
+        stopSharing(); toast("🛑 IT Admin ended the remote session.", { icon: 'ℹ️' });
       }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
-        stopSharing(); 
-        toast.error("🛑 IT Admin ended the remote support session.");
-      })
-      // 🌟 SUPABASE FALLBACK CONTROL LISTENER (If P2P Network is blocked)
-      .on('broadcast', { event: 'control_command' }, (payload) => {
+        stopSharing(); toast.error("🛑 IT Admin ended the remote support session.");
+      }).on('broadcast', { event: 'control_command' }, (payload) => {
         executeAdminCommand(payload.payload);
-      })
-      .subscribe(async (status) => {
+      }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
@@ -172,33 +189,24 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       });
 
     } catch (err: any) {
-      toast.error(`Screen share cancelled or failed: ${err.message || 'Permission denied'}`);
+      toast.error(`Screen share failed: ${err.message}`);
       setIsConnecting(false);
     }
   };
 
   const stopSharing = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    if (peerRef.current) {
-      peerRef.current.close();
-      peerRef.current = null;
-    }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (channelRef.current) {
       channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
-    setIsStreaming(false);
-    setIsConnecting(false);
-    setIncomingRequest(null);
+    setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null);
   };
 
   return (
     <>
-      {/* 🟢 ACTIVE STREAMING MATTE GLASS BADGE */}
       {isStreaming && (
         <div className="fixed bottom-6 right-6 z-9999 bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
           <div className="flex items-center gap-3">
@@ -214,39 +222,23 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         </div>
       )}
 
-      {/* ⚠️ INCOMING SCREEN SHARE MAC-OS REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white/90 backdrop-blur-3xl border border-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-sm animate-bounce">
               <Monitor size={32} />
             </div>
-            
             <div className="text-center space-y-1.5">
               <h3 className="text-xl font-bold text-slate-900 tracking-tight">Live IT Support Access</h3>
-              <p className="text-sm font-medium text-slate-500">
-                <strong className="text-slate-800">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view and control your screen.
-              </p>
+              <p className="text-sm font-medium text-slate-500"><strong className="text-slate-800">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view and control your screen.</p>
             </div>
-
             <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 flex items-start gap-3 shadow-sm">
               <ShieldAlert size={20} className="shrink-0 text-amber-600 mt-0.5" />
               <p className="leading-relaxed">When prompted by your system, please select <strong className="underline decoration-amber-400">"Entire Screen"</strong> to allow full remote control access.</p>
             </div>
-
             <div className="flex gap-3 pt-2">
-              <button 
-                onClick={() => setIncomingRequest(null)} 
-                disabled={isConnecting} 
-                className="flex-1 py-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all cursor-pointer"
-              >
-                Decline
-              </button>
-              <button 
-                onClick={startScreenShare} 
-                disabled={isConnecting} 
-                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer"
-              >
+              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all cursor-pointer">Decline</button>
+              <button onClick={startScreenShare} disabled={isConnecting} className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer">
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
               </button>
