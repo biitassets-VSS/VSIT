@@ -15,7 +15,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const channelRef = useRef<any>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
 
-  // 🌟 FILE SHARING RECEIVER MEMORY
   const incomingFileMeta = useRef<any>(null);
   const fileBuffer = useRef<ArrayBuffer[]>([]);
 
@@ -40,7 +39,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     };
   }, [staffId]);
 
-  // 🌟 THE EXECUTION HELPER (Now with Clipboard Sync!)
   const executeAdminCommand = async (cmd: any) => {
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
@@ -51,8 +49,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
         else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
         else if (cmd.type === 'refresh') (window as any).electronAPI.sendSystemCommand('refresh_app');
-        
-        // 🌟 NEW: CLIPBOARD SYNC
         else if (cmd.type === 'sync_clipboard') {
           if ((window as any).electronAPI.readClipboard) {
             const text = await (window as any).electronAPI.readClipboard();
@@ -65,11 +61,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       } catch (e) {
         console.error("OS execution failed:", e);
       }
-    } else {
-      // Alert the staff member if they accepted via Chrome instead of the .exe
-      if (['mousemove', 'keydown', 'sync_clipboard'].includes(cmd.type)) {
-         console.warn("Control blocked: User is not in the Electron App.");
-      }
     }
   };
 
@@ -79,13 +70,28 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
 
     try {
       let stream;
-      try {
-        // 🌟 NEW: Attempt to capture Audio + Video for the Admin's Audio toggle
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      } catch (audioErr) {
-        // Fallback if OS blocks audio capture
+
+      // 🌟 THE ULTIMATE FIX: HARDWARE ID CAPTURE (Bypasses Admin Restrictions)
+      if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
+        
+        // 1. Get the raw hardware source ID directly from the OS
+        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
+        if (!sourceId) throw new Error("Hardware Source ID not found.");
+
+        // 2. Force the WebRTC engine to hook the hardware directly, bypassing the web sandbox
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false, // Keep audio false here to guarantee video doesn't crash
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sourceId
+            }
+          } as any 
+        });
+
+      } else {
+        // Fallback if tested in a standard Chrome browser instead of the .exe
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        toast('System audio sharing not supported by OS. Video only.', { icon: '🔇' });
       }
 
       streamRef.current = stream;
@@ -105,24 +111,20 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         }
       };
 
-      // 🌟 FILE & DATA RECEIVER
       peer.ondatachannel = (event) => {
         const receiveChannel = event.channel;
         dataChannelRef.current = receiveChannel;
 
         receiveChannel.onmessage = (e) => {
-          // 1. Handle Standard JSON Commands
           if (typeof e.data === 'string') {
             try {
               const data = JSON.parse(e.data);
-              
               if (['mousemove', 'mousedown', 'mouseup', 'keydown', 'keyup', 'scroll', 'refresh', 'sync_clipboard'].includes(data.type)) {
                 executeAdminCommand(data);
               } 
               else if (data.type === 'ping') {
                 receiveChannel.send(JSON.stringify({ type: 'pong' }));
               }
-              // 🌟 NEW: File Metadata Receiver
               else if (data.type === 'file_meta') {
                 incomingFileMeta.current = data;
                 fileBuffer.current = [];
@@ -130,13 +132,11 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
               }
             } catch (err) {}
           } 
-          // 🌟 NEW: File Chunk ArrayBuffer Receiver
           else if (e.data instanceof ArrayBuffer) {
             fileBuffer.current.push(e.data);
             const currentSize = fileBuffer.current.reduce((acc, chunk) => acc + chunk.byteLength, 0);
             
             if (incomingFileMeta.current && currentSize >= incomingFileMeta.current.size) {
-              // Assemble file and trigger download
               const blob = new Blob(fileBuffer.current, { type: incomingFileMeta.current.fileType });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
@@ -208,7 +208,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   return (
     <>
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-9999 bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
+        <div className="fixed bottom-6 right-6 z-[9999] bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)] shrink-0" />
             <div>
@@ -223,7 +223,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       )}
 
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white/90 backdrop-blur-3xl border border-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-sm animate-bounce">
               <Monitor size={32} />
