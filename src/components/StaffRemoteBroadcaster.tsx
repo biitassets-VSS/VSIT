@@ -60,9 +60,12 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         else if (cmd.type === 'sync_clipboard') {
           if ((window as any).electronAPI.readClipboard) {
             const text = await (window as any).electronAPI.readClipboard();
+            // Try UDP Data Channel First
             if (dataChannelRef.current?.readyState === 'open') {
               dataChannelRef.current.send(JSON.stringify({ type: 'clipboard_data', text }));
-            } else if (channelRef.current) {
+            } 
+            // Fallback to Supabase
+            else if (channelRef.current) {
               channelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
             }
             toast.success("Clipboard securely synced to IT Admin.");
@@ -79,19 +82,8 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      let stream;
-
-      if (typeof window !== 'undefined' && (window as any).electronAPI && (window as any).electronAPI.getDesktopSourceId) {
-        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
-        if (!sourceId) throw new Error("Hardware Source ID not found.");
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } as any 
-        });
-      } else {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      }
-
+      // 🌟 THE FIX: Clean standard API. Electron's main.js will perfectly intercept this.
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       streamRef.current = stream;
 
       stream.getVideoTracks()[0].onended = () => {
@@ -102,7 +94,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
       peerRef.current = peer;
 
-      // 🌟 THE FIX: DO NOT TERMINATE SESSION ON WEBRTC FAILURE. Let Supabase Fallback take over!
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed') {
           toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });

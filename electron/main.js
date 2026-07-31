@@ -1,19 +1,18 @@
-// electron/main.js
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 THE FIX: PREVENT CHROMIUM SANDBOX CRASH IN WINDOWS ADMIN MODE
+// Bypass Chromium Sandbox for Administrator Mode
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 
-// Native getUserMedia bypass flags
+// Native WebRTC Flags
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-media-stream');
 
-// Fix nut.js freezing
+// Remove forced delays for instant mouse control
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 5000;
 
@@ -36,40 +35,28 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
-  // 🌟 SET DISPLAY MEDIA HANDLER
+  // 🌟 THE FIX: Clean Media Interceptor (Safe for Admin Mode)
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false })
+    desktopCapturer.getSources({ types: ['screen'] })
       .then((sources) => {
-        if (sources.length > 0) {
-          // 'loopback' enables Windows System Audio capture!
-          callback({ video: sources[0], audio: 'loopback' }); 
+        if (sources && sources.length > 0) {
+          // Pass video only. Audio loopback removed to prevent Admin-mode crash.
+          callback({ video: sources[0] }); 
         } else {
-          console.error("No desktop sources found.");
           callback();
         }
       })
       .catch((err) => {
-        console.error("Display media request failed:", err);
+        console.error("Capture failed:", err);
         callback();
       });
   });
 
-  // 🌟 PERMISSION APPROVALS
   session.defaultSession.setPermissionCheckHandler(() => true);
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
 }
 
 app.whenReady().then(createWindow);
-
-ipcMain.handle('get-desktop-source-id', async () => {
-  try {
-    const sources = await desktopCapturer.getSources({ types: ['screen'] });
-    if (sources.length > 0) return sources[0].id;
-    return null;
-  } catch (e) {
-    return null;
-  }
-});
 
 // -------------------------------------------------------------
 // 🎮 OS CONTROL LISTENERS 
