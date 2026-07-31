@@ -123,7 +123,7 @@ export default function StaffLoginPage() {
       {/* 🌟 BOTTOM LEFT: Increased scale for the desktop app button */}
       <div className="absolute bottom-6 left-6 z-20">
         <a 
-          href="/downloads/VSIT-Desktop-App.exe" 
+          href="https://github.com/biitassets-VSS/VSIT/releases/download/v0.1.0/Virtual.Staffing.Portal.Setup.0.1.0.exe" 
           download
           className="flex items-center gap-2.5 px-6 py-4 bg-white/50 backdrop-blur-2xl border border-white/80 text-purple-800 rounded-2xl text-sm font-bold transition-all hover:bg-white/80 hover:scale-105 shadow-md cursor-pointer"
         >
