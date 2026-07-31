@@ -8,7 +8,8 @@ import {
   ArrowLeft, ArrowRightLeft, CheckCircle2, XCircle, Clock, 
   Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
   X, History as HistoryIcon, FilterX, ExternalLink, Settings, Send, 
-  ShieldCheck, Check, AlertTriangle, Package, Monitor, ArrowRight
+  ShieldCheck, Check, AlertTriangle, Package, Monitor, ArrowRight,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 
 // Safe date formatter
@@ -78,14 +79,32 @@ function AdminReplacementsContent() {
       const { data: pendingAssets } = await supabase.from('assets').select('*').eq('status', 'Replacement Requested');
       const pendUserIds = [...new Set(pendingAssets?.map(a => a.assigned_to).filter(Boolean))];
       let pendProfiles: any[] = [];
+      
       if (pendUserIds.length > 0) {
         const { data: profs } = await supabase.from('profiles').select('*').in('id', pendUserIds);
         pendProfiles = profs || [];
       }
-      const compiledPending = (pendingAssets || []).map(asset => ({
-        ...asset, 
-        user_profile: pendProfiles.find(p => p.id === asset.assigned_to) || null
-      }));
+      
+      // 🌟 UPDATED PENDING LOGIC: Detect Deactivated Users
+      const compiledPending = (pendingAssets || []).map(asset => {
+        const profile = pendProfiles.find(p => p.id === asset.assigned_to) || null;
+        let staffName = profile?.full_name || profile?.name || '';
+        let isRemoved = false;
+
+        if (!staffName && asset.assigned_to) {
+          staffName = 'Deactivated Staff';
+          isRemoved = true;
+        } else if (!staffName) {
+          staffName = 'Unassigned';
+        }
+
+        return {
+          ...asset, 
+          user_profile: profile,
+          display_name: staffName,
+          is_removed: isRemoved
+        };
+      });
       setPendingRequests(compiledPending);
 
       // 2. Fetch Available Inventory (In Stock Unassigned)
@@ -99,17 +118,41 @@ function AdminReplacementsContent() {
         .select('*, assets(*)')
         .in('status', ['Replacement Approved', 'Replacement Rejected'])
         .order('created_at', { ascending: false });
+        
       const histUserIds = [...new Set(historyInsps?.map(i => i.inspected_by).filter(Boolean))];
       let histProfiles: any[] = [];
       if (histUserIds.length > 0) {
         const { data: p } = await supabase.from('profiles').select('*').in('id', histUserIds);
         histProfiles = p || [];
       }
-      const compiledHistory = (historyInsps || []).map(insp => ({
-        ...insp, 
-        user_profile: histProfiles.find(p => p.id === insp.inspected_by) || null
-      }));
+      
+      // 🌟 UPDATED HISTORY LOGIC: Smart Detection of Admin actions vs Deleted Users
+      const compiledHistory = (historyInsps || []).map(insp => {
+        const profile = histProfiles.find(p => p.id === insp.inspected_by) || null;
+        let staffName = profile?.full_name || profile?.name || '';
+        let isRemoved = false;
+        let isAdmin = false;
+
+        if (!staffName) {
+          if (insp.inspected_by) {
+            staffName = 'Deactivated Staff';
+            isRemoved = true;
+          } else {
+            staffName = 'System Administrator';
+            isAdmin = true;
+          }
+        }
+
+        return {
+          ...insp, 
+          user_profile: profile,
+          display_name: staffName,
+          is_removed: isRemoved,
+          is_admin: isAdmin
+        };
+      });
       setHistoryRequests(compiledHistory);
+      
     } catch (error: any) {
       console.error('Error syncing replacement records:', error);
       toast.error('Failed to sync replacement ledger.');
@@ -119,7 +162,9 @@ function AdminReplacementsContent() {
   };
 
   const sendStaffAlert = async (staffId: string, assetName: string, tagId: string) => {
-    if (!staffId) return alert("Cannot send alert: No valid employee profile ID attached to this record.");
+    if (!staffId || staffId.includes('EMP-UNKNOWN')) {
+      return alert("Cannot send alert: No valid employee profile ID attached to this record.");
+    }
 
     setSendingAlertId(staffId);
     try {
@@ -237,34 +282,26 @@ function AdminReplacementsContent() {
 
   const filteredPending = pendingRequests.filter(item => {
     const query = searchQuery.toLowerCase();
-    const staffName = (item.user_profile?.full_name || item.user_profile?.name || '').toLowerCase();
+    const staffName = (item.display_name || '').toLowerCase();
     const empCode = (item.user_profile?.emp_code || '').toLowerCase();
     return staffName.includes(query) || empCode.includes(query) || (item.name || '').toLowerCase().includes(query) || (item.serial_number || '').toLowerCase().includes(query) || (item.asset_tag || '').toLowerCase().includes(query);
   });
 
   const filteredHistory = historyRequests.filter(item => {
     const query = searchQuery.toLowerCase();
-    const staffName = (item.user_profile?.full_name || item.user_profile?.name || '').toLowerCase();
+    const staffName = (item.display_name || '').toLowerCase();
     const empCode = (item.user_profile?.emp_code || '').toLowerCase();
     return staffName.includes(query) || empCode.includes(query) || (item.assets?.name || '').toLowerCase().includes(query) || (item.assets?.serial_number || '').toLowerCase().includes(query);
   });
 
-  // 🌟 COOL, MATTE FROSTED GLASS THEME (Lower Brightness/Whiteness)
+  // 🌟 COOL, MATTE FROSTED GLASS THEME
   const theme = {
-    bg: 'bg-[#F1F5F9]', // Cooler, muted slate background
-    card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', // Opaque enough to read, translucent enough for depth
+    bg: 'bg-[#F1F5F9]',
+    card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', 
     cardHover: 'hover:bg-white/80 hover:border-orange-300 hover:shadow-md hover:-translate-y-1 transition-all duration-300',
     modalBody: 'bg-[#F8FAFC]/95 backdrop-blur-2xl rounded-3xl border border-white shadow-xl',
     textMain: 'text-slate-800',
     textSub: 'text-slate-500',
-  };
-
-  const getSemanticBadge = (status: string) => {
-    const s = safeString(status).toLowerCase();
-    if (s.includes('approved') || s.includes('restocked')) return 'bg-transparent border border-emerald-400 text-emerald-600 shadow-[0_0_8px_rgba(52,211,153,0.4)] group-hover:shadow-[0_0_12px_rgba(52,211,153,0.7)]';
-    if (s.includes('rejected')) return 'bg-transparent border border-rose-400 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.4)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.7)]';
-    if (s.includes('replace') || s.includes('requested')) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
-    return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.4)] group-hover:shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse';
   };
 
   return (
@@ -361,17 +398,18 @@ function AdminReplacementsContent() {
             <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Fetching Hardware Handovers...</span>
           </div>
         ) : activeTab === 'pending' ? (
+          /* PENDING REQUESTS TAB */
           filteredPending.length === 0 ? (
             <div className={`w-full py-24 text-center flex flex-col items-center justify-center space-y-3 ${theme.card}`}>
               <Monitor size={48} className="mx-auto text-orange-600 opacity-60" />
               <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Pending Replacement Requests</h3>
-              <p className={`text-xs font-semibold ${theme.textSub}`}>All device swap requests have been processed.</p>
+              <p className={`text-xs font-semibold ${theme.textSub}`}>All device swap requests have been processed or none have been requested.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredPending.map((request, index) => {
-                const staffName = request.user_profile?.full_name || request.user_profile?.name || 'Unassigned Staff';
-                const staffEmpCode = request.user_profile?.emp_code || request.user_profile?.emp_id || 'NO-ID';
+                const staffName = request.display_name;
+                const staffEmpCode = request.user_profile?.emp_code || request.user_profile?.emp_id || (request.is_removed ? 'REMOVED' : 'NO-ID');
 
                 return (
                   <div 
@@ -410,7 +448,12 @@ function AdminReplacementsContent() {
                         </div>
                         <div className="overflow-hidden">
                           <span className={`text-[9px] font-bold uppercase tracking-widest block ${theme.textSub}`}>Requested By</span>
-                          <p className={`text-sm font-bold truncate ${theme.textMain}`}>{staffName}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {request.is_removed && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-700 border border-rose-200 uppercase tracking-widest">Deactivated</span>
+                            )}
+                            <p className={`text-sm font-bold truncate ${theme.textMain}`}>{staffName}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -418,14 +461,14 @@ function AdminReplacementsContent() {
                     <div className="space-y-3 pt-4 border-t border-slate-200 mt-auto">
                       <button 
                         onClick={() => openSwapModal(request)} 
-                        className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(168,85,247,0.3)] transition-all cursor-pointer"
+                        className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer"
                       >
                         <ArrowRightLeft size={16} /> Process Swap & Assign New
                       </button>
 
                       <button
                         type="button"
-                        disabled={sendingAlertId === request.assigned_to}
+                        disabled={sendingAlertId === request.assigned_to || request.is_removed}
                         onClick={() => sendStaffAlert(request.assigned_to, request.name, request.asset_tag)}
                         className={`w-full py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50`}
                       >
@@ -439,6 +482,7 @@ function AdminReplacementsContent() {
             </div>
           )
         ) : (
+          /* PROCESSED HISTORY TAB */
           filteredHistory.length === 0 ? (
             <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.card}`}>
               <HistoryIcon size={48} className="mx-auto text-purple-600 opacity-60" />
@@ -448,14 +492,14 @@ function AdminReplacementsContent() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredHistory.map((record, index) => {
-                const staffName = record.user_profile?.full_name || record.user_profile?.name || 'Unknown User';
+                const staffName = record.display_name;
                 const isApproved = record.status === 'Replacement Approved';
                 const processDate = record.created_at ? new Date(record.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Date';
 
                 return (
                   <div 
                     key={`history-${record.id}-${index}`} 
-                    className={`p-6 md:p-8 flex flex-col justify-between gap-6 ${theme.card} ${theme.cardHover}`}
+                    className={`p-6 md:p-8 flex flex-col justify-between gap-6 transition-all duration-300 ${theme.card} ${theme.cardHover}`}
                   >
                     <div className="space-y-4">
                       <div className="flex justify-between items-start">
@@ -481,9 +525,17 @@ function AdminReplacementsContent() {
                     <div className={`pt-4 border-t border-slate-200 flex items-center justify-between text-xs mt-auto`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
                         <User size={14} className="text-purple-600" />
-                        <span>Requested by:</span>
+                        <span>{record.is_admin ? 'Executed by:' : 'Requested by:'}</span>
                       </div>
-                      <strong className={theme.textMain}>{staffName}</strong>
+                      <div className="flex items-center gap-2">
+                        {record.is_removed && (
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 border border-rose-200 text-rose-700 uppercase tracking-widest shadow-sm">Removed</span>
+                        )}
+                        {record.is_admin && (
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-purple-100 border border-purple-200 text-purple-700 uppercase tracking-widest shadow-sm">IT Admin</span>
+                        )}
+                        <strong className={theme.textMain}>{staffName}</strong>
+                      </div>
                     </div>
                   </div>
                 );
