@@ -7,7 +7,7 @@ import {
   ArrowLeft, RotateCcw, CheckCircle2, XCircle, Clock, 
   Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
   X, Image as ImageIcon, History as HistoryIcon, FilterX, ExternalLink, Settings,
-  Send, ShieldCheck, Check, AlertTriangle, Package, CornerDownLeft
+  Send, ShieldCheck, Check, AlertTriangle, Package, CornerDownLeft, ChevronUp, ChevronDown, Download, Printer
 } from 'lucide-react';
 
 function AdminAssetReturnsContent() {
@@ -46,16 +46,19 @@ function AdminAssetReturnsContent() {
 
       rawReturns.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
+        
+        // 🌟 CRITICAL FIX: We ONLY match the profile against the person who created the inspection record.
+        // We NEVER look at `matchedAsset.assigned_to` because that changes when the asset is given to a new user.
         const matchedProfile = profilesData.find(p => 
           (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
           (insp.inspected_by && String(p.id) === String(insp.inspected_by)) ||
-          (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase()) ||
-          (matchedAsset.assigned_to && String(p.id) === String(matchedAsset.assigned_to))
-        ) || {};
+          (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase())
+        );
 
         const itemIdentifier = insp.inspection_id || insp.uuid || insp.id || `return-${insp.asset_id}-${idx}-${Date.now()}`;
         const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
 
+        // Try to recover the name from historical text if the profile was deleted
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name;
         if (!recoveredName && insp.notes) {
           const match = insp.notes.match(/by\s+(.*?)\s+on/i);
@@ -65,9 +68,24 @@ function AdminAssetReturnsContent() {
           recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
 
-        const finalName = matchedProfile.full_name || matchedProfile.name || recoveredName || 'Unassigned Staff';
-        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(insp.inspected_by || '');
-        const finalEmpCode = (!isUuid && insp.inspected_by) ? insp.inspected_by : (matchedProfile.emp_code || insp.emp_code || 'EMP-UNKNOWN');
+        let isRemoved = false;
+        let finalName = '';
+        let finalEmpCode = '';
+
+        if (matchedProfile) {
+          finalName = matchedProfile.full_name || matchedProfile.name;
+          finalEmpCode = matchedProfile.emp_code;
+        } else {
+          // If no active profile is found, they were deleted or it was an admin action.
+          if (insp.inspected_by) {
+            isRemoved = true;
+            finalName = recoveredName || 'Deactivated Staff';
+            finalEmpCode = insp.emp_code || 'REMOVED-ID';
+          } else {
+            finalName = recoveredName || 'System Administrator';
+            finalEmpCode = 'ADMIN';
+          }
+        }
 
         const sLower = (insp.status || '').toLowerCase();
         let isProcessed = sLower.includes('approved') || sLower.includes('rejected') || sLower.includes('restocked') || sLower.includes('completed');
@@ -75,13 +93,14 @@ function AdminAssetReturnsContent() {
         masterLedger.push({
           ...insp,
           id: itemIdentifier,
-          staff_id: matchedProfile.id || insp.inspected_by,
+          staff_id: matchedProfile?.id || insp.inspected_by, // Keep original ID even if deleted for audit
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Hardware',
           category: matchedAsset.category || 'Laptop', 
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
           asset_tag: matchedAsset.asset_tag || 'NO-TAG',
           staff_name: finalName,
           emp_code: finalEmpCode,
+          is_removed: isRemoved,
           is_processed: isProcessed,
           status: insp.status || 'Pending Return Review',
           photos: photosArray
@@ -97,8 +116,8 @@ function AdminAssetReturnsContent() {
   };
 
   const sendStaffAlert = async (staffId: string, assetName: string, tagId: string, customMessage?: string) => {
-    if (!staffId || staffId.includes('EMP-UNKNOWN') || staffId.includes('ADMIN')) {
-      return alert("Cannot send alert: No valid employee profile ID attached to this record.");
+    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('ADMIN')) {
+      return alert("Cannot send alert: No valid active employee profile ID attached to this record.");
     }
 
     setSendingAlertId(staffId);
@@ -186,7 +205,8 @@ function AdminAssetReturnsContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      if (staffId && !staffId.includes('EMP-UNKNOWN') && !staffId.includes('ADMIN')) {
+      // Only send notification if the user wasn't deleted
+      if (staffId && !item.is_removed && !staffId.includes('ADMIN')) {
         try {
           await supabase.from('notifications').insert([{
             target_user: staffId,
@@ -204,7 +224,7 @@ function AdminAssetReturnsContent() {
         (r.id === returnId) ? { ...r, status: targetStatus, admin_remarks: remarks || r.admin_remarks, is_processed: true } : r
       ));
 
-      alert(`Success: ${action} executed. Notification sent to employee dashboard.`);
+      alert(`Success: ${action} executed.`);
     } catch (err: any) {
       alert(`Error processing return: ${err.message}`);
     } finally {
@@ -239,7 +259,7 @@ function AdminAssetReturnsContent() {
     const s = (status || '').toLowerCase();
     if (s.includes('approved') || s.includes('restocked')) return 'bg-transparent border border-emerald-400 text-emerald-600 shadow-[0_0_8px_rgba(52,211,153,0.4)] group-hover:shadow-[0_0_12px_rgba(52,211,153,0.7)]';
     if (s.includes('rejected')) return 'bg-transparent border border-rose-400 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.4)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.7)]';
-    if (s.includes('replace')) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
+    if (s.includes('replace') || s.includes('requested')) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
     return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.4)] group-hover:shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse';
   };
 
@@ -265,7 +285,7 @@ function AdminAssetReturnsContent() {
             </button>
             <div>
               <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
-                <h1 className={`text-xl sm:text-2xl font-black tracking-tight ${theme.textMain} flex items-center gap-2`}>
+                <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
                   <RotateCcw className="text-orange-600 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
                   <span>Asset Returns</span>
                 </h1>
@@ -337,7 +357,7 @@ function AdminAssetReturnsContent() {
         ) : filteredList.length === 0 ? (
           <div className={`${theme.card} w-full py-24 text-center flex flex-col items-center justify-center space-y-3`}>
             <Package size={48} className="mx-auto text-orange-600 opacity-80" />
-            <h3 className={`text-base font-black uppercase tracking-widest ${theme.textMain}`}>
+            <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>
               {activeTab === 'pending' ? 'No Pending Return Requests' : 'No Processed History Found'}
             </h3>
             <p className={`text-xs font-semibold ${theme.textSub}`}>
@@ -357,11 +377,17 @@ function AdminAssetReturnsContent() {
                   {/* Left: Employee Custody & Hardware Info */}
                   <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r border-white/60 pb-6 xl:pb-0 xl:pr-8`}>
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shrink-0 bg-white/80 border border-white/80 text-orange-600 shadow-sm`}>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-white/80 border border-white/80 text-orange-600 shadow-sm`}>
                         <User size={20} />
                       </div>
                       <div className="overflow-hidden">
-                        <h3 className={`text-lg font-black leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
+                        {/* 🌟 Fixed Name Block */}
+                        <div className="flex items-center gap-2">
+                           <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
+                           {item.is_removed && (
+                             <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 border border-rose-200 text-rose-700 uppercase tracking-widest shadow-sm">Removed</span>
+                           )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md bg-white border border-white/80 text-slate-700 shadow-sm`}>
                             {item.emp_code}
@@ -414,7 +440,7 @@ function AdminAssetReturnsContent() {
                     {!item.is_processed && (
                       <button
                         type="button"
-                        disabled={sendingAlertId === item.staff_id}
+                        disabled={sendingAlertId === item.staff_id || item.is_removed}
                         onClick={() => sendStaffAlert(item.staff_id, item.asset_name, item.asset_tag)}
                         className="w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_4px_15px_rgba(168,85,247,0.3)] bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
                       >
