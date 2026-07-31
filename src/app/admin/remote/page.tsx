@@ -10,23 +10,11 @@ import {
   Ban, MessageSquare, Send, X, Maximize, Minimize, GripVertical
 } from 'lucide-react';
 
-interface StaffMember {
-  id: string; name?: string; full_name?: string; email: string; emp_code?: string; department?: string; is_online?: boolean; assigned_asset_name?: string;
-}
-
-interface ChatMessage {
-  sender: string; text: string; time: string; isSelf: boolean;
-}
-
+interface StaffMember { id: string; name?: string; full_name?: string; email: string; emp_code?: string; department?: string; is_online?: boolean; assigned_asset_name?: string; }
+interface ChatMessage { sender: string; text: string; time: string; isSelf: boolean; }
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-const iceServers = [
-  { urls: 'stun:stun.l.google.com:19302' }, 
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun.services.mozilla.com' }
-];
+const iceServers = [ { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' } ];
 
 export default function AdminRemotePage() {
   const router = useRouter();
@@ -62,7 +50,6 @@ export default function AdminRemotePage() {
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   
-  // 🌟 ANTI-DISCONNECT & MOUSE THROTTLE REFS
   const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMoveTimeRef = useRef<number>(0);
 
@@ -83,9 +70,7 @@ export default function AdminRemotePage() {
   const loadStaffAndAdminData = async () => {
     try {
       const [{ data: profiles }, { data: assets }] = await Promise.all([ supabase.from('profiles').select('*'), supabase.from('assets').select('name, assigned_to') ]);
-      if (profiles) {
-        setStaffList(profiles.map((p: any) => ({ ...p, assigned_asset_name: (assets || []).find(a => a.assigned_to === p.id)?.name || 'Unassigned PC' })));
-      }
+      if (profiles) setStaffList(profiles.map((p: any) => ({ ...p, assigned_asset_name: (assets || []).find(a => a.assigned_to === p.id)?.name || 'Unassigned PC' })));
     } catch (error) {} finally { setLoading(false); }
   };
 
@@ -126,6 +111,12 @@ export default function AdminRemotePage() {
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === 'file_meta') toast(`Receiving file: ${msg.name}...`);
+            // 🌟 NEW: INCOMING CLIPBOARD RECEIVER
+            if (msg.type === 'clipboard_data') {
+               navigator.clipboard.writeText(msg.text).then(() => {
+                 toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
+               });
+            }
           } catch(e) {}
         }
       };
@@ -143,9 +134,7 @@ export default function AdminRemotePage() {
       channelRef.current = sessionChannel;
 
       peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
-        }
+        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
       };
 
       sessionChannel.on('broadcast', { event: 'sdp_offer_staff' }, async (payload) => {
@@ -157,19 +146,14 @@ export default function AdminRemotePage() {
           await sessionChannel.send({ type: 'broadcast', event: 'sdp_answer_admin', payload: { sdp: answer } });
         } catch (rtcError) {}
       }).on('broadcast', { event: 'ice_candidate_staff' }, async (payload) => {
-        if (peer.remoteDescription && payload.payload?.candidate) {
-          await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
-        }
+        if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
       }).on('broadcast', { event: 'staff_stopped_sharing' }, () => {
-        terminateSession();
-        toast.error("Employee stopped sharing their screen.");
+        terminateSession(); toast.error("Employee stopped sharing their screen.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
         setChatMessages(prev => [...prev, { sender: payload.payload.sender || 'Staff', text: payload.payload.text, time: payload.payload.time, isSelf: false }]);
         setIsChatOpen(true);
       }).on('broadcast', { event: 'control_accepted' }, () => {
-        setIsControlling(true);
-        setSessionStatus('controlling');
-        toast.success("✅ Staff granted remote control access!");
+        setIsControlling(true); setSessionStatus('controlling'); toast.success("✅ Staff granted remote control access!");
       }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Staff declined remote control.");
       }).subscribe(async (status) => {
@@ -197,11 +181,8 @@ export default function AdminRemotePage() {
 
   const sendControlCommand = (command: any) => {
     if (isControlling) {
-      if (dataChannelRef.current?.readyState === 'open') {
-        dataChannelRef.current.send(JSON.stringify(command));
-      } else if (channelRef.current) {
-        channelRef.current.send({ type: 'broadcast', event: 'control_command', payload: command });
-      }
+      if (dataChannelRef.current?.readyState === 'open') dataChannelRef.current.send(JSON.stringify(command));
+      else if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'control_command', payload: command });
     }
   };
 
@@ -228,17 +209,10 @@ export default function AdminRemotePage() {
     readSlice(0);
   };
 
-  // 🌟 FIX 1: THROTTLING ADDED TO PREVENT OS CRASH ON THE STAFF SIDE
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
     if (type === 'mousemove') {
-      if (isDraggingDock) {
-        setDockPos({ x: e.clientX - dragStartDock.current.x, y: e.clientY - dragStartDock.current.y });
-        return;
-      }
-      if (isDraggingChat) {
-        setChatPos({ x: e.clientX - dragStartChat.current.x, y: e.clientY - dragStartChat.current.y });
-        return;
-      }
+      if (isDraggingDock) { setDockPos({ x: e.clientX - dragStartDock.current.x, y: e.clientY - dragStartDock.current.y }); return; }
+      if (isDraggingChat) { setChatPos({ x: e.clientX - dragStartChat.current.x, y: e.clientY - dragStartChat.current.y }); return; }
     }
     if (type === 'mouseup' || type === 'mouseleave') {
       if (isDraggingDock || isDraggingChat) { setIsDraggingDock(false); setIsDraggingChat(false); return; }
@@ -247,7 +221,6 @@ export default function AdminRemotePage() {
     if (!isControlling) return;
     e.preventDefault();
 
-    // Throttle mousemove to 30 FPS to prevent remote freeze
     if (type === 'mousemove') {
       const now = Date.now();
       if (now - lastMoveTimeRef.current < 35) return; 
@@ -303,7 +276,7 @@ export default function AdminRemotePage() {
 
   const requestClipboardSync = () => {
     sendControlCommand({ type: 'sync_clipboard' });
-    toast.success("Clipboard sync requested...");
+    toast.loading("Requesting Staff Clipboard...");
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
@@ -317,9 +290,8 @@ export default function AdminRemotePage() {
   };
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      viewportContainerRef.current?.requestFullscreen().catch(() => {});
-    } else { document.exitFullscreen(); }
+    if (!document.fullscreenElement) { viewportContainerRef.current?.requestFullscreen().catch(() => {}); } 
+    else { document.exitFullscreen(); }
   };
 
   const theme = {
@@ -332,27 +304,21 @@ export default function AdminRemotePage() {
   return (
     <div className={`h-screen ${theme.bg} font-sans flex flex-col overflow-hidden relative`}>
       <Toaster position="top-right" />
-      
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-225 h-125 pointer-events-none z-0 flex justify-between items-center opacity-30">
         <div className="w-112.5 h-112.5 bg-[#FFD1B3] rounded-full blur-[120px]"></div>
         <div className="w-112.5 h-112.5 bg-[#D8B4FE] rounded-full blur-[120px]"></div>
       </div>
-
       <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
       <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
-        
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-white border border-white/80 text-orange-600 flex items-center justify-center shadow-sm">
-              <Monitor size={20} />
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-white border border-white/80 text-orange-600 flex items-center justify-center shadow-sm"><Monitor size={20} /></div>
             <div>
               <h1 className={`text-xl font-bold tracking-tight ${theme.textMain}`}>Virtual Support Commander</h1>
               <p className={`text-xs font-semibold ${theme.textSub}`}>Enterprise P2P Remote Diagnostics Protocol</p>
             </div>
           </div>
-          
           <div className="flex items-center gap-3">
             <button onClick={() => router.push('/admin')} className={`flex items-center gap-1.5 px-4 py-2.5 bg-white/60 border border-white/80 hover:bg-white/90 shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider text-slate-800 transition-colors cursor-pointer`}>
               <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
@@ -444,7 +410,6 @@ export default function AdminRemotePage() {
                     </div>
                   )}
 
-                  {/* 🌟 VIBRANT 3PX OUTLINE MAC-OS DOCK */}
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
                     <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }} className="absolute bottom-6 left-1/2 bg-white/80 backdrop-blur-2xl border border-white p-2 rounded-full flex gap-2 shadow-2xl z-50 items-center transition-all">
                       <div onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }} className="cursor-grab active:cursor-grabbing p-2 text-slate-400 hover:text-slate-800 transition-colors ml-1">
@@ -455,8 +420,7 @@ export default function AdminRemotePage() {
                       {[
                         { 
                           icon: <Video size={20} strokeWidth={isControlling ? 2.5 : 2} />, active: isControlling, 
-                          color: 'text-blue-500 hover:bg-blue-100 hover:text-blue-700', 
-                          activeClass: 'text-blue-700 bg-white border-[3px] border-blue-600 shadow-lg shadow-blue-600/30 scale-[1.15]',
+                          color: 'text-blue-500 hover:bg-blue-100 hover:text-blue-700', activeClass: 'text-blue-700 bg-white border-[3px] border-blue-600 shadow-lg shadow-blue-600/30 scale-[1.15]',
                           action: () => { 
                             if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
                             else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); }
@@ -471,9 +435,7 @@ export default function AdminRemotePage() {
                         { icon: <RefreshCw size={20} />, active: false, color: 'text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700', action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
                         { icon: <Ban size={20} />, active: false, color: "text-rose-500 hover:text-white hover:bg-rose-500", action: terminateSession, tooltip: "Disconnect" }
                       ].map((btn, i) => (
-                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all cursor-pointer ${btn.active ? btn.activeClass : `border border-transparent ${btn.color}`}`}>
-                          {btn.icon}
-                        </button>
+                        <button key={i} onClick={btn.action} title={btn.tooltip} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all cursor-pointer ${btn.active ? btn.activeClass : `border border-transparent ${btn.color}`}`}>{btn.icon}</button>
                       ))}
                     </div>
                   )}
