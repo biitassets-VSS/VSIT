@@ -4,11 +4,13 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 Bypass Chromium Sandbox for Administrator Mode
+// 🌟 THE ULTIMATE ADMIN VIDEO FIX: 
+// Force CPU rendering so Windows doesn't block the GPU in Administrator Mode!
+app.disableHardwareAcceleration();
+
+// Bypass Sandboxes
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
-
-// Native WebRTC Flags
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-media-stream');
@@ -36,7 +38,7 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
-  // Safe Media Interceptor for Admin Mode
+  // 🌟 CLEAN MEDIA INTERCEPTOR (Safe for Admin Mode with CPU Rendering)
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] })
       .then((sources) => {
@@ -51,20 +53,6 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
-
-// 🌟 THE MISSING HANDLER: This is what caused the error!
-ipcMain.handle('get-desktop-source-id', async () => {
-  try {
-    const sources = await desktopCapturer.getSources({ types: ['screen'] });
-    if (sources.length > 0) {
-      return sources[0].id;
-    }
-    return null;
-  } catch (e) {
-    console.error("Failed to get desktop source:", e);
-    return null;
-  }
-});
 
 // -------------------------------------------------------------
 // 🎮 OS CONTROL LISTENERS 

@@ -313,7 +313,7 @@ export default function AdminRemotePage() {
       </div>
       <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
-      <div className="w-full max-w-[100rem] px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
+      <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-white border border-white/80 text-orange-600 flex items-center justify-center shadow-sm"><Monitor size={20} /></div>
