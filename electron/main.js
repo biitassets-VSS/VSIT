@@ -1,9 +1,10 @@
+// electron/main.js
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// Bypass Chromium Sandbox for Administrator Mode
+// 🌟 Bypass Chromium Sandbox for Administrator Mode
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 
@@ -35,21 +36,14 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
-  // 🌟 THE FIX: Clean Media Interceptor (Safe for Admin Mode)
+  // Safe Media Interceptor for Admin Mode
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] })
       .then((sources) => {
-        if (sources && sources.length > 0) {
-          // Pass video only. Audio loopback removed to prevent Admin-mode crash.
-          callback({ video: sources[0] }); 
-        } else {
-          callback();
-        }
+        if (sources && sources.length > 0) callback({ video: sources[0] }); 
+        else callback();
       })
-      .catch((err) => {
-        console.error("Capture failed:", err);
-        callback();
-      });
+      .catch((err) => callback());
   });
 
   session.defaultSession.setPermissionCheckHandler(() => true);
@@ -57,6 +51,20 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
+
+// 🌟 THE MISSING HANDLER: This is what caused the error!
+ipcMain.handle('get-desktop-source-id', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen'] });
+    if (sources.length > 0) {
+      return sources[0].id;
+    }
+    return null;
+  } catch (e) {
+    console.error("Failed to get desktop source:", e);
+    return null;
+  }
+});
 
 // -------------------------------------------------------------
 // 🎮 OS CONTROL LISTENERS 
