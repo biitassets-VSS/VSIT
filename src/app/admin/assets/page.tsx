@@ -9,7 +9,7 @@ import {
   Upload, FileSpreadsheet, Package, Mouse, 
   Headphones, SlidersHorizontal, ChevronDown, ChevronUp, CheckCircle2, 
   Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
-  Keyboard, RectangleHorizontal, Monitor, Sparkles, History,
+  Keyboard, RectangleHorizontal, Monitor, Sparkles, History as HistoryIcon,
   Filter, FilterX, ShieldCheck, FileText, Cpu, Zap
 } from 'lucide-react';
 
@@ -92,7 +92,7 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
   return `${cpu} | 16GB RAM | 512GB NVMe SSD | Windows 11 Pro`;
 }
 
-const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, placeholder = "Type employee name or EMP code..." }: any) => {
+const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Type employee name or EMP code..." }: any) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -118,7 +118,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
     <div className="relative" ref={wrapperRef}>
       <div className="flex items-center w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus-within:bg-white focus-within:border-purple-400 focus-within:ring-4 focus-within:ring-purple-500/10 rounded-xl transition-all shadow-sm">
         <Search size={16} className="text-slate-500 mr-2 shrink-0" />
-        <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className="w-full text-sm font-bold outline-none bg-transparent text-slate-900 placeholder:text-slate-400" />
+        <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className="w-full text-sm font-semibold outline-none bg-transparent text-slate-900 placeholder:text-slate-400" />
         {value && <X size={16} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-2" onClick={() => { onChange(''); setQuery(''); }} />}
         <ChevronDown size={16} className="text-slate-500 cursor-pointer" onClick={() => setOpen(!open)} />
       </div>
@@ -126,13 +126,13 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, isDarkMode, place
         <div className="absolute z-50 w-full mt-2 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] max-h-60 overflow-y-auto custom-scrollbar bg-white/90 backdrop-blur-xl border border-white/60">
           <div onClick={() => { onChange(''); setQuery(''); setOpen(false); }} className="p-4 text-xs font-bold uppercase cursor-pointer border-b border-white/60 text-orange-600 hover:bg-white/50">📦 Unassign / Return to Stock</div>
           {query.trim().length === 0 ? (
-            <div className="p-4 text-center text-xs font-bold text-slate-500">🔍 Type an employee name or EMP code above...</div>
+            <div className="p-4 text-center text-xs font-semibold text-slate-500">🔍 Type an employee name or EMP code above...</div>
           ) : filtered.length === 0 ? (
-            <div className="p-4 text-center text-xs font-bold text-rose-500">No matched employee found for "{query}".</div>
+            <div className="p-4 text-center text-xs font-semibold text-rose-500">No matched employee found for "{query}".</div>
           ) : (
             filtered.map((s: any) => (
               <div key={s.id} className="p-4 text-sm cursor-pointer border-b border-white/60 flex justify-between items-center hover:bg-white/50 text-slate-900" onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}>
-                <span className="font-bold">{s.full_name || s.name}</span>
+                <span className="font-semibold">{s.full_name || s.name}</span>
                 <span className="font-mono text-[10px] px-2 py-1 rounded-md font-bold bg-white/60 text-slate-700 border border-white/80">{s.emp_code || s.email}</span>
               </div>
             ))
@@ -255,19 +255,19 @@ function AssetRegistryContent() {
 
   const getStockStatusBadge = (status: string) => {
     const s = safeString(status);
-    if (s.includes('Assigned')) return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-    if (s.includes('Repair')) return 'bg-orange-100 text-orange-800 border-orange-300 animate-pulse';
-    if (s.includes('Demo')) return 'bg-purple-100 text-purple-800 border-purple-300';
-    if (s.includes('Pending')) return 'bg-amber-100 text-amber-800 border-amber-300';
-    return 'bg-slate-100 text-slate-800 border-slate-300';
+    if (s.includes('Assigned')) return 'bg-transparent border border-emerald-500 text-emerald-600 shadow-[0_0_6px_rgba(16,185,129,0.3)] group-hover:shadow-[0_0_12px_rgba(16,185,129,0.6)]';
+    if (s.includes('Repair')) return 'bg-transparent border border-orange-500 text-orange-600 shadow-[0_0_6px_rgba(249,115,22,0.3)] group-hover:shadow-[0_0_12px_rgba(249,115,22,0.6)] animate-pulse';
+    if (s.includes('Demo')) return 'bg-transparent border border-purple-500 text-purple-600 shadow-[0_0_6px_rgba(168,85,247,0.3)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.6)]';
+    if (s.includes('Pending')) return 'bg-transparent border border-amber-500 text-amber-600 shadow-[0_0_6px_rgba(245,158,11,0.3)] group-hover:shadow-[0_0_12px_rgba(245,158,11,0.6)]';
+    return 'bg-transparent border border-blue-500 text-blue-600 shadow-[0_0_6px_rgba(59,130,246,0.3)] group-hover:shadow-[0_0_12px_rgba(59,130,246,0.6)]';
   };
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-    if (s.includes('return')) return 'bg-purple-100 text-purple-800 border-purple-300';
-    if (s.includes('rejected')) return 'bg-rose-100 text-rose-800 border-rose-300';
-    return 'bg-amber-100 text-amber-800 border-amber-300';
+    if (s.includes('approved')) return 'bg-transparent border border-emerald-500 text-emerald-600 shadow-[0_0_6px_rgba(16,185,129,0.3)] group-hover:shadow-[0_0_12px_rgba(16,185,129,0.6)]';
+    if (s.includes('return')) return 'bg-transparent border border-purple-500 text-purple-600 shadow-[0_0_6px_rgba(168,85,247,0.3)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.6)]';
+    if (s.includes('rejected')) return 'bg-transparent border border-rose-500 text-rose-600 shadow-[0_0_6px_rgba(243,64,84,0.3)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.6)]';
+    return 'bg-transparent border border-amber-500 text-amber-600 shadow-[0_0_6px_rgba(245,158,11,0.3)] group-hover:shadow-[0_0_12px_rgba(245,158,11,0.6)]';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -465,13 +465,13 @@ function AssetRegistryContent() {
             </button>
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${theme.textMain} flex items-center gap-2`}>
+                <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
                   <ShieldCheck className="text-orange-600 w-6 h-6 sm:w-8 sm:h-8 shrink-0" />
                   <span>Asset Records</span>
                 </h1>
-                <span className={`px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-widest bg-white/60 border border-white/80 text-orange-600 shadow-sm`}>{assets.length} Units</span>
+                <span className={`px-3 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white/60 border border-white/80 text-orange-600 shadow-sm`}>{assets.length} Units</span>
               </div>
-              <p className={`text-sm font-bold ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
+              <p className={`text-sm font-semibold ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
             </div>
           </div>
 
@@ -512,7 +512,7 @@ function AssetRegistryContent() {
                 >
                   <span className={isActive ? 'text-white' : 'text-purple-600 group-hover:text-purple-700 transition-colors'}>{cat.icon}</span> 
                   <span className="hidden sm:inline">{cat.name}</span>
-                  <span className={`px-2 py-0.5 rounded-lg font-mono text-[10px] font-black transition-colors ${
+                  <span className={`px-2 py-0.5 rounded-lg font-mono text-[10px] font-bold transition-colors ${
                     isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-purple-700 border border-white/80'
                   }`}>{getCatCount(cat.name)}</span>
                 </button>
@@ -538,7 +538,7 @@ function AssetRegistryContent() {
                   value={searchQuery} 
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search by Asset Name, Tag ID, Brand, Category, S/N, or Staff..." 
-                  className="w-full pl-12 pr-4 py-1.5 text-sm font-bold outline-none bg-transparent placeholder:text-slate-400"
+                  className="w-full pl-12 pr-4 py-1.5 text-sm font-semibold outline-none bg-transparent placeholder:text-slate-400"
                 />
               </div>
             </div>
@@ -547,7 +547,7 @@ function AssetRegistryContent() {
           {/* FILTER TABS */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto custom-scrollbar">
-              <span className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0 ${theme.textMain}`}>
+              <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${theme.textMain}`}>
                 <Filter size={16} className="text-orange-600" /> Filter:
               </span>
               
@@ -583,15 +583,15 @@ function AssetRegistryContent() {
                     setSearchQuery('');
                     setSelectedCategory('All');
                   }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black bg-rose-500 hover:bg-rose-600 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0"
                 >
                   <FilterX size={14} /> <span>Reset</span>
                 </button>
               )}
             </div>
 
-            <span className={`text-sm font-bold ${theme.textSub} shrink-0`}>
-              Showing <strong className="text-orange-600 font-black">{filteredAssets.length}</strong> of {assets.length} assets
+            <span className={`text-sm font-semibold ${theme.textSub} shrink-0`}>
+              Showing <strong className="text-orange-600 font-bold">{filteredAssets.length}</strong> of {assets.length} assets
             </span>
           </div>
         </div>
@@ -605,8 +605,8 @@ function AssetRegistryContent() {
         ) : filteredAssets.length === 0 ? (
           <div className={`${theme.card} p-16 text-center flex flex-col items-center justify-center space-y-4`}>
             <Package size={56} className="text-orange-600 opacity-80" />
-            <h3 className={`text-xl font-black ${theme.textMain}`}>No Hardware Found</h3>
-            <p className={`text-sm font-bold max-w-md ${theme.textSub}`}>No assets match your selected filter combination.</p>
+            <h3 className={`text-xl font-bold ${theme.textMain}`}>No Hardware Found</h3>
+            <p className={`text-sm font-semibold max-w-md ${theme.textSub}`}>No assets match your selected filter combination.</p>
             <button onClick={() => { setStatusFilter('All'); setConditionFilter('All'); setSearchQuery(''); setSelectedCategory('All'); }} className="mt-4 px-8 py-3.5 bg-orange-600 hover:bg-orange-700 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)] rounded-xl text-sm font-bold uppercase tracking-wider cursor-pointer">
               Reset All Filters
             </button>
@@ -621,17 +621,18 @@ function AssetRegistryContent() {
                   const target = e.target as HTMLElement;
                   if (target.closest('button')) return;
                   toggleSelectAsset(asset.id);
-                }} className={`${theme.card} flex flex-col justify-between group cursor-pointer ${isSelected ? 'border-orange-400 shadow-[0_8px_32px_rgba(249,115,22,0.15)] bg-white/70' : theme.cardHover} overflow-hidden`}>
+                }} className={`${theme.card} flex flex-col justify-between group cursor-pointer ${isSelected ? 'ring-2 ring-orange-400 bg-white/60' : theme.cardHover} overflow-hidden`}>
                   
-                  <div className={`p-5 sm:p-6 border-b border-white/60`}>
+                  <div className={`p-5 sm:p-6 border-b border-white/40`}>
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-white/80 text-orange-600 border border-white/80 shadow-sm`}>
                           {getCategoryIcon(asset.category, 20)}
                         </div>
                         <div className="overflow-hidden">
-                          <h3 className={`text-base font-black leading-tight truncate max-w-44 ${theme.textMain}`}>{asset.safe_display_name}</h3>
-                          <p className={`text-xs font-bold mt-1 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
+                          {/* 🌟 Readable, un-squished title */}
+                          <h3 className={`text-base font-bold leading-tight truncate max-w-44 ${theme.textMain}`}>{asset.safe_display_name}</h3>
+                          <p className={`text-xs font-semibold mt-1 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -643,46 +644,49 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className="flex items-center gap-2.5">
-                      <span className={`px-3 py-1 rounded-lg font-black text-[10px] uppercase tracking-widest border backdrop-blur-sm shadow-sm ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                      <span className={`px-3 py-1 rounded-lg font-black text-[10px] uppercase tracking-widest border backdrop-blur-sm shadow-sm bg-white/80 border-white/80 text-slate-800`}>{asset.asset_condition || 'New'}</span>
+                      {/* 🌟 Neon Outline Status Badges */}
+                      <span className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
+                      {/* Frosted Outline Condition Badge */}
+                      <span className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase tracking-wider bg-transparent border border-slate-400 text-slate-600 shadow-[0_0_6px_rgba(148,163,184,0.3)] group-hover:shadow-[0_0_12px_rgba(148,163,184,0.6)] transition-all duration-300 cursor-default`}>{asset.asset_condition || 'New'}</span>
                     </div>
                   </div>
 
-                  <div className={`p-5 sm:p-6 space-y-3 flex-1 bg-white/30`}>
-                    <div className={`flex justify-between items-center p-3 bg-white/70 border border-white/80 text-slate-900 rounded-xl shadow-sm`}>
-                      <span className={`font-black uppercase text-[10px] tracking-widest ${theme.textSub}`}>Tag ID</span> 
-                      <span className="font-mono font-black text-sm text-purple-700">{asset.clean_tag}</span>
+                  <div className={`p-5 sm:p-6 space-y-3 flex-1 bg-white/20 border-y border-white/40`}>
+                    <div className={`flex justify-between items-center p-3 bg-white/40 border border-white/60 text-slate-900 rounded-xl shadow-sm hover:shadow-md transition-shadow`}>
+                      <span className={`font-bold uppercase text-[10px] tracking-wider ${theme.textSub}`}>Tag ID</span> 
+                      <span className="font-mono font-bold text-sm text-purple-700">{asset.clean_tag}</span>
                     </div>
-                    <div className={`flex justify-between items-center p-3 bg-white/70 border border-white/80 text-slate-900 rounded-xl shadow-sm`}>
-                      <span className={`font-black uppercase text-[10px] tracking-widest ${theme.textSub}`}>Serial S/N</span> 
-                      <span className={`font-mono font-black text-xs truncate max-w-35 ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
+                    <div className={`flex justify-between items-center p-3 bg-white/40 border border-white/60 text-slate-900 rounded-xl shadow-sm hover:shadow-md transition-shadow`}>
+                      <span className={`font-bold uppercase text-[10px] tracking-wider ${theme.textSub}`}>Serial S/N</span> 
+                      <span className={`font-mono font-bold text-xs truncate max-w-35 ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
                     </div>
                     
-                    <div className={`flex justify-between items-center p-3 bg-white/70 border border-white/80 text-slate-900 rounded-xl shadow-sm`}>
+                    <div className={`flex justify-between items-center p-3 bg-white/40 border border-white/60 text-slate-900 rounded-xl shadow-sm hover:shadow-md transition-shadow`}>
                       <div className="flex flex-col">
-                        <span className={`font-black uppercase text-[10px] tracking-widest ${theme.textSub}`}>Holder</span> 
-                        <span className={`font-black text-xs truncate max-w-32 ${theme.textMain} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
+                        <span className={`font-bold uppercase text-[10px] tracking-wider ${theme.textSub}`}>Holder</span> 
+                        {/* 🌟 Cleaner holder name text */}
+                        <span className={`font-bold text-xs truncate max-w-32 ${theme.textMain} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
                       </div>
-                      <span className={`font-mono font-black px-3 py-1.5 rounded-xl text-[10px] bg-white border border-white/80 text-slate-800 shadow-sm`}>{asset.emp_code}</span>
+                      <span className={`font-mono font-bold px-3 py-1.5 rounded-xl text-[10px] bg-white border border-white/80 text-slate-800 shadow-sm`}>{asset.emp_code}</span>
                     </div>
                   </div>
 
-                  <div className={`p-4 sm:p-5 border-t border-white/60 bg-white/40 flex items-center justify-between`}>
+                  <div className={`p-4 sm:p-5 border-t border-white/40 bg-white/10 flex items-center justify-between`}>
                     <div className="flex items-center gap-2">
                       <Clock size={16} className={theme.textSub} />
                       <div className="flex flex-col">
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Last Audited</span>
-                        <span className={`text-[11px] font-mono font-black ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Last Audited</span>
+                        <span className={`text-[11px] font-mono font-bold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-black backdrop-blur-sm shadow-sm ${getInspectionStatusColor(asset.live_inspection_status)}`}>
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all duration-300 cursor-default ${getInspectionStatusColor(asset.live_inspection_status)}`}>
                       {(() => {
                         const st = (asset.live_inspection_status || '').toLowerCase().trim();
                         if (st.includes('approved')) return <CheckCircle2 size={14} />;
                         if (st.includes('return')) return <RefreshCw size={14} className="animate-spin" />;
                         return <AlertTriangle size={14} />;
                       })()}
-                      <span className="text-[10px] font-black uppercase tracking-widest">{asset.live_inspection_status || 'Approved'}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider">{asset.live_inspection_status || 'Approved'}</span>
                     </div>
                   </div>
 
@@ -759,10 +763,10 @@ function AssetRegistryContent() {
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                       <h3 className={`text-base sm:text-lg font-bold font-mono ${theme.textMain} tracking-wider`}>{liveModalTag}</h3>
-                      <span className={`px-2 py-0.5 rounded-md font-black text-[9px] uppercase tracking-widest border backdrop-blur-sm ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-wider cursor-default ${getStockStatusBadge(viewAssetModal.status)}`}>{viewAssetModal.status || 'In Stock'}</span>
                     </div>
                     <p className={`text-xs font-bold mt-0.5 ${theme.textSub}`} title={editForm.serial || viewAssetModal.serial_number}>
-                      S/N: <span className="font-mono font-black">{editForm.serial || viewAssetModal.serial_number}</span>
+                      S/N: <span className="font-mono font-bold">{editForm.serial || viewAssetModal.serial_number}</span>
                     </p>
                   </div>
                 </div>
@@ -789,56 +793,56 @@ function AssetRegistryContent() {
                 {isEditingAsset ? (
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div className={`flex justify-between items-center pb-2 border-b border-white/60`}>
-                      <span className={`text-sm font-black uppercase tracking-widest text-orange-600`}>Editing Hardware Record</span>
+                      <span className={`text-sm font-bold uppercase tracking-widest text-orange-600`}>Editing Hardware Record</span>
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 bg-white/50 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}>
                       <div>
-                        <label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
+                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
                         <select value={editForm.category} onChange={e => { 
                           const newCat = e.target.value; 
                           setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) }); 
-                        }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none">
+                        }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold">
                           {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className={`text-[10px] font-black uppercase flex justify-between mb-1.5 text-orange-600`}>
+                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-orange-600`}>
                           <span>Asset Tag ID</span>
                           <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
                         </label>
-                        <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none" />
+                        <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none font-semibold" />
                       </div>
                     </div>
 
                     <div>
-                      <label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                      <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none" />
+                      <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
+                      <input type="text" required value={editForm.serial} onChange={e => setEditForm({...editForm, serial: e.target.value})} placeholder="e.g. M27370-00105" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none font-semibold" />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" /></div>
                       <div>
-                        <label className={`text-[10px] font-black uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
+                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
                           <span>Assets Name</span>
                           <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
                         </label>
-                        <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" />
+                        <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                      <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono transition-all shadow-sm outline-none" /></div>
-                      <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" /></div>
-                      <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono transition-all shadow-sm outline-none font-semibold" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={editForm.purchase_date} onChange={e => setEditForm({...editForm, purchase_date: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" /></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={editForm.warranty_expiry} onChange={e => setEditForm({...editForm, warranty_expiry: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" /></div>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <label className={`text-[10px] font-black uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
+                        <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
                         <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-600 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
                       </div>
-                      <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" />
+                      <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" />
                       <div className="flex flex-wrap gap-1.5 pt-1.5">
                         {[
                           "AMD Ryzen 7 7735HS | 16GB RAM | 512GB SSD | Win 11 Home",
@@ -860,19 +864,19 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t border-white/60`}>
-                      <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none"><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                      <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none"><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold"><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold"><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Assigned">👤 Assigned</option><option value="Demo Use">🧪 Demo</option><option value="In Repair">⚠️ Repair</option><option value="Discard">🗑️ Discard</option></select></div>
                       <div>
-                        <label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Inspection State</label>
-                        <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none">
+                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Inspection State</label>
+                        <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold">
                           <option value="Approved">✅ Approved</option><option value="Re-Inspection">🔄 Re-Inspection</option><option value="Not Approved">⚠️ Not Approved</option><option value="Rejected">❌ Rejected</option>
                         </select>
                       </div>
                     </div>
 
                     <div className={`p-5 bg-white/50 backdrop-blur-xl rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]`}>
-                      <label className={`text-[10px] font-black uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
-                      <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} isDarkMode={false} />
+                      <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.textSub}`}>Re-Assign Holder</label>
+                      <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} placeholder="Type employee name or EMP code..." />
                     </div>
 
                     <div className="flex gap-4 pt-4 border-t border-white/60">
@@ -885,36 +889,36 @@ function AssetRegistryContent() {
                 ) : (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1.5 text-orange-600`}>{viewAssetModal.category || 'Laptop'}</p></div>
-                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
-                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-xs font-bold mt-1.5 truncate ${theme.textMain}`} title={viewAssetModal.safe_display_name}>{viewAssetModal.safe_display_name}</p></div>
+                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-xs font-bold mt-1.5 text-orange-600`}>{viewAssetModal.category || 'Laptop'}</p></div>
+                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{viewAssetModal.brand || 'N/A'}</p></div>
+                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-xs font-bold mt-1.5 truncate ${theme.textMain}`} title={viewAssetModal.safe_display_name}>{viewAssetModal.safe_display_name}</p></div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Purchase Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
-                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Warranty Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
-                      <div className={`p-4 flex flex-col justify-center bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Inspection Status</p><div className="flex items-center gap-1 mt-1.5"><span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase border backdrop-blur-sm shadow-sm ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
+                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Purchase Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.purchase_date)}</p></div>
+                      <div className={`p-4 bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Warranty Date</p><p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{safeDate(viewAssetModal.warranty_expiry)}</p></div>
+                      <div className={`p-4 flex flex-col justify-center bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}><p className={`text-[9px] font-bold uppercase tracking-widest ${theme.textSub}`}>Inspection Status</p><div className="flex items-center gap-1 mt-1.5"><span className={`px-2.5 py-1 rounded-md text-[9px] font-bold uppercase border backdrop-blur-sm shadow-sm cursor-default transition-all ${getInspectionStatusColor(viewAssetModal.live_inspection_status)}`}>{viewAssetModal.live_inspection_status || 'Approved'}</span></div></div>
                     </div>
 
                     <div className={`p-4 flex items-center gap-4 bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}>
                       <Cpu size={20} className="text-orange-600 shrink-0" />
                       <div className="w-full">
-                        <span className={`text-[9px] font-black uppercase tracking-widest block ${theme.textSub}`}>System Hardware Configuration / Specifications:</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest block ${theme.textSub}`}>System Hardware Configuration / Specifications:</span>
                         <p className={`text-xs font-bold mt-1 ${theme.textMain}`}>{viewAssetModal.system_specs || 'Standard Business Hardware Configuration'}</p>
                       </div>
                     </div>
 
                     <div className={`p-4 flex items-center justify-between bg-white/80 backdrop-blur-xl rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]`}>
                       <div>
-                        <span className={`text-[9px] font-black uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Assigned Employee Holder:</span>
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-white border border-white/80 text-orange-600 shadow-sm`}><User size={16}/></div>
-                          <span className={`text-sm font-black ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
+                          <span className={`text-sm font-bold ${theme.textMain}`}>{viewAssetModal.staff_name}</span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
-                         <span className={`text-[8px] font-black uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
-                         <span className={`text-xs font-mono font-black px-3 py-1.5 bg-white border border-white/80 text-slate-900 shadow-sm rounded-xl`}>{viewAssetModal.emp_code}</span>
+                         <span className={`text-[8px] font-bold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
+                         <span className={`text-xs font-mono font-bold px-3 py-1.5 bg-white border border-white/80 text-slate-900 shadow-sm rounded-xl`}>{viewAssetModal.emp_code}</span>
                       </div>
                     </div>
 
@@ -926,7 +930,7 @@ function AssetRegistryContent() {
                               <FileText size={20} />
                             </div>
                             <div>
-                              <h4 className={`text-xs font-black uppercase tracking-widest text-emerald-900`}>Official Handover Agreement</h4>
+                              <h4 className={`text-xs font-bold uppercase tracking-widest text-emerald-900`}>Official Handover Agreement</h4>
                               <p className={`text-[10px] font-bold text-emerald-700 mt-0.5`}>Digitally executed custody document with hardware specs and policies.</p>
                             </div>
                           </div>
@@ -940,11 +944,11 @@ function AssetRegistryContent() {
                     <div className={`p-5 bg-white/60 backdrop-blur-xl rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]`}>
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2.5">
-                          <History size={16} className="text-orange-600" />
-                          <h4 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
+                          <HistoryIcon size={16} className="text-orange-600" />
+                          <h4 className={`text-xs font-bold uppercase tracking-widest ${theme.textMain}`}>Lifecycle & Activity History</h4>
                         </div>
                         {assetHistory.length > 1 && (
-                          <button onClick={() => setShowFullHistory(!showFullHistory)} className="text-[10px] font-black text-orange-600 hover:underline cursor-pointer flex items-center gap-1 bg-white/80 border border-white/80 shadow-sm px-2 py-1 rounded-md">
+                          <button onClick={() => setShowFullHistory(!showFullHistory)} className="text-[10px] font-bold text-orange-600 hover:underline cursor-pointer flex items-center gap-1 bg-white/80 border border-white/80 shadow-sm px-2 py-1 rounded-md">
                             {showFullHistory ? (<><span>Show Less</span> <ChevronUp size={14}/></>) : (<><span>Show Full History ({assetHistory.length})</span> <ChevronDown size={14}/></>)}
                           </button>
                         )}
@@ -970,8 +974,8 @@ function AssetRegistryContent() {
                               <div key={idx} className={`p-4 bg-white/80 border border-white/80 text-slate-900 rounded-xl shadow-sm`}>
                                 <div className="flex justify-between items-start mb-2">
                                   <div>
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border backdrop-blur-sm ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
-                                    <p className={`text-xs font-black mt-1.5 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-500 font-mono">({log.emp_code})</span></p>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border backdrop-blur-sm cursor-default transition-all ${getInspectionStatusColor(log.status)}`}>{log.status}</span>
+                                    <p className={`text-xs font-bold mt-1.5 ${theme.textMain}`}>{log.staff_name} <span className="text-slate-500 font-mono">({log.emp_code})</span></p>
                                   </div>
                                   <span className={`text-[10px] font-bold bg-white/60 border border-white/80 text-slate-800 shadow-sm px-2 py-0.5 rounded`}>{safeDate(log.created_at)}</span>
                                 </div>
@@ -1006,14 +1010,14 @@ function AssetRegistryContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm">
           <div className={`max-w-3xl w-full overflow-hidden flex flex-col max-h-[92vh] ${theme.modalBody}`}>
             <div className={`p-6 border-b border-white/60 flex justify-between items-center bg-white/50`}>
-              <h3 className={`text-lg font-black uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
+              <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>Register New Asset</h3>
               <button onClick={() => setIsAddModalOpen(false)} className={`p-2.5 bg-white/60 border border-white/80 text-slate-800 hover:bg-white/90 shadow-sm rounded-xl cursor-pointer transition-colors`}><X size={16}/></button>
             </div>
             
             <form onSubmit={handleSaveNewAsset} className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 bg-white/50 backdrop-blur-xl rounded-3xl border border-white/60 shadow-sm`}>
                 <div>
-                  <label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
+                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Asset Category *</label>
                   <select value={newAssetCategory} onChange={e => {
                     const newCat = e.target.value;
                     setNewAssetCategory(newCat);
@@ -1021,53 +1025,53 @@ function AssetRegistryContent() {
                     if (newCat === 'Laptop') setNewAssetSpecs('Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
                     else if (newCat.includes('Keyboard') || newCat.includes('Mouse')) setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
                     else setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
-                  }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none">
+                  }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold">
                     {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={`text-[10px] font-black uppercase flex justify-between mb-1.5 text-orange-600`}>
+                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-orange-600`}>
                     <span>Asset Tag ID</span>
                     <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(generate new)</button>
                   </label>
-                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none" />
+                  <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none font-semibold" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
-                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="e.g. M27370-00105" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none" />
+                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Factory Serial Number (Laptop SN - Charger SN) *</label>
+                  <input type="text" required value={newAssetSerial} onChange={e => setNewAssetSerial(e.target.value)} placeholder="e.g. M27370-00105" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono uppercase transition-all shadow-sm outline-none font-semibold" />
                 </div>
                 <div>
-                  <label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Vendor Source</label>
-                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" />
+                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Vendor Source</label>
+                  <input type="text" value={newAssetVendor} onChange={e => setNewAssetVendor(e.target.value)} placeholder="e.g. Local Supplier, Nabha" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" /></div>
                 <div>
-                  <label className={`text-[10px] font-black uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
+                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.textSub}`}>
                     <span>Assets Name *</span>
                     <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
                   </label>
-                  <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" />
+                  <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono transition-all shadow-sm outline-none" /></div>
-                <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" /></div>
-                <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Price (₹)</label><input type="number" step="0.01" value={newAssetPrice} onChange={e => setNewAssetPrice(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl font-mono transition-all shadow-sm outline-none font-semibold" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Purchase Date</label><input type="date" value={newAssetPurchaseDate} onChange={e => setNewAssetPurchaseDate(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" /></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Warranty Expiry</label><input type="date" value={newAssetWarranty} onChange={e => setNewAssetWarranty(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" /></div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <label className={`text-[10px] font-black uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
+                  <label className={`text-[10px] font-bold uppercase ${theme.textSub}`}>System Hardware Specifications / Configuration</label>
                   <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-600 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
                 </div>
-                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none" />
+                <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold" />
                 <div className="flex flex-wrap gap-1.5 pt-1.5">
                   {[
                     "AMD Ryzen 7 7735HS | 16GB RAM | 512GB SSD | Win 11 Home",
@@ -1089,13 +1093,13 @@ function AssetRegistryContent() {
               </div>
 
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t border-white/60`}>
-                <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none"><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-black uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none"><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Demo Use">🧪 Demo</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold"><option value="New">✨ New</option><option value="Refurbished">🔄 Refurbished</option><option value="Repaired">🛠️ Repaired</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className="w-full p-3.5 bg-white/80 border border-white/80 text-slate-900 focus:bg-white focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 rounded-xl transition-all shadow-sm outline-none font-semibold"><option value="In Stock (Unassigned)">📦 In Stock</option><option value="Demo Use">🧪 Demo</option></select></div>
               </div>
 
               <div className={`p-5 bg-white/50 backdrop-blur-xl rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]`}>
-                <label className={`text-[10px] font-black uppercase block mb-2 ${theme.textSub}`}>Assign to Employee (Optional)</label>
-                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} isDarkMode={false} />
+                <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.textSub}`}>Assign to Employee (Optional)</label>
+                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} placeholder="Type employee name or EMP code..." />
               </div>
 
               <div className="flex gap-4 pt-6 border-t border-white/60">
@@ -1114,7 +1118,7 @@ function AssetRegistryContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-sm">
           <div className={`max-w-md w-full p-8 text-center animate-in fade-in duration-200 ${theme.modalBody} space-y-6`}>
             <div className={`flex justify-between items-center pb-4 border-b border-white/60`}>
-              <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18} className="text-orange-600"/> Bulk Asset Import</h3>
+              <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={18} className="text-orange-600"/> Bulk Asset Import</h3>
               <button onClick={() => setIsBulkModalOpen(false)} className={`p-2.5 bg-white/60 border border-white/80 text-slate-800 hover:bg-white/90 shadow-sm rounded-xl cursor-pointer transition-colors`}><X size={16}/></button>
             </div>
             
