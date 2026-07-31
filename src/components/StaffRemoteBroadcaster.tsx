@@ -45,7 +45,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         if (cmd.type === 'mousemove') {
           (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
         }
-        // 🌟 FIX 1: Force mouse to move to exact spot before clicking to bypass throttle lag
         else if (cmd.type === 'mousedown') {
           (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
           (window as any).electronAPI.sendMouseDown(cmd.button);
@@ -58,8 +57,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
         else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
         else if (cmd.type === 'refresh') (window as any).electronAPI.sendSystemCommand('refresh_app');
-        
-        // 🌟 FIX 2: Clipboard Supabase Fallback Routing
         else if (cmd.type === 'sync_clipboard') {
           if ((window as any).electronAPI.readClipboard) {
             const text = await (window as any).electronAPI.readClipboard();
@@ -105,10 +102,10 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
       peerRef.current = peer;
 
+      // 🌟 THE FIX: DO NOT TERMINATE SESSION ON WEBRTC FAILURE. Let Supabase Fallback take over!
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          stopSharing();
-          toast.error("IT Admin disconnected from the session.");
+        if (peer.connectionState === 'failed') {
+          toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });
         }
       };
 

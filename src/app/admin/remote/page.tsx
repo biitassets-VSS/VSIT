@@ -90,10 +90,10 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
+      // 🌟 THE FIX: DO NOT TERMINATE SESSION ON WEBRTC FAILURE. Let Supabase Fallback take over!
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed') {
-          terminateSession();
-          toast.error("Network connection dropped by firewall or timeout.");
+          toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });
         }
       };
 
@@ -155,14 +155,11 @@ export default function AdminRemotePage() {
         setIsControlling(true); setSessionStatus('controlling'); toast.success("✅ Staff granted remote control access!");
       }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Staff declined remote control.");
-      })
-      // 🌟 FIX 2: Supabase Fallback Receiver for Clipboard Data
-      .on('broadcast', { event: 'clipboard_data' }, (payload) => {
+      }).on('broadcast', { event: 'clipboard_data' }, (payload) => {
         navigator.clipboard.writeText(payload.payload.text).then(() => {
           toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
         });
-      })
-      .subscribe(async (status) => {
+      }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           const pingChannel = supabase.channel(backgroundChannelId);
           pingChannel.subscribe(async (pingStatus) => {
@@ -436,7 +433,6 @@ export default function AdminRemotePage() {
                           icon: <Keyboard size={20} strokeWidth={isKeyboardEnabled ? 2.5 : 2} />, active: isKeyboardEnabled, 
                           color: 'text-purple-500 hover:bg-purple-100 hover:text-purple-700', activeClass: 'text-purple-700 bg-white border-[3px] border-purple-600 shadow-lg shadow-purple-600/30 scale-[1.15]', 
                           action: () => { 
-                            // 🌟 FIX 3: Keyboard Toggle Notification Added
                             if(isControlling) { 
                               setIsKeyboardEnabled(!isKeyboardEnabled); 
                               toast.success(!isKeyboardEnabled ? "Keyboard Control Enabled ⌨️" : "Keyboard Control Disabled", { id: 'kb' });
