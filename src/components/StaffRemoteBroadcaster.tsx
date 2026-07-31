@@ -79,11 +79,25 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 Safe WebRTC Capture linked to Electron's DisplayMediaRequestHandler
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false
-      });
+      let stream: MediaStream;
+      
+      // 🌟 Direct Desktop Capture (Bypasses Chromium security blocks)
+      if (typeof window !== 'undefined' && (window as any).electronAPI?.getDesktopSourceId) {
+        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
+        if (!sourceId) throw new Error("Could not fetch screen source ID from OS.");
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sourceId,
+            }
+          } as any
+        });
+      } else {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      }
 
       streamRef.current = stream;
 
@@ -179,7 +193,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       });
 
     } catch (err: any) {
-      // 🌟 Detailed Error Reporting so we aren't blind
       console.error("Capture Error:", err);
       toast.error(`Video Error: ${err.name} - ${err.message}`, { duration: 6000 });
       setIsConnecting(false);

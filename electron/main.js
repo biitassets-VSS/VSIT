@@ -5,20 +5,16 @@ const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js');
 
 // -------------------------------------------------------------
-// 1. THE ADMINISTRATOR VIDEO FIX FLAGS
+// 1. ADMINISTRATOR VIDEO FIX FLAGS
 // -------------------------------------------------------------
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
-
-// These two flags bypass the Windows UIPI texture block in Admin mode
 app.commandLine.appendSwitch('in-process-gpu'); 
 app.commandLine.appendSwitch('disable-direct-composition');
-
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
 app.commandLine.appendSwitch('enable-media-stream');
 
-// Configure Nut.js input speeds for zero-latency control
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 5000;
 
@@ -49,7 +45,7 @@ function resolveNutKey(keyStr) {
 }
 
 // -------------------------------------------------------------
-// 3. WINDOW SETUP & DISPLAY MEDIA HANDLER
+// 3. WINDOW SETUP
 // -------------------------------------------------------------
 let mainWindow;
 
@@ -69,19 +65,6 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); 
 
-  // 🌟 Admin-Safe Screen Capture Router
-  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    desktopCapturer.getSources({ types: ['screen'] })
-      .then((sources) => {
-        if (sources && sources.length > 0) {
-          callback({ video: sources[0] });
-        } else {
-          callback();
-        }
-      })
-      .catch(() => callback());
-  });
-
   session.defaultSession.setPermissionCheckHandler(() => true);
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
 }
@@ -89,7 +72,23 @@ function createWindow() {
 app.whenReady().then(createWindow);
 
 // -------------------------------------------------------------
-// 4. OS REMOTE CONTROL HANDLERS
+// 4. DESKTOP CAPTURE (Fix for "No handler registered")
+// -------------------------------------------------------------
+ipcMain.handle('get-desktop-source-id', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen'] });
+    if (sources && sources.length > 0) {
+      return sources[0].id; // Returns the exact OS internal screen ID
+    }
+    return null;
+  } catch (err) {
+    console.error("Error fetching desktop sources:", err);
+    return null;
+  }
+});
+
+// -------------------------------------------------------------
+// 5. OS REMOTE CONTROL HANDLERS
 // -------------------------------------------------------------
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   try {
@@ -141,7 +140,7 @@ ipcMain.on('remote-key-up', async (event, { key }) => {
 });
 
 // -------------------------------------------------------------
-// 5. CLIPBOARD & SYSTEM COMMANDS
+// 6. CLIPBOARD & SYSTEM COMMANDS
 // -------------------------------------------------------------
 ipcMain.on('sync-clipboard-write', (event, { text }) => { if (text) clipboard.writeText(text); });
 ipcMain.handle('sync-clipboard-read', () => clipboard.readText());
