@@ -79,26 +79,10 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      let stream: MediaStream;
+      // 🌟 USE MODERN API: Electron's main.js will cleanly intercept this in Admin Mode 
+      // without fighting the Windows GPU!
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       
-      // 🌟 Direct Desktop Capture (Bypasses Chromium security blocks)
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.getDesktopSourceId) {
-        const sourceId = await (window as any).electronAPI.getDesktopSourceId();
-        if (!sourceId) throw new Error("Could not fetch screen source ID from OS.");
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sourceId,
-            }
-          } as any
-        });
-      } else {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      }
-
       streamRef.current = stream;
 
       stream.getVideoTracks()[0].onended = () => {
