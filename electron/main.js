@@ -4,13 +4,18 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point } = require('@nut-tree-fork/nut-js');
 
-// 🌟 FIX 2: CRITICAL FLAG RESTORED! 
-// This is strictly required for the native 'getUserMedia' bypass to work!
-app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
+// 🌟 THE FIX: PREVENT CHROMIUM SANDBOX CRASH IN WINDOWS ADMIN MODE
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
 
+// Native getUserMedia bypass flags
+app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('allow-http-screen-capture');
-app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
 app.commandLine.appendSwitch('enable-media-stream');
+
+// Fix nut.js freezing
+mouse.config.autoDelayMs = 0;
+mouse.config.mouseSpeed = 5000;
 
 let mainWindow;
 
@@ -19,7 +24,7 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: "Virtual Staffing Portal",
-    icon: path.join(__dirname, '../build/icon.ico'), // 🌟 ADDED: Custom Taskbar & Window Icon
+    icon: path.join(__dirname, '../build/icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -31,13 +36,13 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('https://vsit-teal.vercel.app'); // Live Vercel URL
 
-  // 🌟 SET DISPLAY MEDIA HANDLER ON DEFAULT SESSION
+  // 🌟 SET DISPLAY MEDIA HANDLER
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    desktopCapturer.getSources({ types: ['screen'] })
+    desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false })
       .then((sources) => {
         if (sources.length > 0) {
-          // Pass primary desktop screen
-          callback({ video: sources[0] });
+          // 'loopback' enables Windows System Audio capture!
+          callback({ video: sources[0], audio: 'loopback' }); 
         } else {
           console.error("No desktop sources found.");
           callback();
@@ -56,43 +61,33 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-// 🌟 HARDWARE ID HOOK (FORCING FULL SCREEN FOR IT ADMIN)
 ipcMain.handle('get-desktop-source-id', async () => {
   try {
-    // We MUST use 'screen' so the IT Admin sees the whole desktop, not just a random window.
     const sources = await desktopCapturer.getSources({ types: ['screen'] });
-    
-    if (sources.length > 0) {
-      console.log("🎯 Desktop Screen ID retrieved:", sources[0].id);
-      return sources[0].id;
-    }
-    
+    if (sources.length > 0) return sources[0].id;
     return null;
   } catch (e) {
-    console.error("Source ID fetch failed:", e);
     return null;
   }
 });
 
 // -------------------------------------------------------------
-// 🎮 OS CONTROL LISTENERS (ADVANCED ENTERPRISE SUITE)
+// 🎮 OS CONTROL LISTENERS 
 // -------------------------------------------------------------
 
-// Basic Clicks & Typing (Legacy Fallback)
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
   try {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.size;
     await mouse.setPosition(new Point(Math.round((xPercent / 100) * width), Math.round((yPercent / 100) * height)));
     await mouse.click(Button.LEFT);
-  } catch (e) { console.error("Click failed:", e); }
+  } catch (e) {}
 });
 
 ipcMain.on('remote-type', async (event, { text }) => {
-  try { await keyboard.type(text); } catch (e) { console.error("Type failed:", e); }
+  try { await keyboard.type(text); } catch (e) {}
 });
 
-// 🌟 ADVANCED MOUSE CONTROL (Zero-Latency Dragging & Scrolling)
 ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
   try {
     const { width, height } = screen.getPrimaryDisplay().size;
@@ -112,7 +107,6 @@ ipcMain.on('remote-scroll', async (event, { deltaY }) => {
   try { await mouse.scrollDown(deltaY > 0 ? -2 : 2); } catch (e) {}
 });
 
-// 🌟 ADVANCED KEYBOARD CONTROL (Modifier Keys & Holding)
 ipcMain.on('remote-key-down', async (event, { key }) => {
   try { await keyboard.pressKey(key); } catch (e) {}
 });
@@ -121,7 +115,6 @@ ipcMain.on('remote-key-up', async (event, { key }) => {
   try { await keyboard.releaseKey(key); } catch (e) {}
 });
 
-// 🌟 CLIPBOARD SYNCING
 ipcMain.on('sync-clipboard-write', (event, { text }) => {
   clipboard.writeText(text);
 });
@@ -130,7 +123,6 @@ ipcMain.handle('sync-clipboard-read', () => {
   return clipboard.readText();
 });
 
-// 🌟 SYSTEM DIAGNOSTICS COMMANDS
 ipcMain.on('system-command', async (event, { command }) => {
   try {
     const allowedCommands = {
@@ -148,9 +140,7 @@ ipcMain.on('system-command', async (event, { command }) => {
     } else if (allowedCommands[command]) {
       exec(allowedCommands[command]);
     }
-  } catch (err) {
-    console.error("Command failed:", err);
-  }
+  } catch (err) {}
 });
 
 app.on('window-all-closed', () => {
