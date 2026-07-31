@@ -10,5 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendScroll: (deltaY) => ipcRenderer.send('remote-scroll', { deltaY }),
   sendSystemCommand: (command) => ipcRenderer.send('system-command', { command }),
   readClipboard: () => ipcRenderer.invoke('sync-clipboard-read'),
-  writeClipboard: (text) => ipcRenderer.send('sync-clipboard-write', { text })
+  writeClipboard: (text) => ipcRenderer.send('sync-clipboard-write', { text }),
+  
+  // Expose the desktop capture source ID fetcher for Admin video bypass
+  getDesktopSourceId: () => ipcRenderer.invoke('get-desktop-source-id')
 });
