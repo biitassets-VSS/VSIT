@@ -130,13 +130,13 @@ export default function AdminDashboardPage() {
         setAuthError('Access Denied: You do not possess administrative clearance.'); return;
       }
 
-      setAdminName(activeUser.full_name || activeUser.name || 'System Admin');
+      const currentAdminName = activeUser.full_name || activeUser.name || 'IT Administrator';
+      setAdminName(currentAdminName);
 
       const [
         { data: assets }, { data: inspections }, { data: tickets }, staffRes
       ] = await Promise.all([
         supabase.from('assets').select('id, status'),
-        // ⚡ FIX: Fetching the entire related asset row safely
         supabase.from('inspections').select('*, assets(*)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
         supabase.from('profiles').select('*')
@@ -198,49 +198,50 @@ export default function AdminDashboardPage() {
       const offlineCount = Math.max(0, staffData.length - finalOnlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 6).map(log => {
-        // ⚡ FIX: Extract Asset Information Safely
         const assetObj = log.assets || {};
         const assetOwnerId = assetObj.assigned_to;
         const assetName = assetObj.name || assetObj.asset_name || 'an asset';
 
-        // Check if a staff member owns this log or asset
-        const matchedProfile = staffData.find(p => 
+        // ⚡ IDENTIFY THE STAFF MEMBER (Requester)
+        const requesterProfile = staffData.find(p => 
           (log.user_email && p.email?.toLowerCase() === log.user_email.toLowerCase()) || 
           (log.user_id && p.id === log.user_id) ||
           (assetOwnerId && p.id === assetOwnerId)
         );
 
-        // ⚡ FIX: Detect if the Admin performed this action (Approvals)
-        const isAdminAction = 
-          (log.inspected_by || '').toLowerCase() === 'admin' || 
-          log.inspected_by === activeUser.id || 
-          (log.created_by || '').toLowerCase() === 'admin';
-
-        let displayName = 'System Update'; 
-        let empCode = '';
-
-        if (isAdminAction) {
-          displayName = activeUser.full_name || 'IT Administrator';
-          empCode = 'ADMIN';
-        } else if (matchedProfile) {
-          displayName = matchedProfile.full_name || matchedProfile.name || 'Staff Member';
-          empCode = matchedProfile.emp_code || '';
-        } else if (log.user_email) {
-          displayName = log.user_email.split('@')[0];
+        let requesterName = 'Staff Member';
+        let requesterEmpCode = '';
+        if (requesterProfile) {
+          requesterName = requesterProfile.full_name || requesterProfile.name || 'Staff Member';
+          requesterEmpCode = requesterProfile.emp_code || '';
+        } else if (log.user_email || log.user_name || log.created_by_name) {
+          requesterName = log.user_name || log.created_by_name || (log.user_email ? log.user_email.split('@')[0] : 'Staff Member');
         }
 
         const statusText = (log.status || '').toLowerCase();
+        const isApproved = statusText.includes('resolv') || statusText.includes('approv');
+
+        let displayName = requesterName; 
+        let empCode = requesterEmpCode;
         let logTheme = 'text-purple-600 bg-purple-500/10 border-purple-500/20'; 
-        
-        // ⚡ FIX: Dynamic descriptive action text
         let actionText = `Logged system event for ${assetName}.`;
 
         if (statusText.includes('pending') || statusText === '') {
           logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
           actionText = `Requested return/inspection for ${assetName}.`;
-        } else if (statusText.includes('resolv') || statusText.includes('approv')) {
+        } else if (isApproved) {
+          // ⚡ IDENTIFY THE ADMIN (Approver) AND RECORD BOTH PARTIES
+          let approverName = currentAdminName;
+          if (log.inspected_by && log.inspected_by !== 'admin' && log.inspected_by !== activeUser.id) {
+            const approverProfile = staffData.find(p => p.id === log.inspected_by);
+            if (approverProfile) approverName = approverProfile.full_name || approverProfile.name || currentAdminName;
+          }
+
+          displayName = approverName; // The Admin is the actor
+          empCode = 'ADMIN';          // Give them the Admin badge
           logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-          actionText = `Approved return/inspection for ${assetName}.`;
+          // Record both the Admin who approved it, and the Staff who requested it
+          actionText = `Approved return request from ${requesterName} for ${assetName}.`;
         }
 
         return { ...log, displayName, empCode, logTheme, actionText };
@@ -281,7 +282,6 @@ export default function AdminDashboardPage() {
   // 🎨 PURE MAC OS 2026 PREMIUM GLASS THEME
   const theme = {
     bg: isDarkMode ? 'bg-[#09090b]' : 'bg-[#f0f4f8]',
-    // Perfectly transparent glass with strong blur, NO opaque backgrounds on hover
     glassCard: isDarkMode 
       ? 'bg-[#18181b]/40 backdrop-blur-2xl border border-white/10 shadow-lg' 
       : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-sm',
@@ -305,19 +305,11 @@ export default function AdminDashboardPage() {
   );
 
   return (
-    // 🌟 100% DESKTOP FREEZE (ABSOLUTE INSET-0 + OVERFLOW-HIDDEN)
-    // On Mobile: Allows natural vertical scrolling
     <div className={`absolute inset-0 w-full h-full lg:overflow-hidden overflow-y-auto flex flex-col ${theme.bg} font-sans antialiased z-0`}>
-      
-      {/* 🌟 ENHANCED AMBIENT NEON ORBS FOR PURE GLASS BLUR */}
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-5 h-full lg:min-h-0 z-10">
-        
-        {/* 🌟 HEADER WITH SYNC BUTTON */}
-        {/* Removed overflow-hidden so the sync button shadow doesn't clip */}
         <div className={`${theme.glassCard} rounded-2xl p-4 border flex items-center justify-between shrink-0 transition-all`}>
           <Link href="/admin" className="flex items-center gap-4 group">
             <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-500' : 'bg-orange-50 border-orange-200 text-orange-500'}`}>
@@ -340,7 +332,6 @@ export default function AdminDashboardPage() {
           </button>
         </div>
 
-        {/* 📊 THUMBNAIL STAT CARDS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
           
           <div className={`${theme.glassCard} p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-500/30 group`}>
@@ -417,7 +408,6 @@ export default function AdminDashboardPage() {
 
         </div>
 
-        {/* 🟢 SYSTEM MODULES & LIVE ACTIVITY LOG */}
         <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 lg:overflow-hidden pt-2">
           
           <div className="w-full lg:w-[72%] flex flex-col lg:min-h-0 lg:overflow-hidden">
@@ -464,7 +454,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* LIVE ACTIVITY LOG SIDEBAR */}
           <div className="w-full lg:w-[28%] flex flex-col lg:min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
             <h3 className={`text-[11px] font-extrabold uppercase tracking-widest pl-1 shrink-0 mb-3 ${theme.subText}`}>Live Activity Log</h3>
             <div className={`${theme.glassCard} rounded-2xl p-5 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden`}>
@@ -484,12 +473,14 @@ export default function AdminDashboardPage() {
                         <p className={`text-[14px] font-bold leading-tight flex items-center gap-2 truncate ${theme.text}`}>
                           <span className="truncate">{log.displayName}</span>
                           {log.empCode && (
-                            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-200 text-slate-500'}`}>
+                            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest ${
+                              log.empCode === 'ADMIN' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                              isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-200 text-slate-500'
+                            }`}>
                               {log.empCode}
                             </span>
                           )}
                         </p>
-                        {/* ⚡ Dynamic action text including the asset name */}
                         <p className={`text-[11px] font-medium mt-1 truncate ${theme.subText}`}>{log.actionText}</p>
                         <p className={`text-[10px] font-bold uppercase tracking-wider mt-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
@@ -506,7 +497,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ANNOUNCEMENT MODAL */}
       {isBroadcastModalOpen && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in">
           <div className={`rounded-3xl max-w-lg w-full p-6 shadow-2xl border space-y-5 animate-in zoom-in-95 duration-300 ${theme.glassCard}`}>
