@@ -38,7 +38,6 @@ function resolveNutKey(keyStr) {
   return KEY_MAP[keyStr] || KEY_MAP[keyStr.toLowerCase()] || null;
 }
 
-// Helper to convert coordinate whether sent as 0.0 - 1.0 or 0 - 100 percentage
 function toPixels(val, maxDimension) {
   if (val === undefined || val === null || isNaN(val)) return 0;
   const normalized = val > 1 ? val / 100 : val;
@@ -46,6 +45,9 @@ function toPixels(val, maxDimension) {
 }
 
 let mainWindow;
+
+// ⚡ CACHED DISPLAY BOUNDS (Fixes CPU Exhaustion)
+let primaryScreenBounds = { width: 1920, height: 1080 }; 
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -64,41 +66,34 @@ function createWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL('http://localhost:3000'); 
 
-  console.log("Window created and loading URL!");
-
   mainWindow.once('ready-to-show', () => {
-    console.log("App is ready to show on screen!");
     mainWindow.show();
     mainWindow.focus();
   });
 
-  // Native Media Handler
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    console.log("Frontend requested video stream. Searching for screens...");
-    
-    desktopCapturer.getSources({ types: ['screen', 'window'] })
-      .then((sources) => {
-        const primaryScreen = sources.find(s => s.id.startsWith('screen')) || sources[0];
-        
-        if (primaryScreen) {
-          console.log(`SUCCESS: Found display source: ${primaryScreen.name} (${primaryScreen.id})`);
-          callback({ video: primaryScreen });
-        } else {
-          console.error("CRITICAL ERROR: Windows returned zero screens or windows to capture!");
-          callback(); 
-        }
-      })
-      .catch((err) => {
-        console.error("DesktopCapturer failed entirely:", err);
-        callback();
-      });
+    desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+      const primaryScreen = sources.find(s => s.id.startsWith('screen')) || sources[0];
+      if (primaryScreen) callback({ video: primaryScreen });
+      else callback(); 
+    }).catch(() => callback());
   });
 
   session.defaultSession.setPermissionCheckHandler(() => true);
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  
+  // Cache the bounds once on startup
+  primaryScreenBounds = screen.getPrimaryDisplay().bounds;
+  
+  // Only update the bounds if the user physically changes their monitor resolution
+  screen.on('display-metrics-changed', () => {
+    primaryScreenBounds = screen.getPrimaryDisplay().bounds;
+  });
+});
 
 ipcMain.handle('get-desktop-source-id', async () => {
   try {
@@ -106,37 +101,56 @@ ipcMain.handle('get-desktop-source-id', async () => {
     if (sources && sources.length > 0) return sources[0].id;
     return null;
   } catch (err) {
-    console.error("Error fetching desktop sources:", err);
     return null;
   }
 });
 
-// Remote Mouse Controls
-ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
+// ⚡ SMART MOUSE QUEUE (Fixes Nut.js Queue Choking)
+// This drops stale mouse movements so the cursor never falls behind.
+let isMouseMoving = false;
+let pendingMousePosition = null;
+
+async function processMouseQueue() {
+  if (!pendingMousePosition) {
+    isMouseMoving = false; // Queue is empty, stop moving
+    return;
+  }
+  
+  isMouseMoving = true;
+  
+  // Grab the absolute latest requested position and clear the queue
+  const { x, y } = pendingMousePosition;
+  pendingMousePosition = null; 
+
   try {
-    const display = screen.getPrimaryDisplay();
-    const width = display.bounds.width;
-    const height = display.bounds.height;
+    await mouse.setPosition(new Point(x, y));
+  } catch (err) {}
 
-    const posX = toPixels(xPercent, width);
-    const posY = toPixels(yPercent, height);
+  // Immediately loop to process the next position (if one arrived while we were moving)
+  processMouseQueue();
+}
 
-    await mouse.setPosition(new Point(posX, posY));
-  } catch (e) {}
+ipcMain.on('remote-mouse-move', (event, { xPercent, yPercent }) => {
+  // Use the cached bounds (Instant, no OS query)
+  const posX = toPixels(xPercent, primaryScreenBounds.width);
+  const posY = toPixels(yPercent, primaryScreenBounds.height);
+  
+  // Queue the latest position
+  pendingMousePosition = { x: posX, y: posY };
+  
+  // Start the processor if it isn't already running
+  if (!isMouseMoving) {
+    processMouseQueue();
+  }
 });
 
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
+  const posX = toPixels(xPercent, primaryScreenBounds.width);
+  const posY = toPixels(yPercent, primaryScreenBounds.height);
   try {
-    const display = screen.getPrimaryDisplay();
-    const width = display.bounds.width;
-    const height = display.bounds.height;
-
-    const posX = toPixels(xPercent, width);
-    const posY = toPixels(yPercent, height);
-
     await mouse.setPosition(new Point(posX, posY));
     await mouse.click(Button.LEFT);
-  } catch (e) { console.error("Mouse click failed:", e); }
+  } catch (e) {}
 });
 
 ipcMain.on('remote-mouse-down', async (event, { button }) => {
