@@ -75,9 +75,9 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   
-  // 🔗 Set your production web URL here
+  // 🔗 UPDATED: Pointing to your live Vercel application
   const isDev = !app.isPackaged;
-  const startUrl = isDev ? 'http://localhost:3000' : 'https://your-production-app-domain.com';
+  const startUrl = isDev ? 'http://localhost:3000' : 'https://vsit-teal.vercel.app';
   mainWindow.loadURL(startUrl); 
 
   mainWindow.once('ready-to-show', () => {
