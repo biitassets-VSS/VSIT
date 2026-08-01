@@ -136,8 +136,8 @@ export default function AdminDashboardPage() {
         { data: assets }, { data: inspections }, { data: tickets }, staffRes
       ] = await Promise.all([
         supabase.from('assets').select('id, status'),
-        // ⚡ FIX: Added `assigned_to` to the assets relationship fetch 
-        supabase.from('inspections').select('*, assets(asset_name, assigned_to)').order('created_at', { ascending: false }),
+        // ⚡ FIX: Fetching the entire related asset row safely
+        supabase.from('inspections').select('*, assets(*)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
         supabase.from('profiles').select('*')
       ]);
@@ -198,36 +198,52 @@ export default function AdminDashboardPage() {
       const offlineCount = Math.max(0, staffData.length - finalOnlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 6).map(log => {
-        // ⚡ FIX: Extract assigned_to from the related asset mapping
-        const assetOwnerId = log.assets?.assigned_to;
+        // ⚡ FIX: Extract Asset Information Safely
+        const assetObj = log.assets || {};
+        const assetOwnerId = assetObj.assigned_to;
+        const assetName = assetObj.name || assetObj.asset_name || 'an asset';
 
-        // ⚡ FIX: Deep checking logic to reliably trace profile ID
+        // Check if a staff member owns this log or asset
         const matchedProfile = staffData.find(p => 
           (log.user_email && p.email?.toLowerCase() === log.user_email.toLowerCase()) || 
           (log.user_id && p.id === log.user_id) ||
-          (log.staff_id && p.id === log.staff_id) ||
-          (log.created_by && p.id === log.created_by) ||
-          (assetOwnerId && p.id === assetOwnerId) // Match via asset ownership
+          (assetOwnerId && p.id === assetOwnerId)
         );
-        
-        let displayName = 'Unknown User'; 
+
+        // ⚡ FIX: Detect if the Admin performed this action (Approvals)
+        const isAdminAction = 
+          (log.inspected_by || '').toLowerCase() === 'admin' || 
+          log.inspected_by === activeUser.id || 
+          (log.created_by || '').toLowerCase() === 'admin';
+
+        let displayName = 'System Update'; 
         let empCode = '';
 
-        if (matchedProfile) {
-          displayName = matchedProfile.full_name || matchedProfile.name || displayName;
+        if (isAdminAction) {
+          displayName = activeUser.full_name || 'IT Administrator';
+          empCode = 'ADMIN';
+        } else if (matchedProfile) {
+          displayName = matchedProfile.full_name || matchedProfile.name || 'Staff Member';
           empCode = matchedProfile.emp_code || '';
         } else if (log.user_email) {
           displayName = log.user_email.split('@')[0];
-        } else if (log.user_name || log.created_by_name) {
-          displayName = log.user_name || log.created_by_name;
         }
 
         const statusText = (log.status || '').toLowerCase();
         let logTheme = 'text-purple-600 bg-purple-500/10 border-purple-500/20'; 
-        if (statusText.includes('pending') || statusText === '') logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
-        if (statusText.includes('resolv') || statusText.includes('approv')) logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
         
-        return { ...log, displayName, empCode, logTheme };
+        // ⚡ FIX: Dynamic descriptive action text
+        let actionText = `Logged system event for ${assetName}.`;
+
+        if (statusText.includes('pending') || statusText === '') {
+          logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
+          actionText = `Requested return/inspection for ${assetName}.`;
+        } else if (statusText.includes('resolv') || statusText.includes('approv')) {
+          logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+          actionText = `Approved return/inspection for ${assetName}.`;
+        }
+
+        return { ...log, displayName, empCode, logTheme, actionText };
       });
 
       setStats({
@@ -473,7 +489,8 @@ export default function AdminDashboardPage() {
                             </span>
                           )}
                         </p>
-                        <p className={`text-[11px] font-medium mt-1 truncate ${theme.subText}`}>Submitted system request.</p>
+                        {/* ⚡ Dynamic action text including the asset name */}
+                        <p className={`text-[11px] font-medium mt-1 truncate ${theme.subText}`}>{log.actionText}</p>
                         <p className={`text-[10px] font-bold uppercase tracking-wider mt-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
                     </div>
