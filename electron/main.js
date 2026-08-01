@@ -1,19 +1,25 @@
 // electron/main.js
 console.log("Starting Electron App...");
 
-const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard, Tray, Menu } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js');
 
-// 🌟 REQUIRED FLAGS: Bypasses Admin screen capture block
+// 🌟 REQUIRED FLAGS
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('enable-media-stream');
 app.commandLine.appendSwitch('disable-features', 'WebRtcWgcCapturer'); 
 
-// ⚡ Ultra-fast instant mouse movement (prevents cursor gliding lag)
+// ⚡ Ultra-fast instant mouse movement
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 100000;
+
+// 🌟 AUTO-START ON BOOT
+app.setLoginItemSettings({
+  openAtLogin: true,
+  args: ['--hidden'] // Tells the app to start minimized when booting up
+});
 
 const KEY_MAP = {
   'Backspace': Key.Backspace, 'Tab': Key.Tab, 'Enter': Key.Enter,
@@ -45,30 +51,70 @@ function toPixels(val, maxDimension) {
 }
 
 let mainWindow;
-
-// ⚡ CACHED DISPLAY BOUNDS (Fixes CPU Exhaustion)
+let tray = null; // System Tray reference
+let isQuitting = false; // Tracks if user clicked "Quit" from the tray
 let primaryScreenBounds = { width: 1920, height: 1080 }; 
+
+// Check if app was started automatically by Windows on boot
+const isAutoStartup = process.argv.includes('--hidden');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    show: false, 
+    show: false, // Always start hidden, we decide to show it later
     title: "Virtual Staffing Portal",
     icon: path.join(__dirname, '../build/icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false // Keep WebSockets/Realtime active in background
     }
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadURL('https://vsit-teal.vercel.app'); 
+  
+  // 🔗 Set your production web URL here
+  const isDev = !app.isPackaged;
+  const startUrl = isDev ? 'http://localhost:3000' : 'https://your-production-app-domain.com';
+  mainWindow.loadURL(startUrl); 
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.focus();
+    // Only show the window if it was manually opened by the user
+    if (!isAutoStartup) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  // 🌟 MINIMIZE TO TRAY (Intercept the 'X' close button)
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault(); // Prevent app from quitting
+      mainWindow.hide();      // Hide to system tray instead
+    }
+  });
+
+  // 🌟 CREATE SYSTEM TRAY ICON
+  tray = new Tray(path.join(__dirname, '../build/icon.ico'));
+  
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Open Portal', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { type: 'separator' },
+    { label: 'Quit App', click: () => { isQuitting = true; app.quit(); } }
+  ]);
+  
+  tray.setToolTip('Virtual Staffing Portal is running in the background');
+  tray.setContextMenu(contextMenu);
+
+  // Restore window when tray icon is clicked
+  tray.on('click', () => {
+    if (mainWindow.isVisible()) {
+      mainWindow.focus();
+    } else {
+      mainWindow.show();
+    }
   });
 
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
@@ -85,11 +131,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  
-  // Cache the bounds once on startup
   primaryScreenBounds = screen.getPrimaryDisplay().bounds;
-  
-  // Only update the bounds if the user physically changes their monitor resolution
   screen.on('display-metrics-changed', () => {
     primaryScreenBounds = screen.getPrimaryDisplay().bounds;
   });
@@ -105,43 +147,29 @@ ipcMain.handle('get-desktop-source-id', async () => {
   }
 });
 
-// ⚡ SMART MOUSE QUEUE (Fixes Nut.js Queue Choking)
-// This drops stale mouse movements so the cursor never falls behind.
+// ⚡ SMART MOUSE QUEUE
 let isMouseMoving = false;
 let pendingMousePosition = null;
 
 async function processMouseQueue() {
   if (!pendingMousePosition) {
-    isMouseMoving = false; // Queue is empty, stop moving
+    isMouseMoving = false; 
     return;
   }
   
   isMouseMoving = true;
-  
-  // Grab the absolute latest requested position and clear the queue
   const { x, y } = pendingMousePosition;
   pendingMousePosition = null; 
 
-  try {
-    await mouse.setPosition(new Point(x, y));
-  } catch (err) {}
-
-  // Immediately loop to process the next position (if one arrived while we were moving)
+  try { await mouse.setPosition(new Point(x, y)); } catch (err) {}
   processMouseQueue();
 }
 
 ipcMain.on('remote-mouse-move', (event, { xPercent, yPercent }) => {
-  // Use the cached bounds (Instant, no OS query)
   const posX = toPixels(xPercent, primaryScreenBounds.width);
   const posY = toPixels(yPercent, primaryScreenBounds.height);
-  
-  // Queue the latest position
   pendingMousePosition = { x: posX, y: posY };
-  
-  // Start the processor if it isn't already running
-  if (!isMouseMoving) {
-    processMouseQueue();
-  }
+  if (!isMouseMoving) processMouseQueue();
 });
 
 ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
@@ -168,7 +196,6 @@ ipcMain.on('remote-scroll', async (event, { deltaY }) => {
   } catch (e) {}
 });
 
-// Remote Keyboard Controls
 ipcMain.on('remote-type', async (event, { text }) => {
   try { if (text) await keyboard.type(text); } catch (e) {}
 });
@@ -188,7 +215,6 @@ ipcMain.on('remote-key-up', async (event, { key }) => {
   } catch (e) {}
 });
 
-// Clipboard & System Command Handlers
 ipcMain.on('sync-clipboard-write', (event, { text }) => { if (text) clipboard.writeText(text); });
 ipcMain.handle('sync-clipboard-read', () => clipboard.readText());
 
@@ -204,4 +230,7 @@ ipcMain.on('system-command', async (event, { command }) => {
   } catch (err) {}
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+// 🌟 Do not quit when windows are closed (Keep running in background)
+app.on('window-all-closed', () => {
+  // Overriding default behavior to keep app alive in tray
+});
