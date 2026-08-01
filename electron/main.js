@@ -64,7 +64,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadURL('http://localhost:3000'); 
+  mainWindow.loadURL('https://vsit-teal.vercel.app'); 
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
