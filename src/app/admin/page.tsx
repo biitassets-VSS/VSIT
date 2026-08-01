@@ -136,7 +136,8 @@ export default function AdminDashboardPage() {
         { data: assets }, { data: inspections }, { data: tickets }, staffRes
       ] = await Promise.all([
         supabase.from('assets').select('id, status'),
-        supabase.from('inspections').select('*, assets(asset_name)').order('created_at', { ascending: false }),
+        // ⚡ FIX: Added `assigned_to` to the assets relationship fetch 
+        supabase.from('inspections').select('*, assets(asset_name, assigned_to)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
         supabase.from('profiles').select('*')
       ]);
@@ -197,15 +198,19 @@ export default function AdminDashboardPage() {
       const offlineCount = Math.max(0, staffData.length - finalOnlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 6).map(log => {
-        // 🌟 FIX: Check multiple fields to reliably find the user profile
+        // ⚡ FIX: Extract assigned_to from the related asset mapping
+        const assetOwnerId = log.assets?.assigned_to;
+
+        // ⚡ FIX: Deep checking logic to reliably trace profile ID
         const matchedProfile = staffData.find(p => 
           (log.user_email && p.email?.toLowerCase() === log.user_email.toLowerCase()) || 
           (log.user_id && p.id === log.user_id) ||
-          (log.inspected_by && p.id === log.inspected_by) ||
-          (log.created_by && p.id === log.created_by)
+          (log.staff_id && p.id === log.staff_id) ||
+          (log.created_by && p.id === log.created_by) ||
+          (assetOwnerId && p.id === assetOwnerId) // Match via asset ownership
         );
         
-        let displayName = 'A user'; 
+        let displayName = 'Unknown User'; 
         let empCode = '';
 
         if (matchedProfile) {
@@ -213,6 +218,8 @@ export default function AdminDashboardPage() {
           empCode = matchedProfile.emp_code || '';
         } else if (log.user_email) {
           displayName = log.user_email.split('@')[0];
+        } else if (log.user_name || log.created_by_name) {
+          displayName = log.user_name || log.created_by_name;
         }
 
         const statusText = (log.status || '').toLowerCase();
@@ -398,7 +405,6 @@ export default function AdminDashboardPage() {
         <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 lg:overflow-hidden pt-2">
           
           <div className="w-full lg:w-[72%] flex flex-col lg:min-h-0 lg:overflow-hidden">
-            {/* 🌟 Added extra bottom margin to the title for better spacing */}
             <h3 className={`text-[11px] font-extrabold uppercase tracking-widest pl-1 shrink-0 mb-3 ${theme.subText}`}>System Modules</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 lg:min-h-0 lg:overflow-y-auto custom-scrollbar content-start pb-6 pr-1">
@@ -417,14 +423,12 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    // 🌟 FIXED HEIGHT CARD (h-[135px]) ELIMINATES SHRINKAGE & EMPTY SPACE 
                     className={`text-left cursor-pointer h-33.75 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 ease-out group ${theme.glassCard} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-500/40' : 'hover:shadow-purple-500/10 hover:border-purple-500/40'}`}
                   >
                     <div className="flex items-start justify-between w-full relative">
                       <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${isOrange ? (isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100/80 text-orange-600') : (isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100/80 text-purple-600')}`}>
                         <m.icon size={20} strokeWidth={2.2} />
                         {m.badge > 0 && (
-                          // 🌟 POSITIONED BADGE OUTSIDE OVERFLOW TO PREVENT CLIPPING
                           <span className="absolute -top-2.5 -right-2.5 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-linear-to-br from-rose-500 to-red-600 shadow-sm border border-white dark:border-[#18181b] z-50">
                             {m.badge}
                           </span>
@@ -461,7 +465,6 @@ export default function AdminDashboardPage() {
                         <Clock size={14} strokeWidth={2.5} />
                       </div>
                       <div className="pt-0.5 min-w-0">
-                        {/* 🌟 FIX: Updated rendering to show Name AND Employee ID Tag */}
                         <p className={`text-[14px] font-bold leading-tight flex items-center gap-2 truncate ${theme.text}`}>
                           <span className="truncate">{log.displayName}</span>
                           {log.empCode && (
