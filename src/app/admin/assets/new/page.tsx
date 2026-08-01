@@ -280,7 +280,7 @@ export default function AddNewAssetPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {currentPhotoRequirements.map((label, index) => (
                   <div key={index} className="flex flex-col">
-                    <label className="text-[10px] sm:text-xs uppercase font-black text-gray-500 mb-2 h-8 flex items-end break-words leading-tight" title={label}>
+                    <label className="text-[10px] sm:text-xs uppercase font-black text-gray-500 mb-2 h-8 flex items-end wrap-break-word leading-tight" title={label}>
                       {label} *
                     </label>
                     
@@ -326,7 +326,7 @@ export default function AddNewAssetPage() {
           <Link href="/admin/assets" className="w-full sm:w-auto px-6 py-4 sm:py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors text-center">
             Cancel
           </Link>
-          <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-8 py-4 sm:py-3.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 min-w-[160px]">
+          <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-8 py-4 sm:py-3.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 min-w-40">
             {isSubmitting ? (
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
             ) : (

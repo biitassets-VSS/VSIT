@@ -3,18 +3,18 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Loader2, Mail, Lock, ArrowRight, MonitorDown, Users, AlertCircle } from 'lucide-react';
+import { Loader2, Mail, Lock, ArrowRight, MonitorDown, Users, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function StaffLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false); // 🌟 Added Remember Me State
+  const [showPassword, setShowPassword] = useState(false); // 🌟 Added state for password visibility
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 🌟 Load saved credentials on startup
   useEffect(() => {
     const savedEmail = localStorage.getItem('vsit_staff_saved_email');
     const savedPass = localStorage.getItem('vsit_staff_saved_pass');
@@ -47,7 +47,6 @@ export default function StaffLoginPage() {
       if (profileError) throw profileError;
       if (profile?.status === 'Disabled') throw new Error('Account disabled by administrator.');
 
-      // 🌟 Save or clear credentials based on checkbox
       if (rememberMe) {
         localStorage.setItem('vsit_staff_saved_email', email.trim());
         localStorage.setItem('vsit_staff_saved_pass', password);
@@ -72,16 +71,15 @@ export default function StaffLoginPage() {
     <div className="min-h-screen w-full bg-transparent flex items-center justify-center p-4 sm:p-8 font-sans antialiased relative overflow-hidden selection:bg-purple-500/30">
       <Toaster position="top-center" toastOptions={{ className: 'bg-white/95 backdrop-blur-xl border border-white/80 text-slate-900 font-bold rounded-2xl shadow-xl' }} />
 
-      {/* Increased max-width to max-w-lg to comfortably hold the bigger text */}
       <div className="relative w-full max-w-lg z-10">
         
-        {/* 🌟 FULL FROSTED GLASS EFFECT */}
         <div className="relative bg-white/35 backdrop-blur-3xl rounded-[2.5rem] p-8 sm:p-12 border border-white/60 shadow-[0_15px_50px_rgba(0,0,0,0.05)] flex flex-col items-center text-center ring-1 ring-white/80">
           
+          {/* 🌟 LOGO ENLARGED: Changed from h-12 to h-16 sm:h-20 for much better readability */}
           <img 
             src="/logo.png" 
             alt="Virtual Staffing Solution Logo" 
-            className="h-12 w-auto mb-6 object-contain drop-shadow-sm"
+            className="h-16 sm:h-20 w-auto mb-6 object-contain drop-shadow-sm"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
@@ -119,15 +117,28 @@ export default function StaffLoginPage() {
               <div className="relative group">
                 <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-purple-600" />
                 
+                {/* 🌟 DYNAMIC PASSWORD INPUT: Toggles between text and password types. Added right padding (pr-12) so text doesn't overlap the eye icon */}
                 <input 
-                  type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl text-base font-semibold outline-none transition-all bg-white/60 backdrop-blur-md border border-white/80 focus:bg-white focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 text-slate-900 placeholder:text-slate-400 shadow-sm"
+                  className="w-full pl-12 pr-12 py-4 rounded-2xl text-base font-semibold outline-none transition-all bg-white/60 backdrop-blur-md border border-white/80 focus:bg-white focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 text-slate-900 placeholder:text-slate-400 shadow-sm"
                 />
+
+                {/* 🌟 SHOW/HIDE PASSWORD TOGGLE BUTTON */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-purple-600 transition-colors focus:outline-none cursor-pointer"
+                  tabIndex={-1} // Prevents tab targeting while navigating the form
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
             </div>
 
-            {/* 🌟 REMEMBER ME CHECKBOX */}
             <div className="flex items-center mt-2 ml-1">
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <input 

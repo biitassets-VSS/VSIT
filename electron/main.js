@@ -6,19 +6,38 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js');
 
-// 🌟 REQUIRED FLAGS
+// 🌟 1. SINGLE INSTANCE LOCK (Prevents duplicate app launches)
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  console.log("Another instance is already running. Quitting duplicate process...");
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // When a 2nd instance is launched, restore and focus the existing window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// 🌟 2. PERFORMANCE & RESOURCE OPTIMIZATION FLAGS (Reduces RAM/CPU)
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('enable-media-stream');
 app.commandLine.appendSwitch('disable-features', 'WebRtcWgcCapturer'); 
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); // Restricts JS heap usage
+app.commandLine.appendSwitch('disable-site-isolation-trials'); // Reduces RAM footprint
 
-// ⚡ Ultra-fast instant mouse movement
+// ⚡ Ultra-fast instant mouse movement setup
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 100000;
 
 // 🌟 AUTO-START ON BOOT
 app.setLoginItemSettings({
   openAtLogin: true,
-  args: ['--hidden'] 
+  args: ['--hidden']
 });
 
 const KEY_MAP = {
@@ -50,7 +69,7 @@ function toPixels(val, maxDimension) {
   return Math.round(Math.max(0, Math.min(1, normalized)) * maxDimension);
 }
 
-let mainWindow;
+let mainWindow = null;
 let tray = null; 
 let isQuitting = false; 
 let primaryScreenBounds = { width: 1920, height: 1080 }; 
@@ -68,7 +87,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false 
+      backgroundThrottling: false, // Prevents WebRTC/WebSocket timeouts
+      spellcheck: false // Saves CPU and RAM
     }
   });
 
@@ -92,29 +112,6 @@ function createWindow() {
     }
   });
 
-  // 🌟 CREATE SYSTEM TRAY ICON (Fixed Blank Icon)
-  const iconPath = path.join(__dirname, '../build/icon.ico');
-  const trayIcon = nativeImage.createFromPath(iconPath);
-  
-  tray = new Tray(trayIcon);
-  
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open Portal', click: () => { mainWindow.show(); mainWindow.focus(); } },
-    { type: 'separator' },
-    { label: 'Quit App', click: () => { isQuitting = true; app.quit(); } }
-  ]);
-  
-  tray.setToolTip('Virtual Staffing Portal is running in the background');
-  tray.setContextMenu(contextMenu);
-
-  tray.on('click', () => {
-    if (mainWindow.isVisible()) {
-      mainWindow.focus();
-    } else {
-      mainWindow.show();
-    }
-  });
-
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
       const primaryScreen = sources.find(s => s.id.startsWith('screen')) || sources[0];
@@ -127,8 +124,56 @@ function createWindow() {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
 }
 
+// 🌟 3. SINGLE TRAY CREATION GUARD (Fixes Double Tray Icon)
+function createSystemTray() {
+  if (tray) {
+    tray.destroy(); // Safely clean up any leftover tray icon
+    tray = null;
+  }
+
+  const iconPath = path.join(__dirname, '../build/icon.ico');
+  const trayIcon = nativeImage.createFromPath(iconPath);
+  
+  tray = new Tray(trayIcon);
+  
+  const contextMenu = Menu.buildFromTemplate([
+    { 
+      label: 'Open Portal', 
+      click: () => { 
+        if (mainWindow) {
+          mainWindow.show(); 
+          mainWindow.focus(); 
+        }
+      } 
+    },
+    { type: 'separator' },
+    { 
+      label: 'Quit App', 
+      click: () => { 
+        isQuitting = true; 
+        app.quit(); 
+      } 
+    }
+  ]);
+  
+  tray.setToolTip('Virtual Staffing Portal is running in background');
+  tray.setContextMenu(contextMenu);
+
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.focus();
+      } else {
+        mainWindow.show();
+      }
+    }
+  });
+}
+
 app.whenReady().then(() => {
   createWindow();
+  createSystemTray(); // Create tray exactly once when app is ready
+
   primaryScreenBounds = screen.getPrimaryDisplay().bounds;
   screen.on('display-metrics-changed', () => {
     primaryScreenBounds = screen.getPrimaryDisplay().bounds;
@@ -145,6 +190,7 @@ ipcMain.handle('get-desktop-source-id', async () => {
   }
 });
 
+// ⚡ SMART MOUSE QUEUE (Prevents CPU Spikes)
 let isMouseMoving = false;
 let pendingMousePosition = null;
 
