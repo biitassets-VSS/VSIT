@@ -12,11 +12,8 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const channelRef = useRef<any>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
-
-  const incomingFileMeta = useRef<any>(null);
-  const fileBuffer = useRef<ArrayBuffer[]>([]);
+  const signalingChannelRef = useRef<any>(null);
+  const controlChannelRef = useRef<any>(null);
 
   useEffect(() => {
     if (!staffId) return;
@@ -40,6 +37,10 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   }, [staffId]);
 
   const executeAdminCommand = async (cmd: any) => {
+    if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
+      console.log("⚡ COMMAND EXECUTING ON STAFF PC:", cmd.type, cmd);
+    }
+
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
         if (cmd.type === 'mousemove') {
@@ -60,10 +61,8 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         else if (cmd.type === 'sync_clipboard') {
           if ((window as any).electronAPI.readClipboard) {
             const text = await (window as any).electronAPI.readClipboard();
-            if (dataChannelRef.current?.readyState === 'open') {
-              dataChannelRef.current.send(JSON.stringify({ type: 'clipboard_data', text }));
-            } else if (channelRef.current) {
-              channelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
+            if (signalingChannelRef.current) {
+              signalingChannelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
             }
             toast.success("Clipboard securely synced to IT Admin.");
           }
@@ -71,6 +70,8 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       } catch (e) {
         console.error("OS execution failed:", e);
       }
+    } else {
+      console.error("❌ electronAPI is NOT available on the window object!");
     }
   };
 
@@ -79,10 +80,11 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 USE MODERN API: Electron's main.js will cleanly intercept this in Admin Mode 
-      // without fighting the Windows GPU!
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      });
+
       streamRef.current = stream;
 
       stream.getVideoTracks()[0].onended = () => {
@@ -93,59 +95,22 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
       peerRef.current = peer;
 
-      peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed') {
-          toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });
-        }
-      };
-
-      peer.ondatachannel = (event) => {
-        const receiveChannel = event.channel;
-        dataChannelRef.current = receiveChannel;
-
-        receiveChannel.onmessage = (e) => {
-          if (typeof e.data === 'string') {
-            try {
-              const data = JSON.parse(e.data);
-              if (['mousemove', 'mousedown', 'mouseup', 'keydown', 'keyup', 'scroll', 'refresh', 'sync_clipboard'].includes(data.type)) {
-                executeAdminCommand(data);
-              } 
-              else if (data.type === 'ping') {
-                receiveChannel.send(JSON.stringify({ type: 'pong' }));
-              }
-              else if (data.type === 'file_meta') {
-                incomingFileMeta.current = data;
-                fileBuffer.current = [];
-                toast.loading(`Receiving file: ${data.name}...`);
-              }
-            } catch (err) {}
-          } 
-          else if (e.data instanceof ArrayBuffer) {
-            fileBuffer.current.push(e.data);
-            const currentSize = fileBuffer.current.reduce((acc, chunk) => acc + chunk.byteLength, 0);
-            
-            if (incomingFileMeta.current && currentSize >= incomingFileMeta.current.size) {
-              const blob = new Blob(fileBuffer.current, { type: incomingFileMeta.current.fileType });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = incomingFileMeta.current.name;
-              a.click();
-              URL.revokeObjectURL(url);
-              
-              toast.dismiss();
-              toast.success(`File downloaded: ${incomingFileMeta.current.name}`);
-              incomingFileMeta.current = null;
-              fileBuffer.current = [];
-            }
-          }
-        };
-      };
-
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
 
-      const sessionChannel = supabase.channel(incomingRequest.channelId);
-      channelRef.current = sessionChannel;
+      // 1. SIGNALING CHANNEL (For WebRTC setup and chat)
+      const sessionChannel = supabase.channel(incomingRequest.channelId, { config: { broadcast: { ack: false } } });
+      signalingChannelRef.current = sessionChannel;
+
+      // 2. DEDICATED CONTROL CHANNEL (Only for high-speed mouse/keyboard commands)
+      const controlChannel = supabase.channel(`${incomingRequest.channelId}_controls`, { config: { broadcast: { ack: false } } });
+      controlChannelRef.current = controlChannel;
+
+      // Listen for commands on the dedicated channel
+      controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
+        executeAdminCommand(payload.payload);
+      }).subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log("🟢 STAFF DEDICATED CONTROL CHANNEL OPEN!");
+      });
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
@@ -166,10 +131,9 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         stopSharing(); toast("🛑 IT Admin ended the remote session.", { icon: 'ℹ️' });
       }).on('broadcast', { event: 'admin_stopped_sharing' }, () => {
         stopSharing(); toast.error("🛑 IT Admin ended the remote support session.");
-      }).on('broadcast', { event: 'control_command' }, (payload) => {
-        executeAdminCommand(payload.payload);
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          console.log("🟢 STAFF SIGNALING CHANNEL OPEN");
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
           sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
@@ -186,10 +150,14 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const stopSharing = () => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
-    if (channelRef.current) {
-      channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
+    if (signalingChannelRef.current) {
+      signalingChannelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: {} });
+      supabase.removeChannel(signalingChannelRef.current);
+      signalingChannelRef.current = null;
+    }
+    if (controlChannelRef.current) {
+      supabase.removeChannel(controlChannelRef.current);
+      controlChannelRef.current = null;
     }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null);
   };
@@ -197,11 +165,13 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   return (
     <>
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-[9999] bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
+        <div className="fixed bottom-6 right-6 z-9999 bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)] shrink-0" />
             <div>
-              <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">Screen Share Active</p>
+              <p className="text-xs font-bold text-orange-600 uppercase tracking-widest flex items-center gap-2">
+                Screen Share Active <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded font-black">V3-TUNNEL</span>
+              </p>
               <p className="text-[11px] font-semibold text-slate-500">IT Support is actively monitoring your workspace.</p>
             </div>
           </div>
@@ -212,7 +182,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       )}
 
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white/90 backdrop-blur-3xl border border-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-sm animate-bounce">
               <Monitor size={32} />

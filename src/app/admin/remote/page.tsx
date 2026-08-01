@@ -41,17 +41,16 @@ export default function AdminRemotePage() {
   
   const dragStartDock = useRef({ x: 0, y: 0 });
   const dragStartChat = useRef({ x: 0, y: 0 });
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
-  const channelRef = useRef<any>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const signalingChannelRef = useRef<any>(null);
+  const controlChannelRef = useRef<any>(null);
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   
-  const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastMoveTimeRef = useRef<number>(0);
+  const lastBroadcastRef = useRef<number>(0);
 
   useEffect(() => { 
     document.documentElement.classList.remove('dark'); 
@@ -70,7 +69,7 @@ export default function AdminRemotePage() {
   const loadStaffAndAdminData = async () => {
     try {
       const [{ data: profiles }, { data: assets }] = await Promise.all([ supabase.from('profiles').select('*'), supabase.from('assets').select('name, assigned_to') ]);
-      if (profiles) setStaffList(profiles.map((p: any) => ({ ...p, assigned_asset_name: (assets || []).find(a => a.assigned_to === p.id)?.name || 'Unassigned PC' })));
+      if (profiles) setStaffList(profiles.map((p: any) => ({ ...p, assigned_asset_name: (assets || []).find((a: any) => a.assigned_to === p.id)?.name || 'Unassigned PC' })));
     } catch (error) {} finally { setLoading(false); }
   };
 
@@ -84,39 +83,15 @@ export default function AdminRemotePage() {
     try {
       const backgroundChannelId = getChannelTopic(activeSession);
       const liveSessionId = `${backgroundChannelId}_live_${Date.now()}`;
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (signalingChannelRef.current) supabase.removeChannel(signalingChannelRef.current);
 
       const peer = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 10 });
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
-      // 🌟 THE FIX: DO NOT TERMINATE SESSION ON WEBRTC FAILURE. Let Supabase Fallback take over!
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed') {
-          toast.error("WebRTC dropped. Falling back to secure database routing...", { duration: 4000 });
-        }
-      };
-
-      const dataChannel = peer.createDataChannel('enterprise_channel', { ordered: true });
-      dataChannelRef.current = dataChannel;
-      
-      dataChannel.onopen = () => {
-        keepAliveIntervalRef.current = setInterval(() => {
-          if (dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: 'ping' }));
-        }, 3000); 
-      };
-
-      dataChannel.onmessage = (event) => {
-        if (typeof event.data === 'string') {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'file_meta') toast(`Receiving file: ${msg.name}...`);
-            if (msg.type === 'clipboard_data') {
-               navigator.clipboard.writeText(msg.text).then(() => {
-                 toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
-               });
-            }
-          } catch(e) {}
+          toast.error("WebRTC dropped. Attempting to reconnect...", { duration: 4000 });
         }
       };
 
@@ -129,8 +104,16 @@ export default function AdminRemotePage() {
         }
       };
 
-      const sessionChannel = supabase.channel(liveSessionId, { config: { broadcast: { self: false, ack: true } } });
-      channelRef.current = sessionChannel;
+      // 1. SIGNALING CHANNEL
+      const sessionChannel = supabase.channel(liveSessionId, { config: { broadcast: { self: false, ack: false } } });
+      signalingChannelRef.current = sessionChannel;
+
+      // 2. DEDICATED CONTROL CHANNEL
+      const controlChannel = supabase.channel(`${liveSessionId}_controls`, { config: { broadcast: { self: false, ack: false } } });
+      controlChannelRef.current = controlChannel;
+      controlChannel.subscribe((status) => {
+         if (status === 'SUBSCRIBED') console.log("🟢 ADMIN DEDICATED CONTROL CHANNEL OPEN!");
+      });
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
@@ -161,6 +144,7 @@ export default function AdminRemotePage() {
         });
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          console.log("🟢 ADMIN SIGNALING CHANNEL OPEN");
           const pingChannel = supabase.channel(backgroundChannelId);
           pingChannel.subscribe(async (pingStatus) => {
             if (pingStatus === 'SUBSCRIBED') {
@@ -174,42 +158,32 @@ export default function AdminRemotePage() {
   };
 
   const terminateSession = () => {
-    if (keepAliveIntervalRef.current) { clearInterval(keepAliveIntervalRef.current); keepAliveIntervalRef.current = null; }
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
-    if (channelRef.current) { channelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: {} }); supabase.removeChannel(channelRef.current); channelRef.current = null; }
+    if (signalingChannelRef.current) { signalingChannelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: {} }); supabase.removeChannel(signalingChannelRef.current); signalingChannelRef.current = null; }
+    if (controlChannelRef.current) { supabase.removeChannel(controlChannelRef.current); controlChannelRef.current = null; }
     if (videoRef.current) videoRef.current.srcObject = null;
     if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
     setSessionStatus('idle'); setIsControlling(false); setIsKeyboardEnabled(false); setIsChatOpen(false); setIsFullscreen(false);
   };
 
   const sendControlCommand = (command: any) => {
-    if (isControlling) {
-      if (dataChannelRef.current?.readyState === 'open') dataChannelRef.current.send(JSON.stringify(command));
-      else if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'control_command', payload: command });
+    if (!isControlling || !controlChannelRef.current) return;
+    
+    if (command.type !== 'mousemove' && command.type !== 'scroll') {
+       console.log(`📤 SENDING VIA DEDICATED CHANNEL:`, command.type, command);
     }
-  };
 
-  const sendFileP2P = (file: File) => {
-    if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') return toast.error("P2P Data Tunnel not open.");
-    toast.loading(`Uploading ${file.name}...`);
-    dataChannelRef.current.send(JSON.stringify({ type: 'file_meta', name: file.name, size: file.size, fileType: file.type }));
-    const CHUNK_SIZE = 16384; 
-    const reader = new FileReader();
-    let offset = 0;
-
-    reader.onload = (e) => {
-      if (e.target?.result && dataChannelRef.current) {
-        dataChannelRef.current.send(e.target.result as ArrayBuffer);
-        offset += (e.target.result as ArrayBuffer).byteLength;
-        if (offset < file.size) readSlice(offset);
-        else toast.success("Document Sent Successfully!");
+    try {
+      // 🚨 Throttle mouse moves to 150ms to ensure Supabase never blocks it
+      if (command.type === 'mousemove' || command.type === 'scroll') {
+        const now = Date.now();
+        if (now - lastBroadcastRef.current < 150) return; 
+        lastBroadcastRef.current = now;
       }
-    };
-    const readSlice = (o: number) => {
-      const slice = file.slice(o, o + CHUNK_SIZE);
-      reader.readAsArrayBuffer(slice);
-    };
-    readSlice(0);
+      controlChannelRef.current.send({ type: 'broadcast', event: 'control_command', payload: command });
+    } catch (err) {
+      console.error("Failed to send command:", err);
+    }
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
@@ -222,7 +196,7 @@ export default function AdminRemotePage() {
     }
 
     if (!isControlling) return;
-    e.preventDefault();
+    if (type !== 'scroll') e.preventDefault(); 
 
     if (type === 'mousemove') {
       const now = Date.now();
@@ -284,11 +258,11 @@ export default function AdminRemotePage() {
 
   const sendChatMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !channelRef.current) return;
+    if (!chatInput.trim() || !signalingChannelRef.current) return;
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     setChatMessages(prev => [...prev, { sender: 'IT Admin', text: chatInput, time: timeString, isSelf: true }]);
-    channelRef.current.send({ type: 'broadcast', event: 'chat_message', payload: { sender: 'IT Admin', text: chatInput, time: timeString } });
+    signalingChannelRef.current.send({ type: 'broadcast', event: 'chat_message', payload: { sender: 'IT Admin', text: chatInput, time: timeString } });
     setChatInput('');
   };
 
@@ -311,7 +285,6 @@ export default function AdminRemotePage() {
         <div className="w-112.5 h-112.5 bg-[#FFD1B3] rounded-full blur-[120px]"></div>
         <div className="w-112.5 h-112.5 bg-[#D8B4FE] rounded-full blur-[120px]"></div>
       </div>
-      <input type="file" ref={fileInputRef} onChange={(e) => { if(e.target.files?.[0]) sendFileP2P(e.target.files[0]) }} className="hidden" />
 
       <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
@@ -380,7 +353,7 @@ export default function AdminRemotePage() {
                   onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
                   onMouseUp={(e) => handleMouseEvent(e, 'mouseup')}
                   onMouseLeave={(e) => handleMouseEvent(e, 'mouseleave')}
-                  onWheel={(e) => { if(isControlling) { e.preventDefault(); sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
+                  onWheel={(e) => { if(isControlling) { sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
                   onContextMenu={(e) => e.preventDefault()}
                 >
                   <video ref={videoRef} autoPlay playsInline muted={!isAudioEnabled} className={`max-w-full max-h-full object-contain ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} />
@@ -426,7 +399,7 @@ export default function AdminRemotePage() {
                           color: 'text-blue-500 hover:bg-blue-100 hover:text-blue-700', activeClass: 'text-blue-700 bg-white border-[3px] border-blue-600 shadow-lg shadow-blue-600/30 scale-[1.15]',
                           action: () => { 
                             if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
-                            else { channelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); }
+                            else { signalingChannelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); setIsControlling(true); }
                           }, tooltip: isControlling ? "Disable Control" : "Request Control" 
                         },
                         { 
@@ -443,7 +416,6 @@ export default function AdminRemotePage() {
                         { icon: <Clipboard size={20} />, active: false, color: 'text-amber-500 hover:bg-amber-100 hover:text-amber-700', action: requestClipboardSync, tooltip: "Sync Clipboard" },
                         { icon: <Volume2 size={20} strokeWidth={isAudioEnabled ? 2.5 : 2} />, active: isAudioEnabled, color: 'text-teal-500 hover:bg-teal-100 hover:text-teal-700', activeClass: 'text-teal-700 bg-white border-[3px] border-teal-600 shadow-lg shadow-teal-600/30 scale-[1.15]', action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },
                         { icon: isFullscreen ? <Minimize size={20} strokeWidth={2.5}/> : <Maximize size={20} />, active: isFullscreen, color: 'text-slate-500 hover:bg-slate-200 hover:text-slate-800', activeClass: 'text-slate-800 bg-white border-[3px] border-slate-700 shadow-lg shadow-slate-600/30 scale-[1.15]', action: toggleFullscreen, tooltip: "Fullscreen" },
-                        { icon: <FileUp size={20} />, active: false, color: 'text-orange-500 hover:bg-orange-100 hover:text-orange-700', action: () => fileInputRef.current?.click(), tooltip: "Share Document" },
                         { icon: <RefreshCw size={20} />, active: false, color: 'text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700', action: () => sendControlCommand({ type: 'refresh' }), tooltip: "Reload App" },
                         { icon: <Ban size={20} />, active: false, color: "text-rose-500 hover:text-white hover:bg-rose-500", action: terminateSession, tooltip: "Disconnect" }
                       ].map((btn, i) => (

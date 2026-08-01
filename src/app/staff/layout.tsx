@@ -67,10 +67,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
+  const controlChannelRef = useRef<any>(null);
 
   const [staffProfile, setStaffProfile] = useState<any>({ id: '', name: 'Loading...', email: '...', initials: 'ST' });
 
-  // 🌟 THEME SYNC
   useEffect(() => {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -106,7 +106,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, showChat]);
 
-  // 🌟 LIVE STAFF ONLINE PRESENCE TRACKING
   useEffect(() => {
     if (!staffProfile.id) return;
     
@@ -174,6 +173,45 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); supabase.removeChannel(ch3); };
   }, [staffProfile, listenerKey]);
 
+  const executeAdminCommand = async (cmd: any) => {
+    if (!isControlGrantedRef.current) return;
+
+    if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
+      console.log("⚡ COMMAND RECEIVED FROM DB BRIDGE:", cmd.type);
+    }
+
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      try {
+        if (cmd.type === 'mousemove') {
+          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+        }
+        else if (cmd.type === 'mousedown') {
+          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+          (window as any).electronAPI.sendMouseDown(cmd.button);
+        }
+        else if (cmd.type === 'mouseup') {
+          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+          (window as any).electronAPI.sendMouseUp(cmd.button);
+        }
+        else if (cmd.type === 'keydown') (window as any).electronAPI.sendKeyDown(cmd.key);
+        else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
+        else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
+        else if (cmd.type === 'refresh') (window as any).electronAPI.sendSystemCommand('refresh_app');
+        else if (cmd.type === 'sync_clipboard') {
+          if ((window as any).electronAPI.readClipboard) {
+            const text = await (window as any).electronAPI.readClipboard();
+            if (channelRef.current) {
+              channelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
+            }
+            addSystemAlert("📋 Clipboard Synced", "Clipboard securely synced to IT Admin.");
+          }
+        }
+      } catch (e) {
+        console.error("OS execution failed:", e);
+      }
+    }
+  };
+
   const startScreenShare = async (manualChannelId?: string, alertIdToDismiss?: string) => {
     const targetChannelId = manualChannelId || incomingRequest?.channelId || getChannelTopic(staffProfile);
     setIsConnecting(true);
@@ -202,28 +240,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
 
-      peer.ondatachannel = (event) => {
-        const receiveChannel = event.channel;
-        receiveChannel.onmessage = async (e) => {
-          if (!isControlGrantedRef.current || !electronAPI) return;
-          const cmd = JSON.parse(e.data);
-          
-          switch(cmd.type) {
-            case 'mousemove': electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); break;
-            case 'mousedown': electronAPI.sendMouseDown(cmd.button); break;
-            case 'mouseup': electronAPI.sendMouseUp(cmd.button); break;
-            case 'scroll': electronAPI.sendScroll(cmd.deltaY); break;
-            case 'keydown': electronAPI.sendKeyDown(cmd.key); break;
-            case 'keyup': electronAPI.sendKeyUp(cmd.key); break;
-            case 'sync_clipboard': 
-              const text = await electronAPI.readClipboard();
-              receiveChannel.send(JSON.stringify({ type: 'clipboard_data', text }));
-              break;
-            case 'refresh': window.location.reload(); break;
-          }
-        };
-      };
-
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
           stopScreenSharing("Network connection failed.");
@@ -235,6 +251,15 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       supabase.getChannels().forEach(ch => { if (ch.topic === targetChannelId) supabase.removeChannel(ch); });
       const sessionChannel = supabase.channel(targetChannelId, { config: { broadcast: { self: false, ack: true } } });
       channelRef.current = sessionChannel;
+
+      const controlChannel = supabase.channel(`${targetChannelId}_controls`, { config: { broadcast: { ack: false } } });
+      controlChannelRef.current = controlChannel;
+      
+      controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
+        executeAdminCommand(payload.payload);
+      }).subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log("🟢 STAFF DEDICATED CONTROL CHANNEL OPEN!");
+      });
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
@@ -284,6 +309,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
+    if (controlChannelRef.current) {
+      supabase.removeChannel(controlChannelRef.current);
+      controlChannelRef.current = null;
+    }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
     setIsControlGranted(false); setRemoteControlRequest(false);
     
@@ -319,9 +348,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
-  // 🎨 PURE ULTRA GLASS THEME: Heavily Transparent to let portal orange/purple bleed through!
   const theme = {
-    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]', // The base portal theme color
+    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
     glassPanel: isDarkMode 
       ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-2xl' 
       : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
@@ -340,11 +368,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   return (
     <div className={`min-h-screen ${theme.bg} flex font-sans relative overflow-hidden transition-colors duration-1000 z-0`}>
       
-      {/* 🌟 TRUE LIGHT ORANGE & PURPLE AMBIENT BACKGROUND ORBS */}
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      {/* FLOATING TOASTS (Glass) */}
       <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 rounded-3xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
@@ -360,7 +386,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         ))}
       </div>
 
-      {/* 🔴 ACTIVE STREAMING UI */}
       {isStreaming && (
         <>
           {adminPing && (
@@ -372,7 +397,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           
           <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
             
-            {/* 🌟 REMOTE CONTROL APPROVAL MODAL */}
             {remoteControlRequest && (
               <div className={`${theme.glassPanel} p-5 rounded-3xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto`}>
                 <div className="flex items-start gap-3">
@@ -393,7 +417,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
             )}
 
-            {/* 🌟 FULL TRANSPARENT GLASS CHAT BOX */}
             {showChat && (
               <div className={`w-80 ${theme.glassPanel} rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border border-white/40`}>
                 <div className={`p-4 border-b text-sm font-bold flex justify-between items-center ${isDarkMode ? 'border-white/10 text-white' : 'border-white/30 text-slate-900'}`}>
@@ -415,12 +438,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
             )}
 
-            {/* Floating Action Bar */}
             <div className={`${theme.glassPanel} p-3 sm:p-4 rounded-3xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-6 max-w-md w-full pointer-events-auto border-white/40`}>
               <div className="flex items-center gap-3">
                 <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0 shadow-[0_0_10px_rgba(244,63,94,0.8)]" />
                 <div>
-                  <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">Screen Share Active</p>
+                  <p className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest flex items-center gap-2">
+                    Screen Share Active <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded font-black">V3-TUNNEL</span>
+                  </p>
                   <p className={`text-[10px] font-semibold ${theme.subText}`}>
                     {isControlGranted ? 'Admin controls your PC.' : 'IT Support is viewing your workspace.'}
                   </p>
@@ -437,7 +461,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </>
       )}
 
-      {/* ⚠️ INCOMING REQUEST MODAL */}
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className={`${theme.glassPanel} rounded-4xl max-w-md w-full p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] space-y-6 animate-in zoom-in-95 border-2 ${isDarkMode ? 'border-orange-500/50' : 'border-white/50'}`}>
@@ -461,7 +484,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* 🌟 NARROWER SIDEBAR (FROSTED GLASS) */}
       <aside className={`fixed lg:sticky top-0 left-0 h-screen w-56 z-50 flex flex-col transition-transform duration-300 ${theme.glassPanel} border-y-0 border-l-0 border-r ${isDarkMode ? 'border-r-white/10' : 'border-r-white/40'} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className={`h-16 flex items-center px-5 border-b shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/30'}`}><img src="/logo.png" alt="Logo" className="h-7 w-auto drop-shadow-sm" /></div>
         <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto custom-scrollbar">
@@ -489,7 +511,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
         
-        {/* 🌟 HEADER (FROSTED GLASS) */}
         <header className={`h-16 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} border-x-0 border-t-0 border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/40'}`}>
           <div className="flex items-center gap-3">
             <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-xl transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-slate-500 hover:bg-white/30'}`}><Menu size={20} /></button>
@@ -502,7 +523,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white/50">{unreadCount}</span>}
             </button>
 
-            {/* NOTIFICATION DROPDOWN */}
             {isNotifOpen && (
               <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-4xl overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200 border ${theme.glassPanel}`}>
                 <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/30 border-white/40 backdrop-blur-md'}`}>
@@ -534,7 +554,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        {/* 🌟 MAIN CONTENT AREA (Scrollable) */}
         <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
         </main>
