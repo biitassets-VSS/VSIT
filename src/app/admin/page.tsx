@@ -197,14 +197,30 @@ export default function AdminDashboardPage() {
       const offlineCount = Math.max(0, staffData.length - finalOnlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 6).map(log => {
-        const matchedProfile = staffData.find(p => p.email?.toLowerCase() === log.user_email?.toLowerCase() || p.id === log.inspected_by);
-        let displayName = log.user_email?.split('@')[0] || 'A user'; 
-        if (matchedProfile) displayName = `${matchedProfile.full_name || matchedProfile.name || displayName}`;
+        // 🌟 FIX: Check multiple fields to reliably find the user profile
+        const matchedProfile = staffData.find(p => 
+          (log.user_email && p.email?.toLowerCase() === log.user_email.toLowerCase()) || 
+          (log.user_id && p.id === log.user_id) ||
+          (log.inspected_by && p.id === log.inspected_by) ||
+          (log.created_by && p.id === log.created_by)
+        );
+        
+        let displayName = 'A user'; 
+        let empCode = '';
+
+        if (matchedProfile) {
+          displayName = matchedProfile.full_name || matchedProfile.name || displayName;
+          empCode = matchedProfile.emp_code || '';
+        } else if (log.user_email) {
+          displayName = log.user_email.split('@')[0];
+        }
+
         const statusText = (log.status || '').toLowerCase();
         let logTheme = 'text-purple-600 bg-purple-500/10 border-purple-500/20'; 
         if (statusText.includes('pending') || statusText === '') logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
         if (statusText.includes('resolv') || statusText.includes('approv')) logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-        return { ...log, displayName, logTheme };
+        
+        return { ...log, displayName, empCode, logTheme };
       });
 
       setStats({
@@ -445,7 +461,15 @@ export default function AdminDashboardPage() {
                         <Clock size={14} strokeWidth={2.5} />
                       </div>
                       <div className="pt-0.5 min-w-0">
-                        <p className={`text-[14px] font-bold leading-tight truncate ${theme.text}`}>{log.displayName}</p>
+                        {/* 🌟 FIX: Updated rendering to show Name AND Employee ID Tag */}
+                        <p className={`text-[14px] font-bold leading-tight flex items-center gap-2 truncate ${theme.text}`}>
+                          <span className="truncate">{log.displayName}</span>
+                          {log.empCode && (
+                            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-slate-200 text-slate-500'}`}>
+                              {log.empCode}
+                            </span>
+                          )}
+                        </p>
                         <p className={`text-[11px] font-medium mt-1 truncate ${theme.subText}`}>Submitted system request.</p>
                         <p className={`text-[10px] font-bold uppercase tracking-wider mt-1.5 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`}>{timeAgo(log.created_at)}</p>
                       </div>
