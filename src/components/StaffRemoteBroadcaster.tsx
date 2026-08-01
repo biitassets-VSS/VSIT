@@ -95,17 +95,31 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
       peerRef.current = peer;
 
+      // ⚡ LISTEN FOR INCOMING WEBRTC DATA CHANNEL FOR ZERO-LATENCY CONTROLS
+      peer.ondatachannel = (event) => {
+        const receiveChannel = event.channel;
+        receiveChannel.onmessage = (e) => {
+          try {
+            const cmd = JSON.parse(e.data);
+            executeAdminCommand(cmd); // Fast execution via P2P
+          } catch (err) {
+            console.error("Failed to parse data channel message:", err);
+          }
+        };
+        receiveChannel.onopen = () => console.log("⚡ P2P DataChannel Opened (Staff Side)");
+      };
+
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
 
       // 1. SIGNALING CHANNEL (For WebRTC setup and chat)
       const sessionChannel = supabase.channel(incomingRequest.channelId, { config: { broadcast: { ack: false } } });
       signalingChannelRef.current = sessionChannel;
 
-      // 2. DEDICATED CONTROL CHANNEL (Only for high-speed mouse/keyboard commands)
+      // 2. DEDICATED CONTROL CHANNEL (Fallback)
       const controlChannel = supabase.channel(`${incomingRequest.channelId}_controls`, { config: { broadcast: { ack: false } } });
       controlChannelRef.current = controlChannel;
 
-      // Listen for commands on the dedicated channel
+      // Listen for commands on the dedicated channel (Fallback)
       controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
         executeAdminCommand(payload.payload);
       }).subscribe((status) => {

@@ -11,8 +11,9 @@ app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('enable-media-stream');
 app.commandLine.appendSwitch('disable-features', 'WebRtcWgcCapturer'); 
 
+// ⚡ Ultra-fast instant mouse movement (prevents cursor gliding lag)
 mouse.config.autoDelayMs = 0;
-mouse.config.mouseSpeed = 5000;
+mouse.config.mouseSpeed = 100000;
 
 const KEY_MAP = {
   'Backspace': Key.Backspace, 'Tab': Key.Tab, 'Enter': Key.Enter,
@@ -35,6 +36,13 @@ for (let i = 65; i <= 90; i++) {
 function resolveNutKey(keyStr) {
   if (!keyStr) return null;
   return KEY_MAP[keyStr] || KEY_MAP[keyStr.toLowerCase()] || null;
+}
+
+// Helper to convert coordinate whether sent as 0.0 - 1.0 or 0 - 100 percentage
+function toPixels(val, maxDimension) {
+  if (val === undefined || val === null || isNaN(val)) return 0;
+  const normalized = val > 1 ? val / 100 : val;
+  return Math.round(Math.max(0, Math.min(1, normalized)) * maxDimension);
 }
 
 let mainWindow;
@@ -103,49 +111,55 @@ ipcMain.handle('get-desktop-source-id', async () => {
   }
 });
 
-// 🌟 DIAGNOSTIC LOGGING ADDED FOR REMOTE CONTROLS
-ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
-  console.log(`[OS ACTION] Clicking mouse at ${xPercent}%, ${yPercent}%`);
+// Remote Mouse Controls
+ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
   try {
-    const { width, height } = screen.getPrimaryDisplay().size;
-    await mouse.setPosition(new Point(Math.round((xPercent / 100) * width), Math.round((yPercent / 100) * height)));
+    const display = screen.getPrimaryDisplay();
+    const width = display.bounds.width;
+    const height = display.bounds.height;
+
+    const posX = toPixels(xPercent, width);
+    const posY = toPixels(yPercent, height);
+
+    await mouse.setPosition(new Point(posX, posY));
+  } catch (e) {}
+});
+
+ipcMain.on('remote-click', async (event, { xPercent, yPercent }) => {
+  try {
+    const display = screen.getPrimaryDisplay();
+    const width = display.bounds.width;
+    const height = display.bounds.height;
+
+    const posX = toPixels(xPercent, width);
+    const posY = toPixels(yPercent, height);
+
+    await mouse.setPosition(new Point(posX, posY));
     await mouse.click(Button.LEFT);
   } catch (e) { console.error("Mouse click failed:", e); }
 });
 
-ipcMain.on('remote-type', async (event, { text }) => {
-  console.log(`[OS ACTION] Typing text: ${text}`);
-  try { if (text) await keyboard.type(text); } catch (e) {}
-});
-
-ipcMain.on('remote-mouse-move', async (event, { xPercent, yPercent }) => {
-  console.log(`[OS ACTION] Moving mouse to ${xPercent}%, ${yPercent}%`);
-  try {
-    const { width, height } = screen.getPrimaryDisplay().size;
-    await mouse.setPosition(new Point(Math.round((xPercent / 100) * width), Math.round((yPercent / 100) * height)));
-  } catch (e) {}
-});
-
 ipcMain.on('remote-mouse-down', async (event, { button }) => {
-  console.log(`[OS ACTION] Mouse down (Button: ${button})`);
   try { await mouse.pressButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {}
 });
 
 ipcMain.on('remote-mouse-up', async (event, { button }) => {
-  console.log(`[OS ACTION] Mouse up (Button: ${button})`);
   try { await mouse.releaseButton(button === 2 ? Button.RIGHT : Button.LEFT); } catch (e) {}
 });
 
 ipcMain.on('remote-scroll', async (event, { deltaY }) => {
-  console.log(`[OS ACTION] Scroll (Delta: ${deltaY})`);
   try {
     if (deltaY > 0) await mouse.scrollDown(2);
     else await mouse.scrollUp(2);
   } catch (e) {}
 });
 
+// Remote Keyboard Controls
+ipcMain.on('remote-type', async (event, { text }) => {
+  try { if (text) await keyboard.type(text); } catch (e) {}
+});
+
 ipcMain.on('remote-key-down', async (event, { key }) => {
-  console.log(`[OS ACTION] Key down: ${key}`);
   try {
     const nutKey = resolveNutKey(key);
     if (nutKey !== null) await keyboard.pressKey(nutKey);
@@ -154,7 +168,6 @@ ipcMain.on('remote-key-down', async (event, { key }) => {
 });
 
 ipcMain.on('remote-key-up', async (event, { key }) => {
-  console.log(`[OS ACTION] Key up: ${key}`);
   try {
     const nutKey = resolveNutKey(key);
     if (nutKey !== null) await keyboard.releaseKey(nutKey);

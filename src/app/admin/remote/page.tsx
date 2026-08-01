@@ -46,6 +46,8 @@ export default function AdminRemotePage() {
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const signalingChannelRef = useRef<any>(null);
   const controlChannelRef = useRef<any>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null); // ⚡ Added DataChannel Ref
+  
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   
@@ -89,6 +91,16 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
+      // ⚡ Create WebRTC DataChannel for ultra-low latency controls
+      const dataChannel = peer.createDataChannel("controls", {
+        ordered: false, // Don't delay new packets for lost ones
+        maxRetransmits: 0 
+      });
+      dataChannelRef.current = dataChannel;
+      
+      dataChannel.onopen = () => console.log("⚡ WebRTC DataChannel Opened for fast controls");
+      dataChannel.onclose = () => console.log("WebRTC DataChannel Closed");
+
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === 'failed') {
           toast.error("WebRTC dropped. Attempting to reconnect...", { duration: 4000 });
@@ -108,7 +120,7 @@ export default function AdminRemotePage() {
       const sessionChannel = supabase.channel(liveSessionId, { config: { broadcast: { self: false, ack: false } } });
       signalingChannelRef.current = sessionChannel;
 
-      // 2. DEDICATED CONTROL CHANNEL
+      // 2. DEDICATED CONTROL CHANNEL (Fallback)
       const controlChannel = supabase.channel(`${liveSessionId}_controls`, { config: { broadcast: { self: false, ack: false } } });
       controlChannelRef.current = controlChannel;
       controlChannel.subscribe((status) => {
@@ -158,6 +170,7 @@ export default function AdminRemotePage() {
   };
 
   const terminateSession = () => {
+    if (dataChannelRef.current) { dataChannelRef.current.close(); dataChannelRef.current = null; } // Cleanup
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (signalingChannelRef.current) { signalingChannelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: {} }); supabase.removeChannel(signalingChannelRef.current); signalingChannelRef.current = null; }
     if (controlChannelRef.current) { supabase.removeChannel(controlChannelRef.current); controlChannelRef.current = null; }
@@ -167,14 +180,23 @@ export default function AdminRemotePage() {
   };
 
   const sendControlCommand = (command: any) => {
-    if (!isControlling || !controlChannelRef.current) return;
+    if (!isControlling) return;
     
-    if (command.type !== 'mousemove' && command.type !== 'scroll') {
-       console.log(`📤 SENDING VIA DEDICATED CHANNEL:`, command.type, command);
-    }
-
     try {
-      // 🚨 Throttle mouse moves to 150ms to ensure Supabase never blocks it
+      // ⚡ FAST PATH: Send via WebRTC DataChannel if open (Zero Latency)
+      if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+        dataChannelRef.current.send(JSON.stringify(command));
+        // Skip sending fast continuous actions over Supabase if DataChannel worked
+        if (command.type === 'mousemove' || command.type === 'scroll') return;
+      }
+
+      if (!controlChannelRef.current) return;
+      
+      if (command.type !== 'mousemove' && command.type !== 'scroll') {
+         console.log(`📤 SENDING COMMAND:`, command.type, command);
+      }
+
+      // SLOW PATH FALLBACK: Supabase Throttle
       if (command.type === 'mousemove' || command.type === 'scroll') {
         const now = Date.now();
         if (now - lastBroadcastRef.current < 150) return; 
@@ -200,7 +222,8 @@ export default function AdminRemotePage() {
 
     if (type === 'mousemove') {
       const now = Date.now();
-      if (now - lastMoveTimeRef.current < 35) return; 
+      // Increase polling speed for DataChannel smoothness (35ms -> ~28fps)
+      if (now - lastMoveTimeRef.current < 30) return; 
       lastMoveTimeRef.current = now;
     }
 
@@ -227,10 +250,13 @@ export default function AdminRemotePage() {
     const clickX = e.clientX - rect.left - offsetX;
     const clickY = e.clientY - rect.top - offsetY;
 
-    if (clickX < 0 || clickX > actualWidth || clickY < 0 || clickY > actualHeight) return;
+    // ⚡ FIX: Strict boundaries and calculation
+    const clampedX = Math.max(0, Math.min(clickX, actualWidth));
+    const clampedY = Math.max(0, Math.min(clickY, actualHeight));
 
-    const xPercent = (clickX / actualWidth) * 100;
-    const yPercent = (clickY / actualHeight) * 100;
+    // Convert to percentage (0.0 to 1.0) instead of (0 to 100) for standard Electron coordinates
+    const xPercent = clampedX / actualWidth;
+    const yPercent = clampedY / actualHeight;
 
     sendControlCommand({ type, xPercent, yPercent, button: e.button });
   };
@@ -346,9 +372,11 @@ export default function AdminRemotePage() {
                   )}
                 </div>
 
+                {/* ⚡ FIX: Added cursor-default & select-none */}
                 <div 
                   ref={viewportContainerRef} 
-                  className={`flex-1 bg-slate-900 relative overflow-hidden flex items-center justify-center rounded-b-3xl ${isControlling ? 'cursor-crosshair' : ''}`}
+                  className={`flex-1 bg-slate-900 relative overflow-hidden flex items-center justify-center rounded-b-3xl ${isControlling ? 'cursor-default select-none' : ''}`}
+                  style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                   onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
                   onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
                   onMouseUp={(e) => handleMouseEvent(e, 'mouseup')}
@@ -356,7 +384,14 @@ export default function AdminRemotePage() {
                   onWheel={(e) => { if(isControlling) { sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
                   onContextMenu={(e) => e.preventDefault()}
                 >
-                  <video ref={videoRef} autoPlay playsInline muted={!isAudioEnabled} className={`max-w-full max-h-full object-contain ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} />
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted={!isAudioEnabled} 
+                    className={`max-w-full max-h-full object-contain pointer-events-auto cursor-default select-none ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} 
+                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                  />
                   
                   {sessionStatus === 'requesting' && (
                     <div className="text-center text-white">
@@ -366,7 +401,7 @@ export default function AdminRemotePage() {
                   )}
                   
                   {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }} className="absolute bottom-24 right-6 w-80 bg-white/95 backdrop-blur-3xl border border-white shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden">
+                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }} className="absolute bottom-24 right-6 w-80 bg-white/95 backdrop-blur-3xl border border-white shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden cursor-default">
                       <div onMouseDown={(e) => { e.stopPropagation(); setIsDraggingChat(true); dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y }; }} className="p-4 border-b border-slate-100 text-slate-800 flex justify-between items-center cursor-grab active:cursor-grabbing bg-slate-50/50">
                         <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-purple-600" /> Live Chat</span>
                         <button onClick={() => setIsChatOpen(false)} className="hover:bg-slate-200 p-1.5 rounded-md text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"><X size={16}/></button>
@@ -387,7 +422,7 @@ export default function AdminRemotePage() {
                   )}
 
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }} className="absolute bottom-6 left-1/2 bg-white/80 backdrop-blur-2xl border border-white p-2 rounded-full flex gap-2 shadow-2xl z-50 items-center transition-all">
+                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }} className="absolute bottom-6 left-1/2 bg-white/80 backdrop-blur-2xl border border-white p-2 rounded-full flex gap-2 shadow-2xl z-50 items-center transition-all cursor-default">
                       <div onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }} className="cursor-grab active:cursor-grabbing p-2 text-slate-400 hover:text-slate-800 transition-colors ml-1">
                         <GripVertical size={18} />
                       </div>
