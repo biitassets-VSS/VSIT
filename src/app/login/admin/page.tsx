@@ -7,15 +7,25 @@ import { Mail, Lock, ArrowRight, Loader2, AlertCircle, Sun, Moon } from 'lucide-
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false); // 🌟 Added Remember Me State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
 
-  // Initialize theme
+  // Initialize theme & load saved credentials
   useEffect(() => {
     const isSystemDark = document.documentElement.classList.contains('dark') || true;
     setIsDark(isSystemDark);
     if (isSystemDark) document.documentElement.classList.add('dark');
+
+    // 🌟 Load saved credentials on startup
+    const savedEmail = localStorage.getItem('vsit_admin_saved_email');
+    const savedPass = localStorage.getItem('vsit_admin_saved_pass');
+    if (savedEmail && savedPass) {
+      setEmail(savedEmail);
+      setPassword(savedPass);
+      setRememberMe(true);
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -52,6 +62,15 @@ export default function AdminLoginPage() {
         throw new Error('Not authorized for Admin access.');
       }
 
+      // 🌟 Save or clear credentials based on checkbox
+      if (rememberMe) {
+        localStorage.setItem('vsit_admin_saved_email', email.trim());
+        localStorage.setItem('vsit_admin_saved_pass', password);
+      } else {
+        localStorage.removeItem('vsit_admin_saved_email');
+        localStorage.removeItem('vsit_admin_saved_pass');
+      }
+
       localStorage.setItem('vsit_admin_session', JSON.stringify(profile || authData.user));
 
       setTimeout(() => {
@@ -76,13 +95,13 @@ export default function AdminLoginPage() {
         {isDark ? <Sun size={20} className="stroke-[2.5]" /> : <Moon size={20} className="stroke-[2.5]" />}
       </button>
 
-      <div className="relative w-full max-w-[440px]">
+      <div className="relative w-full max-w-110">
         
         {/* Neon Orange Glow Effect */}
-        <div className={`absolute -inset-1 rounded-[2.5rem] blur-2xl opacity-40 animate-pulse transition-colors duration-700 ${isDark ? 'bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600' : 'bg-gradient-to-r from-orange-300 via-amber-300 to-orange-300'}`}></div>
+        <div className={`absolute -inset-1 rounded-[2.5rem] blur-2xl opacity-40 animate-pulse transition-colors duration-700 ${isDark ? 'bg-linear-to-r from-orange-600 via-amber-500 to-orange-600' : 'bg-linear-to-r from-orange-300 via-amber-300 to-orange-300'}`}></div>
         
         {/* Main Glass Card */}
-        <div className={`relative rounded-[2rem] p-8 sm:p-10 border shadow-2xl flex flex-col items-center transition-colors duration-500 ${isDark ? 'bg-[#121212]/95 backdrop-blur-2xl border-zinc-800' : 'bg-white/95 backdrop-blur-2xl border-white shadow-orange-900/5'}`}>
+        <div className={`relative rounded-4xl p-8 sm:p-10 border shadow-2xl flex flex-col items-center transition-colors duration-500 ${isDark ? 'bg-[#121212]/95 backdrop-blur-2xl border-zinc-800' : 'bg-white/95 backdrop-blur-2xl border-white shadow-orange-900/5'}`}>
           
           {/* Smart Logo Container */}
           <div className={`mb-8 p-4 rounded-2xl w-full flex justify-center transition-colors duration-500 ${isDark ? 'bg-white/10 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)] border border-white/5' : 'bg-transparent'}`}>
@@ -139,6 +158,21 @@ export default function AdminLoginPage() {
                   className={`w-full pl-12 pr-4 py-4 rounded-xl text-sm sm:text-base font-semibold outline-none transition-all border ${isDark ? 'bg-[#18181b] border-zinc-700 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 placeholder:text-zinc-600' : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder:text-slate-400'}`}
                 />
               </div>
+            </div>
+
+            {/* 🌟 REMEMBER ME CHECKBOX */}
+            <div className="flex items-center mt-4 ml-1">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={rememberMe} 
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className={`w-4 h-4 rounded border transition-colors cursor-pointer accent-orange-500 ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-slate-300'}`}
+                />
+                <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-colors ${isDark ? 'text-zinc-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+                  Remember login on this computer
+                </span>
+              </label>
             </div>
 
             <button type="submit" disabled={loading} className="w-full py-4 mt-6 rounded-xl text-sm font-extrabold uppercase tracking-widest flex items-center justify-center gap-3 text-white bg-orange-400 hover:bg-orange-600 shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:shadow-[0_4px_25px_rgba(249,115,22,0.4)] transition-all disabled:opacity-70 active:scale-[0.98]">
