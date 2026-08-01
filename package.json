@@ -65,6 +65,7 @@
     },
     "files": [
       "electron/**/*",
+      "build/**/*",
       "package.json",
       "!src/**/*",
       "!.next/**/*",

@@ -1,7 +1,7 @@
 // electron/main.js
 console.log("Starting Electron App...");
 
-const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen, session, clipboard, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js');
@@ -18,7 +18,7 @@ mouse.config.mouseSpeed = 100000;
 // 🌟 AUTO-START ON BOOT
 app.setLoginItemSettings({
   openAtLogin: true,
-  args: ['--hidden'] // Tells the app to start minimized when booting up
+  args: ['--hidden'] 
 });
 
 const KEY_MAP = {
@@ -51,53 +51,52 @@ function toPixels(val, maxDimension) {
 }
 
 let mainWindow;
-let tray = null; // System Tray reference
-let isQuitting = false; // Tracks if user clicked "Quit" from the tray
+let tray = null; 
+let isQuitting = false; 
 let primaryScreenBounds = { width: 1920, height: 1080 }; 
 
-// Check if app was started automatically by Windows on boot
 const isAutoStartup = process.argv.includes('--hidden');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    show: false, // Always start hidden, we decide to show it later
+    show: false, 
     title: "Virtual Staffing Portal",
     icon: path.join(__dirname, '../build/icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false // Keep WebSockets/Realtime active in background
+      backgroundThrottling: false 
     }
   });
 
   mainWindow.setMenuBarVisibility(false);
   
-  // 🔗 UPDATED: Pointing to your live Vercel application
   const isDev = !app.isPackaged;
   const startUrl = isDev ? 'http://localhost:3000' : 'https://vsit-teal.vercel.app';
   mainWindow.loadURL(startUrl); 
 
   mainWindow.once('ready-to-show', () => {
-    // Only show the window if it was manually opened by the user
     if (!isAutoStartup) {
       mainWindow.show();
       mainWindow.focus();
     }
   });
 
-  // 🌟 MINIMIZE TO TRAY (Intercept the 'X' close button)
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
-      event.preventDefault(); // Prevent app from quitting
-      mainWindow.hide();      // Hide to system tray instead
+      event.preventDefault(); 
+      mainWindow.hide();      
     }
   });
 
-  // 🌟 CREATE SYSTEM TRAY ICON
-  tray = new Tray(path.join(__dirname, '../build/icon.ico'));
+  // 🌟 CREATE SYSTEM TRAY ICON (Fixed Blank Icon)
+  const iconPath = path.join(__dirname, '../build/icon.ico');
+  const trayIcon = nativeImage.createFromPath(iconPath);
+  
+  tray = new Tray(trayIcon);
   
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Open Portal', click: () => { mainWindow.show(); mainWindow.focus(); } },
@@ -108,7 +107,6 @@ function createWindow() {
   tray.setToolTip('Virtual Staffing Portal is running in the background');
   tray.setContextMenu(contextMenu);
 
-  // Restore window when tray icon is clicked
   tray.on('click', () => {
     if (mainWindow.isVisible()) {
       mainWindow.focus();
@@ -147,7 +145,6 @@ ipcMain.handle('get-desktop-source-id', async () => {
   }
 });
 
-// ⚡ SMART MOUSE QUEUE
 let isMouseMoving = false;
 let pendingMousePosition = null;
 
@@ -230,7 +227,4 @@ ipcMain.on('system-command', async (event, { command }) => {
   } catch (err) {}
 });
 
-// 🌟 Do not quit when windows are closed (Keep running in background)
-app.on('window-all-closed', () => {
-  // Overriding default behavior to keep app alive in tray
-});
+app.on('window-all-closed', () => {});
