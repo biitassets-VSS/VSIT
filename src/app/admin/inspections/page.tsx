@@ -72,8 +72,6 @@ function AdminInspectionReviewContent() {
       rawInspections.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
         
-        // 🌟 CRITICAL FIX: Only match the profile of the person who actually submitted the record. 
-        // We DO NOT fall back to `matchedAsset.assigned_to` here, as that breaks historical integrity when reassigned.
         const matchedProfile = profilesData.find(p => 
           (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
           (insp.inspected_by && String(p.id) === String(insp.inspected_by)) ||
@@ -111,15 +109,35 @@ function AdminInspectionReviewContent() {
 
         const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
 
-        // Recover name from notes or email if profile is missing
+        // 🌟 AGGRESSIVE REAL NAME RECOVERY FROM E-SIGNATURES
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
-        if (!recoveredName && insp.notes) {
-          const match = insp.notes.match(/by\s+(.*?)\s+on/i);
+        
+        // 1. Check current note first for signature
+        if (!recoveredName && insp.notes && insp.notes.includes('Digitally Signed')) {
+          const match = insp.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
           if (match) recoveredName = match[1].trim();
         }
+
+        // 2. Deep search through ALL historical logs for this user's digital signature
+        if (!recoveredName && (insp.user_email || insp.inspected_by)) {
+          const historicalSignature = rawInspections.find(r => 
+            ((insp.user_email && r.user_email?.toLowerCase() === insp.user_email.toLowerCase()) || 
+             (insp.inspected_by && String(r.inspected_by) === String(insp.inspected_by))) &&
+            r.notes && r.notes.includes('Digitally Signed Handover Agreement by')
+          );
+          
+          if (historicalSignature && historicalSignature.notes) {
+            const match = historicalSignature.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
+            if (match) recoveredName = match[1].trim();
+          }
+        }
+        
+        // 3. Final fallback to email formatting ONLY if they never signed an agreement
         if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
           recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
+        
+        let recoveredEmpCode = insp.emp_code || insp.employee_code || insp.staff_id;
 
         let finalName = '';
         let finalEmpCode = '';
@@ -137,13 +155,13 @@ function AdminInspectionReviewContent() {
           finalName = matchedProfile.full_name || matchedProfile.name;
           finalEmpCode = matchedProfile.emp_code || insp.emp_code;
         } else {
-          // 🌟 REMOVED USER DETECTED: A record exists, but the profile is gone from the database
+          // 🌟 FORCE REAL IDENTITY: Preserve real name instead of "Deactivated Staff"
           if (insp.inspected_by || insp.user_email) {
             isDeletedUser = true;
-            finalName = recoveredName || 'Deactivated Staff';
-            finalEmpCode = insp.emp_code || 'REMOVED-ID';
+            finalName = recoveredName || (insp.user_email ? insp.user_email : 'Unknown Past User');
+            finalEmpCode = recoveredEmpCode || (insp.inspected_by ? `ID-${String(insp.inspected_by).substring(0, 5).toUpperCase()}` : 'OLD-RECORD');
           } else {
-            finalName = 'Unassigned Staff';
+            finalName = 'Unassigned Asset';
             finalEmpCode = 'NO-EMP-RECORD';
           }
         }
@@ -153,7 +171,7 @@ function AdminInspectionReviewContent() {
           id: itemIdentifier,
           is_submission: !isAdminAction,
           is_admin_action: isAdminAction,
-          staff_id: matchedProfile?.id || insp.inspected_by, // Retain for audit history
+          staff_id: matchedProfile?.id || insp.inspected_by, 
           asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
           category: matchedAsset.category || 'Laptop', 
           serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
@@ -166,28 +184,62 @@ function AdminInspectionReviewContent() {
         });
       });
 
-      // Include Assigned Assets that are overdue or waiting for inspection
+      // 🌟 MISSING INSPECTIONS
       assetsData.forEach(asset => {
         const s = (asset.inspection_status || '').toLowerCase();
         if ((s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) && !asset.status?.toLowerCase().includes('return')) {
+          
+          if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
+
           if (!processedAssetIds.has(String(asset.id))) {
-            const matchedStaff = profilesData.find(p => p.id === asset.assigned_to) || {};
+            const matchedStaff = profilesData.find(p => p.id === asset.assigned_to);
+            
+            let sName = matchedStaff?.full_name || matchedStaff?.name;
+            let sCode = matchedStaff?.emp_code || matchedStaff?.emp_id;
+
+            // 🌟 IF STAFF IS DELETED BUT HARDWARE IS PENDING
+            if (!sName) {
+              const historicalRecord = rawInspections.find(i => String(i.asset_id) === String(asset.id));
+              
+              // 1. Try to find the name from the signed agreement first!
+              const historicalSignature = rawInspections.find(i => 
+                String(i.asset_id) === String(asset.id) && 
+                i.notes && i.notes.includes('Digitally Signed Handover Agreement by')
+              );
+              
+              if (historicalSignature && historicalSignature.notes) {
+                const match = historicalSignature.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
+                if (match) sName = match[1].trim();
+              }
+              
+              // 2. Fallbacks
+              if (!sName) {
+                let fallbackName = historicalRecord?.user_name || historicalRecord?.staff_name || historicalRecord?.full_name;
+                if (!fallbackName && historicalRecord?.user_email) {
+                  fallbackName = historicalRecord.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                }
+                sName = fallbackName || (asset.assigned_to ? 'Unregistered User' : 'Unassigned Asset');
+              }
+              
+              sCode = historicalRecord?.emp_code || historicalRecord?.employee_code || (asset.assigned_to ? `ID-${String(asset.assigned_to).substring(0,5).toUpperCase()}` : 'NO-ID');
+            }
+
             masterLedger.push({
               id: `missing-${asset.id}`,
               asset_id: asset.id,
               is_submission: false,
               is_admin_action: false,
-              staff_id: matchedStaff.id || asset.assigned_to,
+              staff_id: matchedStaff?.id || asset.assigned_to,
               created_at: asset.created_at || new Date().toISOString(),
               asset_name: asset.name || asset.asset_name,
-              category: asset.category || 'Laptop', 
+              category: asset.category || 'Hardware', 
               serial_number: asset.serial_number || asset.serial,
               asset_tag: asset.asset_tag || 'NO-TAG',
-              staff_name: matchedStaff.full_name || matchedStaff.name || 'Unassigned',
-              emp_code: matchedStaff.emp_code || matchedStaff.emp_id || 'N/A',
-              is_deleted_user: false,
+              staff_name: sName,
+              emp_code: sCode || 'N/A',
+              is_deleted_user: !matchedStaff,
               status: 'Awaiting Staff Action',
-              notes: 'Staff member has not submitted the smartphone visual inspection yet.',
+              notes: 'Staff member has not submitted the visual inspection yet.',
               photos: []
             });
           }
@@ -204,7 +256,7 @@ function AdminInspectionReviewContent() {
   };
 
   const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, isReInspection: boolean = false) => {
-    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN')) {
+    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-')) {
       return alert("Cannot send alert: No valid active employee profile ID attached to this record.");
     }
 
@@ -270,8 +322,7 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      // Only alert if the staff member is still active
-      if (staffId && !isDeletedUser && !staffId.includes('ADMIN')) {
+      if (staffId && !isDeletedUser && !staffId.includes('ADMIN') && !staffId.includes('ID-')) {
         try {
           await supabase.from('notifications').insert([{
             target_user: staffId,
@@ -346,7 +397,6 @@ function AdminInspectionReviewContent() {
     router.replace('/admin/inspections'); 
   };
 
-  // 🌟 COOL, MATTE FROSTED GLASS THEME
   const theme = {
     bg: 'bg-[#F1F5F9]',
     card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', 
@@ -356,7 +406,6 @@ function AdminInspectionReviewContent() {
     textSub: 'text-slate-500',
   };
 
-  // Neon Glow Outlines
   const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
     if (isAdminAction) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
     const s = (status || '').toLowerCase().trim();
@@ -369,7 +418,6 @@ function AdminInspectionReviewContent() {
 
   return (
     <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
-      {/* 🌟 SOFT, LOW-OPACITY ORBS */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-225 h-125 pointer-events-none z-0 flex justify-between items-center opacity-30">
         <div className="w-112.5 h-112.5 bg-[#FFD1B3] rounded-full blur-[120px]"></div>
         <div className="w-112.5 h-112.5 bg-[#D8B4FE] rounded-full blur-[120px]"></div>
@@ -377,7 +425,6 @@ function AdminInspectionReviewContent() {
 
       <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
-        {/* HEADER */}
         <div className={`${theme.card} p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
           <div className="flex items-center gap-3.5 sm:gap-5">
             <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm rounded-2xl text-slate-600 transition-all cursor-pointer`}>
@@ -426,7 +473,6 @@ function AdminInspectionReviewContent() {
           </div>
         )}
 
-        {/* TABS & SEARCH */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {[
@@ -468,7 +514,6 @@ function AdminInspectionReviewContent() {
           </div>
         </div>
 
-        {/* LOG GRID */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-600"></div>
@@ -500,7 +545,6 @@ function AdminInspectionReviewContent() {
                         : theme.cardHover
                   }`}
                 >
-                  {/* Left: Information Workspace Pane */}
                   <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 border-slate-200`}>
                     <div className="flex items-start gap-4">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${
@@ -512,7 +556,6 @@ function AdminInspectionReviewContent() {
                       <div className="overflow-hidden">
                         <div className="flex items-center gap-2">
                            <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
-                           {/* 🌟 CRITICAL BADGE FOR DELETED USERS IN HISTORY */}
                            {item.is_deleted_user && (
                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 border border-rose-200 text-rose-700 uppercase tracking-widest shadow-sm">Removed</span>
                            )}
@@ -605,7 +648,6 @@ function AdminInspectionReviewContent() {
                     )}
                   </div>
 
-                  {/* Right: Condition & Action Evidence Workspace Pane */}
                   <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Compliance Evaluation Workspace</h4>
@@ -618,7 +660,7 @@ function AdminInspectionReviewContent() {
                       <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className="text-orange-600"/> Photographic Evidence ({photosArray.length})</span>
                       {!item.is_submission ? (
                         <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 border-amber-300 bg-amber-50/50 text-amber-800`}>
-                          <Clock size={14} /> Awaiting staff member to upload smartphone verification photos.
+                          <Clock size={14} /> Awaiting staff member to upload visual verification photos.
                         </div>
                       ) : photosArray.length === 0 ? (
                         <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 border-slate-200 bg-white/60 text-slate-500`}>
@@ -728,7 +770,6 @@ function AdminInspectionReviewContent() {
           </div>
         )}
 
-        {/* High-Res Photo Lightbox Modal */}
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}

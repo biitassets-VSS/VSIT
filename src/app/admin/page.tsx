@@ -81,6 +81,7 @@ export default function AdminDashboardPage() {
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
         const state = presenceChannel.presenceState();
+        // Count total connections in the presence channel
         setPresenceOnlineCount(Object.keys(state).length);
       })
       .subscribe(async (status) => {
@@ -94,6 +95,7 @@ export default function AdminDashboardPage() {
     if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/logo.png' });
   };
 
+  // 🌟 REALTIME DATABASE SUBSCRIPTIONS
   useEffect(() => {
     const adminChannel = supabase
       .channel('admin-live-feed')
@@ -103,7 +105,7 @@ export default function AdminDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadAdminData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => loadAdminData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => loadAdminData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false)) // Instantly updates when staff comes online/offline
       .subscribe();
     return () => { supabase.removeChannel(adminChannel); };
   }, []);
@@ -134,7 +136,7 @@ export default function AdminDashboardPage() {
       setAdminName(currentAdminName);
 
       const [
-        { data: assets }, { data: inspections }, { data: tickets }, staffRes
+        { data: assets }, { data: inspections }, { data: tickets }, { data: staffDataRes }
       ] = await Promise.all([
         supabase.from('assets').select('id, status'),
         supabase.from('inspections').select('*, assets(*)').order('created_at', { ascending: false }),
@@ -142,11 +144,12 @@ export default function AdminDashboardPage() {
         supabase.from('profiles').select('*')
       ]);
 
-      const staffData = staffRes.data || [];
+      const staffData = staffDataRes || [];
       const inspData = inspections || [];
       const tktData = tickets || [];
       const assetsData = assets || [];
 
+      // Asset Calculations
       let usedAssetsCount = 0, inStockAssetsCount = 0, discardedAssetsCount = 0, returnRequestsCount = 0, replacementRequestsCount = 0;
       assetsData.forEach(a => {
         const s = (a.status || '').toLowerCase().trim();
@@ -157,6 +160,7 @@ export default function AdminDashboardPage() {
         else inStockAssetsCount++;
       });
 
+      // Inspection Calculations
       let pendingCount = 0, resolvedCount = 0;
       inspData.forEach(i => {
         const s = (i.status || '').toLowerCase().trim();
@@ -168,6 +172,7 @@ export default function AdminDashboardPage() {
         }
       });
 
+      // Ticket Calculations
       let pendingTicketsCount = 0, inProcessTicketsCount = 0, resolvedTicketsCount = 0;
       tktData.forEach(t => {
         const s = (t.status || '').toLowerCase().trim();
@@ -176,26 +181,44 @@ export default function AdminDashboardPage() {
         else pendingTicketsCount++;
       });
 
-      let dbOnlineCount = 0, deactivatedCount = 0;
+      // 🌟 ACCURATE STAFF TRACKING (Excluding Admins)
+      let dbOnlineCount = 0, deactivatedCount = 0, totalStaffCount = 0;
       const now = new Date().getTime();
+      
       staffData.forEach(s => {
-        const statusStr = (s.status || '').toLowerCase().trim();
         const roleStr = (s.role || '').toLowerCase().trim();
-        const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
+        const emailStr = (s.email || '').toLowerCase().trim();
+        
+        // Skip admins from the "Total Staff" count
+        if (roleStr === 'admin' || emailStr === 'lakhwinder.bi@outlook.com') return;
+        
+        totalStaffCount++; // Increment pure staff count
 
-        if (isDeactivated) { deactivatedCount++; return; }
+        const statusStr = (s.status || '').toLowerCase().trim();
+        const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke', 'disabled'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
+
+        if (isDeactivated) { 
+          deactivatedCount++; 
+          return; 
+        }
 
         let isOnline = s.is_online === true || String(s.is_online).toLowerCase() === 'true' || s.is_online === 1 || statusStr === 'online' || statusStr === 'live';
+        
+        // Fallback Activity Check: If they submitted an inspection or ticket in the last 15 minutes, they are active.
         if (!isOnline) {
-          const hasRecentInspection = inspData.some(i => (i.user_email?.toLowerCase() === s.email?.toLowerCase() || i.inspected_by === s.id) && (now - new Date(i.created_at).getTime()) < 30 * 60000);
-          const hasRecentTicket = tktData.some(t => (t.created_by?.toLowerCase() === s.email?.toLowerCase() || t.user_id === s.id) && (now - new Date(t.created_at).getTime()) < 30 * 60000);
+          const hasRecentInspection = inspData.some(i => (i.user_email?.toLowerCase() === s.email?.toLowerCase() || i.inspected_by === s.id) && (now - new Date(i.created_at).getTime()) < 15 * 60000);
+          const hasRecentTicket = tktData.some(t => (t.created_by?.toLowerCase() === s.email?.toLowerCase() || t.user_id === s.id) && (now - new Date(t.created_at).getTime()) < 15 * 60000);
           if (hasRecentInspection || hasRecentTicket) isOnline = true;
         }
+
         if (isOnline) dbOnlineCount++;
       });
 
-      const finalOnlineCount = Math.max(presenceOnlineCount, dbOnlineCount, 1);
-      const offlineCount = Math.max(0, staffData.length - finalOnlineCount - deactivatedCount);
+      // Calculate final active/offline staff based on pure staff count
+      // (presenceOnlineCount - 1) removes the Admin's current connection from the real-time presence count
+      const activePresence = Math.max(0, presenceOnlineCount - 1); 
+      const finalOnlineCount = Math.max(activePresence, dbOnlineCount);
+      const offlineCount = Math.max(0, totalStaffCount - finalOnlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 6).map(log => {
         const assetObj = log.assets || {};
@@ -230,17 +253,15 @@ export default function AdminDashboardPage() {
           logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
           actionText = `Requested return/inspection for ${assetName}.`;
         } else if (isApproved) {
-          // ⚡ IDENTIFY THE ADMIN (Approver) AND RECORD BOTH PARTIES
           let approverName = currentAdminName;
           if (log.inspected_by && log.inspected_by !== 'admin' && log.inspected_by !== activeUser.id) {
             const approverProfile = staffData.find(p => p.id === log.inspected_by);
             if (approverProfile) approverName = approverProfile.full_name || approverProfile.name || currentAdminName;
           }
 
-          displayName = approverName; // The Admin is the actor
-          empCode = 'ADMIN';          // Give them the Admin badge
+          displayName = approverName; 
+          empCode = 'ADMIN';          
           logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-          // Record both the Admin who approved it, and the Staff who requested it
           actionText = `Approved return request from ${requesterName} for ${assetName}.`;
         }
 
@@ -251,7 +272,7 @@ export default function AdminDashboardPage() {
         totalAssets: assetsData.length || 0, usedAssets: usedAssetsCount, inStockAssets: inStockAssetsCount, discardedAssets: discardedAssetsCount,
         totalVerifications: inspData.length, resolvedInspections: resolvedCount, pendingInspections: pendingCount,
         totalTickets: tktData.length, resolvedTickets: resolvedTicketsCount, pendingTickets: pendingTicketsCount, inProcessTickets: inProcessTicketsCount,
-        totalStaff: staffData.length, onlineStaff: finalOnlineCount, offlineStaff: offlineCount, deactivatedStaff: deactivatedCount,
+        totalStaff: totalStaffCount, onlineStaff: finalOnlineCount, offlineStaff: offlineCount, deactivatedStaff: deactivatedCount,
         returnRequests: returnRequestsCount, replacementRequests: replacementRequestsCount
       });
       

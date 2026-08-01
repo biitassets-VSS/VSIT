@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, 
   Loader2, ShieldCheck, AlertTriangle, FileSignature, CheckCircle2, 
-  PenTool, X, AlertCircle, Check, Eye
+  PenTool, X, AlertCircle, Check, Eye, Camera, Send
 } from 'lucide-react';
 
 // 🌟 BULLETPROOF DYNAMIC DUE DATE ENGINE
@@ -53,6 +53,20 @@ const getAssetIcon = (category: string) => {
   return Package; 
 };
 
+// 🌟 DESKTOP NOTIFICATION TRIGGER
+const triggerDesktopAlert = (title: string, body: string) => {
+  try { const audio = new Audio('/alert.mp3'); audio.play().catch(() => {}); } catch (err) {}
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/logo.png' });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') new Notification(title, { body, icon: '/logo.png' });
+      });
+    }
+  }
+};
+
 export default function StaffAssetsPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -63,6 +77,18 @@ export default function StaffAssetsPage() {
   const [signModalAsset, setSignModalAsset] = useState<any>(null);
   const [signatureName, setSignatureName] = useState('');
   const [isSigning, setIsSigning] = useState(false);
+
+  // Return Modal State
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [selectedReturnAsset, setSelectedReturnAsset] = useState<any>(null);
+  const [returnNotes, setReturnNotes] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
+  // 🌟 Replacement Modal State
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [selectedReplaceAsset, setSelectedReplaceAsset] = useState<any>(null);
+  const [replaceReason, setReplaceReason] = useState('');
+  const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -145,6 +171,44 @@ export default function StaffAssetsPage() {
     }
   };
 
+  // 🌟 REAL-TIME SUPABASE LISTENER FOR DESKTOP ALERTS
+  useEffect(() => {
+    if (!currentUser?.id || currentUser.id === 'guest-mock-uuid') return;
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const realtimeChannel = supabase
+      .channel('staff_assets_realtime')
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'assets', filter: `assigned_to=eq.${currentUser.id}` }, 
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setAssignedAssets((current) => current.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a));
+            
+            // Notify if Admin changed the status
+            if (payload.old.status !== payload.new.status) {
+              triggerDesktopAlert('IT Asset Update', `Your hardware (${payload.new.asset_tag}) status is now: ${payload.new.status}`);
+            }
+          } 
+          else if (payload.eventType === 'DELETE') {
+            setAssignedAssets((current) => current.filter(a => a.id !== payload.old.id));
+            triggerDesktopAlert('Asset Removed', `IT Admin has removed an asset from your assigned inventory.`);
+          } 
+          else if (payload.eventType === 'INSERT') {
+            setAssignedAssets((current) => [...current, payload.new]);
+            triggerDesktopAlert('New Asset Assigned', `IT Admin has linked a new device (${payload.new.asset_tag}) to your profile.`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(realtimeChannel); };
+  }, [currentUser]);
+
+  // 🌟 SIGN AGREEMENT HANDLER
   const handleSignAgreement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signatureName.trim()) return alert("Please type your name to sign.");
@@ -203,6 +267,97 @@ export default function StaffAssetsPage() {
     }
   };
 
+  // 🌟 SMART RETURN HANDLERS
+  const openReturnModal = (asset: any) => {
+    setSelectedReturnAsset(asset);
+    setReturnNotes('');
+    setReturnModalOpen(true);
+  };
+
+  const handleReturnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReturnAsset) return;
+    setIsSubmittingReturn(true);
+
+    try {
+      const { error } = await supabase
+        .from('assets')
+        .update({ 
+          status: 'Return Pending', 
+          notes: returnNotes 
+        })
+        .eq('id', selectedReturnAsset.id);
+
+      if (error) throw error;
+
+      setAssignedAssets((prev) => prev.map(a => a.id === selectedReturnAsset.id ? { ...a, status: 'Return Pending' } : a));
+      setReturnModalOpen(false);
+      triggerDesktopAlert('Return Submitted', `Your return request for ${selectedReturnAsset.asset_tag} has been sent to IT.`);
+
+    } catch (err: any) {
+      alert(`Failed to submit return request: ${err.message}`);
+    } finally {
+      setIsSubmittingReturn(false);
+    }
+  };
+
+  const handleResetAndReturn = async (asset: any) => {
+    try {
+      await supabase.from('assets').update({ status: 'Assigned' }).eq('id', asset.id);
+      setAssignedAssets((prev) => prev.map(a => a.id === asset.id ? { ...a, status: 'Assigned' } : a));
+      openReturnModal(asset);
+    } catch (error) {
+      console.error("Failed to reset asset status", error);
+    }
+  };
+
+  // 🌟 SMART REPLACE HANDLERS
+  const openReplaceModal = (asset: any) => {
+    setSelectedReplaceAsset(asset);
+    setReplaceReason('');
+    setReplaceModalOpen(true);
+  };
+
+  const handleReplaceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReplaceAsset) return;
+    setIsSubmittingReplace(true);
+
+    try {
+      const cleanEmail = currentUser.email.toLowerCase().trim();
+      const finalEmp = currentUser.emp_id || 'STAFF';
+
+      // 1. Log a Ticket for the Admin Helpdesk
+      const { error: ticketError } = await supabase.from('tickets').insert({ 
+        title: `Replacement Request: ${selectedReplaceAsset.name}`, 
+        category: 'Asset Replacement', 
+        description: `Tag ID: ${selectedReplaceAsset.asset_tag} | S/N: ${selectedReplaceAsset.serial_number}\n\nReason: ${replaceReason}`, 
+        status: 'Pending', 
+        created_by: cleanEmail, 
+        emp_code: finalEmp, 
+        staff_name: currentUser.name 
+      });
+      if (ticketError) throw ticketError;
+
+      // 2. Update the Asset Status
+      const { error: assetError } = await supabase
+        .from('assets')
+        .update({ status: 'Replacement Requested' })
+        .eq('id', selectedReplaceAsset.id);
+      if (assetError) throw assetError;
+
+      // 3. Update the UI
+      setAssignedAssets((prev) => prev.map(a => a.id === selectedReplaceAsset.id ? { ...a, status: 'Replacement Requested' } : a));
+      setReplaceModalOpen(false);
+      triggerDesktopAlert('Replacement Submitted', `Your replacement request for ${selectedReplaceAsset.asset_tag} has been sent to IT.`);
+
+    } catch (err: any) {
+      alert(`Failed to submit replacement request: ${err.message}`);
+    } finally {
+      setIsSubmittingReplace(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
@@ -220,7 +375,7 @@ export default function StaffAssetsPage() {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none relative z-10 font-sans">
         
         {/* 🚨 PENDING E-SIGN ALERTS */}
         {pendingAssets.length > 0 && (
@@ -285,8 +440,13 @@ export default function StaffAssetsPage() {
             {assignedAssets.map(asset => {
               const statusStr = (asset.live_inspection_status || '').toLowerCase();
               const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes(statusStr) || (asset.status || '').toLowerCase() === 'pending handover';
-              const isRejected = statusStr === 'rejected';
-              const dueDate = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at);
+              const isDueDatePassed = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at) < new Date();
+              
+              // Smart Return & Replace Status Variables
+              const currentStatus = (asset.status || 'Assigned').toLowerCase();
+              const isReturnPending = currentStatus === 'return pending' || currentStatus === 'return requested';
+              const isReplacePending = currentStatus === 'replacement requested';
+              const isReturnRejected = currentStatus === 'return rejected' || currentStatus === 'rejected';
 
               return (
                 <div 
@@ -295,15 +455,23 @@ export default function StaffAssetsPage() {
                 >
                   
                   {/* Glowing Status Blob behind card */}
-                  <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 group-hover:opacity-20 pointer-events-none ${isRejected ? 'bg-rose-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                  <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 group-hover:opacity-20 pointer-events-none ${isReturnRejected ? 'bg-rose-500' : (isReturnPending || isReplacePending) ? 'bg-orange-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
 
                   {/* Card Header & Status */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
                     
-                    {isRejected ? (
+                    {isReturnRejected ? (
                       <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30 shrink-0 backdrop-blur-md shadow-sm">
-                        Return Rejected
+                        Request Rejected
+                      </span>
+                    ) : isReturnPending ? (
+                      <span className="px-3 py-1.5 bg-orange-500/10 text-orange-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-500/30 shrink-0 backdrop-blur-md shadow-sm">
+                        Return Pending
+                      </span>
+                    ) : isReplacePending ? (
+                      <span className="px-3 py-1.5 bg-purple-500/10 text-purple-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-purple-500/30 shrink-0 backdrop-blur-md shadow-sm">
+                        Replacement Pending
                       </span>
                     ) : isPending ? (
                       <span className="px-3 py-1.5 bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-500/30 shrink-0 backdrop-blur-md shadow-sm">
@@ -332,7 +500,7 @@ export default function StaffAssetsPage() {
                     </div>
                     <div className="min-w-0">
                       <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Next Due</span>
-                      <span className={`font-bold text-sm block ${dueDate < new Date() ? 'text-rose-600' : 'text-slate-900'}`}>{formatDate(dueDate)}</span>
+                      <span className={`font-bold text-sm block ${isDueDatePassed ? 'text-rose-600' : 'text-slate-900'}`}>{formatDate(getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at))}</span>
                     </div>
                     <div className="min-w-0">
                       <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Category</span>
@@ -344,7 +512,7 @@ export default function StaffAssetsPage() {
                     </div>
                   </div>
 
-                  {/* 🌟 ACTION BUTTONS (Added View Agreement functionality here) */}
+                  {/* 🌟 ACTION BUTTONS WITH SMART RETURN & REPLACE LOGIC */}
                   <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-white/40">
                     {isPending ? (
                       <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2 cursor-pointer">
@@ -352,12 +520,42 @@ export default function StaffAssetsPage() {
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a return request.")} className="px-6 py-2.5 rounded-2xl border border-orange-200/60 text-orange-600 hover:bg-orange-50/50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
-                          Return
-                        </button>
-                        <button onClick={() => alert("Please navigate to the Helpdesk to submit a replacement request.")} className="px-6 py-2.5 rounded-2xl border border-purple-200/60 text-purple-600 hover:bg-purple-50/50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
-                          Replace
-                        </button>
+                        {/* 🌟 DYNAMIC RETURN/REPLACE BUTTON LOGIC */}
+                        {(isReturnPending || isReplacePending) ? (
+                          <div className="flex flex-col items-center gap-1.5">
+                            <button disabled className="px-6 py-2.5 bg-slate-50/50 border border-slate-200/50 text-slate-400 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed shadow-inner transition-all">
+                              Pending Admin
+                            </button>
+                            <span className={`text-[9px] font-black uppercase tracking-widest text-center leading-tight drop-shadow-sm animate-pulse ${isReplacePending ? 'text-purple-500' : 'text-orange-500'}`}>
+                              Already Submitted<br/>Wait for Response
+                            </span>
+                          </div>
+                        ) : isReturnRejected ? (
+                          <div className="flex flex-col items-center gap-1.5">
+                            <button 
+                              onClick={() => handleResetAndReturn(asset)} 
+                              className="px-6 py-2.5 bg-white border border-rose-500 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                            >
+                              <AlertCircle size={14} /> Request Rejected (Retry)
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => openReturnModal(asset)} 
+                              className="px-6 py-2.5 rounded-2xl border border-orange-200/60 text-orange-600 hover:bg-orange-50/50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer"
+                            >
+                              Return
+                            </button>
+                            <button 
+                              onClick={() => openReplaceModal(asset)} 
+                              className="px-6 py-2.5 rounded-2xl border border-purple-200/60 text-purple-600 hover:bg-purple-50/50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer"
+                            >
+                              Replace
+                            </button>
+                          </>
+                        )}
+
                         <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border border-blue-200/60 text-blue-600 hover:bg-blue-50/50 hover:border-blue-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
                           <Eye size={16} /> View Agreement
                         </button>
@@ -372,9 +570,9 @@ export default function StaffAssetsPage() {
         )}
       </div>
 
-      {/* 📝 DIGITAL E-SIGN / REVIEW MODAL (PORTAL FIX) */}
+      {/* 📝 DIGITAL E-SIGN / REVIEW MODAL */}
       {mounted && signModalAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200 z-2147483647">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200 z-9999">
           <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white/60">
             
             <div className="p-6 bg-white/50 backdrop-blur-md border-b border-white/60 flex justify-between items-center shrink-0">
@@ -508,6 +706,108 @@ export default function StaffAssetsPage() {
         </div>,
         document.body
       )}
+
+      {/* 🌟 RETURN REQUEST MODAL */}
+      {mounted && returnModalOpen && selectedReturnAsset && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 border border-white/60">
+            
+            <div className="p-6 border-b border-white/60 flex justify-between items-center bg-white/50 backdrop-blur-md">
+              <h3 className="text-lg font-black text-slate-900">Return Asset</h3>
+              <button onClick={() => setReturnModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 rounded-full transition-colors cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleReturnSubmit} className="p-6 space-y-6">
+              
+              <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl shadow-sm">
+                <p className="text-xs font-bold text-orange-800 uppercase tracking-widest mb-1">Asset</p>
+                <p className="text-sm font-black text-orange-900">{selectedReturnAsset.name} ({selectedReturnAsset.asset_tag})</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Reason / Condition Notes *</label>
+                <textarea 
+                  required
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                  placeholder="Why are you returning this? Note any physical damages..."
+                  className="w-full px-4 py-3 bg-white/60 border border-white/80 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none resize-none h-24 transition-all shadow-inner"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Upload Photo Verification</label>
+                <label className="flex flex-col items-center justify-center w-full py-6 border-2 border-dashed border-slate-300 rounded-xl bg-white/60 hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer group shadow-sm">
+                  <Camera className="text-slate-400 group-hover:text-orange-500 mb-2 transition-colors" size={24} />
+                  <span className="text-xs font-bold text-slate-500 group-hover:text-orange-600">Click to capture condition photo</span>
+                  <input type="file" accept="image/*" className="hidden" />
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setReturnModalOpen(false)} className="flex-1 py-3 rounded-xl border border-white/80 bg-white/50 text-xs font-bold text-slate-600 hover:bg-white transition-all cursor-pointer shadow-sm">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmittingReturn} className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer">
+                  {isSubmittingReturn ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Submit Return
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 🌟 REPLACE REQUEST MODAL */}
+      {mounted && replaceModalOpen && selectedReplaceAsset && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 border border-white/60">
+            
+            <div className="p-6 border-b border-white/60 flex justify-between items-center bg-white/50 backdrop-blur-md">
+              <h3 className="text-lg font-black text-slate-900">Replace Asset</h3>
+              <button onClick={() => setReplaceModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 rounded-full transition-colors cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleReplaceSubmit} className="p-6 space-y-6">
+              
+              <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl shadow-sm">
+                <p className="text-xs font-bold text-purple-800 uppercase tracking-widest mb-1">Asset</p>
+                <p className="text-sm font-black text-purple-900">{selectedReplaceAsset.name} ({selectedReplaceAsset.asset_tag})</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Reason for Replacement *</label>
+                <textarea 
+                  required
+                  value={replaceReason}
+                  onChange={(e) => setReplaceReason(e.target.value)}
+                  placeholder="Is it broken? Upgrading? Explain the issue..."
+                  className="w-full px-4 py-3 bg-white/60 border border-white/80 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none resize-none h-24 transition-all shadow-inner"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setReplaceModalOpen(false)} className="flex-1 py-3 rounded-xl border border-white/80 bg-white/50 text-xs font-bold text-slate-600 hover:bg-white transition-all cursor-pointer shadow-sm">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmittingReplace} className="flex-1 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(168,85,247,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer">
+                  {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Submit Request
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </>
   );
 }

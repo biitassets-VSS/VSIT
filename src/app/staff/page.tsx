@@ -384,8 +384,13 @@ export default function StaffDashboardPage() {
                 assignedAssets.map(asset => {
                   const btnState = getAssetAuditState(asset);
                   const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
-                  const isReturnPending = (asset.status || '').toLowerCase().includes('return');
-                  const isReturnRejected = (asset.live_inspection_status || '').toLowerCase() === 'return rejected';
+                  
+                  // 🌟 PRECISE REAL-TIME STATUS CHECKS
+                  const currentStatus = (asset.status || '').toLowerCase();
+                  const inspStatus = (asset.live_inspection_status || '').toLowerCase();
+                  
+                  const isReturnPending = currentStatus.includes('return') || inspStatus.includes('return pending');
+                  const isReturnRejected = currentStatus.includes('reject') || inspStatus.includes('reject');
 
                   return (
                     <div key={asset.id} className={`${theme.glassItem} p-5 rounded-2xl`}>
@@ -414,18 +419,37 @@ export default function StaffDashboardPage() {
                       </div>
                       
                       <div className="flex flex-wrap items-center gap-3 pt-4 justify-end">
-                        {/* 🌟 FIXED: CLEAN WHITE ACTION BUTTONS WITH COLORED BORDERS */}
-                        <button 
-                          disabled={isReturnPending && !isReturnRejected}
-                          onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                          className={`px-5 py-2.5 font-bold text-xs rounded-xl transition-all border shadow-sm ${
-                            (isReturnPending && !isReturnRejected)
-                              ? 'bg-white/40 border-white/60 text-slate-400 cursor-not-allowed opacity-60'
-                              : 'bg-white border-orange-200 text-orange-500 hover:bg-orange-50 hover:border-orange-300 cursor-pointer'
-                          }`}
-                        >
-                          Return
-                        </button>
+                        
+                        {/* 🌟 SMART RETURN BUTTON LOGIC */}
+                        {isReturnPending && !isReturnRejected ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <button disabled className="px-5 py-2.5 font-bold text-xs rounded-xl transition-all border shadow-sm bg-white/40 border-white/60 text-slate-400 cursor-not-allowed opacity-60">
+                              Pending Admin
+                            </button>
+                            <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center leading-tight animate-pulse mt-1">
+                              Already Submitted<br/>Wait for Response
+                            </span>
+                          </div>
+                        ) : isReturnRejected ? (
+                          <button 
+                            onClick={async () => {
+                              // Reset the status allowing them to re-upload photos
+                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null }).eq('id', asset.id);
+                              loadRealDatabase();
+                              setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
+                            }}
+                            className="px-5 py-2.5 font-bold text-xs rounded-xl transition-all border shadow-sm bg-white border-rose-300 text-rose-500 hover:bg-rose-50 hover:border-rose-400 cursor-pointer flex items-center gap-2"
+                          >
+                            <AlertTriangle size={14} /> Rejected (Retry)
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
+                            className="px-5 py-2.5 font-bold text-xs rounded-xl transition-all border shadow-sm bg-white border-orange-200 text-orange-500 hover:bg-orange-50 hover:border-orange-300 cursor-pointer"
+                          >
+                            Return
+                          </button>
+                        )}
 
                         <button 
                           disabled={isReturnPending && !isReturnRejected}

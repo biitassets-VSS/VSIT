@@ -6,7 +6,7 @@ import {
   ArrowLeft, Settings as SettingsIcon, Sun, Moon, Monitor, 
   Sliders, Users, ShieldCheck, Save, RefreshCw, Search, 
   UserCheck, CheckCircle2, Lock, Mail, Globe, Database, 
-  Cpu, HardDrive, ShieldAlert, Edit2
+  Cpu, HardDrive, ShieldAlert, Edit2, AlertTriangle, Loader2
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -31,6 +31,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false); // 🌟 Added Cleanup State
 
   // 🌟 SAFE THEME INITIALIZATION
   useEffect(() => {
@@ -67,6 +68,28 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
     }, 600);
   };
 
+  // 🌟 DATABASE CLEANUP HANDLER
+  const handleDatabaseCleanup = async () => {
+    const confirm = window.confirm("WARNING: This will permanently delete all rejected requests, failed inspections, demo tickets, and clear asset notes. Proceed?");
+    if (!confirm) return;
+
+    setIsCleaning(true);
+    try {
+      const res = await fetch('/api/admin/cleanup', { method: 'POST' });
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success("Success! " + data.message);
+      } else {
+        toast.error("Cleanup Error: " + data.error);
+      }
+    } catch (error) {
+      toast.error("Failed to connect to the cleanup service.");
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+
   const filteredUsers = users.filter(u => {
     const q = searchQuery.toLowerCase();
     return (u.full_name || u.name || '').toLowerCase().includes(q) || 
@@ -74,7 +97,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
            (u.emp_code || '').toLowerCase().includes(q);
   });
 
-  // 🌟 DYNAMIC BRAND THEME DICTIONARY (100% LIGHT ORANGE & PURPLE HARMONY)
+  // 🌟 DYNAMIC BRAND THEME DICTIONARY
   const theme = {
     card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
     cardInner: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-200',
@@ -89,7 +112,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
     <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-300 font-sans antialiased">
       <Toaster position="top-right" />
       
-      {/* 🌟 STANDARDIZED HEADER WITH PERFECT VERTICAL ALIGNMENT */}
+      {/* 🌟 STANDARDIZED HEADER */}
       <div className={`${theme.card} rounded-3xl p-4 sm:p-5 border shadow-sm flex items-center justify-between gap-3 sm:gap-4 transition-all duration-300 hover:shadow-md`}>
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <Link 
@@ -116,7 +139,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
         </div>
       </div>
 
-      {/* 🌟 RENAMED & SLEEK NAVIGATION TABS (TOUCH-SCROLLABLE ON MOBILE) */}
+      {/* 🌟 NAVIGATION TABS */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto pb-1.5 custom-scrollbar shrink-0">
         {[
           { id: 'appearance', label: 'Themes & Display', icon: Moon },
@@ -154,7 +177,6 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-            
             {/* Light Mode Box */}
             <div 
               onClick={() => applyThemeMode('light')}
@@ -222,75 +244,105 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
         </div>
       )}
 
-      {/* 🌟 TAB 2: SYSTEM DEFAULTS */}
+      {/* 🌟 TAB 2: SYSTEM DEFAULTS & CLEANUP */}
       {activeTab === 'general' && (
-        <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm space-y-5 sm:space-y-6 animate-in fade-in duration-300`}>
-          <div>
-            <h3 className={`text-sm sm:text-base font-black ${theme.textMain}`}>General System Parameters</h3>
-            <p className={`text-xs font-medium mt-0.5 ${theme.textMuted}`}>Configure portal identity, notification channels, and file upload restrictions.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+        <div className="space-y-4">
+          <form onSubmit={handleSaveSettings} className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm space-y-5 sm:space-y-6 animate-in fade-in duration-300`}>
             <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>Portal Identity Name</label>
-              <input 
-                type="text" 
-                value={settings.appName} 
-                onChange={e => setSettings({...settings, appName: e.target.value})}
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                className="w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
-              />
+              <h3 className={`text-sm sm:text-base font-black ${theme.textMain}`}>General System Parameters</h3>
+              <p className={`text-xs font-medium mt-0.5 ${theme.textMuted}`}>Configure portal identity, notification channels, and file upload restrictions.</p>
             </div>
-            <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>IT Support Email Channel</label>
-              <input 
-                type="email" 
-                value={settings.supportEmail} 
-                onChange={e => setSettings({...settings, supportEmail: e.target.value})}
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                className="w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-            <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>Max Attachment Upload Size (MB)</label>
-              <select 
-                value={settings.maxUploadSizeMB} 
-                onChange={e => setSettings({...settings, maxUploadSizeMB: e.target.value})}
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                className="w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer shadow-2xs"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <div>
+                <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>Portal Identity Name</label>
+                <input 
+                  type="text" 
+                  value={settings.appName} 
+                  onChange={e => setSettings({...settings, appName: e.target.value})}
+                  className={`w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold outline-none transition-all shadow-2xs ${theme.inputBg}`}
+                />
+              </div>
+              <div>
+                <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>IT Support Email Channel</label>
+                <input 
+                  type="email" 
+                  value={settings.supportEmail} 
+                  onChange={e => setSettings({...settings, supportEmail: e.target.value})}
+                  className={`w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold outline-none transition-all shadow-2xs ${theme.inputBg}`}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <div>
+                <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>Max Attachment Upload Size (MB)</label>
+                <select 
+                  value={settings.maxUploadSizeMB} 
+                  onChange={e => setSettings({...settings, maxUploadSizeMB: e.target.value})}
+                  className={`w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold outline-none transition-all cursor-pointer shadow-2xs ${theme.inputBg}`}
+                >
+                  <option value="5" className={isDarkMode ? 'bg-[#150f24]' : ''}>5 MB (Compact Smartphone Photos)</option>
+                  <option value="10" className={isDarkMode ? 'bg-[#150f24]' : ''}>10 MB (Recommended Default)</option>
+                  <option value="25" className={isDarkMode ? 'bg-[#150f24]' : ''}>25 MB (High-Res Audit Captures)</option>
+                </select>
+              </div>
+              <div>
+                <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>Watermark Stamp Formatting</label>
+                <select 
+                  value={settings.watermarkFormat} 
+                  onChange={e => setSettings({...settings, watermarkFormat: e.target.value})}
+                  className={`w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold outline-none transition-all cursor-pointer shadow-2xs ${theme.inputBg}`}
+                >
+                  <option value="Date, Time & Tag ID" className={isDarkMode ? 'bg-[#150f24]' : ''}>Date, Time & Tag ID (Standard)</option>
+                  <option value="Employee Name & Tag ID" className={isDarkMode ? 'bg-[#150f24]' : ''}>Employee Name & Tag ID</option>
+                </select>
+              </div>
+            </div>
+
+            <div className={`pt-4 border-t flex justify-end ${theme.divider}`}>
+              <button 
+                type="submit" disabled={isSaving}
+                className="w-full sm:w-auto px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-orange-600/20 cursor-pointer transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
               >
-                <option value="5" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>5 MB (Compact Smartphone Photos)</option>
-                <option value="10" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>10 MB (Recommended Default)</option>
-                <option value="25" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>25 MB (High-Res Audit Captures)</option>
-              </select>
+                {isSaving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                <span>{isSaving ? 'Saving Changes...' : 'Save General Preferences'}</span>
+              </button>
             </div>
-            <div>
-              <label className={`text-[11px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textMuted}`}>Watermark Stamp Formatting</label>
-              <select 
-                value={settings.watermarkFormat} 
-                onChange={e => setSettings({...settings, watermarkFormat: e.target.value})}
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                className="w-full p-3.5 rounded-xl text-xs sm:text-sm font-bold border outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer shadow-2xs"
-              >
-                <option value="Date, Time & Tag ID" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Date, Time & Tag ID (Standard)</option>
-                <option value="Employee Name & Tag ID" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Employee Name & Tag ID</option>
-              </select>
-            </div>
-          </div>
+          </form>
 
-          <div className={`pt-4 border-t flex justify-end ${theme.divider}`}>
-            <button 
-              type="submit" disabled={isSaving}
-              className="w-full sm:w-auto px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-orange-600/20 cursor-pointer transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-            >
-              {isSaving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
-              <span>{isSaving ? 'Saving Changes...' : 'Save General Preferences'}</span>
-            </button>
+          {/* 🌟 DATABASE CLEANUP SECTION */}
+          <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm border-rose-500/30 bg-rose-50/20 dark:bg-rose-950/10 animate-in fade-in duration-300`}>
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="p-3 rounded-xl bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 shrink-0 shadow-sm">
+                <AlertTriangle size={20} />
+              </div>
+              <div className="w-full">
+                <h4 className={`text-sm sm:text-base font-black text-rose-700 dark:text-rose-400`}>System Cleanup (Purge Records)</h4>
+                <p className={`text-xs font-medium mt-1 leading-relaxed ${theme.textMuted}`}>
+                  Keep your asset tracking history neat and clean by purging unnecessary logs. This action is permanent.
+                </p>
+                
+                <ul className={`text-[11px] font-bold mt-3 space-y-1.5 p-4 rounded-xl border ${isDarkMode ? 'bg-black/20 border-rose-900/30 text-rose-300/80' : 'bg-rose-50/50 border-rose-100 text-rose-800/70'}`}>
+                  <li className="flex items-center gap-2"><ShieldAlert size={12}/> All Demo/Guest tickets</li>
+                  <li className="flex items-center gap-2"><ShieldAlert size={12}/> "Rejected" Return & Replace requests</li>
+                  <li className="flex items-center gap-2"><ShieldAlert size={12}/> "Rejected" Inspections</li>
+                  <li className="flex items-center gap-2"><ShieldAlert size={12}/> Clears temporary clutter notes from Assets</li>
+                </ul>
+
+                <button 
+                  type="button"
+                  onClick={handleDatabaseCleanup}
+                  disabled={isCleaning}
+                  className="mt-5 w-full sm:w-auto px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-rose-600/20 cursor-pointer transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                >
+                  {isCleaning ? <Loader2 size={15} className="animate-spin" /> : <Database size={15} />}
+                  <span>{isCleaning ? 'Scrubbing Database...' : 'Purge Unnecessary Records'}</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
       )}
 
       {/* 🌟 TAB 3: STAFF ACCOUNTS OVERVIEW */}
@@ -305,8 +357,7 @@ export default function SettingsClient({ initialSettings, initialUsers }: Settin
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-orange-500" size={15} />
               <input 
                 type="text" placeholder="Search employee..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-2xs"
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-bold outline-none transition-all shadow-2xs ${theme.inputBg}`}
               />
             </div>
           </div>
