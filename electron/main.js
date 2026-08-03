@@ -84,6 +84,7 @@ function createWindow() {
     title: "Virtual Staffing Portal",
     icon: path.join(__dirname, '../build/icon.ico'),
     webPreferences: {
+      partition: 'persist:vsit-session', // 🌟 ADDED: Ensures session persistence across restarts
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,

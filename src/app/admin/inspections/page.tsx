@@ -109,16 +109,14 @@ function AdminInspectionReviewContent() {
 
         const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
 
-        // 🌟 AGGRESSIVE REAL NAME RECOVERY FROM E-SIGNATURES
+        // 🌟 ROBUST REAL-NAME RECOVERY FROM E-SIGNATURES & HISTORY
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
         
-        // 1. Check current note first for signature
         if (!recoveredName && insp.notes && insp.notes.includes('Digitally Signed')) {
           const match = insp.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
           if (match) recoveredName = match[1].trim();
         }
 
-        // 2. Deep search through ALL historical logs for this user's digital signature
         if (!recoveredName && (insp.user_email || insp.inspected_by)) {
           const historicalSignature = rawInspections.find(r => 
             ((insp.user_email && r.user_email?.toLowerCase() === insp.user_email.toLowerCase()) || 
@@ -132,7 +130,6 @@ function AdminInspectionReviewContent() {
           }
         }
         
-        // 3. Final fallback to email formatting ONLY if they never signed an agreement
         if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
           recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
@@ -155,7 +152,6 @@ function AdminInspectionReviewContent() {
           finalName = matchedProfile.full_name || matchedProfile.name;
           finalEmpCode = matchedProfile.emp_code || insp.emp_code;
         } else {
-          // 🌟 FORCE REAL IDENTITY: Preserve real name instead of "Deactivated Staff"
           if (insp.inspected_by || insp.user_email) {
             isDeletedUser = true;
             finalName = recoveredName || (insp.user_email ? insp.user_email : 'Unknown Past User');
@@ -197,11 +193,7 @@ function AdminInspectionReviewContent() {
             let sName = matchedStaff?.full_name || matchedStaff?.name;
             let sCode = matchedStaff?.emp_code || matchedStaff?.emp_id;
 
-            // 🌟 IF STAFF IS DELETED BUT HARDWARE IS PENDING
             if (!sName) {
-              const historicalRecord = rawInspections.find(i => String(i.asset_id) === String(asset.id));
-              
-              // 1. Try to find the name from the signed agreement first!
               const historicalSignature = rawInspections.find(i => 
                 String(i.asset_id) === String(asset.id) && 
                 i.notes && i.notes.includes('Digitally Signed Handover Agreement by')
@@ -212,8 +204,8 @@ function AdminInspectionReviewContent() {
                 if (match) sName = match[1].trim();
               }
               
-              // 2. Fallbacks
               if (!sName) {
+                const historicalRecord = rawInspections.find(i => String(i.asset_id) === String(asset.id));
                 let fallbackName = historicalRecord?.user_name || historicalRecord?.staff_name || historicalRecord?.full_name;
                 if (!fallbackName && historicalRecord?.user_email) {
                   fallbackName = historicalRecord.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -221,7 +213,8 @@ function AdminInspectionReviewContent() {
                 sName = fallbackName || (asset.assigned_to ? 'Unregistered User' : 'Unassigned Asset');
               }
               
-              sCode = historicalRecord?.emp_code || historicalRecord?.employee_code || (asset.assigned_to ? `ID-${String(asset.assigned_to).substring(0,5).toUpperCase()}` : 'NO-ID');
+              const historicalRecordForCode = rawInspections.find(i => String(i.asset_id) === String(asset.id));
+              sCode = historicalRecordForCode?.emp_code || historicalRecordForCode?.employee_code || (asset.assigned_to ? `ID-${String(asset.assigned_to).substring(0,5).toUpperCase()}` : 'NO-ID');
             }
 
             masterLedger.push({
@@ -773,7 +766,7 @@ function AdminInspectionReviewContent() {
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
