@@ -14,7 +14,7 @@ interface StaffMember { id: string; name?: string; full_name?: string; email: st
 interface ChatMessage { sender: string; text: string; time: string; isSelf: boolean; }
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-// 🌟 UPDATED: Matching Metered.ca TURN Servers from the Staff Side for zero-lag routing
+// Metered.ca TURN Servers for zero-lag routing
 const iceServers = [ 
   { urls: 'stun:stun.l.google.com:19302' }, 
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -113,7 +113,6 @@ export default function AdminRemotePage() {
         }
       };
 
-      // 🌟 ADDED: Clean up zombies if the staff drops
       peer.oniceconnectionstatechange = () => {
         if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'closed') {
           terminateSession();
@@ -162,9 +161,11 @@ export default function AdminRemotePage() {
       }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Staff declined remote control.");
       }).on('broadcast', { event: 'clipboard_data' }, (payload) => {
+        // 🌟 FIX: Clears the loading toast correctly and handles copy errors!
+        toast.dismiss('clipboard-toast'); 
         navigator.clipboard.writeText(payload.payload.text).then(() => {
           toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
-        });
+        }).catch(() => toast.error("Browser blocked clipboard write."));
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           console.log("🟢 ADMIN SIGNALING CHANNEL OPEN");
@@ -230,8 +231,8 @@ export default function AdminRemotePage() {
 
     if (type === 'mousemove') {
       const now = Date.now();
-      // 🌟 UPDATED THROTTLE: 40ms (25fps) reduces flood, stops lag, feels ultra-smooth.
-      if (now - lastMoveTimeRef.current < 40) return; 
+      // 🌟 FIX: Updated throttle to 15ms (60 frames per second) for ultra-fast response
+      if (now - lastMoveTimeRef.current < 15) return; 
       lastMoveTimeRef.current = now;
     }
 
@@ -285,7 +286,8 @@ export default function AdminRemotePage() {
 
   const requestClipboardSync = () => {
     sendControlCommand({ type: 'sync_clipboard' });
-    toast.loading("Requesting Staff Clipboard...");
+    // 🌟 FIX: Added toast ID so we can clear it when data arrives
+    toast.loading("Requesting Staff Clipboard...", { id: 'clipboard-toast' });
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
@@ -378,7 +380,6 @@ export default function AdminRemotePage() {
                   )}
                 </div>
 
-                {/* 🌟 DOUBLE MOUSE FIX: 'cursor-none' completely hides your local mouse when controlling! */}
                 <div 
                   ref={viewportContainerRef} 
                   className={`flex-1 bg-slate-900 relative overflow-hidden flex items-center justify-center rounded-b-3xl ${isControlling ? 'cursor-none select-none' : ''}`}
@@ -390,7 +391,6 @@ export default function AdminRemotePage() {
                   onWheel={(e) => { if(isControlling) { sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
                   onContextMenu={(e) => e.preventDefault()}
                 >
-                  {/* 🌟 DOUBLE MOUSE FIX 2: Ensures the video element itself also hides the mouse */}
                   <video 
                     ref={videoRef} 
                     autoPlay 

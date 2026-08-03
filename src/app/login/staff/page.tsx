@@ -16,24 +16,40 @@ export default function StaffLoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 🌟 1. ADDED: Check if Supabase already has a saved active session
-    // If they are already logged in, bypass the login screen completely.
-    const checkActiveSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        window.location.href = '/staff';
-      }
-    };
-    checkActiveSession();
-
-    // 🌟 2. Existing "Remember Me" logic (autofills inputs if they manually logged out)
     const savedEmail = localStorage.getItem('vsit_staff_saved_email');
     const savedPass = localStorage.getItem('vsit_staff_saved_pass');
-    if (savedEmail && savedPass) {
-      setEmail(savedEmail);
-      setPassword(savedPass);
-      setRememberMe(true);
-    }
+
+    const checkActiveSession = async () => {
+      // 1. Check if Supabase already has a saved active session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        window.location.href = '/staff';
+      } else if (savedEmail && savedPass) {
+        // 🌟 2. FORCE LOGIN: If session died but we have a saved password, auto-login silently!
+        setLoading(true);
+        const { error: authError } = await supabase.auth.signInWithPassword({ 
+          email: savedEmail, 
+          password: savedPass 
+        });
+        
+        if (!authError) {
+          window.location.href = '/staff';
+        } else {
+          // If auto-login fails (e.g. password changed), just autofill the form instead
+          setEmail(savedEmail);
+          setPassword(savedPass);
+          setRememberMe(true);
+          setLoading(false);
+        }
+      } else if (savedEmail) {
+        // Just autofill email if they didn't save the password
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    };
+    
+    checkActiveSession();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
