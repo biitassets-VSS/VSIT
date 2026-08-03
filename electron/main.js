@@ -6,7 +6,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { mouse, keyboard, Button, Point, Key } = require('@nut-tree-fork/nut-js');
 
-// 🌟 1. SINGLE INSTANCE LOCK (Prevents duplicate app launches)
+// 🌟 SINGLE INSTANCE LOCK
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
@@ -14,7 +14,6 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    // When a 2nd instance is launched, restore and focus the existing window
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       if (!mainWindow.isVisible()) mainWindow.show();
@@ -23,22 +22,18 @@ if (!gotTheLock) {
   });
 }
 
-// 🌟 2. PERFORMANCE & RESOURCE OPTIMIZATION FLAGS (Reduces RAM/CPU)
+// 🌟 PERFORMANCE FLAGS
 app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
 app.commandLine.appendSwitch('enable-media-stream');
 app.commandLine.appendSwitch('disable-features', 'WebRtcWgcCapturer'); 
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); // Restricts JS heap usage
-app.commandLine.appendSwitch('disable-site-isolation-trials'); // Reduces RAM footprint
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); 
+app.commandLine.appendSwitch('disable-site-isolation-trials'); 
 
 // ⚡ Ultra-fast instant mouse movement setup
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 100000;
 
-// 🌟 AUTO-START ON BOOT
-app.setLoginItemSettings({
-  openAtLogin: true,
-  args: ['--hidden']
-});
+app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
 
 const KEY_MAP = {
   'Backspace': Key.Backspace, 'Tab': Key.Tab, 'Enter': Key.Enter,
@@ -63,10 +58,12 @@ function resolveNutKey(keyStr) {
   return KEY_MAP[keyStr] || KEY_MAP[keyStr.toLowerCase()] || null;
 }
 
+// 🌟 FIX 1: The 0-Index Boundary Fix (Fixes the Taskbar Unreachability)
 function toPixels(val, maxDimension) {
   if (val === undefined || val === null || isNaN(val)) return 0;
   const normalized = val > 1 ? val / 100 : val;
-  return Math.round(Math.max(0, Math.min(1, normalized)) * maxDimension);
+  // Subtract 1 from maxDimension so it never asks for a pixel outside the monitor bounds!
+  return Math.round(Math.max(0, Math.min(1, normalized)) * (maxDimension - 1));
 }
 
 let mainWindow = null;
@@ -84,12 +81,12 @@ function createWindow() {
     title: "Virtual Staffing Portal",
     icon: path.join(__dirname, '../build/icon.ico'),
     webPreferences: {
-      partition: 'persist:vsit-session', // 🌟 ADDED: Ensures session persistence across restarts
+      partition: 'persist:vsit-session', 
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false, // Prevents WebRTC/WebSocket timeouts
-      spellcheck: false // Saves CPU and RAM
+      backgroundThrottling: false, 
+      spellcheck: false 
     }
   });
 
@@ -125,10 +122,9 @@ function createWindow() {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
 }
 
-// 🌟 3. SINGLE TRAY CREATION GUARD (Fixes Double Tray Icon)
 function createSystemTray() {
   if (tray) {
-    tray.destroy(); // Safely clean up any leftover tray icon
+    tray.destroy(); 
     tray = null;
   }
 
@@ -138,23 +134,9 @@ function createSystemTray() {
   tray = new Tray(trayIcon);
   
   const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'Open Portal', 
-      click: () => { 
-        if (mainWindow) {
-          mainWindow.show(); 
-          mainWindow.focus(); 
-        }
-      } 
-    },
+    { label: 'Open Portal', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
     { type: 'separator' },
-    { 
-      label: 'Quit App', 
-      click: () => { 
-        isQuitting = true; 
-        app.quit(); 
-      } 
-    }
+    { label: 'Quit App', click: () => { isQuitting = true; app.quit(); } }
   ]);
   
   tray.setToolTip('Virtual Staffing Portal is running in background');
@@ -162,23 +144,28 @@ function createSystemTray() {
 
   tray.on('click', () => {
     if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.focus();
-      } else {
-        mainWindow.show();
-      }
+      if (mainWindow.isVisible()) mainWindow.focus();
+      else mainWindow.show();
     }
   });
 }
 
 app.whenReady().then(() => {
   createWindow();
-  createSystemTray(); // Create tray exactly once when app is ready
+  createSystemTray(); 
 
-  primaryScreenBounds = screen.getPrimaryDisplay().bounds;
-  screen.on('display-metrics-changed', () => {
-    primaryScreenBounds = screen.getPrimaryDisplay().bounds;
-  });
+  // 🌟 FIX 2: Windows Display Scaling Fix (125%, 150%)
+  const updateScreenBounds = () => {
+    const display = screen.getPrimaryDisplay();
+    // Multiplying by scaleFactor ensures we get the TRUE physical monitor size
+    primaryScreenBounds = { 
+      width: display.bounds.width * display.scaleFactor, 
+      height: display.bounds.height * display.scaleFactor 
+    };
+  };
+
+  updateScreenBounds();
+  screen.on('display-metrics-changed', updateScreenBounds);
 });
 
 ipcMain.handle('get-desktop-source-id', async () => {
@@ -191,7 +178,6 @@ ipcMain.handle('get-desktop-source-id', async () => {
   }
 });
 
-// ⚡ SMART MOUSE QUEUE (Prevents CPU Spikes)
 let isMouseMoving = false;
 let pendingMousePosition = null;
 
