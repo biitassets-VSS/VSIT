@@ -7,14 +7,13 @@ import toast, { Toaster } from 'react-hot-toast';
 import { 
   Monitor, ArrowLeft, Loader2, Search, PanelLeftClose, PanelLeftOpen, 
   RefreshCw, Power, Keyboard, Video, Clipboard, FileUp, Volume2, 
-  Ban, MessageSquare, Send, X, Maximize, Minimize, GripVertical
+  Ban, MessageSquare, Send, X, Maximize, Minimize, GripVertical, Wifi
 } from 'lucide-react';
 
 interface StaffMember { id: string; name?: string; full_name?: string; email: string; emp_code?: string; department?: string; is_online?: boolean; assigned_asset_name?: string; }
 interface ChatMessage { sender: string; text: string; time: string; isSelf: boolean; }
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-// Metered.ca TURN Servers for zero-lag routing
 const iceServers = [ 
   { urls: 'stun:stun.l.google.com:19302' }, 
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -36,6 +35,9 @@ export default function AdminRemotePage() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // 🌟 NEW: Network Quality State
+  const [videoQuality, setVideoQuality] = useState<'high' | 'med' | 'low'>('high');
   
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -88,6 +90,7 @@ export default function AdminRemotePage() {
     setChatMessages([]);
     setDockPos({ x: 0, y: 0 });
     setChatPos({ x: 0, y: 0 });
+    setVideoQuality('high');
 
     try {
       const backgroundChannelId = getChannelTopic(activeSession);
@@ -98,20 +101,8 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
-      const dataChannel = peer.createDataChannel("controls", {
-        ordered: false,
-        maxRetransmits: 0 
-      });
+      const dataChannel = peer.createDataChannel("controls", { ordered: false, maxRetransmits: 0 });
       dataChannelRef.current = dataChannel;
-      
-      dataChannel.onopen = () => console.log("⚡ WebRTC DataChannel Opened for fast controls");
-      dataChannel.onclose = () => console.log("WebRTC DataChannel Closed");
-
-      peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed') {
-          toast.error("WebRTC dropped. Attempting to reconnect...", { duration: 4000 });
-        }
-      };
 
       peer.oniceconnectionstatechange = () => {
         if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'closed') {
@@ -133,9 +124,6 @@ export default function AdminRemotePage() {
 
       const controlChannel = supabase.channel(`${liveSessionId}_controls`, { config: { broadcast: { self: false, ack: false } } });
       controlChannelRef.current = controlChannel;
-      controlChannel.subscribe((status) => {
-         if (status === 'SUBSCRIBED') console.log("🟢 ADMIN DEDICATED CONTROL CHANNEL OPEN!");
-      });
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_admin', payload: { candidate: event.candidate } });
@@ -161,14 +149,12 @@ export default function AdminRemotePage() {
       }).on('broadcast', { event: 'control_rejected' }, () => {
         toast.error("❌ Staff declined remote control.");
       }).on('broadcast', { event: 'clipboard_data' }, (payload) => {
-        // 🌟 FIX: Clears the loading toast correctly and handles copy errors!
         toast.dismiss('clipboard-toast'); 
         navigator.clipboard.writeText(payload.payload.text).then(() => {
           toast.success("Staff clipboard copied to your PC!", { icon: '📋' });
         }).catch(() => toast.error("Browser blocked clipboard write."));
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          console.log("🟢 ADMIN SIGNALING CHANNEL OPEN");
           const pingChannel = supabase.channel(backgroundChannelId);
           pingChannel.subscribe(async (pingStatus) => {
             if (pingStatus === 'SUBSCRIBED') {
@@ -192,29 +178,35 @@ export default function AdminRemotePage() {
   };
 
   const sendControlCommand = (command: any) => {
-    if (!isControlling) return;
+    if (!isControlling && command.type !== 'set_quality') return;
     
     try {
       if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
         dataChannelRef.current.send(JSON.stringify(command));
         if (command.type === 'mousemove' || command.type === 'scroll') return;
       }
-
       if (!controlChannelRef.current) return;
-      
-      if (command.type !== 'mousemove' && command.type !== 'scroll') {
-         console.log(`📤 SENDING COMMAND:`, command.type, command);
-      }
-
       if (command.type === 'mousemove' || command.type === 'scroll') {
         const now = Date.now();
         if (now - lastBroadcastRef.current < 150) return; 
         lastBroadcastRef.current = now;
       }
       controlChannelRef.current.send({ type: 'broadcast', event: 'control_command', payload: command });
-    } catch (err) {
-      console.error("Failed to send command:", err);
-    }
+    } catch (err) {}
+  };
+
+  // 🌟 NEW: Network Quality Cycler
+  const cycleQuality = () => {
+    let newQual: 'high' | 'med' | 'low' = 'high';
+    let scale = 1; let fps = 30;
+    
+    if (videoQuality === 'high') { newQual = 'med'; scale = 1.5; fps = 24; }
+    else if (videoQuality === 'med') { newQual = 'low'; scale = 2.0; fps = 15; }
+    else { newQual = 'high'; scale = 1; fps = 30; }
+
+    setVideoQuality(newQual);
+    sendControlCommand({ type: 'set_quality', scale, fps });
+    toast.success(`Network Quality Set: ${newQual.toUpperCase()} (Adjusting...)`);
   };
 
   const handleMouseEvent = (e: React.MouseEvent, type: string) => {
@@ -231,8 +223,7 @@ export default function AdminRemotePage() {
 
     if (type === 'mousemove') {
       const now = Date.now();
-      // 🌟 FIX: Updated throttle to 15ms (60 frames per second) for ultra-fast response
-      if (now - lastMoveTimeRef.current < 15) return; 
+      if (now - lastMoveTimeRef.current < 25) return; // 🌟 25ms throttle avoids UDP network lag while staying very smooth
       lastMoveTimeRef.current = now;
     }
 
@@ -245,8 +236,7 @@ export default function AdminRemotePage() {
 
     let actualWidth = rect.width;
     let actualHeight = rect.height;
-    let offsetX = 0;
-    let offsetY = 0;
+    let offsetX = 0; let offsetY = 0;
 
     if (viewRatio > videoRatio) {
       actualWidth = rect.height * videoRatio;
@@ -261,7 +251,6 @@ export default function AdminRemotePage() {
 
     const clampedX = Math.max(0, Math.min(clickX, actualWidth));
     const clampedY = Math.max(0, Math.min(clickY, actualHeight));
-
     const xPercent = clampedX / actualWidth;
     const yPercent = clampedY / actualHeight;
 
@@ -286,7 +275,6 @@ export default function AdminRemotePage() {
 
   const requestClipboardSync = () => {
     sendControlCommand({ type: 'sync_clipboard' });
-    // 🌟 FIX: Added toast ID so we can clear it when data arrives
     toast.loading("Requesting Staff Clipboard...", { id: 'clipboard-toast' });
   };
 
@@ -294,7 +282,6 @@ export default function AdminRemotePage() {
     e.preventDefault();
     if (!chatInput.trim() || !signalingChannelRef.current) return;
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
     setChatMessages(prev => [...prev, { sender: 'IT Admin', text: chatInput, time: timeString, isSelf: true }]);
     signalingChannelRef.current.send({ type: 'broadcast', event: 'chat_message', payload: { sender: 'IT Admin', text: chatInput, time: timeString } });
     setChatInput('');
@@ -305,21 +292,12 @@ export default function AdminRemotePage() {
     else { document.exitFullscreen(); }
   };
 
-  const theme = {
-    bg: 'bg-[#F1F5F9]',
-    card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', 
-    textMain: 'text-slate-900',
-    textSub: 'text-slate-600',
-  };
+  const theme = { bg: 'bg-[#F1F5F9]', card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', textMain: 'text-slate-900', textSub: 'text-slate-600' };
 
   return (
     <div className={`h-screen ${theme.bg} font-sans flex flex-col overflow-hidden relative`}>
       <Toaster position="top-right" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-225 h-125 pointer-events-none z-0 flex justify-between items-center opacity-30">
-        <div className="w-112.5 h-112.5 bg-[#FFD1B3] rounded-full blur-[120px]"></div>
-        <div className="w-112.5 h-112.5 bg-[#D8B4FE] rounded-full blur-[120px]"></div>
-      </div>
-
+      
       <div className="w-full max-w-400 px-4 mx-auto py-4 flex-1 flex flex-col min-h-0 gap-4 relative z-10">
         <div className={`${theme.card} p-4 sm:p-5 flex items-center justify-between shrink-0`}>
           <div className="flex items-center gap-3.5">
@@ -330,12 +308,8 @@ export default function AdminRemotePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push('/admin')} className={`flex items-center gap-1.5 px-4 py-2.5 bg-white/60 border border-white/80 hover:bg-white/90 shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider text-slate-800 transition-colors cursor-pointer`}>
-              <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
-            </button>
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 rounded-xl border border-white/80 text-slate-700 bg-white/60 hover:bg-white/90 transition-all shadow-sm cursor-pointer">
-              {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-            </button>
+            <button onClick={() => router.push('/admin')} className={`flex items-center gap-1.5 px-4 py-2.5 bg-white/60 border border-white/80 hover:bg-white/90 shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider text-slate-800 transition-colors cursor-pointer`}><ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span></button>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 rounded-xl border border-white/80 text-slate-700 bg-white/60 hover:bg-white/90 transition-all shadow-sm cursor-pointer">{isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>
           </div>
         </div>
 
@@ -380,9 +354,10 @@ export default function AdminRemotePage() {
                   )}
                 </div>
 
+                {/* 🌟 TASKBAR FIX: Removed rounded borders when controlling to ensure edge-to-edge tracking */}
                 <div 
                   ref={viewportContainerRef} 
-                  className={`flex-1 bg-slate-900 relative overflow-hidden flex items-center justify-center rounded-b-3xl ${isControlling ? 'cursor-none select-none' : ''}`}
+                  className={`flex-1 bg-slate-900 relative flex items-center justify-center ${isControlling ? 'cursor-none select-none' : 'rounded-b-3xl overflow-hidden'}`}
                   style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                   onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
                   onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
@@ -392,68 +367,24 @@ export default function AdminRemotePage() {
                   onContextMenu={(e) => e.preventDefault()}
                 >
                   <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted={!isAudioEnabled} 
+                    ref={videoRef} autoPlay playsInline muted={!isAudioEnabled} 
                     className={`max-w-full max-h-full object-contain pointer-events-auto select-none ${isControlling ? 'cursor-none' : 'cursor-default'} ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} 
                     style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                   />
                   
                   {sessionStatus === 'requesting' && (
-                    <div className="text-center text-white">
-                      <Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" />
-                      <p className="font-bold tracking-widest uppercase text-sm">Awaiting Staff Approval...</p>
-                    </div>
-                  )}
-                  
-                  {isChatOpen && (sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(${chatPos.x}px, ${chatPos.y}px)` }} className="absolute bottom-24 right-6 w-80 bg-white/95 backdrop-blur-3xl border border-white shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden cursor-default">
-                      <div onMouseDown={(e) => { e.stopPropagation(); setIsDraggingChat(true); dragStartChat.current = { x: e.clientX - chatPos.x, y: e.clientY - chatPos.y }; }} className="p-4 border-b border-slate-100 text-slate-800 flex justify-between items-center cursor-grab active:cursor-grabbing bg-slate-50/50">
-                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-purple-600" /> Live Chat</span>
-                        <button onClick={() => setIsChatOpen(false)} className="hover:bg-slate-200 p-1.5 rounded-md text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"><X size={16}/></button>
-                      </div>
-                      <div className="h-60 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
-                        {chatMessages.length === 0 ? <div className="m-auto text-center text-xs font-medium text-slate-400">Send a message to start communicating.</div> : chatMessages.map((msg, i) => (
-                          <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.isSelf ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none border border-purple-500' : 'bg-slate-100 text-slate-800 self-start rounded-2xl rounded-bl-none border border-slate-200'}`}>
-                            <div className={`font-bold text-[9px] mb-1 uppercase tracking-wider ${msg.isSelf ? 'text-purple-200' : 'text-slate-500'}`}>{msg.sender}</div>{msg.text}
-                          </div>
-                        ))}
-                        <div ref={chatEndRef} />
-                      </div>
-                      <form onSubmit={sendChatMessage} className="p-3 bg-slate-50/80 border-t border-slate-100 flex gap-2">
-                        <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className="flex-1 text-xs font-semibold px-4 py-2.5 bg-white text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-purple-400 transition-all placeholder-slate-400 shadow-sm" />
-                        <button type="submit" disabled={!chatInput.trim()} className="p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-all border border-purple-500 shadow-sm cursor-pointer"><Send size={14}/></button>
-                      </form>
-                    </div>
+                    <div className="text-center text-white"><Loader2 size={48} className="animate-spin text-orange-500 mx-auto mb-4" /><p className="font-bold tracking-widest uppercase text-sm">Awaiting Staff Approval...</p></div>
                   )}
 
                   {(sessionStatus === 'connected' || sessionStatus === 'controlling') && (
-                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }} className="absolute bottom-6 left-1/2 bg-white/80 backdrop-blur-2xl border border-white p-2 rounded-full flex gap-2 shadow-2xl z-50 items-center transition-all cursor-default">
-                      <div onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }} className="cursor-grab active:cursor-grabbing p-2 text-slate-400 hover:text-slate-800 transition-colors ml-1">
-                        <GripVertical size={18} />
-                      </div>
+                    <div onMouseDown={(e) => e.stopPropagation()} style={{ transform: `translate(calc(-50% + ${dockPos.x}px), ${dockPos.y}px)` }} className="absolute bottom-6 left-1/2 bg-white/80 backdrop-blur-2xl border border-white p-2 rounded-full flex gap-2 shadow-2xl z-50 items-center transition-all cursor-default hover:bg-white/95">
+                      <div onMouseDown={(e) => { e.stopPropagation(); setIsDraggingDock(true); dragStartDock.current = { x: e.clientX - dockPos.x, y: e.clientY - dockPos.y }; }} className="cursor-grab active:cursor-grabbing p-2 text-slate-400 hover:text-slate-800 transition-colors ml-1"><GripVertical size={18} /></div>
                       <div className="w-px h-6 bg-slate-200 mx-0.5" />
 
                       {[
-                        { 
-                          icon: <Video size={20} strokeWidth={isControlling ? 2.5 : 2} />, active: isControlling, 
-                          color: 'text-blue-500 hover:bg-blue-100 hover:text-blue-700', activeClass: 'text-blue-700 bg-white border-[3px] border-blue-600 shadow-lg shadow-blue-600/30 scale-[1.15]',
-                          action: () => { 
-                            if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } 
-                            else { signalingChannelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); setIsControlling(true); }
-                          }, tooltip: isControlling ? "Disable Control" : "Request Control" 
-                        },
-                        { 
-                          icon: <Keyboard size={20} strokeWidth={isKeyboardEnabled ? 2.5 : 2} />, active: isKeyboardEnabled, 
-                          color: 'text-purple-500 hover:bg-purple-100 hover:text-purple-700', activeClass: 'text-purple-700 bg-white border-[3px] border-purple-600 shadow-lg shadow-purple-600/30 scale-[1.15]', 
-                          action: () => { 
-                            if(isControlling) { 
-                              setIsKeyboardEnabled(!isKeyboardEnabled); 
-                              toast.success(!isKeyboardEnabled ? "Keyboard Control Enabled ⌨️" : "Keyboard Control Disabled", { id: 'kb' });
-                            } else toast.error("Request control first!"); 
-                          }, tooltip: "Keyboard Input" 
-                        },
+                        { icon: <Video size={20} strokeWidth={isControlling ? 2.5 : 2} />, active: isControlling, color: 'text-blue-500 hover:bg-blue-100 hover:text-blue-700', activeClass: 'text-blue-700 bg-white border-[3px] border-blue-600 shadow-lg shadow-blue-600/30 scale-[1.15]', action: () => { if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } else { signalingChannelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); setIsControlling(true); } }, tooltip: isControlling ? "Disable Control" : "Request Control" },
+                        { icon: <Keyboard size={20} strokeWidth={isKeyboardEnabled ? 2.5 : 2} />, active: isKeyboardEnabled, color: 'text-purple-500 hover:bg-purple-100 hover:text-purple-700', activeClass: 'text-purple-700 bg-white border-[3px] border-purple-600 shadow-lg shadow-purple-600/30 scale-[1.15]', action: () => { if(isControlling) { setIsKeyboardEnabled(!isKeyboardEnabled); toast.success(!isKeyboardEnabled ? "Keyboard Control Enabled ⌨️" : "Keyboard Control Disabled", { id: 'kb' }); } else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
+                        { icon: <Wifi size={20} />, active: videoQuality !== 'high', color: 'text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700', activeClass: 'text-indigo-700 bg-white border-[3px] border-indigo-600 shadow-lg shadow-indigo-600/30 scale-[1.15]', action: cycleQuality, tooltip: `Network Quality: ${videoQuality.toUpperCase()}` }, // 🌟 NEW: Quality toggle button
                         { icon: <MessageSquare size={20} strokeWidth={isChatOpen ? 2.5 : 2} />, active: isChatOpen, color: 'text-emerald-500 hover:bg-emerald-100 hover:text-emerald-700', activeClass: 'text-emerald-700 bg-white border-[3px] border-emerald-600 shadow-lg shadow-emerald-600/30 scale-[1.15]', action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
                         { icon: <Clipboard size={20} />, active: false, color: 'text-amber-500 hover:bg-amber-100 hover:text-amber-700', action: requestClipboardSync, tooltip: "Sync Clipboard" },
                         { icon: <Volume2 size={20} strokeWidth={isAudioEnabled ? 2.5 : 2} />, active: isAudioEnabled, color: 'text-teal-500 hover:bg-teal-100 hover:text-teal-700', activeClass: 'text-teal-700 bg-white border-[3px] border-teal-600 shadow-lg shadow-teal-600/30 scale-[1.15]', action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },

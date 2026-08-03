@@ -37,6 +37,26 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   }, [staffId]);
 
   const executeAdminCommand = async (cmd: any) => {
+    // 🌟 NEW: Dynamic Video Quality scaling based on Network Button
+    if (cmd.type === 'set_quality') {
+      const senders = peerRef.current?.getSenders() || [];
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      
+      if (videoSender) {
+        const params = videoSender.getParameters();
+        if (!params.encodings) params.encodings = [{}];
+        
+        // Dynamically applies 1080p, 720p, or 480p and reduces framerate to save bandwidth
+        params.encodings[0].scaleResolutionDownBy = cmd.scale;
+        params.encodings[0].maxFramerate = cmd.fps;
+        
+        videoSender.setParameters(params)
+          .then(() => console.log(`Quality scaled by ${cmd.scale}, FPS: ${cmd.fps}`))
+          .catch(e => console.error("Quality change failed:", e));
+      }
+      return; // Do not pass this command to Electron API
+    }
+
     if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
       console.log("⚡ COMMAND EXECUTING ON STAFF PC:", cmd.type, cmd);
     }
@@ -70,8 +90,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       } catch (e) {
         console.error("OS execution failed:", e);
       }
-    } else {
-      console.error("❌ electronAPI is NOT available on the window object!");
     }
   };
 
@@ -80,13 +98,8 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 UPDATED: Optimize video for lower latency over TURN servers (30fps & 1080p max)
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { max: 1920 },
-          height: { max: 1080 },
-          frameRate: { ideal: 30, max: 30 }
-        },
+        video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { ideal: 30, max: 30 } },
         audio: false
       });
 
@@ -99,70 +112,43 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
 
       const peer = new RTCPeerConnection({ 
         iceServers: [
-          // 1. STUN servers (Fastest, tries direct connection first)
           { urls: 'stun:stun.l.google.com:19302' }, 
           { urls: 'stun:stun1.l.google.com:19302' },
-          
-          // 2. Your Metered TURN Servers
-          {
-            urls: 'turn:vsit-portal.metered.ca:80',
-            username: 'b13ed4c71d2d26a5a93f2f60',
-            credential: 'oIXCegcSeNTsCZSG'
-          },
-          {
-            urls: 'turn:vsit-portal.metered.ca:443',
-            username: 'b13ed4c71d2d26a5a93f2f60',
-            credential: 'oIXCegcSeNTsCZSG'
-          },
-          {
-            urls: 'turn:vsit-portal.metered.ca:443?transport=tcp',
-            username: 'b13ed4c71d2d26a5a93f2f60',
-            credential: 'oIXCegcSeNTsCZSG'
-          }
+          { urls: 'turn:vsit-portal.metered.ca:80', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' },
+          { urls: 'turn:vsit-portal.metered.ca:443', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' },
+          { urls: 'turn:vsit-portal.metered.ca:443?transport=tcp', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' }
         ] 
       });
       peerRef.current = peer;
 
-      // 🌟 ADDED: Auto-detects if the Admin refreshed or the network dropped (Zombie connection fix)
       peer.oniceconnectionstatechange = () => {
-        if (peer.iceConnectionState === 'disconnected' || 
-            peer.iceConnectionState === 'failed' || 
-            peer.iceConnectionState === 'closed') {
+        if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'closed') {
           console.log("WebRTC connection dropped. Cleaning up...");
           stopSharing(); 
         }
       };
 
-      // ⚡ LISTEN FOR INCOMING WEBRTC DATA CHANNEL FOR ZERO-LATENCY CONTROLS
       peer.ondatachannel = (event) => {
         const receiveChannel = event.channel;
         receiveChannel.onmessage = (e) => {
           try {
             const cmd = JSON.parse(e.data);
-            executeAdminCommand(cmd); // Fast execution via P2P
-          } catch (err) {
-            console.error("Failed to parse data channel message:", err);
-          }
+            executeAdminCommand(cmd); 
+          } catch (err) {}
         };
-        receiveChannel.onopen = () => console.log("⚡ P2P DataChannel Opened (Staff Side)");
       };
 
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
 
-      // 1. SIGNALING CHANNEL (For WebRTC setup and chat)
       const sessionChannel = supabase.channel(incomingRequest.channelId, { config: { broadcast: { ack: false } } });
       signalingChannelRef.current = sessionChannel;
 
-      // 2. DEDICATED CONTROL CHANNEL (Fallback)
       const controlChannel = supabase.channel(`${incomingRequest.channelId}_controls`, { config: { broadcast: { ack: false } } });
       controlChannelRef.current = controlChannel;
 
-      // Listen for commands on the dedicated channel (Fallback)
       controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
         executeAdminCommand(payload.payload);
-      }).subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log("🟢 STAFF DEDICATED CONTROL CHANNEL OPEN!");
-      });
+      }).subscribe();
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
@@ -185,7 +171,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         stopSharing(); toast.error("🛑 IT Admin ended the remote support session.");
       }).subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          console.log("🟢 STAFF SIGNALING CHANNEL OPEN");
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
           sessionChannel.send({ type: 'broadcast', event: 'sdp_offer_staff', payload: { sdp: offer } });
@@ -193,7 +178,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       });
 
     } catch (err: any) {
-      console.error("Capture Error:", err);
       toast.error(`Video Error: ${err.name} - ${err.message}`, { duration: 6000 });
       setIsConnecting(false);
     }
