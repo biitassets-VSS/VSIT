@@ -766,7 +766,7 @@ function AdminInspectionReviewContent() {
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
