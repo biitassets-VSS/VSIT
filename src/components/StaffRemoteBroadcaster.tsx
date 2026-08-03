@@ -80,8 +80,13 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
+      // 🌟 UPDATED: Optimize video for lower latency over TURN servers (30fps & 1080p max)
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: {
+          width: { max: 1920 },
+          height: { max: 1080 },
+          frameRate: { ideal: 30, max: 30 }
+        },
         audio: false
       });
 
@@ -92,8 +97,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         toast.error("Screen sharing stopped by user.");
       };
 
-      // 🌟 UPDATED: Integrated Metered.ca TURN servers for global network penetration
-     const peer = new RTCPeerConnection({ 
+      const peer = new RTCPeerConnection({ 
         iceServers: [
           // 1. STUN servers (Fastest, tries direct connection first)
           { urls: 'stun:stun.l.google.com:19302' }, 
@@ -118,6 +122,16 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         ] 
       });
       peerRef.current = peer;
+
+      // 🌟 ADDED: Auto-detects if the Admin refreshed or the network dropped (Zombie connection fix)
+      peer.oniceconnectionstatechange = () => {
+        if (peer.iceConnectionState === 'disconnected' || 
+            peer.iceConnectionState === 'failed' || 
+            peer.iceConnectionState === 'closed') {
+          console.log("WebRTC connection dropped. Cleaning up...");
+          stopSharing(); 
+        }
+      };
 
       // ⚡ LISTEN FOR INCOMING WEBRTC DATA CHANNEL FOR ZERO-LATENCY CONTROLS
       peer.ondatachannel = (event) => {
@@ -203,7 +217,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   return (
     <>
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-[9999] bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
+        <div className="fixed bottom-6 right-6 z-9999 bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)] shrink-0" />
             <div>
@@ -220,7 +234,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       )}
 
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white/90 backdrop-blur-3xl border border-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-sm animate-bounce">
               <Monitor size={32} />

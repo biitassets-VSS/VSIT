@@ -14,7 +14,14 @@ interface StaffMember { id: string; name?: string; full_name?: string; email: st
 interface ChatMessage { sender: string; text: string; time: string; isSelf: boolean; }
 const getChannelTopic = (staff: any) => `vsit_rtc_${(staff?.emp_code || staff?.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-const iceServers = [ { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' } ];
+// 🌟 UPDATED: Matching Metered.ca TURN Servers from the Staff Side for zero-lag routing
+const iceServers = [ 
+  { urls: 'stun:stun.l.google.com:19302' }, 
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:vsit-portal.metered.ca:80', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' },
+  { urls: 'turn:vsit-portal.metered.ca:443', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' },
+  { urls: 'turn:vsit-portal.metered.ca:443?transport=tcp', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' }
+];
 
 export default function AdminRemotePage() {
   const router = useRouter();
@@ -46,7 +53,7 @@ export default function AdminRemotePage() {
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const signalingChannelRef = useRef<any>(null);
   const controlChannelRef = useRef<any>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null); // ⚡ Added DataChannel Ref
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
   
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -91,9 +98,8 @@ export default function AdminRemotePage() {
       peerRef.current = peer;
       peer.addTransceiver('video', { direction: 'recvonly' });
 
-      // ⚡ Create WebRTC DataChannel for ultra-low latency controls
       const dataChannel = peer.createDataChannel("controls", {
-        ordered: false, // Don't delay new packets for lost ones
+        ordered: false,
         maxRetransmits: 0 
       });
       dataChannelRef.current = dataChannel;
@@ -107,6 +113,13 @@ export default function AdminRemotePage() {
         }
       };
 
+      // 🌟 ADDED: Clean up zombies if the staff drops
+      peer.oniceconnectionstatechange = () => {
+        if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'closed') {
+          terminateSession();
+        }
+      };
+
       peer.ontrack = (event) => {
         if (videoRef.current && event.streams[0]) {
           videoRef.current.srcObject = event.streams[0];
@@ -116,11 +129,9 @@ export default function AdminRemotePage() {
         }
       };
 
-      // 1. SIGNALING CHANNEL
       const sessionChannel = supabase.channel(liveSessionId, { config: { broadcast: { self: false, ack: false } } });
       signalingChannelRef.current = sessionChannel;
 
-      // 2. DEDICATED CONTROL CHANNEL (Fallback)
       const controlChannel = supabase.channel(`${liveSessionId}_controls`, { config: { broadcast: { self: false, ack: false } } });
       controlChannelRef.current = controlChannel;
       controlChannel.subscribe((status) => {
@@ -170,7 +181,7 @@ export default function AdminRemotePage() {
   };
 
   const terminateSession = () => {
-    if (dataChannelRef.current) { dataChannelRef.current.close(); dataChannelRef.current = null; } // Cleanup
+    if (dataChannelRef.current) { dataChannelRef.current.close(); dataChannelRef.current = null; } 
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (signalingChannelRef.current) { signalingChannelRef.current.send({ type: 'broadcast', event: 'terminate_session', payload: {} }); supabase.removeChannel(signalingChannelRef.current); signalingChannelRef.current = null; }
     if (controlChannelRef.current) { supabase.removeChannel(controlChannelRef.current); controlChannelRef.current = null; }
@@ -183,10 +194,8 @@ export default function AdminRemotePage() {
     if (!isControlling) return;
     
     try {
-      // ⚡ FAST PATH: Send via WebRTC DataChannel if open (Zero Latency)
       if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
         dataChannelRef.current.send(JSON.stringify(command));
-        // Skip sending fast continuous actions over Supabase if DataChannel worked
         if (command.type === 'mousemove' || command.type === 'scroll') return;
       }
 
@@ -196,7 +205,6 @@ export default function AdminRemotePage() {
          console.log(`📤 SENDING COMMAND:`, command.type, command);
       }
 
-      // SLOW PATH FALLBACK: Supabase Throttle
       if (command.type === 'mousemove' || command.type === 'scroll') {
         const now = Date.now();
         if (now - lastBroadcastRef.current < 150) return; 
@@ -222,8 +230,8 @@ export default function AdminRemotePage() {
 
     if (type === 'mousemove') {
       const now = Date.now();
-      // Increase polling speed for DataChannel smoothness (35ms -> ~28fps)
-      if (now - lastMoveTimeRef.current < 30) return; 
+      // 🌟 UPDATED THROTTLE: 40ms (25fps) reduces flood, stops lag, feels ultra-smooth.
+      if (now - lastMoveTimeRef.current < 40) return; 
       lastMoveTimeRef.current = now;
     }
 
@@ -250,11 +258,9 @@ export default function AdminRemotePage() {
     const clickX = e.clientX - rect.left - offsetX;
     const clickY = e.clientY - rect.top - offsetY;
 
-    // ⚡ FIX: Strict boundaries and calculation
     const clampedX = Math.max(0, Math.min(clickX, actualWidth));
     const clampedY = Math.max(0, Math.min(clickY, actualHeight));
 
-    // Convert to percentage (0.0 to 1.0) instead of (0 to 100) for standard Electron coordinates
     const xPercent = clampedX / actualWidth;
     const yPercent = clampedY / actualHeight;
 
@@ -372,10 +378,10 @@ export default function AdminRemotePage() {
                   )}
                 </div>
 
-                {/* ⚡ FIX: Added cursor-default & select-none */}
+                {/* 🌟 DOUBLE MOUSE FIX: 'cursor-none' completely hides your local mouse when controlling! */}
                 <div 
                   ref={viewportContainerRef} 
-                  className={`flex-1 bg-slate-900 relative overflow-hidden flex items-center justify-center rounded-b-3xl ${isControlling ? 'cursor-default select-none' : ''}`}
+                  className={`flex-1 bg-slate-900 relative overflow-hidden flex items-center justify-center rounded-b-3xl ${isControlling ? 'cursor-none select-none' : ''}`}
                   style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                   onMouseMove={(e) => handleMouseEvent(e, 'mousemove')}
                   onMouseDown={(e) => handleMouseEvent(e, 'mousedown')}
@@ -384,12 +390,13 @@ export default function AdminRemotePage() {
                   onWheel={(e) => { if(isControlling) { sendControlCommand({ type: 'scroll', deltaY: e.deltaY }); }}}
                   onContextMenu={(e) => e.preventDefault()}
                 >
+                  {/* 🌟 DOUBLE MOUSE FIX 2: Ensures the video element itself also hides the mouse */}
                   <video 
                     ref={videoRef} 
                     autoPlay 
                     playsInline 
                     muted={!isAudioEnabled} 
-                    className={`max-w-full max-h-full object-contain pointer-events-auto cursor-default select-none ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} 
+                    className={`max-w-full max-h-full object-contain pointer-events-auto select-none ${isControlling ? 'cursor-none' : 'cursor-default'} ${sessionStatus === 'connected' || sessionStatus === 'controlling' ? 'block' : 'hidden'}`} 
                     style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                   />
                   
