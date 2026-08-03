@@ -29,7 +29,6 @@ app.commandLine.appendSwitch('disable-features', 'WebRtcWgcCapturer');
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); 
 app.commandLine.appendSwitch('disable-site-isolation-trials'); 
 
-// ⚡ Ultra-fast instant mouse movement setup
 mouse.config.autoDelayMs = 0;
 mouse.config.mouseSpeed = 100000;
 
@@ -58,11 +57,10 @@ function resolveNutKey(keyStr) {
   return KEY_MAP[keyStr] || KEY_MAP[keyStr.toLowerCase()] || null;
 }
 
-// 🌟 FIX 1: The 0-Index Boundary Fix (Fixes the Taskbar Unreachability)
 function toPixels(val, maxDimension) {
   if (val === undefined || val === null || isNaN(val)) return 0;
   const normalized = val > 1 ? val / 100 : val;
-  // Subtract 1 from maxDimension so it never asks for a pixel outside the monitor bounds!
+  // Strictly prevent mouse from going out of bounds
   return Math.round(Math.max(0, Math.min(1, normalized)) * (maxDimension - 1));
 }
 
@@ -110,11 +108,15 @@ function createWindow() {
     }
   });
 
+  // 🌟 FIX: STRICTLY CAPTURE FULL SCREEN ONLY (Removed 'window')
+  // This guarantees the taskbar is included in the video feed!
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-    desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
-      const primaryScreen = sources.find(s => s.id.startsWith('screen')) || sources[0];
-      if (primaryScreen) callback({ video: primaryScreen });
-      else callback(); 
+    desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false }).then((sources) => {
+      if (sources && sources.length > 0) {
+        callback({ video: sources[0] });
+      } else {
+        callback(); 
+      }
     }).catch(() => callback());
   });
 
@@ -154,13 +156,12 @@ app.whenReady().then(() => {
   createWindow();
   createSystemTray(); 
 
-  // 🌟 FIX 2: Windows Display Scaling Fix (125%, 150%)
+  // 🌟 FIX: Accurately calculate physical screen size ignoring Windows Display Scaling (125/150%)
   const updateScreenBounds = () => {
     const display = screen.getPrimaryDisplay();
-    // Multiplying by scaleFactor ensures we get the TRUE physical monitor size
     primaryScreenBounds = { 
-      width: display.bounds.width * display.scaleFactor, 
-      height: display.bounds.height * display.scaleFactor 
+      width: Math.round(display.bounds.width * display.scaleFactor), 
+      height: Math.round(display.bounds.height * display.scaleFactor) 
     };
   };
 
