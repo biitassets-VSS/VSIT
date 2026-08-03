@@ -15,7 +15,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const signalingChannelRef = useRef<any>(null);
   const controlChannelRef = useRef<any>(null);
 
-  // 🌟 NEW: Frame Dropper Queue to prevent Electron from freezing!
   const latestMouseCmdRef = useRef<any>(null);
   const isExecutingMouseRef = useRef(false);
 
@@ -40,13 +39,12 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     };
   }, [staffId]);
 
-  // 🌟 NEW: Smooth Mouse Queue Execution
   const processMouseQueue = async () => {
     if (!latestMouseCmdRef.current || isExecutingMouseRef.current) return;
     
     isExecutingMouseRef.current = true;
     const cmd = latestMouseCmdRef.current;
-    latestMouseCmdRef.current = null; // Clear so we don't process it twice
+    latestMouseCmdRef.current = null; 
 
     try {
       if (typeof window !== 'undefined' && (window as any).electronAPI) {
@@ -79,7 +77,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       console.log("⚡ COMMAND EXECUTING ON STAFF PC:", cmd.type, cmd);
     }
 
-    // 🌟 FIX: Queue the mousemove instead of blocking the main thread
     if (cmd.type === 'mousemove') {
       latestMouseCmdRef.current = cmd;
       processMouseQueue();
@@ -120,8 +117,12 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
+      // 🌟 FIX: Removed max-width and max-height constraints! 
+      // This forces the browser to capture the true 16:10 resolution so the taskbar isn't cropped off.
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { ideal: 30, max: 30 } },
+        video: { 
+          frameRate: { ideal: 30, max: 30 } 
+        },
         audio: false
       });
 
