@@ -35,8 +35,6 @@ export default function AdminRemotePage() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [isKeyboardEnabled, setIsKeyboardEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // 🌟 NEW: Network Quality State
   const [videoQuality, setVideoQuality] = useState<'high' | 'med' | 'low'>('high');
   
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -195,7 +193,6 @@ export default function AdminRemotePage() {
     } catch (err) {}
   };
 
-  // 🌟 NEW: Network Quality Cycler
   const cycleQuality = () => {
     let newQual: 'high' | 'med' | 'low' = 'high';
     let scale = 1; let fps = 30;
@@ -223,7 +220,8 @@ export default function AdminRemotePage() {
 
     if (type === 'mousemove') {
       const now = Date.now();
-      if (now - lastMoveTimeRef.current < 25) return; // 🌟 25ms throttle avoids UDP network lag while staying very smooth
+      // 🌟 Stabilized throttle to ~33fps to prevent Electron app from freezing
+      if (now - lastMoveTimeRef.current < 30) return; 
       lastMoveTimeRef.current = now;
     }
 
@@ -234,25 +232,25 @@ export default function AdminRemotePage() {
     const videoRatio = video.videoWidth / video.videoHeight;
     const viewRatio = rect.width / rect.height;
 
-    let actualWidth = rect.width;
-    let actualHeight = rect.height;
-    let offsetX = 0; let offsetY = 0;
+    // 🌟 FIX: Updated coordinate math for exact 100% edge-to-edge accuracy (Taskbar fix)
+    let renderWidth = rect.width;
+    let renderHeight = rect.height;
+    let startX = 0; let startY = 0;
 
     if (viewRatio > videoRatio) {
-      actualWidth = rect.height * videoRatio;
-      offsetX = (rect.width - actualWidth) / 2;
+      renderWidth = rect.height * videoRatio;
+      startX = (rect.width - renderWidth) / 2;
     } else {
-      actualHeight = rect.width / videoRatio;
-      offsetY = (rect.height - actualHeight) / 2;
+      renderHeight = rect.width / videoRatio;
+      startY = (rect.height - renderHeight) / 2;
     }
 
-    const clickX = e.clientX - rect.left - offsetX;
-    const clickY = e.clientY - rect.top - offsetY;
+    const clickX = e.clientX - rect.left - startX;
+    const clickY = e.clientY - rect.top - startY;
 
-    const clampedX = Math.max(0, Math.min(clickX, actualWidth));
-    const clampedY = Math.max(0, Math.min(clickY, actualHeight));
-    const xPercent = clampedX / actualWidth;
-    const yPercent = clampedY / actualHeight;
+    // Guaranteed to reach 1.0 (100%) exactly at the edge
+    const xPercent = Math.max(0, Math.min(1, clickX / renderWidth));
+    const yPercent = Math.max(0, Math.min(1, clickY / renderHeight));
 
     sendControlCommand({ type, xPercent, yPercent, button: e.button });
   };
@@ -354,7 +352,6 @@ export default function AdminRemotePage() {
                   )}
                 </div>
 
-                {/* 🌟 TASKBAR FIX: Removed rounded borders when controlling to ensure edge-to-edge tracking */}
                 <div 
                   ref={viewportContainerRef} 
                   className={`flex-1 bg-slate-900 relative flex items-center justify-center ${isControlling ? 'cursor-none select-none' : 'rounded-b-3xl overflow-hidden'}`}
@@ -384,7 +381,7 @@ export default function AdminRemotePage() {
                       {[
                         { icon: <Video size={20} strokeWidth={isControlling ? 2.5 : 2} />, active: isControlling, color: 'text-blue-500 hover:bg-blue-100 hover:text-blue-700', activeClass: 'text-blue-700 bg-white border-[3px] border-blue-600 shadow-lg shadow-blue-600/30 scale-[1.15]', action: () => { if (isControlling) { setIsControlling(false); setSessionStatus('connected'); toast.success("Switched to View-Only mode."); } else { signalingChannelRef.current?.send({ type: 'broadcast', event: 'request_remote_control', payload: {} }); toast("Requesting control..."); setIsControlling(true); } }, tooltip: isControlling ? "Disable Control" : "Request Control" },
                         { icon: <Keyboard size={20} strokeWidth={isKeyboardEnabled ? 2.5 : 2} />, active: isKeyboardEnabled, color: 'text-purple-500 hover:bg-purple-100 hover:text-purple-700', activeClass: 'text-purple-700 bg-white border-[3px] border-purple-600 shadow-lg shadow-purple-600/30 scale-[1.15]', action: () => { if(isControlling) { setIsKeyboardEnabled(!isKeyboardEnabled); toast.success(!isKeyboardEnabled ? "Keyboard Control Enabled ⌨️" : "Keyboard Control Disabled", { id: 'kb' }); } else toast.error("Request control first!"); }, tooltip: "Keyboard Input" },
-                        { icon: <Wifi size={20} />, active: videoQuality !== 'high', color: 'text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700', activeClass: 'text-indigo-700 bg-white border-[3px] border-indigo-600 shadow-lg shadow-indigo-600/30 scale-[1.15]', action: cycleQuality, tooltip: `Network Quality: ${videoQuality.toUpperCase()}` }, // 🌟 NEW: Quality toggle button
+                        { icon: <Wifi size={20} />, active: videoQuality !== 'high', color: 'text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700', activeClass: 'text-indigo-700 bg-white border-[3px] border-indigo-600 shadow-lg shadow-indigo-600/30 scale-[1.15]', action: cycleQuality, tooltip: `Network Quality: ${videoQuality.toUpperCase()}` },
                         { icon: <MessageSquare size={20} strokeWidth={isChatOpen ? 2.5 : 2} />, active: isChatOpen, color: 'text-emerald-500 hover:bg-emerald-100 hover:text-emerald-700', activeClass: 'text-emerald-700 bg-white border-[3px] border-emerald-600 shadow-lg shadow-emerald-600/30 scale-[1.15]', action: () => setIsChatOpen(!isChatOpen), tooltip: "Live Chat" },
                         { icon: <Clipboard size={20} />, active: false, color: 'text-amber-500 hover:bg-amber-100 hover:text-amber-700', action: requestClipboardSync, tooltip: "Sync Clipboard" },
                         { icon: <Volume2 size={20} strokeWidth={isAudioEnabled ? 2.5 : 2} />, active: isAudioEnabled, color: 'text-teal-500 hover:bg-teal-100 hover:text-teal-700', activeClass: 'text-teal-700 bg-white border-[3px] border-teal-600 shadow-lg shadow-teal-600/30 scale-[1.15]', action: () => setIsAudioEnabled(!isAudioEnabled), tooltip: "Stream Audio" },

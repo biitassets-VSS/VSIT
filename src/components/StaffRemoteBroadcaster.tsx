@@ -15,6 +15,10 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const signalingChannelRef = useRef<any>(null);
   const controlChannelRef = useRef<any>(null);
 
+  // 🌟 NEW: Frame Dropper Queue to prevent Electron from freezing!
+  const latestMouseCmdRef = useRef<any>(null);
+  const isExecutingMouseRef = useRef(false);
+
   useEffect(() => {
     if (!staffId) return;
     document.documentElement.classList.remove('dark'); 
@@ -36,8 +40,24 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     };
   }, [staffId]);
 
+  // 🌟 NEW: Smooth Mouse Queue Execution
+  const processMouseQueue = async () => {
+    if (!latestMouseCmdRef.current || isExecutingMouseRef.current) return;
+    
+    isExecutingMouseRef.current = true;
+    const cmd = latestMouseCmdRef.current;
+    latestMouseCmdRef.current = null; // Clear so we don't process it twice
+
+    try {
+      if (typeof window !== 'undefined' && (window as any).electronAPI) {
+        await (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+      }
+    } catch (e) {}
+    
+    isExecutingMouseRef.current = false;
+  };
+
   const executeAdminCommand = async (cmd: any) => {
-    // 🌟 NEW: Dynamic Video Quality scaling based on Network Button
     if (cmd.type === 'set_quality') {
       const senders = peerRef.current?.getSenders() || [];
       const videoSender = senders.find(s => s.track && s.track.kind === 'video');
@@ -46,27 +66,29 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
         const params = videoSender.getParameters();
         if (!params.encodings) params.encodings = [{}];
         
-        // Dynamically applies 1080p, 720p, or 480p and reduces framerate to save bandwidth
         params.encodings[0].scaleResolutionDownBy = cmd.scale;
         params.encodings[0].maxFramerate = cmd.fps;
         
         videoSender.setParameters(params)
-          .then(() => console.log(`Quality scaled by ${cmd.scale}, FPS: ${cmd.fps}`))
           .catch(e => console.error("Quality change failed:", e));
       }
-      return; // Do not pass this command to Electron API
+      return; 
     }
 
     if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
       console.log("⚡ COMMAND EXECUTING ON STAFF PC:", cmd.type, cmd);
     }
 
+    // 🌟 FIX: Queue the mousemove instead of blocking the main thread
+    if (cmd.type === 'mousemove') {
+      latestMouseCmdRef.current = cmd;
+      processMouseQueue();
+      return;
+    }
+
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
-        if (cmd.type === 'mousemove') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-        }
-        else if (cmd.type === 'mousedown') {
+        if (cmd.type === 'mousedown') {
           (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
           (window as any).electronAPI.sendMouseDown(cmd.button);
         }
