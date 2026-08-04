@@ -41,7 +41,6 @@ export default function AdminDashboardPage() {
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
-  // 🌟 NEW: Real-time Presence Tracking States
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [rawStaffList, setRawStaffList] = useState<any[]>([]);
 
@@ -77,7 +76,7 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // 🌟 SUPABASE REALTIME PRESENCE ENGINE (Teams/WhatsApp Style)
+  // 🌟 SUPABASE REALTIME PRESENCE ENGINE
   useEffect(() => {
     const presenceChannel = supabase.channel('vsit_online_presence');
     presenceChannel
@@ -85,7 +84,6 @@ export default function AdminDashboardPage() {
         const state = presenceChannel.presenceState();
         const activeIds = new Set<string>();
         
-        // Extract exact user IDs and emails of currently online staff
         Object.values(state).forEach((presences: any) => {
           presences.forEach((p: any) => {
             if (p.user_id) activeIds.add(p.user_id);
@@ -101,7 +99,7 @@ export default function AdminDashboardPage() {
     return () => { supabase.removeChannel(presenceChannel); };
   }, []);
 
-  // 🌟 DYNAMIC STAFF STATS CALCULATOR (Updates instantly when presence changes)
+  // 🌟 DYNAMIC STAFF STATS CALCULATOR
   useEffect(() => {
     if (rawStaffList.length === 0) return;
     
@@ -113,7 +111,6 @@ export default function AdminDashboardPage() {
       const roleStr = (s.role || '').toLowerCase().trim();
       const emailStr = (s.email || '').toLowerCase().trim();
       
-      // Skip admins from total count
       if (roleStr === 'admin' || emailStr === 'lakhwinder.bi@outlook.com') return;
       
       totalStaffCount++;
@@ -126,7 +123,6 @@ export default function AdminDashboardPage() {
         return; 
       }
 
-      // Check real-time WebSocket connection Set
       const isLive = onlineUsers.has(s.id) || (s.email && onlineUsers.has(s.email.toLowerCase()));
       if (isLive) liveCount++;
     });
@@ -201,7 +197,6 @@ export default function AdminDashboardPage() {
       const tktData = tickets || [];
       const assetsData = assets || [];
 
-      // Save raw staff list so the Presence useEffect can calculate live stats
       setRawStaffList(staffData);
 
       // Asset Calculations
@@ -215,15 +210,32 @@ export default function AdminDashboardPage() {
         else inStockAssetsCount++;
       });
 
-      // Inspection Calculations
-      let pendingCount = 0, resolvedCount = 0;
+      // 🌟 ACCURATE INSPECTION CALCULATIONS (Matches /admin/inspections/page.tsx)
+      let pendingCount = 0, resolvedCount = 0, totalValidVerifications = 0;
       inspData.forEach(i => {
         const s = (i.status || '').toLowerCase().trim();
         const notes = (i.notes || '').toLowerCase();
-        const byAdmin = (i.inspected_by || '').toLowerCase() === 'admin';
-        if (!byAdmin && !notes.includes('initially registered') && !notes.includes('asset configuration updated')) {
-          if (['resolv', 'approv', 'complet', 'clos'].some(k => s.includes(k))) resolvedCount++;
-          else pendingCount++;
+        const inspByLower = (i.inspected_by || '').toLowerCase().trim();
+
+        // 1. Exclude Return and Replacement Requests
+        const isReturnOrReplace = notes.includes('[return request]') || s.includes('return') || notes.includes('[replacement request]') || s.includes('replace');
+
+        // 2. Exclude Admin System Actions & Stock Intakes
+        const isAdminAction = 
+          inspByLower === 'admin' || inspByLower === 'system' || inspByLower === 'administrator' ||
+          notes.includes('asset configuration updated') || 
+          notes.includes('asset initially registered') ||
+          notes.includes('asset forcefully unassigned') ||
+          notes.includes('asset re-assigned') ||
+          s === 'stock intake' || i.is_admin === true || (i.type || '').toLowerCase() === 'admin';
+
+        if (!isReturnOrReplace && !isAdminAction) {
+          totalValidVerifications++;
+          if (['resolv', 'approv', 'complet', 'clos', 'pass'].some(k => s.includes(k))) {
+            resolvedCount++;
+          } else if (s === 'pending' || s === 'pending review' || s === 'awaiting staff action' || s === '') {
+            pendingCount++;
+          }
         }
       });
 
@@ -241,7 +253,6 @@ export default function AdminDashboardPage() {
         const assetOwnerId = assetObj.assigned_to;
         const assetName = assetObj.name || assetObj.asset_name || 'an asset';
 
-        // ⚡ IDENTIFY THE STAFF MEMBER (Requester)
         const requesterProfile = staffData.find(p => 
           (log.user_email && p.email?.toLowerCase() === log.user_email.toLowerCase()) || 
           (log.user_id && p.id === log.user_id) ||
@@ -287,7 +298,7 @@ export default function AdminDashboardPage() {
       setStats(prev => ({
         ...prev,
         totalAssets: assetsData.length || 0, usedAssets: usedAssetsCount, inStockAssets: inStockAssetsCount, discardedAssets: discardedAssetsCount,
-        totalVerifications: inspData.length, resolvedInspections: resolvedCount, pendingInspections: pendingCount,
+        totalVerifications: totalValidVerifications, resolvedInspections: resolvedCount, pendingInspections: pendingCount,
         totalTickets: tktData.length, resolvedTickets: resolvedTicketsCount, pendingTickets: pendingTicketsCount, inProcessTickets: inProcessTicketsCount,
         returnRequests: returnRequestsCount, replacementRequests: replacementRequestsCount
       }));
