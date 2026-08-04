@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
+// 🌟 INCLUDED: Your custom AI Chatbot
+import StaffAIChatbot from '@/components/StaffAIChatbot';
+
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -557,6 +560,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
+          
+          {/* 🌟 ADDED: Your AI Chatbot is rendered here on all staff pages */}
+          <StaffAIChatbot />
         </main>
       </div>
     </div>
