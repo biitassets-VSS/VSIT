@@ -390,13 +390,14 @@ function AdminInspectionReviewContent() {
     router.replace('/admin/inspections'); 
   };
 
+  // 🎨 PURE MAC OS 2026 TRANSPARENT GLASS THEME
   const theme = {
-    bg: 'bg-[#F1F5F9]',
-    card: 'bg-white/60 backdrop-blur-xl rounded-3xl border border-white/80 shadow-sm', 
-    cardHover: 'hover:bg-white/80 hover:border-orange-300 hover:shadow-md hover:-translate-y-1 transition-all duration-300',
-    modalBody: 'bg-[#F8FAFC]/95 backdrop-blur-2xl rounded-3xl border border-white shadow-xl',
-    textMain: 'text-slate-800',
-    textSub: 'text-slate-500',
+    bg: 'bg-[#FFF9F2]', // Match the staff background perfectly
+    glassCard: 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
+    glassItem: 'bg-white/50 border border-white/60 shadow-sm hover:shadow-md backdrop-blur-2xl transition-all duration-300',
+    glassInner: 'bg-white/70 border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)] backdrop-blur-md',
+    textMain: 'text-slate-900',
+    textSub: 'text-slate-600',
   };
 
   const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
@@ -410,17 +411,16 @@ function AdminInspectionReviewContent() {
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-225 h-125 pointer-events-none z-0 flex justify-between items-center opacity-30">
-        <div className="w-112.5 h-112.5 bg-[#FFD1B3] rounded-full blur-[120px]"></div>
-        <div className="w-112.5 h-112.5 bg-[#D8B4FE] rounded-full blur-[120px]"></div>
-      </div>
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 relative z-0 overflow-hidden`}>
+      {/* 🌟 Premium Background Orbs to match Staff Dashboard */}
+      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
-        <div className={`${theme.card} p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
+        <div className={`${theme.glassCard} rounded-4xl p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
           <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm rounded-2xl text-slate-600 transition-all cursor-pointer`}>
+            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 bg-white/60 backdrop-blur-md border border-white/80 hover:bg-white shadow-sm rounded-2xl text-slate-600 transition-all cursor-pointer`}>
               <ArrowLeft size={18} />
             </button>
             <div>
@@ -442,7 +442,7 @@ function AdminInspectionReviewContent() {
           <button 
             onClick={fetchVerificationLedger} 
             disabled={loading}
-            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0`}
+            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 bg-white/60 backdrop-blur-md border border-white/80 text-slate-700 hover:bg-white shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0`}
           >
             <RefreshCw size={16} className={loading ? 'animate-spin text-orange-600' : 'text-purple-600'} />
             <span>Sync Database</span>
@@ -450,9 +450,9 @@ function AdminInspectionReviewContent() {
         </div>
 
         {assetFilter && (
-          <div className={`border p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 shadow-sm bg-orange-50/70 border-orange-200`}>
+          <div className={`${theme.glassCard} p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4`}>
              <div className={`flex items-center gap-4 text-orange-900`}>
-                <div className={`p-3 border rounded-xl shadow-sm bg-white border-orange-200/80 text-orange-600`}>
+                <div className={`p-3 border rounded-xl shadow-sm bg-white/70 border-white/80 text-orange-600`}>
                   <HistoryIcon size={24} />
                 </div>
                 <div>
@@ -483,7 +483,7 @@ function AdminInspectionReviewContent() {
                   className={`group flex items-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer transition-all duration-200 border ${
                     isActive 
                       ? 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border-purple-600' 
-                      : `bg-white/60 border border-slate-200 text-slate-700 hover:bg-white/90 shadow-sm`
+                      : `bg-white/40 backdrop-blur-md border border-white/60 text-slate-700 hover:bg-white/60 shadow-sm`
                   }`}
                 >
                   <span className={isActive ? 'text-white' : 'text-purple-600 group-hover:text-purple-700 transition-colors'}>{tab.icon}</span>
@@ -493,7 +493,7 @@ function AdminInspectionReviewContent() {
             })}
           </div>
 
-          <div className="p-2.5 bg-white/80 border border-slate-200 text-slate-800 focus-within:bg-white focus-within:border-purple-400 focus-within:ring-4 focus-within:ring-purple-500/10 rounded-2xl transition-all shadow-sm flex items-center">
+          <div className={`p-2.5 rounded-2xl transition-all shadow-sm flex items-center focus-within:ring-4 focus-within:ring-purple-500/10 ${theme.glassInner}`}>
             <div className="relative w-full">
               <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 text-slate-400`} />
               <input 
@@ -513,7 +513,7 @@ function AdminInspectionReviewContent() {
             <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Fetching Submissions...</span>
           </div>
         ) : filteredList.length === 0 ? (
-          <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.card}`}>
+          <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.glassCard}`}>
             <ClipboardCheck size={48} className="mx-auto text-purple-600 opacity-60" />
             <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Logs Found</h3>
             <p className={`text-xs font-semibold ${theme.textSub}`}>The tracking timeline is clear for these parameters.</p>
@@ -530,19 +530,19 @@ function AdminInspectionReviewContent() {
                 <div 
                   key={`${item.id}-${index}`} 
                   id={`inspection-${item.id}`}
-                  className={`p-6 md:p-8 rounded-3xl border shadow-sm transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.card} ${
+                  className={`p-6 md:p-8 rounded-3xl transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.glassItem} ${
                     isHighlighted 
                       ? 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' 
                       : (isPending && item.is_submission && !item.is_admin_action) 
-                        ? 'ring-2 ring-orange-400/50 bg-white/70'
-                        : theme.cardHover
+                        ? 'ring-2 ring-orange-400/50'
+                        : ''
                   }`}
                 >
-                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 border-slate-200`}>
+                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 border-white/50`}>
                     <div className="flex items-start gap-4">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${
                         item.is_admin_action ? 'bg-purple-100 text-purple-700 border border-purple-200' : 
-                        item.is_submission ? 'bg-white border border-slate-200 text-orange-600' : 'bg-slate-100 text-slate-500 border-slate-200'
+                        item.is_submission ? 'bg-white/80 border border-white text-orange-600' : 'bg-slate-100 text-slate-500 border-white'
                       }`}>
                         {item.is_admin_action ? <Settings size={20} /> : <User size={20} />}
                       </div>
@@ -555,7 +555,7 @@ function AdminInspectionReviewContent() {
                         </div>
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-sm border ${
-                            item.is_admin_action ? 'bg-purple-50 text-purple-900 border-purple-200' : 'bg-white text-slate-700 border-slate-200'
+                            item.is_admin_action ? 'bg-purple-50/80 text-purple-900 border-purple-200/50' : 'bg-white/60 text-slate-700 border-white/80'
                           }`}>
                             {item.emp_code}
                           </span>
@@ -568,7 +568,7 @@ function AdminInspectionReviewContent() {
                       </div>
                     </div>
 
-                    <div className={`p-5 rounded-2xl border space-y-3 shadow-sm bg-white/60 border-slate-200`}>
+                    <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
                       <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
                         <Laptop size={14} className="text-orange-600 shrink-0" />
                         <button 
@@ -583,7 +583,7 @@ function AdminInspectionReviewContent() {
                           {item.asset_name}
                         </button>
                       </div>
-                      <div className={`flex justify-between items-center text-[11px] border-t border-slate-200 pt-2.5 mt-2.5`}>
+                      <div className={`flex justify-between items-center text-[11px] border-t border-white/50 pt-2.5 mt-2.5`}>
                         <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
                         <span className={`font-mono font-bold ${theme.textMain}`}>{item.serial_number}</span>
                       </div>
@@ -656,7 +656,7 @@ function AdminInspectionReviewContent() {
                           <Clock size={14} /> Awaiting staff member to upload visual verification photos.
                         </div>
                       ) : photosArray.length === 0 ? (
-                        <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 border-slate-200 bg-white/60 text-slate-500`}>
+                        <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 text-slate-500 ${theme.glassInner}`}>
                           <ShieldAlert size={14} /> No graphical assets required or attached to this registry record log.
                         </div>
                       ) : (
@@ -666,7 +666,7 @@ function AdminInspectionReviewContent() {
                               key={idx}
                               type="button"
                               onClick={() => setPreviewPhotoModal(url)}
-                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 border-slate-200 hover:border-orange-400 bg-white`}
+                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 border-white/80 hover:border-orange-400 bg-white/40`}
                             >
                               <img src={url} alt={`Evidence Shot ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                               <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
@@ -681,28 +681,28 @@ function AdminInspectionReviewContent() {
 
                     <div className="space-y-2">
                       <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>{item.is_admin_action ? 'System Log Notes' : item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
-                      <div className={`p-4 border rounded-2xl text-xs font-semibold italic leading-relaxed shadow-sm bg-white border-slate-200 text-slate-800`}>
+                      <div className={`p-4 rounded-2xl text-xs font-semibold italic leading-relaxed ${theme.glassInner}`}>
                         "{item.notes || 'No comments or written declaration provided.'}"
                       </div>
                     </div>
 
                     {item.admin_remarks && (
-                      <div className={`p-4 border rounded-2xl text-xs font-semibold shadow-sm bg-white/80 border-slate-200`}>
+                      <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
                         <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 text-purple-700`}>Administrative Action Remarks:</span>
                         <p className={theme.textMain}>"{item.admin_remarks}"</p>
                       </div>
                     )}
 
-                    <div className={`pt-4 border-t mt-auto border-slate-200`}>
+                    <div className={`pt-4 border-t mt-auto border-white/50`}>
                       {item.is_admin_action ? (
-                        <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-purple-50/50 border-purple-200`}>
+                        <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-purple-50/60 backdrop-blur-md border-purple-200`}>
                           <span className={`text-[10px] font-bold uppercase tracking-widest text-purple-800`}>System Registry Asset Audit</span>
                           <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-orange-600`}>
                             <CheckCircle2 size={14} /> Log Sealed Automatically
                           </div>
                         </div>
                       ) : !item.is_submission ? (
-                         <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-amber-50/50 border-amber-200`}>
+                         <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-amber-50/60 backdrop-blur-md border-amber-200`}>
                            <span className={`text-[10px] font-bold uppercase tracking-widest text-amber-800`}>Pending Staff Action</span>
                            <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700`}>
                              <Clock size={14} /> Waiting on Employee
@@ -738,7 +738,7 @@ function AdminInspectionReviewContent() {
                           </button>
                         </div>
                       ) : (
-                        <div className={`flex items-center justify-between px-5 py-4 border rounded-xl shadow-sm bg-white border-slate-200`}>
+                        <div className={`flex items-center justify-between px-5 py-4 rounded-xl ${theme.glassInner}`}>
                           <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Adjudication Complete</span>
                           <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
                             {item.status === 'Approved' && <CheckCircle2 size={14} className={"text-emerald-600"}/>}
@@ -794,7 +794,7 @@ function AdminInspectionReviewContent() {
 export default function AdminInspectionReviewPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#F1F5F9] flex flex-col items-center justify-center gap-4 transition-colors">
+      <div className="min-h-screen bg-[#FFF9F2] flex flex-col items-center justify-center gap-4 transition-colors">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-orange-600"></div>
         <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500">Loading Core Engine...</span>
       </div>
