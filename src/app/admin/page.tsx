@@ -41,7 +41,9 @@ export default function AdminDashboardPage() {
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
-  const [presenceOnlineCount, setPresenceOnlineCount] = useState(0);
+  // 🌟 NEW: Real-time Presence Tracking States
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [rawStaffList, setRawStaffList] = useState<any[]>([]);
 
   const [stats, setStats] = useState({
     totalAssets: 0, usedAssets: 0, inStockAssets: 0, discardedAssets: 0,
@@ -75,20 +77,70 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // 🌟 SUPABASE REALTIME PRESENCE ENGINE
+  // 🌟 SUPABASE REALTIME PRESENCE ENGINE (Teams/WhatsApp Style)
   useEffect(() => {
     const presenceChannel = supabase.channel('vsit_online_presence');
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
         const state = presenceChannel.presenceState();
-        // Count total connections in the presence channel
-        setPresenceOnlineCount(Object.keys(state).length);
+        const activeIds = new Set<string>();
+        
+        // Extract exact user IDs and emails of currently online staff
+        Object.values(state).forEach((presences: any) => {
+          presences.forEach((p: any) => {
+            if (p.user_id) activeIds.add(p.user_id);
+            if (p.email) activeIds.add(p.email.toLowerCase());
+          });
+        });
+        
+        setOnlineUsers(activeIds);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') await presenceChannel.track({ admin: 'admin_dashboard', online_at: new Date().toISOString() });
       });
     return () => { supabase.removeChannel(presenceChannel); };
   }, []);
+
+  // 🌟 DYNAMIC STAFF STATS CALCULATOR (Updates instantly when presence changes)
+  useEffect(() => {
+    if (rawStaffList.length === 0) return;
+    
+    let totalStaffCount = 0;
+    let deactivatedCount = 0;
+    let liveCount = 0;
+
+    rawStaffList.forEach(s => {
+      const roleStr = (s.role || '').toLowerCase().trim();
+      const emailStr = (s.email || '').toLowerCase().trim();
+      
+      // Skip admins from total count
+      if (roleStr === 'admin' || emailStr === 'lakhwinder.bi@outlook.com') return;
+      
+      totalStaffCount++;
+
+      const statusStr = (s.status || '').toLowerCase().trim();
+      const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke', 'disabled'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
+
+      if (isDeactivated) { 
+        deactivatedCount++; 
+        return; 
+      }
+
+      // Check real-time WebSocket connection Set
+      const isLive = onlineUsers.has(s.id) || (s.email && onlineUsers.has(s.email.toLowerCase()));
+      if (isLive) liveCount++;
+    });
+
+    const offlineCount = Math.max(0, totalStaffCount - liveCount - deactivatedCount);
+
+    setStats(prev => ({
+      ...prev,
+      totalStaff: totalStaffCount,
+      onlineStaff: liveCount,
+      offlineStaff: offlineCount,
+      deactivatedStaff: deactivatedCount
+    }));
+  }, [onlineUsers, rawStaffList]);
 
   const triggerDesktopAlert = (title: string, body: string) => {
     try { const audio = new Audio('/alert.mp3'); audio.play().catch(() => {}); } catch (err) {}
@@ -105,7 +157,7 @@ export default function AdminDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadAdminData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => loadAdminData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => loadAdminData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false)) // Instantly updates when staff comes online/offline
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false))
       .subscribe();
     return () => { supabase.removeChannel(adminChannel); };
   }, []);
@@ -149,6 +201,9 @@ export default function AdminDashboardPage() {
       const tktData = tickets || [];
       const assetsData = assets || [];
 
+      // Save raw staff list so the Presence useEffect can calculate live stats
+      setRawStaffList(staffData);
+
       // Asset Calculations
       let usedAssetsCount = 0, inStockAssetsCount = 0, discardedAssetsCount = 0, returnRequestsCount = 0, replacementRequestsCount = 0;
       assetsData.forEach(a => {
@@ -180,45 +235,6 @@ export default function AdminDashboardPage() {
         else if (['process', 'progress', 'repair', 'active'].some(k => s.includes(k))) inProcessTicketsCount++;
         else pendingTicketsCount++;
       });
-
-      // 🌟 ACCURATE STAFF TRACKING (Excluding Admins)
-      let dbOnlineCount = 0, deactivatedCount = 0, totalStaffCount = 0;
-      const now = new Date().getTime();
-      
-      staffData.forEach(s => {
-        const roleStr = (s.role || '').toLowerCase().trim();
-        const emailStr = (s.email || '').toLowerCase().trim();
-        
-        // Skip admins from the "Total Staff" count
-        if (roleStr === 'admin' || emailStr === 'lakhwinder.bi@outlook.com') return;
-        
-        totalStaffCount++; // Increment pure staff count
-
-        const statusStr = (s.status || '').toLowerCase().trim();
-        const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke', 'disabled'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
-
-        if (isDeactivated) { 
-          deactivatedCount++; 
-          return; 
-        }
-
-        let isOnline = s.is_online === true || String(s.is_online).toLowerCase() === 'true' || s.is_online === 1 || statusStr === 'online' || statusStr === 'live';
-        
-        // Fallback Activity Check: If they submitted an inspection or ticket in the last 15 minutes, they are active.
-        if (!isOnline) {
-          const hasRecentInspection = inspData.some(i => (i.user_email?.toLowerCase() === s.email?.toLowerCase() || i.inspected_by === s.id) && (now - new Date(i.created_at).getTime()) < 15 * 60000);
-          const hasRecentTicket = tktData.some(t => (t.created_by?.toLowerCase() === s.email?.toLowerCase() || t.user_id === s.id) && (now - new Date(t.created_at).getTime()) < 15 * 60000);
-          if (hasRecentInspection || hasRecentTicket) isOnline = true;
-        }
-
-        if (isOnline) dbOnlineCount++;
-      });
-
-      // Calculate final active/offline staff based on pure staff count
-      // (presenceOnlineCount - 1) removes the Admin's current connection from the real-time presence count
-      const activePresence = Math.max(0, presenceOnlineCount - 1); 
-      const finalOnlineCount = Math.max(activePresence, dbOnlineCount);
-      const offlineCount = Math.max(0, totalStaffCount - finalOnlineCount - deactivatedCount);
 
       const formattedRecentLogs = inspData.slice(0, 6).map(log => {
         const assetObj = log.assets || {};
@@ -268,13 +284,13 @@ export default function AdminDashboardPage() {
         return { ...log, displayName, empCode, logTheme, actionText };
       });
 
-      setStats({
+      setStats(prev => ({
+        ...prev,
         totalAssets: assetsData.length || 0, usedAssets: usedAssetsCount, inStockAssets: inStockAssetsCount, discardedAssets: discardedAssetsCount,
         totalVerifications: inspData.length, resolvedInspections: resolvedCount, pendingInspections: pendingCount,
         totalTickets: tktData.length, resolvedTickets: resolvedTicketsCount, pendingTickets: pendingTicketsCount, inProcessTickets: inProcessTicketsCount,
-        totalStaff: totalStaffCount, onlineStaff: finalOnlineCount, offlineStaff: offlineCount, deactivatedStaff: deactivatedCount,
         returnRequests: returnRequestsCount, replacementRequests: replacementRequestsCount
-      });
+      }));
       
       setRecentActivity(formattedRecentLogs);
       setLoading(false); setIsRefreshing(false);
