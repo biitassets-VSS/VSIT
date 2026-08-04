@@ -6,12 +6,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Laptop, ClipboardCheck, 
   LogOut, Menu, X, Loader2, Ticket, PlusCircle, Bell, History, AlertTriangle,
-  Monitor, ShieldAlert, Check, StopCircle, MessageSquare, Send, MousePointer2
+  Monitor, ShieldAlert, Check, StopCircle, MessageSquare, Send, MousePointer2,
+  Bot, Sparkles // 🌟 ADDED BOT ICONS
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-
-// 🌟 INCLUDED: Your custom AI Chatbot
-import StaffAIChatbot from '@/components/StaffAIChatbot';
 
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -55,11 +53,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  
   const [chatMessages, setChatMessages] = useState<{sender: string, text: string, time: string, isSelf: boolean}[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
-  const [adminPing, setAdminPing] = useState<{x: number, y: number, id: number} | null>(null);
+  
+  // 🌟 NEW: AI CHATBOT STATES
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  const [aiInput, setAiInput] = useState('');
+  const [aiMessages, setAiMessages] = useState<{sender: 'AI' | 'User', text: string}[]>([
+    { sender: 'AI', text: 'Hi! I am your VSIT Assistant. How can I help you with your IT portal today?' }
+  ]);
 
+  const [adminPing, setAdminPing] = useState<{x: number, y: number, id: number} | null>(null);
   const [remoteControlRequest, setRemoteControlRequest] = useState(false);
   const [isControlGranted, setIsControlGranted] = useState(false);
   
@@ -67,6 +73,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   useEffect(() => { isControlGrantedRef.current = isControlGranted; }, [isControlGranted]);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const aiChatEndRef = useRef<HTMLDivElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
@@ -108,6 +115,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   }, [router]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, showChat]);
+  useEffect(() => { aiChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [aiMessages, isAiChatOpen]);
 
   useEffect(() => {
     if (!staffProfile.id) return;
@@ -332,6 +340,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
+  // 🌟 AI CHAT HANDLER
+  const handleAiChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiInput.trim()) return;
+    
+    setAiMessages(prev => [...prev, { sender: 'User', text: aiInput }]);
+    const currentInput = aiInput;
+    setAiInput('');
+
+    // Simulate AI Response
+    setTimeout(() => {
+      setAiMessages(prev => [...prev, { 
+        sender: 'AI', 
+        text: `I'm an automated assistant. I understand you're asking about "${currentInput}". To resolve hardware or software issues, please create an IT Ticket via the dashboard.`
+      }]);
+    }, 1000);
+  };
+
   const handleAcceptControl = () => {
     setIsControlGranted(true);
     setRemoteControlRequest(false);
@@ -374,7 +400,50 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      {/* 🌟 AI CHATBOT BUTTON & WINDOW (Always Visible unless Streaming) */}
+      {!isStreaming && (
+        <div className="fixed bottom-6 right-6 z-9990 flex flex-col items-end pointer-events-none">
+          {/* Floating AI Chat Window */}
+          {isAiChatOpen && (
+            <div className={`w-80 sm:w-96 mb-4 rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border shadow-2xl ${isDarkMode ? 'bg-zinc-900/90 border-white/10' : 'bg-white/95 border-white/60 backdrop-blur-3xl'}`}>
+              <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500 to-purple-600`}>
+                <div className="flex items-center gap-2">
+                  <Bot size={18} />
+                  <div>
+                    <h3 className="text-sm font-black tracking-tight leading-none">AI Support Assistant</h3>
+                    <p className="text-[10px] font-bold text-white/80 mt-1 uppercase tracking-widest">Virtual Staffing IT</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsAiChatOpen(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors cursor-pointer"><X size={16}/></button>
+              </div>
+              <div className="h-72 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-slate-50/50 dark:bg-black/50">
+                {aiMessages.map((msg, i) => (
+                  <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.sender === 'User' ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none'}`}>
+                    {msg.sender === 'AI' && <div className="font-bold text-[9px] mb-1 uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1"><Sparkles size={10}/> VSIT AI</div>}
+                    {msg.text}
+                  </div>
+                ))}
+                <div ref={aiChatEndRef} />
+              </div>
+              <form onSubmit={handleAiChatSubmit} className={`p-3 border-t flex gap-2 ${isDarkMode ? 'bg-zinc-900 border-white/10' : 'bg-white border-slate-200'}`}>
+                <input value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Ask about IT issues..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-xl outline-none transition-all shadow-inner border ${isDarkMode ? 'bg-black/50 text-white border-white/10 focus:border-purple-500' : 'bg-slate-100 text-slate-900 border-slate-200 focus:bg-white focus:ring-4 focus:ring-purple-500/10'}`} />
+                <button type="submit" disabled={!aiInput.trim()} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm bg-purple-600 text-white hover:bg-purple-700`}><Send size={14}/></button>
+              </form>
+            </div>
+          )}
+
+          {/* Floating AI Chat Button */}
+          <button
+            onClick={() => setIsAiChatOpen(!isAiChatOpen)}
+            className={`w-14 h-14 rounded-full bg-linear-to-r from-orange-500 to-purple-600 text-white shadow-[0_8px_20px_rgba(168,85,247,0.4)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all pointer-events-auto cursor-pointer ${isAiChatOpen ? 'rotate-12' : 'rotate-0'}`}
+          >
+            {isAiChatOpen ? <X size={24} /> : <Bot size={28} />}
+          </button>
+        </div>
+      )}
+
+      {/* TOAST ALERTS */}
+      <div className="fixed bottom-6 left-6 sm:left-auto sm:right-24 z-9995 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 rounded-3xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
             <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0 border border-rose-500/20 text-rose-600">
@@ -526,7 +595,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white/50">{unreadCount}</span>}
             </button>
 
-            {/* 🌟 FIX: SOLID FROSTED GLASS BACKGROUND APPLIED HERE */}
             {isNotifOpen && (
               <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-4xl overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200 shadow-2xl border backdrop-blur-3xl ${isDarkMode ? 'bg-zinc-900/95 border-zinc-700/50' : 'bg-white/95 border-white/80'}`}>
                 <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-slate-50/80 border-slate-200 backdrop-blur-md'}`}>
@@ -560,9 +628,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
-          
-          {/* 🌟 ADDED: Your AI Chatbot is rendered here on all staff pages */}
-          <StaffAIChatbot />
         </main>
       </div>
     </div>
