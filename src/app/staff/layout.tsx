@@ -523,26 +523,27 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white/50">{unreadCount}</span>}
             </button>
 
+            {/* 🌟 FIX: SOLID FROSTED GLASS BACKGROUND APPLIED HERE */}
             {isNotifOpen && (
-              <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-4xl overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200 border ${theme.glassPanel}`}>
-                <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/30 border-white/40 backdrop-blur-md'}`}>
+              <div className={`absolute top-full right-0 mt-3 w-80 sm:w-96 rounded-4xl overflow-hidden z-9999 animate-in fade-in slide-in-from-top-2 duration-200 shadow-2xl border backdrop-blur-3xl ${isDarkMode ? 'bg-zinc-900/95 border-zinc-700/50' : 'bg-white/95 border-white/80'}`}>
+                <div className={`px-5 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-slate-50/80 border-slate-200 backdrop-blur-md'}`}>
                   <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${theme.text}`}><History size={14} className="text-purple-600"/> Session Alerts</h3>
                 </div>
                 <div className="max-h-96 overflow-y-auto custom-scrollbar">
                   {alertHistory.length === 0 ? (
                     <div className={`px-4 py-10 text-center flex flex-col items-center gap-2 ${theme.subText}`}><Bell size={28} className="opacity-20" /><span className="text-[11px] font-bold uppercase tracking-widest">No alerts recorded yet.</span></div>
                   ) : (
-                    <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-white/30'}`}>
+                    <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-slate-200'}`}>
                       {alertHistory.map((notif) => {
                         const isError = (notif.title || '').toLowerCase().includes('error') || (notif.title || '').toLowerCase().includes('cancel') || (notif.title || '').toLowerCase().includes('fail');
                         return (
-                          <div key={notif.id} className={`p-5 transition-colors group relative flex gap-3 ${isError ? (isDarkMode ? 'bg-rose-500/10' : 'bg-rose-500/10') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/30')}`}>
+                          <div key={notif.id} className={`p-5 transition-colors group relative flex gap-3 ${isError ? (isDarkMode ? 'bg-rose-500/10' : 'bg-rose-50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50')}`}>
                             <div className={`mt-0.5 shrink-0 ${isError ? 'text-rose-500' : 'text-orange-500'}`}><AlertTriangle size={16} /></div>
                             <div className="flex-1 pr-6 min-w-0">
                               <div className="flex justify-between items-start mb-0.5"><p className={`text-xs font-bold truncate ${isError ? (isDarkMode ? 'text-rose-400' : 'text-rose-700') : theme.text}`}>{notif.title}</p><span className={`text-[9px] font-bold uppercase tracking-wider ${theme.subText}`}>{notif.time}</span></div>
                               <p className={`text-[11px] mt-1.5 leading-relaxed wrap-break-word ${isError ? (isDarkMode ? 'text-rose-300 font-medium' : 'text-rose-600 font-medium') : theme.subText}`}>{notif.message}</p>
                             </div>
-                            <button onClick={() => dismissHistoryAlert(notif.id)} className={`absolute top-5 right-4 p-1.5 rounded-xl shadow-sm transition-colors border ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-rose-400 hover:bg-white/10' : 'bg-white/40 border-white/60 text-slate-500 hover:text-rose-600 hover:bg-white/60'}`} title="Delete from History"><X size={12} /></button>
+                            <button onClick={() => dismissHistoryAlert(notif.id)} className={`absolute top-5 right-4 p-1.5 rounded-xl shadow-sm transition-colors border ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-500 hover:text-rose-400 hover:bg-white/10' : 'bg-white border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-slate-100'}`} title="Delete from History"><X size={12} /></button>
                           </div>
                         );
                       })}
