@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Laptop, ClipboardCheck, 
   LogOut, Menu, X, Loader2, Ticket, PlusCircle, Bell, History, AlertTriangle,
   Monitor, ShieldAlert, Check, StopCircle, MessageSquare, Send, MousePointer2,
-  Bot, Sparkles // 🌟 ADDED BOT ICONS
+  Bot, Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -58,7 +58,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
   
-  // 🌟 NEW: AI CHATBOT STATES
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [aiInput, setAiInput] = useState('');
   const [aiMessages, setAiMessages] = useState<{sender: 'AI' | 'User', text: string}[]>([
@@ -340,7 +339,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 AI CHAT HANDLER
   const handleAiChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim()) return;
@@ -349,7 +347,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     const currentInput = aiInput;
     setAiInput('');
 
-    // Simulate AI Response
     setTimeout(() => {
       setAiMessages(prev => [...prev, { 
         sender: 'AI', 
@@ -384,6 +381,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    // 🌟 PURE GLASS THEME CLASSES FOR CHATBOXES
+    chatWindow: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
+      : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
+    aiBubble: isDarkMode 
+      ? 'bg-black/40 backdrop-blur-xl border border-white/10 text-zinc-100 shadow-[inset_0_1px_4px_rgba(255,255,255,0.1)]' 
+      : 'bg-white/60 backdrop-blur-xl border border-white/80 text-slate-800 shadow-sm shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)]',
+    userBubble: 'bg-gradient-to-r from-purple-500/90 to-purple-600/90 backdrop-blur-md text-white shadow-lg border border-purple-400/50',
+    chatInputBg: isDarkMode ? 'bg-black/20 border-t border-white/10' : 'bg-white/30 border-t border-white/50 backdrop-blur-md',
+    chatInputField: isDarkMode ? 'bg-black/40 text-white border border-white/10 focus:border-purple-500/50' : 'bg-white/50 text-slate-900 border border-white/60 focus:bg-white/70 focus:ring-4 focus:ring-purple-500/10'
   };
 
   if (isCheckingAuth) return (
@@ -400,13 +407,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      {/* 🌟 AI CHATBOT BUTTON & WINDOW (Always Visible unless Streaming) */}
+      {/* 🌟 AI CHATBOT BUTTON & WINDOW */}
       {!isStreaming && (
         <div className="fixed bottom-6 right-6 z-9990 flex flex-col items-end pointer-events-none">
-          {/* Floating AI Chat Window */}
           {isAiChatOpen && (
-            <div className={`w-80 sm:w-96 mb-4 rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border shadow-2xl ${isDarkMode ? 'bg-zinc-900/90 border-white/10' : 'bg-white/95 border-white/60 backdrop-blur-3xl'}`}>
-              <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500 to-purple-600`}>
+            <div className={`w-80 sm:w-96 mb-4 rounded-4xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden ${theme.chatWindow}`}>
+              <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500/90 to-purple-600/90 backdrop-blur-md`}>
                 <div className="flex items-center gap-2">
                   <Bot size={18} />
                   <div>
@@ -416,26 +422,27 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 </div>
                 <button onClick={() => setIsAiChatOpen(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors cursor-pointer"><X size={16}/></button>
               </div>
-              <div className="h-72 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-slate-50/50 dark:bg-black/50">
+              
+              <div className="h-72 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-transparent">
                 {aiMessages.map((msg, i) => (
-                  <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.sender === 'User' ? 'bg-purple-600 text-white self-end rounded-2xl rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none'}`}>
+                  <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 ${msg.sender === 'User' ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-bl-none`}`}>
                     {msg.sender === 'AI' && <div className="font-bold text-[9px] mb-1 uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1"><Sparkles size={10}/> VSIT AI</div>}
                     {msg.text}
                   </div>
                 ))}
                 <div ref={aiChatEndRef} />
               </div>
-              <form onSubmit={handleAiChatSubmit} className={`p-3 border-t flex gap-2 ${isDarkMode ? 'bg-zinc-900 border-white/10' : 'bg-white border-slate-200'}`}>
-                <input value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Ask about IT issues..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-xl outline-none transition-all shadow-inner border ${isDarkMode ? 'bg-black/50 text-white border-white/10 focus:border-purple-500' : 'bg-slate-100 text-slate-900 border-slate-200 focus:bg-white focus:ring-4 focus:ring-purple-500/10'}`} />
-                <button type="submit" disabled={!aiInput.trim()} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm bg-purple-600 text-white hover:bg-purple-700`}><Send size={14}/></button>
+              
+              <form onSubmit={handleAiChatSubmit} className={`p-3 flex gap-2 ${theme.chatInputBg}`}>
+                <input value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Ask about IT issues..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-xl outline-none transition-all shadow-inner ${theme.chatInputField}`} />
+                <button type="submit" disabled={!aiInput.trim()} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-sm bg-linear-to-r from-purple-500 to-purple-600 text-white hover:opacity-90 border border-purple-400/50`}><Send size={14}/></button>
               </form>
             </div>
           )}
 
-          {/* Floating AI Chat Button */}
           <button
             onClick={() => setIsAiChatOpen(!isAiChatOpen)}
-            className={`w-14 h-14 rounded-full bg-linear-to-r from-orange-500 to-purple-600 text-white shadow-[0_8px_20px_rgba(168,85,247,0.4)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all pointer-events-auto cursor-pointer ${isAiChatOpen ? 'rotate-12' : 'rotate-0'}`}
+            className={`w-14 h-14 rounded-full bg-linear-to-r from-orange-500 to-purple-600 text-white shadow-[0_8px_20px_rgba(168,85,247,0.4)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all pointer-events-auto cursor-pointer border border-purple-400/50 ${isAiChatOpen ? 'rotate-12' : 'rotate-0'}`}
           >
             {isAiChatOpen ? <X size={24} /> : <Bot size={28} />}
           </button>
@@ -489,23 +496,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
             )}
 
+            {/* 🌟 LIVE SUPPORT CHATBOX WITH GLASS THEME */}
             {showChat && (
-              <div className={`w-80 ${theme.glassPanel} rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border border-white/40`}>
-                <div className={`p-4 border-b text-sm font-bold flex justify-between items-center ${isDarkMode ? 'border-white/10 text-white' : 'border-white/30 text-slate-900'}`}>
-                  <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-500" /> Live Support Chat</span>
-                  <button onClick={() => setShowChat(false)} className={`p-1.5 rounded-xl transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-white/30 text-slate-500'}`}><X size={16}/></button>
+              <div className={`w-80 sm:w-96 rounded-4xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden ${theme.chatWindow}`}>
+                <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500/90 to-purple-600/90 backdrop-blur-md`}>
+                  <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-white" /> Live Support Chat</span>
+                  <button onClick={() => setShowChat(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors cursor-pointer"><X size={16}/></button>
                 </div>
-                <div className="h-56 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
+                <div className="h-56 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-transparent">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.isSelf ? 'bg-purple-500/10 text-purple-800 border border-purple-500/20 dark:bg-purple-500/30 dark:text-purple-100 self-end rounded-2xl rounded-br-none' : 'bg-white/40 backdrop-blur-md text-slate-800 border border-white/50 dark:bg-white/10 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none'}`}>
-                      <div className={`font-bold text-[9px] mb-1 uppercase tracking-widest ${msg.isSelf ? 'text-purple-600 dark:text-purple-300' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
+                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 ${msg.isSelf ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-bl-none`}`}>
+                      <div className={`font-bold text-[9px] mb-1 uppercase tracking-widest ${msg.isSelf ? 'text-purple-200' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <form onSubmit={sendChatMessage} className={`p-3 border-t flex gap-2 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/30 bg-white/20'}`}>
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-2xl outline-none transition-all shadow-inner border ${isDarkMode ? 'bg-black/50 text-white border-white/20 focus:border-orange-500' : 'bg-white/40 backdrop-blur-md text-slate-900 border-white/50 focus:bg-white/60 focus:ring-4 focus:ring-orange-500/10'}`} />
-                  <button type="submit" disabled={!chatInput.trim()} className={`p-3 rounded-2xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm ${isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white/40 text-slate-800 border-white/50 hover:bg-white/60'}`}><Send size={14}/></button>
+                <form onSubmit={sendChatMessage} className={`p-3 flex gap-2 ${theme.chatInputBg}`}>
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-xl outline-none transition-all shadow-inner ${theme.chatInputField}`} />
+                  <button type="submit" disabled={!chatInput.trim()} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-sm bg-linear-to-r from-purple-500 to-purple-600 text-white hover:opacity-90 border border-purple-400/50`}><Send size={14}/></button>
                 </form>
               </div>
             )}
@@ -582,7 +590,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
-        
         <header className={`h-16 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} border-x-0 border-t-0 border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/40'}`}>
           <div className="flex items-center gap-3">
             <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-xl transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-slate-500 hover:bg-white/30'}`}><Menu size={20} /></button>
