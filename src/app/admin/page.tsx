@@ -76,7 +76,6 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // 🌟 SUPABASE REALTIME PRESENCE ENGINE
   useEffect(() => {
     const presenceChannel = supabase.channel('vsit_online_presence');
     presenceChannel
@@ -99,7 +98,6 @@ export default function AdminDashboardPage() {
     return () => { supabase.removeChannel(presenceChannel); };
   }, []);
 
-  // 🌟 DYNAMIC STAFF STATS CALCULATOR
   useEffect(() => {
     if (rawStaffList.length === 0) return;
     
@@ -143,7 +141,6 @@ export default function AdminDashboardPage() {
     if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/logo.png' });
   };
 
-  // 🌟 REALTIME DATABASE SUBSCRIPTIONS
   useEffect(() => {
     const adminChannel = supabase
       .channel('admin-live-feed')
@@ -186,7 +183,7 @@ export default function AdminDashboardPage() {
       const [
         { data: assets }, { data: inspections }, { data: tickets }, { data: staffDataRes }
       ] = await Promise.all([
-        supabase.from('assets').select('id, status'),
+        supabase.from('assets').select('id, status, assigned_to, inspection_status'),
         supabase.from('inspections').select('*, assets(*)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
         supabase.from('profiles').select('*')
@@ -210,9 +207,13 @@ export default function AdminDashboardPage() {
         else inStockAssetsCount++;
       });
 
-      // 🌟 ACCURATE INSPECTION CALCULATIONS (Matches /admin/inspections/page.tsx)
+      // 🌟 ACCURATE INSPECTION CALCULATIONS (Matches /admin/inspections/page.tsx exactly)
       let pendingCount = 0, resolvedCount = 0, totalValidVerifications = 0;
+      const processedAssetIds = new Set<string>();
+
       inspData.forEach(i => {
+        if (i.asset_id) processedAssetIds.add(String(i.asset_id)); // Track which assets already have logs
+
         const s = (i.status || '').toLowerCase().trim();
         const notes = (i.notes || '').toLowerCase();
         const inspByLower = (i.inspected_by || '').toLowerCase().trim();
@@ -220,7 +221,7 @@ export default function AdminDashboardPage() {
         // 1. Exclude Return and Replacement Requests
         const isReturnOrReplace = notes.includes('[return request]') || s.includes('return') || notes.includes('[replacement request]') || s.includes('replace');
 
-        // 2. Exclude Admin System Actions & Stock Intakes
+        // 2. Exclude Admin System Actions
         const isAdminAction = 
           inspByLower === 'admin' || inspByLower === 'system' || inspByLower === 'administrator' ||
           notes.includes('asset configuration updated') || 
@@ -235,6 +236,20 @@ export default function AdminDashboardPage() {
             resolvedCount++;
           } else if (s === 'pending' || s === 'pending review' || s === 'awaiting staff action' || s === '') {
             pendingCount++;
+          }
+        }
+      });
+
+      // 🌟 ADD MISSING/VIRTUAL INSPECTIONS (The missing link!)
+      assetsData.forEach(asset => {
+        const s = (asset.inspection_status || '').toLowerCase();
+        if ((s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) && !asset.status?.toLowerCase().includes('return')) {
+          if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
+
+          // If this asset has no logs at all, count it as a pending "Awaiting Action" record!
+          if (!processedAssetIds.has(String(asset.id))) {
+            pendingCount++;
+            totalValidVerifications++;
           }
         }
       });
@@ -327,7 +342,6 @@ export default function AdminDashboardPage() {
     } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
   };
 
-  // 🎨 PURE MAC OS 2026 PREMIUM GLASS THEME
   const theme = {
     bg: isDarkMode ? 'bg-[#09090b]' : 'bg-[#f0f4f8]',
     glassCard: isDarkMode 
@@ -443,12 +457,10 @@ export default function AdminDashboardPage() {
                 <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
                 <span className="text-xs font-black text-emerald-500">{stats.onlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
-                <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
                 <span className={`text-xs font-black ${theme.text}`}>{stats.offlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
-                <span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Deact</span>
                 <span className="text-xs font-black text-rose-500">{stats.deactivatedStaff}</span>
               </div>
             </div>
