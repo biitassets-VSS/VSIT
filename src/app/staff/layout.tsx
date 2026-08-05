@@ -38,6 +38,15 @@ interface AlertRecord {
   id: string; title: string; message: string; time: string; read: boolean;
 }
 
+// 🌟 Added 'image' property to AI Chat interface
+interface ChatMessage {
+  sender: 'AI' | 'User' | 'Me' | string;
+  text: string;
+  time?: string;
+  isSelf?: boolean;
+  image?: string; 
+}
+
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -54,7 +63,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   
-  const [chatMessages, setChatMessages] = useState<{sender: string, text: string, time: string, isSelf: boolean}[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
   
@@ -62,7 +71,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [aiInput, setAiInput] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiMessages, setAiMessages] = useState<{sender: 'AI' | 'User', text: string}[]>([
+  const [aiMessages, setAiMessages] = useState<ChatMessage[]>([
     { sender: 'AI', text: 'Hi! I am your VSIT Assistant. How can I help you with your IT portal today?' }
   ]);
 
@@ -335,7 +344,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 SMARTER LOCAL AI ENGINE (With VSIT Custom IT Rules)
+  // 🌟 SMARTER LOCAL AI ENGINE (With Image Support & VSIT Rules)
   const handleAiChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
@@ -345,47 +354,70 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setAiInput('');
     setIsAiLoading(true);
 
-    // Simulate network delay for "Thinking..."
     setTimeout(() => {
       const lowerInput = userMessage.toLowerCase();
       let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' module on your dashboard and click 'Raise Ticket'.";
+      let finalImage: string | undefined = undefined;
 
-      // 🧠 CUSTOM VSIT IT RULES RECOGNITION
-      
-      // 1. Wi-Fi Issues
-      if (/(wifi|wi-fi|internet|network|basement)/i.test(lowerInput)) {
-        finalResponse = "Here are the VSIT Wi-Fi details:\n\n• 1st Basement: 'VSS 5G' or '4G' (Pass: Vss@2026)\n• 2nd Basement: 'NETPLUS 5G' or '4G' (Pass: bansal@123)\n• 3rd Basement: 'VS2 5G' (Pass: Vss@2024)\n\nIf connected but no internet: Turn off Wi-Fi on your laptop, wait 5 seconds, and turn it back on.";
-      } 
-      // 2. Windows Login / PIN Errors
-      else if (/(login|pin|0x80284001|code|password)/i.test(lowerInput) && !lowerInput.includes('wifi') && !lowerInput.includes('wi-fi')) {
-        finalResponse = "Windows Login Issues:\n\n• Ensure your PIN is correct and Num Lock is ON.\n• If you see a code (like A1B2C3) after 3 attempts, enter that code first, then your PIN.\n• Error 0x80284001: Hold the 'Shift' key and click 'Shutdown' on the screen. Keep holding Shift until the lights completely turn off, then power back on.";
+      // 🧠 MASTER KEYWORD RECOGNITION (Basic Language & Images)
+
+      if (/(handover|agreement|sign)/i.test(lowerInput)) {
+        finalResponse = "📝 **How to find and sign Handover Agreements:**\n\n1. Click on 'My Assets' from your dashboard sidebar.\n2. Look for the red alert message at the top.\n3. Review your assigned asset details carefully.\n4. Scroll down to the bottom, type your name in the box, and it will automatically sign digitally!";
+        finalImage = "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=500&q=80";
       }
-      // 3. Microsoft Teams
-      else if (/(teams|message won't send|crashing)/i.test(lowerInput)) {
-        finalResponse = "Microsoft Teams Fixes:\n\n• Press CTRL+Shift+ESC, find Teams in Task Manager, and click 'End Task'. Reopen it.\n• If crashing: Go to Windows Settings -> Apps -> Search 'Teams' -> Advanced Options -> Click 'Repair' (or 'Reset' if that fails).\n• If asking for login: Use your provided Outlook email. If needed, ask the IT Admin for the password.";
+      else if (/(australia time|india time|time zone|canberra|melbourne|sydney)/i.test(lowerInput)) {
+        finalResponse = "⏱️ **How to set Australia Time:**\n\n1. Right-Click on the current time at the bottom right corner of your Windows screen.\n2. Select 'Adjust date/time'.\n3. Find the 'Time zone' dropdown.\n4. Change it to '(UTC +10:00) Canberra, Melbourne, Sydney'.";
+        finalImage = "https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?w=500&q=80";
       }
-      // 4. Outlook
-      else if (/(outlook|email|syncing|sync)/i.test(lowerInput)) {
-        finalResponse = "Outlook Email Fixes:\n\n• Not Opening: Press CTRL+Shift+ESC, find Outlook in Task Manager, and click 'End Task'. Try again.\n• Not Syncing: Open Outlook -> File -> Office Account -> Update Options -> Update Now. (Please do this weekly!).";
+      else if (/(notification|alert|not showing|desktop alert)/i.test(lowerInput)) {
+        finalResponse = "🔔 **Alerts Not Showing on Desktop?**\n\nPlease check your Windows Settings. Make sure 'Notifications' are turned ON, and verify that you have allowed permissions for the Virtual Staffing Solution application to send alerts.";
+        finalImage = "https://images.unsplash.com/photo-1555421689-491a97ff2040?w=500&q=80";
       }
-      // 5. Asset Replacements, Accessories & Handover
-      else if (/(replace|swap|broken|accessory|accessories|exchange|handover)/i.test(lowerInput) && !lowerInput.includes('agreement')) {
-        finalResponse = "Asset Rules:\n\n• Replacements: Click the 'Replacement Log' button on your dashboard to request a swap.\n• Accessories: You cannot get double accessories. Laptops require manager approval.\n• Handover: You cannot exchange or give assets to another staff member without IT Admin approval.";
+      else if (/(team screen|remote access|remote control)/i.test(lowerInput)) {
+        finalResponse = "💻 **Team Screen / Remote Access**\n\nThis feature allows the IT Admin to remotely access your laptop to help fix issues. They can only see your screen AFTER you click 'Accept' on their request. It also includes a live chat option!";
       }
-      // 6. Inspections & Agreements
-      else if (/(inspection|agreement|sign)/i.test(lowerInput)) {
-        finalResponse = "Please remember to complete any pending visual inspections using the camera tool on your dashboard, and ensure all hardware handover agreements are securely signed!";
+      else if (/(my hardware|return|replace|swap)/i.test(lowerInput)) {
+        finalResponse = "📦 **My Hardware Units**\n\nHere you can see your assigned assets.\n• **Return Button**: Use this to return an asset to the IT Admin if you no longer need it.\n• **Replace Button**: Use this if your asset is broken or having issues to request a replacement.";
       }
-      // 7. General Ticket Catch-all
+      else if (/(device audit|audit window|audit close|camera)/i.test(lowerInput)) {
+        finalResponse = "📸 **Device Audit Window**\n\nWhy is the button closed? The Audit button is only visible and automatically enabled when your inspection is near its due date (specifically, 5 days before the deadline).";
+      }
+      else if (/(my tickets|ticket status)/i.test(lowerInput)) {
+        finalResponse = "🎫 **My Tickets**\n\nHere you can check the status of all the tickets you have previously raised and see exactly how they were resolved.";
+      }
+      else if (/(assigned)/i.test(lowerInput) && !lowerInput.includes('ticket')) {
+        finalResponse = "📌 **Assigned**\n\nThis statistic shows exactly how many hardware assets are currently assigned under your name.";
+      }
+      else if (/(action req|pending task)/i.test(lowerInput)) {
+        finalResponse = "⚡ **Action Req.**\n\nHere you can check any pending tasks that require your immediate attention to complete (like signing agreements).";
+      }
+      else if (/(open tix|open ticket)/i.test(lowerInput)) {
+        finalResponse = "📂 **Open Tix**\n\nThis shows how many of your raised tickets are currently 'Open' and waiting to be resolved by the IT team.";
+      }
+      else if (/(ai chatbot|bot|who are you)/i.test(lowerInput)) {
+        finalResponse = "🤖 **AI Chatbot**\n\nThat's me! You can ask me any IT-related issues here, and I will do my best to solve them for you automatically.";
+      }
       else if (/(ticket|tickt|ticet|raise|rise|create|submit|issue)/i.test(lowerInput)) {
-        finalResponse = "To raise a new ticket, click on 'IT Tickets' in the left sidebar menu. Then, click the 'Raise Ticket' button. Fill in the details of your issue and hit submit!";
+        finalResponse = "🎟️ **How to Raise a Ticket:**\n\n1. Click on the 'Raise Ticket' button on your dashboard.\n2. Type your issue.\n3. Select the category (Hardware, Software, or Internet).\n4. Explain briefly, then hit Submit!";
+        finalImage = "https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?w=500&q=80";
+      }
+      else if (/(wifi|wi-fi|internet|network|basement)/i.test(lowerInput)) {
+        finalResponse = "📶 **VSIT Wi-Fi Passwords:**\n\n• 1st Basement: 'VSS 5G' or '4G' (Pass: Vss@2026)\n• 2nd Basement: 'NETPLUS 5G' or '4G' (Pass: bansal@123)\n• 3rd Basement: 'VS2 5G' (Pass: Vss@2024)\n\nNo internet? Turn laptop Wi-Fi off, wait 5s, and turn back on.";
       } 
-      // 8. Greeting
+      else if (/(login|pin|0x80284001|code|password)/i.test(lowerInput) && !lowerInput.includes('wifi') && !lowerInput.includes('wi-fi')) {
+        finalResponse = "🔑 **Windows Login Issues:**\n\n• Ensure PIN is correct & Num Lock is ON.\n• See code A1B2C3? Type code, then PIN.\n• Error 0x80284001: Hold 'Shift', click 'Shutdown'. Hold Shift until lights turn off, then power on.";
+      }
+      else if (/(teams|message won't send|crashing)/i.test(lowerInput)) {
+        finalResponse = "💬 **Microsoft Teams Fixes:**\n\n• Press CTRL+Shift+ESC, 'End Task' Teams. Reopen.\n• Crashing: Windows Settings -> Apps -> Teams -> Advanced Options -> 'Repair'.\n• Needs login: Use Outlook email. Ask IT for password if needed.";
+      }
+      else if (/(outlook|email|syncing|sync)/i.test(lowerInput)) {
+        finalResponse = "📧 **Outlook Email Fixes:**\n\n• Not Opening: CTRL+Shift+ESC, 'End Task' Outlook. Try again.\n• Not Syncing: Open Outlook -> File -> Office Account -> Update Options -> Update Now. (Do this weekly!).";
+      }
       else if (/(hello|hi|hey|greetings|help|support|assist)/i.test(lowerInput)) {
-        finalResponse = "Hello! I am the VSIT Assistant. I can help with Wi-Fi passwords, Windows PIN errors, Teams/Outlook issues, and asset replacements. What do you need help with?";
+        finalResponse = "Hello there! I am the VSIT automated assistant. I can answer questions about raising tickets, software errors, signing agreements, or replacing broken hardware. How can I help you today?";
       }
 
-      setAiMessages(prev => [...prev, { sender: 'AI', text: finalResponse }]);
+      setAiMessages(prev => [...prev, { sender: 'AI', text: finalResponse, image: finalImage }]);
       setIsAiLoading(false);
 
     }, 1200); // 1.2 seconds "Thinking" delay
@@ -464,6 +496,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   <div key={i} className={`max-w-[85%] text-[12px] font-medium p-4 ${msg.sender === 'User' ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-tl-none`}`}>
                     {msg.sender === 'AI' && <div className="font-bold text-[10px] mb-2 uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1.5"><Sparkles size={12}/> VSIT AI</div>}
                     <div className="whitespace-pre-wrap leading-relaxed font-medium">{msg.text}</div>
+                    
+                    {/* 🌟 Image Rendering Engine */}
+                    {msg.sender === 'AI' && msg.image && (
+                      <img src={msg.image} alt="Guide" className="mt-3 rounded-xl w-full h-32 object-cover border border-purple-500/20 shadow-sm animate-in fade-in zoom-in-95 duration-500" />
+                    )}
                   </div>
                 ))}
                 
