@@ -335,7 +335,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 SMARTER LOCAL AI ENGINE (Regex for Typos & Phrases)
+  // 🌟 SMARTER LOCAL AI ENGINE (With VSIT Custom IT Rules)
   const handleAiChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
@@ -350,21 +350,39 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       const lowerInput = userMessage.toLowerCase();
       let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' module on your dashboard and click 'Raise Ticket'.";
 
-      // 🧠 UPGRADED KEYWORD RECOGNITION
-      if (/(ticket|tickt|ticet|raise|rise|create|submit|issue)/i.test(lowerInput)) {
+      // 🧠 CUSTOM VSIT IT RULES RECOGNITION
+      
+      // 1. Wi-Fi Issues
+      if (/(wifi|wi-fi|internet|network|basement)/i.test(lowerInput)) {
+        finalResponse = "Here are the VSIT Wi-Fi details:\n\n• 1st Basement: 'VSS 5G' or '4G' (Pass: Vss@2026)\n• 2nd Basement: 'NETPLUS 5G' or '4G' (Pass: bansal@123)\n• 3rd Basement: 'VS2 5G' (Pass: Vss@2024)\n\nIf connected but no internet: Turn off Wi-Fi on your laptop, wait 5 seconds, and turn it back on.";
+      } 
+      // 2. Windows Login / PIN Errors
+      else if (/(login|pin|0x80284001|code|password)/i.test(lowerInput) && !lowerInput.includes('wifi') && !lowerInput.includes('wi-fi')) {
+        finalResponse = "Windows Login Issues:\n\n• Ensure your PIN is correct and Num Lock is ON.\n• If you see a code (like A1B2C3) after 3 attempts, enter that code first, then your PIN.\n• Error 0x80284001: Hold the 'Shift' key and click 'Shutdown' on the screen. Keep holding Shift until the lights completely turn off, then power back on.";
+      }
+      // 3. Microsoft Teams
+      else if (/(teams|message won't send|crashing)/i.test(lowerInput)) {
+        finalResponse = "Microsoft Teams Fixes:\n\n• Press CTRL+Shift+ESC, find Teams in Task Manager, and click 'End Task'. Reopen it.\n• If crashing: Go to Windows Settings -> Apps -> Search 'Teams' -> Advanced Options -> Click 'Repair' (or 'Reset' if that fails).\n• If asking for login: Use your provided Outlook email. If needed, ask the IT Admin for the password.";
+      }
+      // 4. Outlook
+      else if (/(outlook|email|syncing|sync)/i.test(lowerInput)) {
+        finalResponse = "Outlook Email Fixes:\n\n• Not Opening: Press CTRL+Shift+ESC, find Outlook in Task Manager, and click 'End Task'. Try again.\n• Not Syncing: Open Outlook -> File -> Office Account -> Update Options -> Update Now. (Please do this weekly!).";
+      }
+      // 5. Asset Replacements, Accessories & Handover
+      else if (/(replace|swap|broken|accessory|accessories|exchange|handover)/i.test(lowerInput) && !lowerInput.includes('agreement')) {
+        finalResponse = "Asset Rules:\n\n• Replacements: Click the 'Replacement Log' button on your dashboard to request a swap.\n• Accessories: You cannot get double accessories. Laptops require manager approval.\n• Handover: You cannot exchange or give assets to another staff member without IT Admin approval.";
+      }
+      // 6. Inspections & Agreements
+      else if (/(inspection|agreement|sign)/i.test(lowerInput)) {
+        finalResponse = "Please remember to complete any pending visual inspections using the camera tool on your dashboard, and ensure all hardware handover agreements are securely signed!";
+      }
+      // 7. General Ticket Catch-all
+      else if (/(ticket|tickt|ticet|raise|rise|create|submit|issue)/i.test(lowerInput)) {
         finalResponse = "To raise a new ticket, click on 'IT Tickets' in the left sidebar menu. Then, click the 'Raise Ticket' button. Fill in the details of your issue and hit submit!";
       } 
-      else if (/(teams|outlook|software|app|program|word|excel|not working|error|crash)/i.test(lowerInput)) {
-        finalResponse = "If Microsoft Teams or a software application isn't working, please try these quick solutions first:\n\n• Force close the application and reopen it.\n• Verify your internet/Wi-Fi connection is stable.\n• Check if there are any pending Windows updates.\n• Restart your computer.\n\nIf the issue continues after trying these steps, please click 'IT Tickets' on your dashboard to alert IT Support.";
-      } 
-      else if (/(password|login|access|locked|cant log in|cannot login)/i.test(lowerInput)) {
-        finalResponse = "For password resets, please use the automated self-service portal. If your portal account is completely locked, please submit an urgent access ticket.";
-      } 
-      else if (/(broken|screen|replace|damage|crack|hardware|laptop|mouse|keyboard)/i.test(lowerInput)) {
-        finalResponse = "I'm sorry your hardware is damaged. Please go to the 'Asset Requests' or 'My Assets' section on your dashboard to request a device replacement. You will need to upload photos of the damage.";
-      }
+      // 8. Greeting
       else if (/(hello|hi|hey|greetings|help|support|assist)/i.test(lowerInput)) {
-        finalResponse = "Hello there! I am the VSIT automated assistant. I can answer questions about raising tickets, software errors, or replacing broken hardware. How can I help you today?";
+        finalResponse = "Hello! I am the VSIT Assistant. I can help with Wi-Fi passwords, Windows PIN errors, Teams/Outlook issues, and asset replacements. What do you need help with?";
       }
 
       setAiMessages(prev => [...prev, { sender: 'AI', text: finalResponse }]);
