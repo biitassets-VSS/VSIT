@@ -15,6 +15,7 @@ export default function StaffAIChatbot() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 🌟 SMART LOCAL AI ENGINE (No API Key Required)
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -26,36 +27,48 @@ export default function StaffAIChatbot() {
     setInput('');
     setIsLoading(true);
 
-    try {
-      // Connecting to the real API route we built
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
-      });
+    // Add empty assistant message to stream into
+    setMessages([...newMessages, { role: 'assistant', content: '' }]);
 
-      if (!response.body) throw new Error('No response body');
+    // Simulate network delay for "Thinking..."
+    setTimeout(() => {
+      const lowerInput = userMessage.content.toLowerCase();
+      let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' tab on your left and click 'Raise Ticket'.";
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let aiMessageContent = '';
-
-      setMessages([...newMessages, { role: 'assistant', content: '' }]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        aiMessageContent += decoder.decode(value, { stream: true });
-        
-        setMessages([...newMessages, { role: 'assistant', content: aiMessageContent }]);
+      // 🧠 KEYWORD RECOGNITION LOGIC
+      if (lowerInput.includes('ticket') || lowerInput.includes('raise') || lowerInput.includes('create')) {
+        finalResponse = "To raise a new ticket, click on 'IT Tickets' in the left sidebar menu. Then, click the '+' icon or 'Raise Ticket' button. Fill in the details of your issue and hit submit!";
+      } 
+      else if (lowerInput.includes('teams') || lowerInput.includes('outlook') || lowerInput.includes('software')) {
+        finalResponse = "If Microsoft Teams or a software app isn't working, please try restarting your computer first. If the issue continues, raise a 'Software Ticket' on your dashboard so IT can remotely access your screen.";
+      } 
+      else if (lowerInput.includes('password') || lowerInput.includes('login') || lowerInput.includes('access')) {
+        finalResponse = "For password resets, please use the automated self-service portal. If your portal account is completely locked, please submit an urgent access ticket.";
+      } 
+      else if (lowerInput.includes('broken') || lowerInput.includes('screen') || lowerInput.includes('replace')) {
+        finalResponse = "I'm sorry your hardware is damaged. Please go to the 'Asset Requests' or 'Replacement Log' section on your dashboard to request a device swap. You will need to upload photos of the damage.";
       }
-    } catch (error) {
-      console.error('Chat error:', error);
-      setMessages([...newMessages, { role: 'assistant', content: 'Sorry, I encountered an error connecting to the IT Helpdesk server.' }]);
-    } finally {
-      setIsLoading(false);
-    }
+      else if (lowerInput.includes('hello') || lowerInput.includes('hi ') || lowerInput === 'hi') {
+        finalResponse = "Hello there! I am the VSIT automated assistant. How can I help you with your IT equipment or portal today?";
+      }
+
+      // ✍️ SIMULATE REAL AI TYPING EFFECT
+      let currentText = "";
+      const words = finalResponse.split(" ");
+      let i = 0;
+
+      const streamInterval = setInterval(() => {
+        if (i < words.length) {
+          currentText += (i === 0 ? "" : " ") + words[i];
+          setMessages([...newMessages, { role: 'assistant', content: currentText }]);
+          i++;
+        } else {
+          clearInterval(streamInterval);
+          setIsLoading(false);
+        }
+      }, 60); // Speed of typing (60ms per word)
+
+    }, 800); // 800ms "Thinking" delay
   };
 
   return (
@@ -72,7 +85,7 @@ export default function StaffAIChatbot() {
 
       {/* 🌟 APPLE PREMIUM 2026 FROSTED GLASS WINDOW */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-80 sm:w-96 bg-white/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)] rounded-4xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-6 duration-300">
+        <div className="fixed bottom-6 right-6 z-50 w-80 sm:w-96 bg-white/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/70 shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)] rounded-4xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-6 duration-300">
           
           {/* Glass Header */}
           <div className="p-4 bg-linear-to-r from-orange-500/90 to-purple-600/90 backdrop-blur-md text-white flex justify-between items-start border-b border-white/20">
