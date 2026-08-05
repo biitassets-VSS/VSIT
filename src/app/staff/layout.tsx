@@ -43,6 +43,7 @@ interface ChatMessage {
   text: string;
   time?: string;
   isSelf?: boolean;
+  image?: string; 
 }
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -348,13 +349,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     return parts.map((part, i) => {
       if (part.startsWith('[IMG:') && part.endsWith(']')) {
         const src = part.slice(5, -1);
-        return <img key={i} src={src} alt="Guide Step" className="my-3 rounded-lg w-full h-auto object-contain border border-purple-500/30 shadow-md" />;
+        return <img key={i} src={src} alt="Guide Step" className="my-3 rounded-xl w-full h-auto object-contain border border-purple-500/20 shadow-md animate-in fade-in zoom-in-95 duration-500 bg-white/50" />;
       }
       return <React.Fragment key={i}>{part}</React.Fragment>;
     });
   };
 
-  // 🌟 SMARTER LOCAL AI ENGINE (With Inline Images)
+  // 🌟 SMARTER LOCAL AI ENGINE (With Local Images)
   const handleAiChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
@@ -367,17 +368,18 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setTimeout(() => {
       const lowerInput = userMessage.toLowerCase();
       let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' module on your dashboard and click 'Raise Ticket'.";
+      let finalImage: string | undefined = undefined;
 
-      // 🧠 MASTER KEYWORD RECOGNITION
+      // 🧠 MASTER KEYWORD RECOGNITION (Basic Language & Local Images)
 
       if (/(handover|agreement|sign)/i.test(lowerInput)) {
-        finalResponse = "📝 **How to find and sign Handover Agreements:**\n\n1. Click on 'My Assets' from your dashboard sidebar.\n2. Look for the red alert message at the top.\n3. Review your assigned asset details carefully.\n4. Scroll down to the bottom, type your name in the box, and it will automatically sign digitally!\n[IMG:https://placehold.co/600x300/f3e8ff/a855f7?text=Digital+Signature+Box]";
+        finalResponse = "📝 **How to find and sign Handover Agreements:**\n\n1. Click on 'My Assets' from your dashboard sidebar.\n2. Look for the red alert message at the top.\n3. Review your assigned asset details carefully.\n4. Scroll down to the bottom, type your name in the box, and it will automatically sign digitally!\n[IMG:/chat-images/handover-signature.png]";
       }
       else if (/(australia time|india time|time zone|canberra|melbourne|sydney)/i.test(lowerInput)) {
-        finalResponse = "⏱️ **How to set Australia Time:**\n\n1. Right-Click on the current time at the bottom right corner of your Windows screen.\n2. Select 'Adjust date/time'.\n3. Change 'Time zone' to '(UTC +10:00) Canberra, Melbourne, Sydney'.\n[IMG:https://placehold.co/600x300/f3e8ff/a855f7?text=Windows+Time+Zone+Settings]";
+        finalResponse = "⏱️ **How to set Australia Time:**\n\n1. Right-Click on the current time at the bottom right corner of your Windows screen.\n2. Select 'Adjust date/time'.\n3. Change 'Time zone' to '(UTC +10:00) Canberra, Melbourne, Sydney'.\n[IMG:/chat-images/timezone-settings.png]";
       }
       else if (/(notification|alert|not showing|desktop alert)/i.test(lowerInput)) {
-        finalResponse = "🔔 **Alerts Not Showing on Desktop?**\n\nPlease check your Windows Settings. Make sure 'Notifications' are turned ON, and verify that you have allowed permissions for the Virtual Staffing Solution application to send alerts.\n[IMG:https://placehold.co/600x300/f3e8ff/a855f7?text=Windows+Notification+Settings]";
+        finalResponse = "🔔 **Alerts Not Showing on Desktop?**\n\nPlease check your Windows Settings. Make sure 'Notifications' are turned ON, and verify that you have allowed permissions for the Virtual Staffing Solution application to send alerts.\n[IMG:/chat-images/notification-settings.png]";
       }
       else if (/(team screen|remote access|remote control)/i.test(lowerInput)) {
         finalResponse = "💻 **Team Screen / Remote Access**\n\nThis feature allows the IT Admin to remotely access your laptop to help fix issues. They can only see your screen AFTER you click 'Accept' on their request. It also includes a live chat option!";
@@ -404,7 +406,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         finalResponse = "🤖 **AI Chatbot**\n\nThat's me! You can ask me any IT-related issues here, and I will do my best to solve them for you automatically.";
       }
       else if (/(ticket|tickt|ticet|raise|rise|create|submit|issue)/i.test(lowerInput)) {
-        finalResponse = "🎟️ **How to Raise a Ticket:**\n\n1. Click on the 'Raise Ticket' button on your dashboard.\n2. Type your issue.\n3. Select the category (Hardware, Software, or Internet).\n4. Explain briefly, then hit Submit!\n[IMG:https://placehold.co/600x300/f3e8ff/a855f7?text=Raise+Ticket+Form]";
+        finalResponse = "🎟️ **How to Raise a Ticket:**\n\n1. Click on the 'Raise Ticket' button on your dashboard.\n2. Type your issue.\n3. Select the category (Hardware, Software, or Internet).\n4. Explain briefly, then hit Submit!\n[IMG:/chat-images/raise-ticket.png]";
       }
       else if (/(wifi|wi-fi|internet|network|basement)/i.test(lowerInput)) {
         finalResponse = "📶 **VSIT Wi-Fi Passwords:**\n\n• 1st Basement: 'VSS 5G' or '4G' (Pass: Vss@2026)\n• 2nd Basement: 'NETPLUS 5G' or '4G' (Pass: bansal@123)\n• 3rd Basement: 'VS2 5G' (Pass: Vss@2024)\n\nNo internet? Turn laptop Wi-Fi off, wait 5s, and turn back on.";
@@ -412,12 +414,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       else if (/(login|pin|0x80284001|code|password)/i.test(lowerInput) && !lowerInput.includes('wifi') && !lowerInput.includes('wi-fi')) {
         finalResponse = "🔑 **Windows Login Issues:**\n\n• Ensure PIN is correct & Num Lock is ON.\n• See code A1B2C3? Type code, then PIN.\n• Error 0x80284001: Hold 'Shift', click 'Shutdown'. Hold Shift until lights turn off, then power on.";
       }
-      // 🌟 UPDATED TEAMS RESPONSE WITH INLINE IMAGES
+      // 🌟 TEAMS RESPONSE WITH INLINE LOCAL IMAGES
       else if (/(teams|message won't send|crashing)/i.test(lowerInput)) {
-        finalResponse = "💬 **Microsoft Teams Fixes:**\n\n1️⃣ **General Fix:** Press CTRL+Shift+ESC, find Teams in Task Manager, and click 'End Task'.\n[IMG:https://placehold.co/600x200/f3e8ff/a855f7?text=Windows+11+Task+Manager]\n\n2️⃣ **Crashing/Errors:** Go to Windows Settings -> Apps -> Search 'Teams' -> Advanced Options -> Click 'Repair'.\n[IMG:https://placehold.co/600x200/f3e8ff/a855f7?text=Apps+>+Teams+>+Repair]\n\n3️⃣ **Needs Login:** Use your provided Outlook email. Ask IT for password if needed.\n[IMG:https://placehold.co/600x200/f3e8ff/a855f7?text=Teams+Login+Page]";
+        finalResponse = "💬 **Microsoft Teams Fixes:**\n\n1️⃣ **General Fix:** Press CTRL+Shift+ESC, find Teams in Task Manager, and click 'End Task'.\n[IMG:/chat-images/task-manager.png]\n\n2️⃣ **Crashing/Errors:** Go to Windows Settings -> Apps -> Search 'Teams' -> Advanced Options -> Click 'Repair'.\n[IMG:/chat-images/teams-repair.png]\n\n3️⃣ **Needs Login:** Use your provided Outlook email. Ask IT for password if needed.\n[IMG:/chat-images/teams-login.png]";
       }
       else if (/(outlook|email|syncing|sync)/i.test(lowerInput)) {
-        finalResponse = "📧 **Outlook Email Fixes:**\n\n1️⃣ **Not Opening:** Press CTRL+Shift+ESC, 'End Task' Outlook. Try again.\n[IMG:https://placehold.co/600x200/f3e8ff/a855f7?text=Task+Manager+Outlook]\n\n2️⃣ **Not Syncing:** Open Outlook -> File -> Office Account -> Update Options -> Update Now. (Do this weekly!).\n[IMG:https://placehold.co/600x200/f3e8ff/a855f7?text=Outlook+Update+Now]";
+        finalResponse = "📧 **Outlook Email Fixes:**\n\n1️⃣ **Not Opening:** Press CTRL+Shift+ESC, 'End Task' Outlook. Try again.\n2️⃣ **Not Syncing:** Open Outlook -> File -> Office Account -> Update Options -> Update Now. (Do this weekly!).\n[IMG:/chat-images/outlook-update.png]";
       }
       else if (/(hello|hi|hey|greetings|help|support|assist)/i.test(lowerInput)) {
         finalResponse = "Hello there! I am the VSIT automated assistant. I can answer questions about raising tickets, software errors, signing agreements, or replacing broken hardware. How can I help you today?";
@@ -433,7 +435,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           currentText += (i === 0 ? "" : " ") + words[i];
           setAiMessages(prev => {
             const newArr = [...prev];
-            newArr[newArr.length - 1] = { sender: 'AI', text: currentText };
+            newArr[newArr.length - 1] = { sender: 'AI', text: currentText, image: finalImage };
             return newArr;
           });
           i++;
@@ -523,6 +525,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                     <div className="whitespace-pre-wrap leading-relaxed font-medium">
                       {msg.sender === 'AI' ? renderAiText(msg.text) : msg.text}
                     </div>
+                    
+                    {msg.sender === 'AI' && msg.image && (
+                      <img src={msg.image} alt="Guide" className="mt-3 rounded-xl w-full h-auto object-cover border border-purple-500/20 shadow-sm animate-in fade-in zoom-in-95 duration-500" />
+                    )}
                   </div>
                 ))}
                 
