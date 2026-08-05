@@ -58,8 +58,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
   
+  // 🌟 AI CHATBOT STATES
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [aiInput, setAiInput] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiMessages, setAiMessages] = useState<{sender: 'AI' | 'User', text: string}[]>([
     { sender: 'AI', text: 'Hi! I am your VSIT Assistant. How can I help you with your IT portal today?' }
   ]);
@@ -114,7 +116,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   }, [router]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, showChat]);
-  useEffect(() => { aiChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [aiMessages, isAiChatOpen]);
+  useEffect(() => { aiChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [aiMessages, isAiChatOpen, isAiLoading]);
 
   useEffect(() => {
     if (!staffProfile.id) return;
@@ -185,10 +187,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   const executeAdminCommand = async (cmd: any) => {
     if (!isControlGrantedRef.current) return;
-
-    if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
-      console.log("⚡ COMMAND RECEIVED FROM DB BRIDGE:", cmd.type);
-    }
 
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
@@ -267,9 +265,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       
       controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
         executeAdminCommand(payload.payload);
-      }).subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log("🟢 STAFF DEDICATED CONTROL CHANNEL OPEN!");
-      });
+      }).subscribe();
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
@@ -339,46 +335,42 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 REAL AI CHAT HANDLER
+  // 🌟 SMART LOCAL AI ENGINE (No API Key Required)
   const handleAiChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!aiInput.trim()) return;
+    if (!aiInput.trim() || isAiLoading) return;
 
     const userMessage = aiInput;
-    // 1. Add user message immediately
     setAiMessages(prev => [...prev, { sender: 'User', text: userMessage }]);
     setAiInput('');
+    setIsAiLoading(true);
 
-    // 2. Add a temporary "Thinking..." bubble
-    setAiMessages(prev => [...prev, { sender: 'AI', text: 'Thinking...' }]);
+    // Simulate network delay for "Thinking..."
+    setTimeout(() => {
+      const lowerInput = userMessage.toLowerCase();
+      let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' module on your dashboard and click 'Raise Ticket'.";
 
-    try {
-      // 3. Send the message to your Next.js backend API
-      const response = await fetch('/api/ai-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage })
-      });
+      // 🧠 KEYWORD RECOGNITION LOGIC
+      if (lowerInput.includes('ticket') || lowerInput.includes('raise') || lowerInput.includes('create')) {
+        finalResponse = "To raise a new ticket, click on 'IT Tickets' in the left sidebar menu. Then, click the 'Raise Ticket' button. Fill in the details of your issue and hit submit!";
+      } 
+      else if (lowerInput.includes('teams') || lowerInput.includes('outlook') || lowerInput.includes('software') || lowerInput.includes('app')) {
+        finalResponse = "If Microsoft Teams or a software app isn't working, please try restarting your computer first. If the issue continues, please click the 'Raise Ticket' button on your dashboard to alert IT Support.";
+      } 
+      else if (lowerInput.includes('password') || lowerInput.includes('login') || lowerInput.includes('access')) {
+        finalResponse = "For password resets, please use the automated self-service portal. If your portal account is completely locked, please submit an urgent access ticket.";
+      } 
+      else if (lowerInput.includes('broken') || lowerInput.includes('screen') || lowerInput.includes('replace') || lowerInput.includes('damage')) {
+        finalResponse = "I'm sorry your hardware is damaged. Please go to the 'Asset Requests' or 'My Assets' section on your dashboard to request a device replacement. You will need to upload photos of the damage.";
+      }
+      else if (lowerInput.includes('hello') || lowerInput.includes('hi') || lowerInput.includes('hey')) {
+        finalResponse = "Hello there! I am the VSIT automated assistant. How can I help you with your IT equipment or portal today?";
+      }
 
-      if (!response.ok) throw new Error('API Error');
+      setAiMessages(prev => [...prev, { sender: 'AI', text: finalResponse }]);
+      setIsAiLoading(false);
 
-      const data = await response.json();
-
-      // 4. Replace "Thinking..." with the real AI response
-      setAiMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = { sender: 'AI', text: data.reply };
-        return newMessages;
-      });
-
-    } catch (error) {
-      // 5. Handle errors gracefully
-      setAiMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = { sender: 'AI', text: "Sorry, my servers are currently down. Please submit a manual IT ticket for now!" };
-        return newMessages;
-      });
-    }
+    }, 1200); // 1.2 seconds "Thinking" delay
   };
 
   const handleAcceptControl = () => {
@@ -438,30 +430,38 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         <div className="fixed bottom-6 right-6 z-9990 flex flex-col items-end pointer-events-none">
           {isAiChatOpen && (
             <div className={`w-80 sm:w-96 mb-4 rounded-4xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden ${theme.chatWindow}`}>
-              <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500/90 to-purple-600/90 backdrop-blur-md`}>
-                <div className="flex items-center gap-2">
-                  <Bot size={18} />
+              <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500/90 to-purple-600/90 backdrop-blur-md border-b-white/20`}>
+                <div className="flex items-center gap-3">
+                  <Bot size={24} />
                   <div>
-                    <h3 className="text-sm font-black tracking-tight leading-none">AI Support Assistant</h3>
-                    <p className="text-[10px] font-bold text-white/80 mt-1 uppercase tracking-widest">Virtual Staffing IT</p>
+                    <h3 className="font-extrabold text-sm tracking-tight leading-none">AI Support Assistant</h3>
+                    <p className="font-bold text-[10px] tracking-widest uppercase opacity-90 mt-1">Virtual Staffing IT</p>
                   </div>
                 </div>
-                <button onClick={() => setIsAiChatOpen(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors cursor-pointer"><X size={16}/></button>
+                <button onClick={() => setIsAiChatOpen(false)} className="hover:bg-white/20 p-1.5 rounded-full transition-colors cursor-pointer"><X size={18}/></button>
               </div>
               
-              <div className="h-72 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-transparent">
+              <div className="h-96 p-5 overflow-y-auto flex flex-col gap-4 bg-transparent custom-scrollbar">
                 {aiMessages.map((msg, i) => (
-                  <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 ${msg.sender === 'User' ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-bl-none`}`}>
-                    {msg.sender === 'AI' && <div className="font-bold text-[9px] mb-1 uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1"><Sparkles size={10}/> VSIT AI</div>}
-                    {msg.text}
+                  <div key={i} className={`max-w-[85%] text-[12px] font-medium p-4 ${msg.sender === 'User' ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-tl-none`}`}>
+                    {msg.sender === 'AI' && <div className="font-bold text-[10px] mb-2 uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1.5"><Sparkles size={12}/> VSIT AI</div>}
+                    <div className="whitespace-pre-wrap leading-relaxed font-medium">{msg.text}</div>
                   </div>
                 ))}
+                
+                {isAiLoading && (
+                  <div className={`${theme.aiBubble} rounded-2xl rounded-tl-none px-4 py-4 shadow-sm self-start flex gap-1.5 items-center w-16`}>
+                    <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                    <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
+                  </div>
+                )}
                 <div ref={aiChatEndRef} />
               </div>
               
-              <form onSubmit={handleAiChatSubmit} className={`p-3 flex gap-2 ${theme.chatInputBg}`}>
-                <input value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Ask about IT issues..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-xl outline-none transition-all shadow-inner ${theme.chatInputField}`} />
-                <button type="submit" disabled={!aiInput.trim()} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-sm bg-linear-to-r from-purple-500 to-purple-600 text-white hover:opacity-90 border border-purple-400/50`}><Send size={14}/></button>
+              <form onSubmit={handleAiChatSubmit} className={`p-3 flex gap-2 items-center ${theme.chatInputBg}`}>
+                <input value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Ask about IT issues..." className={`flex-1 text-xs font-semibold px-4 py-3 rounded-xl outline-none transition-all shadow-inner ${theme.chatInputField}`} />
+                <button type="submit" disabled={!aiInput.trim() || isAiLoading} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-sm bg-linear-to-r from-purple-500 to-purple-600 text-white hover:opacity-90 border border-purple-400/50 shrink-0 active:scale-95`}><Send size={16}/></button>
               </form>
             </div>
           )}
