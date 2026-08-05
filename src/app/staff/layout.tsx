@@ -339,20 +339,46 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  const handleAiChatSubmit = (e: React.FormEvent) => {
+  // 🌟 REAL AI CHAT HANDLER
+  const handleAiChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim()) return;
-    
-    setAiMessages(prev => [...prev, { sender: 'User', text: aiInput }]);
-    const currentInput = aiInput;
+
+    const userMessage = aiInput;
+    // 1. Add user message immediately
+    setAiMessages(prev => [...prev, { sender: 'User', text: userMessage }]);
     setAiInput('');
 
-    setTimeout(() => {
-      setAiMessages(prev => [...prev, { 
-        sender: 'AI', 
-        text: `I'm an automated assistant. I understand you're asking about "${currentInput}". To resolve hardware or software issues, please create an IT Ticket via the dashboard.`
-      }]);
-    }, 1000);
+    // 2. Add a temporary "Thinking..." bubble
+    setAiMessages(prev => [...prev, { sender: 'AI', text: 'Thinking...' }]);
+
+    try {
+      // 3. Send the message to your Next.js backend API
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMessage })
+      });
+
+      if (!response.ok) throw new Error('API Error');
+
+      const data = await response.json();
+
+      // 4. Replace "Thinking..." with the real AI response
+      setAiMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = { sender: 'AI', text: data.reply };
+        return newMessages;
+      });
+
+    } catch (error) {
+      // 5. Handle errors gracefully
+      setAiMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = { sender: 'AI', text: "Sorry, my servers are currently down. Please submit a manual IT ticket for now!" };
+        return newMessages;
+      });
+    }
   };
 
   const handleAcceptControl = () => {
