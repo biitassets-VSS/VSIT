@@ -73,6 +73,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([
     { sender: 'AI', text: 'Hi! I am your VSIT Assistant. How can I help you with your IT portal today?' }
   ]);
+  
+  // 🌟 NEW ZOOMED IMAGE STATE
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const [adminPing, setAdminPing] = useState<{x: number, y: number, id: number} | null>(null);
   const [remoteControlRequest, setRemoteControlRequest] = useState(false);
@@ -343,13 +346,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 CUSTOM INLINE IMAGE RENDERER
+  // 🌟 CUSTOM INLINE IMAGE RENDERER WITH ZOOM FUNCTIONALITY
   const renderAiText = (text: string) => {
     const parts = text.split(/(\[IMG:.*?\])/g);
     return parts.map((part, i) => {
       if (part.startsWith('[IMG:') && part.endsWith(']')) {
         const src = part.slice(5, -1);
-        return <img key={i} src={src} alt="Guide Step" className="my-3 rounded-xl w-full h-auto object-contain border border-purple-500/20 shadow-md animate-in fade-in zoom-in-95 duration-500 bg-white/50" />;
+        return (
+          <img 
+            key={i} 
+            src={src} 
+            alt="Guide Step" 
+            onClick={() => setZoomedImage(src)}
+            className="my-3 rounded-xl w-full h-auto object-contain border border-purple-500/20 shadow-sm animate-in fade-in zoom-in-95 duration-500 bg-white/50 cursor-zoom-in hover:opacity-80 transition-all hover:scale-[1.02]" 
+          />
+        );
       }
       return <React.Fragment key={i}>{part}</React.Fragment>;
     });
@@ -371,7 +382,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       let finalImage: string | undefined = undefined;
 
       // 🧠 MASTER KEYWORD RECOGNITION (Basic Language & Local Images)
-
       if (/(handover|agreement|sign)/i.test(lowerInput)) {
         finalResponse = "📝 **How to find and sign Handover Agreements:**\n\n1. Click on 'My Assets' from your dashboard sidebar.\n2. Look for the red alert message at the top.\n3. Review your assigned asset details carefully.\n4. Scroll down to the bottom, type your name in the box, and it will automatically sign digitally!\n[IMG:/chat-images/handover-signature.png]";
       }
@@ -414,7 +424,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       else if (/(login|pin|0x80284001|code|password)/i.test(lowerInput) && !lowerInput.includes('wifi') && !lowerInput.includes('wi-fi')) {
         finalResponse = "🔑 **Windows Login Issues:**\n\n• Ensure PIN is correct & Num Lock is ON.\n• See code A1B2C3? Type code, then PIN.\n• Error 0x80284001: Hold 'Shift', click 'Shutdown'. Hold Shift until lights turn off, then power on.";
       }
-      // 🌟 TEAMS RESPONSE WITH INLINE LOCAL IMAGES
       else if (/(teams|message won't send|crashing)/i.test(lowerInput)) {
         finalResponse = "💬 **Microsoft Teams Fixes:**\n\n1️⃣ **General Fix:** Press CTRL+Shift+ESC, find Teams in Task Manager, and click 'End Task'.\n[IMG:/chat-images/task-manager.png]\n\n2️⃣ **Crashing/Errors:** Go to Windows Settings -> Apps -> Search 'Teams' -> Advanced Options -> Click 'Repair'.\n[IMG:/chat-images/teams-repair.png]\n\n3️⃣ **Needs Login:** Use your provided Outlook email. Ask IT for password if needed.\n[IMG:/chat-images/teams-login.png]";
       }
@@ -521,13 +530,19 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   <div key={i} className={`max-w-[85%] text-[12px] font-medium p-4 ${msg.sender === 'User' ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-tl-none`}`}>
                     {msg.sender === 'AI' && <div className="font-bold text-[10px] mb-2 uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1.5"><Sparkles size={12}/> VSIT AI</div>}
                     
-                    {/* 🌟 Custom Render Engine for Inline Images */}
+                    {/* 🌟 Render Text and Inline Images */}
                     <div className="whitespace-pre-wrap leading-relaxed font-medium">
                       {msg.sender === 'AI' ? renderAiText(msg.text) : msg.text}
                     </div>
                     
+                    {/* Fallback Single Image */}
                     {msg.sender === 'AI' && msg.image && (
-                      <img src={msg.image} alt="Guide" className="mt-3 rounded-xl w-full h-auto object-cover border border-purple-500/20 shadow-sm animate-in fade-in zoom-in-95 duration-500" />
+                      <img 
+                        src={msg.image} 
+                        alt="Guide" 
+                        onClick={() => setZoomedImage(msg.image!)}
+                        className="mt-3 rounded-xl w-full h-auto object-cover border border-purple-500/20 shadow-sm animate-in fade-in zoom-in-95 duration-500 cursor-zoom-in hover:opacity-80 transition-all hover:scale-[1.02]" 
+                      />
                     )}
                   </div>
                 ))}
@@ -746,6 +761,31 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
+
+      {/* 🌟 PREMIUM IMAGE ZOOM OVERLAY (Frosted Glass Theme) */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 z-99999 flex items-center justify-center p-4 sm:p-10 bg-black/50 backdrop-blur-[20px] cursor-zoom-out animate-in fade-in duration-300"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div 
+            className="relative max-w-5xl w-full max-h-[90vh] flex items-center justify-center p-2 rounded-4xl bg-white/10 border border-white/20 shadow-[0_32px_80px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-300" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              src={zoomedImage} 
+              alt="Zoomed View" 
+              className="w-auto h-auto max-w-full max-h-[85vh] object-contain rounded-3xl shadow-2xl" 
+            />
+            <button 
+              onClick={() => setZoomedImage(null)} 
+              className="absolute -top-4 -right-4 p-3 rounded-full bg-linear-to-r from-rose-500 to-rose-600 text-white shadow-[0_8px_20px_rgba(225,29,72,0.4)] hover:scale-110 active:scale-95 transition-all cursor-pointer border border-rose-400"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
