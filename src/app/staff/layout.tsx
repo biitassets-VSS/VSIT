@@ -350,12 +350,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       const lowerInput = userMessage.toLowerCase();
       let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' module on your dashboard and click 'Raise Ticket'.";
 
-      // 🧠 UPGRADED KEYWORD RECOGNITION (Catches typos like "tickt", "ticet", "rise")
+      // 🧠 UPGRADED KEYWORD RECOGNITION
       if (/(ticket|tickt|ticet|raise|rise|create|submit|issue)/i.test(lowerInput)) {
         finalResponse = "To raise a new ticket, click on 'IT Tickets' in the left sidebar menu. Then, click the 'Raise Ticket' button. Fill in the details of your issue and hit submit!";
       } 
       else if (/(teams|outlook|software|app|program|word|excel|not working|error|crash)/i.test(lowerInput)) {
-        finalResponse = "If Microsoft Teams or a software app isn't working, please try restarting your computer first. If the issue continues, please click 'IT Tickets' on your dashboard to alert IT Support.";
+        finalResponse = "If Microsoft Teams or a software application isn't working, please try these quick solutions first:\n\n• Force close the application and reopen it.\n• Verify your internet/Wi-Fi connection is stable.\n• Check if there are any pending Windows updates.\n• Restart your computer.\n\nIf the issue continues after trying these steps, please click 'IT Tickets' on your dashboard to alert IT Support.";
       } 
       else if (/(password|login|access|locked|cant log in|cannot login)/i.test(lowerInput)) {
         finalResponse = "For password resets, please use the automated self-service portal. If your portal account is completely locked, please submit an urgent access ticket.";
