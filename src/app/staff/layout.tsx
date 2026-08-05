@@ -335,7 +335,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setChatInput('');
   };
 
-  // 🌟 SMART LOCAL AI ENGINE (No API Key Required)
+  // 🌟 SMARTER LOCAL AI ENGINE (Regex for Typos & Phrases)
   const handleAiChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiInput.trim() || isAiLoading) return;
@@ -350,21 +350,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       const lowerInput = userMessage.toLowerCase();
       let finalResponse = "I'm an automated assistant. To resolve complex hardware or software issues, please navigate to the 'IT Tickets' module on your dashboard and click 'Raise Ticket'.";
 
-      // 🧠 KEYWORD RECOGNITION LOGIC
-      if (lowerInput.includes('ticket') || lowerInput.includes('raise') || lowerInput.includes('create')) {
+      // 🧠 UPGRADED KEYWORD RECOGNITION (Catches typos like "tickt", "ticet", "rise")
+      if (/(ticket|tickt|ticet|raise|rise|create|submit|issue)/i.test(lowerInput)) {
         finalResponse = "To raise a new ticket, click on 'IT Tickets' in the left sidebar menu. Then, click the 'Raise Ticket' button. Fill in the details of your issue and hit submit!";
       } 
-      else if (lowerInput.includes('teams') || lowerInput.includes('outlook') || lowerInput.includes('software') || lowerInput.includes('app')) {
-        finalResponse = "If Microsoft Teams or a software app isn't working, please try restarting your computer first. If the issue continues, please click the 'Raise Ticket' button on your dashboard to alert IT Support.";
+      else if (/(teams|outlook|software|app|program|word|excel|not working|error|crash)/i.test(lowerInput)) {
+        finalResponse = "If Microsoft Teams or a software app isn't working, please try restarting your computer first. If the issue continues, please click 'IT Tickets' on your dashboard to alert IT Support.";
       } 
-      else if (lowerInput.includes('password') || lowerInput.includes('login') || lowerInput.includes('access')) {
+      else if (/(password|login|access|locked|cant log in|cannot login)/i.test(lowerInput)) {
         finalResponse = "For password resets, please use the automated self-service portal. If your portal account is completely locked, please submit an urgent access ticket.";
       } 
-      else if (lowerInput.includes('broken') || lowerInput.includes('screen') || lowerInput.includes('replace') || lowerInput.includes('damage')) {
+      else if (/(broken|screen|replace|damage|crack|hardware|laptop|mouse|keyboard)/i.test(lowerInput)) {
         finalResponse = "I'm sorry your hardware is damaged. Please go to the 'Asset Requests' or 'My Assets' section on your dashboard to request a device replacement. You will need to upload photos of the damage.";
       }
-      else if (lowerInput.includes('hello') || lowerInput.includes('hi') || lowerInput.includes('hey')) {
-        finalResponse = "Hello there! I am the VSIT automated assistant. How can I help you with your IT equipment or portal today?";
+      else if (/(hello|hi|hey|greetings|help|support|assist)/i.test(lowerInput)) {
+        finalResponse = "Hello there! I am the VSIT automated assistant. I can answer questions about raising tickets, software errors, or replacing broken hardware. How can I help you today?";
       }
 
       setAiMessages(prev => [...prev, { sender: 'AI', text: finalResponse }]);
@@ -406,7 +406,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     aiBubble: isDarkMode 
       ? 'bg-black/40 backdrop-blur-xl border border-white/10 text-zinc-100 shadow-[inset_0_1px_4px_rgba(255,255,255,0.1)]' 
       : 'bg-white/60 backdrop-blur-xl border border-white/80 text-slate-800 shadow-sm shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)]',
-    userBubble: 'bg-gradient-to-r from-purple-500/90 to-purple-600/90 backdrop-blur-md text-white shadow-lg border border-purple-400/50',
+    userBubble: 'bg-linear-to-r from-purple-500/90 to-purple-600/90 backdrop-blur-md text-white shadow-lg border border-purple-400/50',
     chatInputBg: isDarkMode ? 'bg-black/20 border-t border-white/10' : 'bg-white/30 border-t border-white/50 backdrop-blur-md',
     chatInputField: isDarkMode ? 'bg-black/40 text-white border border-white/10 focus:border-purple-500/50' : 'bg-white/50 text-slate-900 border border-white/60 focus:bg-white/70 focus:ring-4 focus:ring-purple-500/10'
   };
