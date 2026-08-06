@@ -119,12 +119,6 @@ function AdminTicketsContent() {
 
   // 🌟 EXECUTE TICKET VERDICT & FOLLOW-UP PINGS
   const executeTicketVerdict = async (ticketId: string, newStatus: string, staffEmail: string, customRemarks?: string) => {
-    let remarks = customRemarks;
-    if (remarks === undefined) {
-      remarks = prompt(`Enter follow-up update note for staff member (Status changing to: ${newStatus}):`) || '';
-      if (!confirm(`Confirm status update to "${newStatus}"?`)) return;
-    }
-
     setUpdatingId(ticketId);
     try {
       const timestamp = new Date().toISOString();
@@ -132,7 +126,7 @@ function AdminTicketsContent() {
         .from('tickets')
         .update({ 
           status: newStatus, 
-          admin_notes: remarks || `Ticket status updated to ${newStatus} by IT Administration.`,
+          admin_notes: customRemarks || `Ticket status updated to ${newStatus} by IT Administration.`,
           updated_at: timestamp
         })
         .eq('id', ticketId);
@@ -152,7 +146,7 @@ function AdminTicketsContent() {
             await supabase.from('notifications').insert([{
               target_user: profile.id,
               title: newStatus === 'Resolved' ? '✔ IT Ticket Resolved' : `🛠️ Support Update: ${newStatus}`,
-              message: remarks || `Your support ticket status was updated to ${newStatus}.`,
+              message: customRemarks || `Your support ticket status was updated to ${newStatus}.`,
               is_read: false,
               type: newStatus === 'Resolved' ? 'success' : 'info'
             }]);
@@ -164,7 +158,7 @@ function AdminTicketsContent() {
 
       setTickets(prev => prev.map(t => 
         t.id === ticketId 
-          ? { ...t, status: newStatus, admin_notes: remarks || `Ticket status updated to ${newStatus} by IT Administration.`, updated_at: timestamp } 
+          ? { ...t, status: newStatus, admin_notes: customRemarks || `Ticket status updated to ${newStatus} by IT Administration.`, updated_at: timestamp } 
           : t
       ));
 
@@ -433,13 +427,13 @@ function AdminTicketsContent() {
                     )}
                   </div>
 
-                  {/* Bottom: Action Controls */}
+                  {/* Bottom: Action Controls - REPLACED NATIVE DIALOGS WITH CUSTOM UI MODAL */}
                   <div className={`pt-5 border-t mt-auto space-y-2.5 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
                     <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
                         disabled={updatingId === tix.id}
-                        onClick={() => executeTicketVerdict(tix.id, 'In Progress', tix.created_by)}
+                        onClick={() => handleOpenFollowUpModal(tix, 'In Progress')}
                         className="flex items-center justify-center gap-1.5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm active:scale-95"
                       >
                         <PlayCircle size={14} className="text-orange-400" /> Work on it
@@ -448,7 +442,7 @@ function AdminTicketsContent() {
                       <button
                         type="button"
                         disabled={updatingId === tix.id}
-                        onClick={() => executeTicketVerdict(tix.id, 'On Hold', tix.created_by)}
+                        onClick={() => handleOpenFollowUpModal(tix, 'On Hold')}
                         className="flex items-center justify-center gap-1.5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm active:scale-95"
                       >
                         <PauseCircle size={14} /> Place On Hold
@@ -469,7 +463,7 @@ function AdminTicketsContent() {
                       <button
                         type="button"
                         disabled={updatingId === tix.id || isResolved}
-                        onClick={() => executeTicketVerdict(tix.id, 'Resolved', tix.created_by)}
+                        onClick={() => handleOpenFollowUpModal(tix, 'Resolved')}
                         className="flex items-center justify-center gap-1.5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-sm active:scale-95"
                       >
                         <CheckCircle2 size={14} /> Resolve Ticket
