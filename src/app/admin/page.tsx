@@ -41,6 +41,9 @@ export default function AdminDashboardPage() {
   const [broadcastImage, setBroadcastImage] = useState<File | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   
+  // 🌟 NEW: State for the Online Staff Modal
+  const [isOnlineStaffModalOpen, setIsOnlineStaffModalOpen] = useState(false);
+  
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [rawStaffList, setRawStaffList] = useState<any[]>([]);
 
@@ -207,27 +210,22 @@ export default function AdminDashboardPage() {
         else inStockAssetsCount++;
       });
 
-      // 🌟 ACCURATE INSPECTION CALCULATIONS (Matches /admin/inspections/page.tsx exactly)
+      // Inspections
       let pendingCount = 0, resolvedCount = 0, totalValidVerifications = 0;
       const processedAssetIds = new Set<string>();
 
       inspData.forEach(i => {
-        if (i.asset_id) processedAssetIds.add(String(i.asset_id)); // Track which assets already have logs
+        if (i.asset_id) processedAssetIds.add(String(i.asset_id));
 
         const s = (i.status || '').toLowerCase().trim();
         const notes = (i.notes || '').toLowerCase();
         const inspByLower = (i.inspected_by || '').toLowerCase().trim();
 
-        // 1. Exclude Return and Replacement Requests
         const isReturnOrReplace = notes.includes('[return request]') || s.includes('return') || notes.includes('[replacement request]') || s.includes('replace');
-
-        // 2. Exclude Admin System Actions
         const isAdminAction = 
           inspByLower === 'admin' || inspByLower === 'system' || inspByLower === 'administrator' ||
-          notes.includes('asset configuration updated') || 
-          notes.includes('asset initially registered') ||
-          notes.includes('asset forcefully unassigned') ||
-          notes.includes('asset re-assigned') ||
+          notes.includes('asset configuration updated') || notes.includes('asset initially registered') ||
+          notes.includes('asset forcefully unassigned') || notes.includes('asset re-assigned') ||
           s === 'stock intake' || i.is_admin === true || (i.type || '').toLowerCase() === 'admin';
 
         if (!isReturnOrReplace && !isAdminAction) {
@@ -240,16 +238,12 @@ export default function AdminDashboardPage() {
         }
       });
 
-      // 🌟 ADD MISSING/VIRTUAL INSPECTIONS (The missing link!)
       assetsData.forEach(asset => {
         const s = (asset.inspection_status || '').toLowerCase();
         if ((s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) && !asset.status?.toLowerCase().includes('return')) {
           if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
-
-          // If this asset has no logs at all, count it as a pending "Awaiting Action" record!
           if (!processedAssetIds.has(String(asset.id))) {
-            pendingCount++;
-            totalValidVerifications++;
+            pendingCount++; totalValidVerifications++;
           }
         }
       });
@@ -300,7 +294,6 @@ export default function AdminDashboardPage() {
             const approverProfile = staffData.find(p => p.id === log.inspected_by);
             if (approverProfile) approverName = approverProfile.full_name || approverProfile.name || currentAdminName;
           }
-
           displayName = approverName; 
           empCode = 'ADMIN';          
           logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
@@ -340,6 +333,23 @@ export default function AdminDashboardPage() {
       setBroadcastMessage(''); setBroadcastImage(null); setIsBroadcastModalOpen(false);
       alert("Announcement broadcasted successfully!");
     } catch (err: any) { alert(`Failed: ${err.message}`); } finally { setIsBroadcasting(false); }
+  };
+
+  // 🌟 NEW: Helper function to get the actual details of live staff members
+  const getLiveStaffDetails = () => {
+    return rawStaffList.filter(s => {
+      const roleStr = (s.role || '').toLowerCase().trim();
+      const emailStr = (s.email || '').toLowerCase().trim();
+      
+      if (roleStr === 'admin' || emailStr === 'lakhwinder.bi@outlook.com') return false;
+      
+      const statusStr = (s.status || '').toLowerCase().trim();
+      const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke', 'disabled'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
+
+      if (isDeactivated) return false;
+
+      return onlineUsers.has(s.id) || (s.email && onlineUsers.has(s.email.toLowerCase()));
+    });
   };
 
   const theme = {
@@ -453,10 +463,19 @@ export default function AdminDashboardPage() {
               <p className={`text-[10px] font-bold ${theme.subText}`}>Total Staff</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
-              <div className="flex flex-col">
-                <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${theme.subText}`}><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
-                <span className="text-xs font-black text-emerald-500">{stats.onlineStaff}</span>
-              </div>
+              
+              {/* 🌟 NEW: Clickable Live Staff Button */}
+              <button 
+                onClick={() => setIsOnlineStaffModalOpen(true)} 
+                title="View Online Staff"
+                className={`flex flex-col text-left cursor-pointer group/live p-1.5 -m-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-100'}`}
+              >
+                <span className={`text-[9px] uppercase font-bold flex items-center gap-1 transition-colors ${theme.subText} group-hover/live:text-emerald-600 dark:group-hover/live:text-emerald-400`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+                </span>
+                <span className="text-xs font-black text-emerald-500 group-hover/live:scale-110 origin-left transition-transform">{stats.onlineStaff}</span>
+              </button>
+
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}><span className={`text-[9px] uppercase font-bold ${theme.subText}`}>Off</span>
                 <span className={`text-xs font-black ${theme.text}`}>{stats.offlineStaff}</span>
               </div>
@@ -611,6 +630,56 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 NEW: Online Staff Modal */}
+      {isOnlineStaffModalOpen && (
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in">
+          <div className={`rounded-3xl max-w-md w-full shadow-2xl border flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-300 ${theme.glassCard}`}>
+            <div className={`p-5 border-b flex items-center justify-between shrink-0 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
+              <h3 className={`text-sm font-black flex items-center gap-2 uppercase tracking-widest ${theme.text}`}>
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                Live Network ({stats.onlineStaff})
+              </h3>
+              <button onClick={() => setIsOnlineStaffModalOpen(false)} className={`p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-white/50 text-slate-500'}`}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="p-2 overflow-y-auto custom-scrollbar flex-1">
+              {getLiveStaffDetails().length === 0 ? (
+                <div className="p-8 text-center flex flex-col items-center justify-center opacity-70">
+                  <Users size={32} className={`${theme.subText} mb-3`} />
+                  <p className={`text-[12px] font-bold ${theme.subText}`}>No staff members are currently online.</p>
+                </div>
+              ) : (
+                <div className="space-y-1 p-2">
+                  {getLiveStaffDetails().map((staff, idx) => (
+                    <div key={idx} className={`p-3 rounded-2xl flex items-center justify-between transition-colors border ${isDarkMode ? 'hover:bg-white/5 border-white/5' : 'hover:bg-slate-50 border-transparent hover:border-slate-200'}`}>
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+                          <Users size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-bold truncate ${theme.text}`}>{staff.full_name || staff.name || staff.email?.split('@')[0] || 'Staff Member'}</p>
+                          <p className={`text-[10px] font-medium truncate ${theme.subText}`}>{staff.email}</p>
+                        </div>
+                      </div>
+                      {staff.emp_code && (
+                        <span className={`shrink-0 text-[9px] px-2 py-1 rounded-md font-black uppercase tracking-widest border ${isDarkMode ? 'bg-[#18181b] text-purple-300 border-purple-800/50' : 'bg-white text-purple-900 border-purple-200 shadow-sm'}`}>
+                          {staff.emp_code}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
