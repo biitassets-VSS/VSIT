@@ -635,7 +635,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
           
-          <StaffAIChatbot />
+          <StaffAIChatbot isDarkMode={isDarkMode} />
         </main>
       </div>
     </div>
