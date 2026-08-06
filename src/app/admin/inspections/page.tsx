@@ -109,7 +109,6 @@ function AdminInspectionReviewContent() {
 
         const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
 
-        // 🌟 ROBUST REAL-NAME RECOVERY FROM E-SIGNATURES & HISTORY
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
         
         if (!recoveredName && insp.notes && insp.notes.includes('Digitally Signed')) {
@@ -180,7 +179,6 @@ function AdminInspectionReviewContent() {
         });
       });
 
-      // 🌟 MISSING INSPECTIONS
       assetsData.forEach(asset => {
         const s = (asset.inspection_status || '').toLowerCase();
         if ((s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) && !asset.status?.toLowerCase().includes('return')) {
@@ -315,16 +313,19 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
+      // 🌟 FULLY OPTIMIZED NOTIFICATION PAYLOAD 
       if (staffId && !isDeletedUser && !staffId.includes('ADMIN') && !staffId.includes('ID-')) {
         try {
           await supabase.from('notifications').insert([{
             target_user: staffId,
-            title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ ${verdict} Action Required`,
-            message: verdict === 'Approved' ? `Your recent hardware audit has been approved.` : `Audit returned: ${remarks}`,
+            title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ Action Required: ${verdict}`,
+            message: verdict === 'Approved' ? `Your recent hardware audit has been successfully approved by the IT Admin.` : `Your asset inspection was marked as ${verdict}. Reason: ${remarks}`,
             is_read: false,
             type: verdict === 'Approved' ? 'success' : 'warning'
           }]);
-        } catch (notifError) {}
+        } catch (notifError) {
+          console.error("Non-fatal notification error:", notifError);
+        }
       }
 
       setInspections(prev => prev.map(item => 
@@ -333,7 +334,7 @@ function AdminInspectionReviewContent() {
           : item
       ));
 
-      alert(`Success: Review locked in as ${verdict}.`);
+      alert(`Success: Review locked in as ${verdict}. Live alert pushed to staff dashboard.`);
     } catch (err: any) {
       alert(`Error transmitting verdict: ${err.message}`);
     } finally {

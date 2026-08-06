@@ -131,20 +131,18 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     if (!staffProfile.id) return;
     
     const checkAssetDeadlines = async () => {
-      // Use sessionStorage so we only trigger the massive alert once per login session, preventing spam
       if (sessionStorage.getItem('has_checked_deadlines_today')) return;
 
       try {
         const { data: assets } = await supabase
           .from('assets')
-          // Adjust 'next_inspection_date' if your DB uses a slightly different column name like 'next_due'
           .select('id, name, asset_name, next_inspection_date')
           .eq('assigned_to', staffProfile.id);
 
         if (!assets || assets.length === 0) return;
 
         const now = new Date();
-        now.setHours(0, 0, 0, 0); // Strip time for accurate date comparison
+        now.setHours(0, 0, 0, 0); 
 
         let hasOverdue = false;
 
@@ -156,15 +154,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
             if (dueDate < now) {
               hasOverdue = true;
-              
-              // 1. Trigger Dashboard In-App Toast & Sound
               addSystemAlert(
                 "🚨 OVERDUE INSPECTION", 
                 `Your inspection for ${displayName} was due on ${dueDate.toLocaleDateString()}. Please submit your inspection immediately!`, 
                 true
               );
-
-              // 2. Trigger Native Windows Desktop Notification
               if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification("Overdue IT Inspection!", { 
                   body: `Your inspection for ${displayName} is past due. Please open the IT Portal to resolve this.`, 
@@ -182,7 +176,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           }
         });
 
-        // Mark as checked for this session
         if (hasOverdue) {
           sessionStorage.setItem('has_checked_deadlines_today', 'true');
         }
@@ -192,6 +185,36 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     };
 
     checkAssetDeadlines();
+  }, [staffProfile.id]);
+
+  // 🌟 NEW: REAL-TIME STAFF NOTIFICATION RECEIVER
+  useEffect(() => {
+    if (!staffProfile.id) return;
+    
+    const staffNotifChannel = supabase
+      .channel(`staff-alerts-${staffProfile.id}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `target_user=eq.${staffProfile.id}`
+      }, (payload) => {
+        const newNotif = payload.new;
+        
+        // 1. Trigger the Dashboard Toast & Sound
+        addSystemAlert(newNotif.title, newNotif.message, true);
+        
+        // 2. Trigger Native Windows Desktop Notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(newNotif.title, { 
+            body: newNotif.message, 
+            icon: '/logo.png' 
+          });
+        }
+      })
+      .subscribe();
+      
+    return () => { supabase.removeChannel(staffNotifChannel); };
   }, [staffProfile.id]);
 
   useEffect(() => {
