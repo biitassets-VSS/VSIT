@@ -44,6 +44,16 @@ function getAuditWindowInfo(category: string = 'Laptop') {
   };
 }
 
+const calculateNextDueDate = (baseDateStr: string | null, cat: string) => {
+  if (!baseDateStr) return null;
+  const baseDate = new Date(baseDateStr);
+  const monthsToAdd = (cat || '').toLowerCase().includes('laptop') ? 1 : 3; 
+  const lastDay = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd + 1, 0);
+  const lastSat = new Date(lastDay);
+  while (lastSat.getDay() !== 6) lastSat.setDate(lastSat.getDate() - 1);
+  return lastSat;
+};
+
 const formatDuration = (start: string, end: string) => {
   if (!start || !end) return '';
   const d1 = new Date(start).getTime();
@@ -142,17 +152,36 @@ export default function StaffDashboardPage() {
 
       const compiledAssets = (assetsRes.data || []).map(asset => {
         const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
+        
+        let nextDue = null;
+        if (asset.next_inspection_date) {
+           nextDue = new Date(asset.next_inspection_date);
+        } else if (latestInsp?.created_at || asset.last_inspection_date) {
+           nextDue = calculateNextDueDate(latestInsp?.created_at || asset.last_inspection_date, asset.category);
+        } else {
+           nextDue = calculateNextDueDate(asset.created_at, asset.category); 
+        }
+        
+        const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < new Date().setHours(0,0,0,0)) : false;
+
         return {
           ...asset,
           live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
-          live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null
+          live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
+          live_admin_remarks: latestInsp?.admin_remarks || null,
+          nextDue,
+          isOverdue
         };
       });
+
       setAssignedAssets(compiledAssets);
       
-      const needsInspCount = compiledAssets.filter(a => 
-        ['pending', 're-inspection', 'overdue', 'not approved', 'reject'].some(status => (a.live_inspection_status || '').toLowerCase().includes(status))
-      ).length;
+      // 🌟 ACCURATE "ACTION REQUIRED" COUNTER OVERRIDE
+      const needsInspCount = compiledAssets.filter(a => {
+        const s = (a.live_inspection_status || '').toLowerCase();
+        if (s === 'pending review' || s === 'pending') return false; 
+        return ['re-inspection', 'not approved', 'reject', 'action required'].some(status => s.includes(status)) || a.isOverdue;
+      }).length;
 
       const tix = ticketsRes.data || [];
       setMyTickets(tix);
@@ -193,7 +222,7 @@ export default function StaffDashboardPage() {
     return 'bg-slate-50 text-slate-600 font-extrabold border border-slate-200 shadow-sm';
   };
 
-  // 🌟 HARDWARE ACTION BUTTON & BADGE STATES
+  // 🌟 HARDWARE ACTION BUTTON & OVERRIDE BADGE STATES
   const getAssetAuditState = (asset: any) => {
     const status = (asset.live_inspection_status || '').toLowerCase();
     const auditWindow = getAuditWindowInfo(asset.category);
@@ -202,11 +231,15 @@ export default function StaffDashboardPage() {
       return { disabled: true, text: "Return Pending", classes: "bg-white text-slate-400 font-bold cursor-not-allowed border border-slate-200 shadow-sm" };
     }
 
-    if (status === 'rejected' || status === 'fail') {
+    if (status.includes('reject') || status.includes('fail')) {
       return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-lg shadow-rose-500/30 animate-pulse border-none" };
     }
-    if (status === 're-inspection') {
-      return { disabled: false, text: "Re-Inspection Required", classes: "bg-amber-500 hover:bg-amber-600 text-white font-bold cursor-pointer shadow-lg shadow-amber-500/30 animate-pulse border-none" };
+    if (status.includes('re-inspection') || status.includes('action required')) {
+      return { disabled: false, text: "Start Inspection", classes: "bg-amber-500 hover:bg-amber-600 text-white font-bold cursor-pointer shadow-lg shadow-amber-500/30 animate-pulse border-none" };
+    }
+
+    if (asset.isOverdue) {
+      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-lg shadow-rose-500/30 animate-pulse border-none" };
     }
 
     const hasAudited = allInspections.some(insp => {
@@ -219,7 +252,6 @@ export default function StaffDashboardPage() {
               (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
     });
 
-    // 🌟 Clean White Button with Emerald Border/Text for "Audited This Cycle"
     if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-white text-emerald-500 border border-emerald-200 font-bold cursor-not-allowed shadow-sm" };
     
     if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-white text-slate-400 font-bold border border-slate-200 shadow-sm cursor-not-allowed" };
@@ -229,22 +261,15 @@ export default function StaffDashboardPage() {
 
   // 🎨 PURE MAC OS 2026 TRANSPARENT GLASS THEME (Based on Mockup)
   const theme = {
-    // 🌟 PURE TRANSPARENT GLASS: Beautiful blur, high transparency, crisp white border
     glassCard: isDarkMode 
       ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]' 
       : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
-    
-    // 🌟 Interactive Glass Buttons (Thumbnails)
     glassButton: isDarkMode
       ? 'bg-black/20 hover:bg-black/40 border border-white/10 shadow-sm'
       : 'bg-white/30 hover:bg-white/60 backdrop-blur-2xl border border-white/80 shadow-sm hover:shadow-md transition-all duration-300',
-    
-    // 🌟 Inner Items (List rows)
     glassItem: isDarkMode
       ? 'bg-black/20 border border-white/10 hover:border-white/20'
       : 'bg-white/50 border border-white/60 shadow-sm hover:shadow-md backdrop-blur-2xl transition-all duration-300',
-    
-    // 🌟 Deep Inner Detail Boxes (More solid for reading fine text)
     glassInner: isDarkMode
       ? 'bg-black/40 border border-white/10'
       : 'bg-white/70 border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)] backdrop-blur-md',
@@ -259,13 +284,12 @@ export default function StaffDashboardPage() {
   const requiresGlobalReinspection = assignedAssets.some(a => {
     const s = (a.live_inspection_status || '').toLowerCase();
     if (s.includes('return')) return false;
-    return ['re-inspection', 'not approved', 'reject'].some(val => s.includes(val));
+    return ['re-inspection', 'not approved', 'reject', 'action required'].some(val => s.includes(val)) || a.isOverdue;
   });
 
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
   return (
-    // We let layout.tsx handle the background/orbs. We just render the content.
     <div className="flex-1 flex flex-col w-full h-full p-4 lg:p-6 gap-5 overflow-hidden lg:min-h-0 z-10 font-sans">
       
       {/* 🌟 HEADER WITH SYNC BUTTON */}
@@ -273,7 +297,6 @@ export default function StaffDashboardPage() {
         <div>
           <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${theme.text}`}>Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
           <div className={`flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm font-semibold ${theme.subText}`}>
-            {/* 🌟 FIXED ID BADGE: Pure readable purple matching your brand */}
             <span className="text-white font-extrabold uppercase tracking-wider px-3 py-1 bg-purple-500 rounded-md shadow-sm">ID: {currentUser.emp_id}</span>
             <span className="font-bold">{currentUser.email}</span>
           </div>
@@ -295,7 +318,6 @@ export default function StaffDashboardPage() {
         {/* Quick Actions (Transparent Glass Buttons) */}
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            // 🌟 FIXED: Pure white icons with colored borders to match the 2nd screenshot perfectly
             { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'bg-white text-purple-500 border border-purple-100 shadow-[0_4px_10px_rgba(168,85,247,0.15)]', type: 'TICKET', isActionDisabled: false, path: null },
             { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'bg-white text-rose-500 border border-rose-100 shadow-[0_4px_10px_rgba(244,63,94,0.15)] animate-pulse' : (isGlobalAuditOpen ? 'bg-white text-amber-500 border border-amber-100 shadow-[0_4px_10px_rgba(245,158,11,0.15)]' : 'bg-white text-slate-400 border border-slate-100 shadow-sm'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
             { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'bg-white text-emerald-500 border border-emerald-100 shadow-[0_4px_10px_rgba(16,185,129,0.15)]', type: 'REQUEST', isActionDisabled: false, path: null },
@@ -308,7 +330,6 @@ export default function StaffDashboardPage() {
               className={`relative ${theme.glassButton} h-30 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-1 hover:border-purple-300'}`}
             >
               <div className="flex items-start justify-between w-full">
-                {/* 🌟 ICON STYLE MATCHES SCREENSHOT #2 */}
                 <div className={`p-3 rounded-2xl transition-transform duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110'} ${item.color}`}>
                   {item.isActionDisabled ? <Lock size={18} /> : <item.icon size={18} strokeWidth={2.5} />}
                 </div>
@@ -330,7 +351,6 @@ export default function StaffDashboardPage() {
         <div className="xl:w-[35%] grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-white/50 dark:border-white/10">
           <div className={`${theme.glassCard} h-30 p-4 rounded-2xl flex flex-col justify-between`}>
             <div className="flex justify-between items-start">
-              {/* 🌟 ICON STYLE MATCHES SCREENSHOT #2 */}
               <div className="p-3 rounded-2xl bg-white border border-purple-100 text-purple-600 shadow-[0_4px_10px_rgba(168,85,247,0.15)]"><Laptop size={18} strokeWidth={2.5} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Assigned</span>
             </div>
@@ -384,8 +404,8 @@ export default function StaffDashboardPage() {
                 assignedAssets.map(asset => {
                   const btnState = getAssetAuditState(asset);
                   const isReInspect = (asset.live_inspection_status || '').toLowerCase().includes('re-inspection');
+                  const isRejected = (asset.live_inspection_status || '').toLowerCase().includes('reject');
                   
-                  // 🌟 PRECISE REAL-TIME STATUS CHECKS
                   const currentStatus = (asset.status || '').toLowerCase();
                   const inspStatus = (asset.live_inspection_status || '').toLowerCase();
                   
@@ -399,25 +419,39 @@ export default function StaffDashboardPage() {
                         <h4 className={`font-extrabold text-base tracking-tight leading-tight ${theme.text}`}>
                           {asset.name || asset.asset_name || asset.model || 'Generic Device'}
                         </h4>
-                        {/* 🌟 FIXED: HIGH CONTRAST HARDWARE STATUS BADGES */}
+                        {/* 🌟 OVERRIDE BADGE FOR ADMIN ACTIONS */}
                         <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 shadow-sm ${
                           isReturnRejected ? 'bg-rose-50 text-rose-600 border-rose-200' :
                           isReturnPending ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                          isReInspect ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                          'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          isRejected ? 'bg-rose-50 text-rose-600 border-rose-200' :
+                          isReInspect ? 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse' :
+                          asset.isOverdue ? 'bg-rose-50 text-rose-600 border-rose-200 animate-pulse' :
+                          (asset.live_inspection_status || '').toLowerCase() === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                          'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                          {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : (asset.live_inspection_status || 'Pending')}
+                          {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : isRejected ? 'Rejected' : isReInspect ? 'Re-Inspection' : asset.isOverdue ? 'Overdue' : (asset.live_inspection_status || 'Pending')}
                         </span>
                       </div>
 
-                      {/* Inner Detail Box */}
+                      {/* Inner Detail Box with Dynamic Due Date */}
                       <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl mt-4 ${theme.glassInner}`}>
                         <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Tag ID</span><span className={`font-mono text-xs font-bold ${theme.text}`}>{asset.asset_tag || 'N/A'}</span></div>
-                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Serial S/N</span><span className={`font-mono text-xs font-bold break-all ${theme.text}`}>{asset.serial_number || asset.serial || 'N/A'}</span></div>
-                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Updated</span><span className={`text-xs font-bold ${theme.text}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span></div>
                         <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Category</span><span className={`text-xs font-bold ${theme.text}`}>{asset.category || 'N/A'}</span></div>
+                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Updated</span><span className={`text-xs font-bold ${theme.text}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span></div>
+                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Next Due</span><span className={`text-xs font-bold ${asset.isOverdue ? 'text-rose-500 animate-pulse' : theme.text}`}>{asset.nextDue ? asset.nextDue.toLocaleDateString('en-IN') : 'N/A'}</span></div>
                       </div>
                       
+                      {/* 🌟 REJECTION REASON NOTIFICATION */}
+                      { (isRejected || isReInspect) && asset.live_admin_remarks && (
+                        <div className={`p-4 mt-4 rounded-xl border text-xs font-bold flex gap-3 ${isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+                          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Request Reason:</span>
+                            {asset.live_admin_remarks}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex flex-wrap items-center gap-3 pt-4 justify-end">
                         
                         {/* 🌟 SMART RETURN BUTTON LOGIC */}
@@ -433,7 +467,6 @@ export default function StaffDashboardPage() {
                         ) : isReturnRejected ? (
                           <button 
                             onClick={async () => {
-                              // Reset the status allowing them to re-upload photos
                               await supabase.from('assets').update({ status: 'Assigned', inspection_status: null }).eq('id', asset.id);
                               loadRealDatabase();
                               setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
@@ -499,7 +532,6 @@ export default function StaffDashboardPage() {
                     <div key={tix.id} className={`p-5 rounded-2xl transition-colors space-y-4 ${theme.glassItem}`}>
                       <div className="flex items-start justify-between gap-3">
                         <span className={`font-extrabold text-sm leading-snug ${theme.text}`}>{tix.title || tix.subject}</span>
-                        {/* 🌟 FIXED: CRISP TICKET STATUS BADGES */}
                         <span className={`px-3 py-1 rounded-lg text-[9px] font-black tracking-widest uppercase border shrink-0 shadow-sm ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
                       </div>
                       
@@ -580,7 +612,6 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, setAssignedAssets, o
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
 
-  // 🌟 MODAL PURE GLASS THEME (Solid White Inputs for text contrast)
   const theme = {
     modalBg: isDarkMode 
       ? 'bg-zinc-900/60 backdrop-blur-[50px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
