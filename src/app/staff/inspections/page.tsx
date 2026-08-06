@@ -760,7 +760,7 @@ function AdminInspectionReviewContent() {
                         </div>
                       ) : (
                         <div className={`flex items-center justify-between px-5 py-4 rounded-xl ${theme.glassInner}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Adjudication Complete</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Admin Verdict Recorded</span>
                           <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
                             {item.status === 'Approved' && <CheckCircle2 size={14} className={"text-emerald-600"}/>}
                             {item.status === 'Re-Inspection' && <RefreshCw size={14} className={"text-orange-600"}/>}
