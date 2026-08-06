@@ -9,7 +9,9 @@ import {
   Monitor, ShieldAlert, Check, StopCircle, MessageSquare, Send, MousePointer2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import StaffAIChatbot from '@/components/StaffAIChatbot'; // 🌟 Importing the separated Chatbot
+
+// 🌟 INCLUDED: Your custom AI Chatbot
+import StaffAIChatbot from '@/components/StaffAIChatbot';
 
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -53,12 +55,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  
   const [chatMessages, setChatMessages] = useState<{sender: string, text: string, time: string, isSelf: boolean}[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
-
   const [adminPing, setAdminPing] = useState<{x: number, y: number, id: number} | null>(null);
+
   const [remoteControlRequest, setRemoteControlRequest] = useState(false);
   const [isControlGranted, setIsControlGranted] = useState(false);
   
@@ -72,26 +73,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const controlChannelRef = useRef<any>(null);
 
   const [staffProfile, setStaffProfile] = useState<any>({ id: '', name: 'Loading...', email: '...', initials: 'ST' });
-
-  // 🌟 GLOBAL AUTO-UPDATE BACKGROUND LISTENER
-  useEffect(() => {
-    const updateChannel = supabase.channel('vsit_global_updates')
-      .on('broadcast', { event: 'force_app_update' }, () => {
-        addSystemAlert("🔄 System Update", "New features deployed! Updating application automatically...", true);
-        
-        // Wait 3 seconds for them to read the toast, then auto-refresh the Electron App
-        setTimeout(() => {
-          if (typeof window !== 'undefined' && (window as any).electronAPI) {
-            (window as any).electronAPI.sendSystemCommand('refresh_app');
-          } else {
-            window.location.reload();
-          }
-        }, 3000);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(updateChannel); };
-  }, []);
 
   useEffect(() => {
     const syncTheme = () => {
@@ -128,6 +109,91 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, showChat]);
 
+  // 🌟 NOTIFICATION ENGINE: Request Windows Permissions on Load
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const addSystemAlert = (title: string, message: string, playSound = true) => {
+    if (playSound) playAlertSound();
+    const id = String(Date.now() + Math.random());
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    setToasts(prev => [...prev, { id, title, message }]);
+    setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000);
+  };
+
+  // 🌟 NEW: ACTIVE DEADLINE SCANNER FOR INSPECTIONS
+  useEffect(() => {
+    if (!staffProfile.id) return;
+    
+    const checkAssetDeadlines = async () => {
+      // Use sessionStorage so we only trigger the massive alert once per login session, preventing spam
+      if (sessionStorage.getItem('has_checked_deadlines_today')) return;
+
+      try {
+        const { data: assets } = await supabase
+          .from('assets')
+          // Adjust 'next_inspection_date' if your DB uses a slightly different column name like 'next_due'
+          .select('id, name, asset_name, next_inspection_date')
+          .eq('assigned_to', staffProfile.id);
+
+        if (!assets || assets.length === 0) return;
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // Strip time for accurate date comparison
+
+        let hasOverdue = false;
+
+        assets.forEach(asset => {
+          if (asset.next_inspection_date) {
+            const dueDate = new Date(asset.next_inspection_date);
+            dueDate.setHours(0, 0, 0, 0);
+            const displayName = asset.name || asset.asset_name || 'Assigned Asset';
+
+            if (dueDate < now) {
+              hasOverdue = true;
+              
+              // 1. Trigger Dashboard In-App Toast & Sound
+              addSystemAlert(
+                "🚨 OVERDUE INSPECTION", 
+                `Your inspection for ${displayName} was due on ${dueDate.toLocaleDateString()}. Please submit your inspection immediately!`, 
+                true
+              );
+
+              // 2. Trigger Native Windows Desktop Notification
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification("Overdue IT Inspection!", { 
+                  body: `Your inspection for ${displayName} is past due. Please open the IT Portal to resolve this.`, 
+                  icon: '/logo.png' 
+                });
+              }
+            } else if (dueDate.getTime() === now.getTime()) {
+              hasOverdue = true;
+              addSystemAlert(
+                "⚠️ INSPECTION DUE TODAY", 
+                `Your hardware inspection for ${displayName} is due today!`, 
+                true
+              );
+            }
+          }
+        });
+
+        // Mark as checked for this session
+        if (hasOverdue) {
+          sessionStorage.setItem('has_checked_deadlines_today', 'true');
+        }
+      } catch (e) {
+        console.error("Failed to scan deadlines", e);
+      }
+    };
+
+    checkAssetDeadlines();
+  }, [staffProfile.id]);
+
   useEffect(() => {
     if (!staffProfile.id) return;
     
@@ -148,16 +214,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
     return () => { supabase.removeChannel(presenceChannel); };
   }, [staffProfile]);
-
-  const addSystemAlert = (title: string, message: string, playSound = true) => {
-    if (playSound) playAlertSound();
-    const id = String(Date.now() + Math.random());
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    setToasts(prev => [...prev, { id, title, message }]);
-    setAlertHistory(prev => [{ id, title, message, time, read: false }, ...prev].slice(0, 50));
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000);
-  };
 
   const dismissHistoryAlert = async (id: string) => {
     setAlertHistory(prev => prev.filter(a => a.id !== id));
@@ -197,6 +253,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   const executeAdminCommand = async (cmd: any) => {
     if (!isControlGrantedRef.current) return;
+
+    if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
+      console.log("⚡ COMMAND RECEIVED FROM DB BRIDGE:", cmd.type);
+    }
 
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
@@ -275,7 +335,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       
       controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
         executeAdminCommand(payload.payload);
-      }).subscribe();
+      }).subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log("🟢 STAFF DEDICATED CONTROL CHANNEL OPEN!");
+      });
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
@@ -371,15 +433,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    chatWindow: isDarkMode 
-      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
-      : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
-    aiBubble: isDarkMode 
-      ? 'bg-black/40 backdrop-blur-xl border border-white/10 text-zinc-100 shadow-[inset_0_1px_4px_rgba(255,255,255,0.1)]' 
-      : 'bg-white/60 backdrop-blur-xl border border-white/80 text-slate-800 shadow-sm shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)]',
-    userBubble: 'bg-linear-to-r from-purple-500/90 to-purple-600/90 backdrop-blur-md text-white shadow-lg border border-purple-400/50',
-    chatInputBg: isDarkMode ? 'bg-black/20 border-t border-white/10' : 'bg-white/30 border-t border-white/50 backdrop-blur-md',
-    chatInputField: isDarkMode ? 'bg-black/40 text-white border border-white/10 focus:border-purple-500/50' : 'bg-white/50 text-slate-900 border border-white/60 focus:bg-white/70 focus:ring-4 focus:ring-purple-500/10'
   };
 
   if (isCheckingAuth) return (
@@ -396,11 +449,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      {/* 🌟 IMPORTED SEPARATED AI CHATBOT COMPONENT */}
-      {!isStreaming && <StaffAIChatbot isDarkMode={isDarkMode} />}
-
-      {/* TOAST ALERTS */}
-      <div className="fixed bottom-6 left-6 sm:left-auto sm:right-24 z-9995 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 rounded-3xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
             <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0 border border-rose-500/20 text-rose-600">
@@ -446,24 +495,23 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
             )}
 
-            {/* 🌟 LIVE SUPPORT CHATBOX WITH GLASS THEME */}
             {showChat && (
-              <div className={`w-80 sm:w-96 rounded-4xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden ${theme.chatWindow}`}>
-                <div className={`p-4 border-b flex justify-between items-center text-white bg-linear-to-r from-orange-500/90 to-purple-600/90 backdrop-blur-md`}>
-                  <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-white" /> Live Support Chat</span>
-                  <button onClick={() => setShowChat(false)} className="p-1.5 rounded-full hover:bg-white/20 transition-colors cursor-pointer"><X size={16}/></button>
+              <div className={`w-80 ${theme.glassPanel} rounded-3xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-4 overflow-hidden border border-white/40`}>
+                <div className={`p-4 border-b text-sm font-bold flex justify-between items-center ${isDarkMode ? 'border-white/10 text-white' : 'border-white/30 text-slate-900'}`}>
+                  <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2"><MessageSquare size={14} className="text-orange-500" /> Live Support Chat</span>
+                  <button onClick={() => setShowChat(false)} className={`p-1.5 rounded-xl transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-white/30 text-slate-500'}`}><X size={16}/></button>
                 </div>
-                <div className="h-56 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar bg-transparent">
+                <div className="h-56 p-4 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 ${msg.isSelf ? `${theme.userBubble} self-end rounded-2xl rounded-br-none` : `${theme.aiBubble} self-start rounded-2xl rounded-bl-none`}`}>
-                      <div className={`font-bold text-[9px] mb-1 uppercase tracking-widest ${msg.isSelf ? 'text-purple-200' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
+                    <div key={i} className={`max-w-[85%] text-[12px] font-medium p-3 shadow-sm ${msg.isSelf ? 'bg-purple-500/10 text-purple-800 border border-purple-500/20 dark:bg-purple-500/30 dark:text-purple-100 self-end rounded-2xl rounded-br-none' : 'bg-white/40 backdrop-blur-md text-slate-800 border border-white/50 dark:bg-white/10 dark:text-zinc-100 self-start rounded-2xl rounded-bl-none'}`}>
+                      <div className={`font-bold text-[9px] mb-1 uppercase tracking-widest ${msg.isSelf ? 'text-purple-600 dark:text-purple-300' : 'text-orange-600 dark:text-orange-400'}`}>{msg.sender}</div>{msg.text}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <form onSubmit={sendChatMessage} className={`p-3 flex gap-2 ${theme.chatInputBg}`}>
-                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-xl outline-none transition-all shadow-inner ${theme.chatInputField}`} />
-                  <button type="submit" disabled={!chatInput.trim()} className={`p-3 rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-sm bg-linear-to-r from-purple-500 to-purple-600 text-white hover:opacity-90 border border-purple-400/50`}><Send size={14}/></button>
+                <form onSubmit={sendChatMessage} className={`p-3 border-t flex gap-2 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/30 bg-white/20'}`}>
+                  <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Type a reply..." className={`flex-1 text-xs font-semibold px-4 py-2.5 rounded-2xl outline-none transition-all shadow-inner border ${isDarkMode ? 'bg-black/50 text-white border-white/20 focus:border-orange-500' : 'bg-white/40 backdrop-blur-md text-slate-900 border-white/50 focus:bg-white/60 focus:ring-4 focus:ring-orange-500/10'}`} />
+                  <button type="submit" disabled={!chatInput.trim()} className={`p-3 rounded-2xl disabled:opacity-50 cursor-pointer transition-all border shadow-sm ${isDarkMode ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white/40 text-slate-800 border-white/50 hover:bg-white/60'}`}><Send size={14}/></button>
                 </form>
               </div>
             )}
@@ -540,6 +588,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
+        
         <header className={`h-16 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} border-x-0 border-t-0 border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/40'}`}>
           <div className="flex items-center gap-3">
             <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-xl transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-slate-500 hover:bg-white/30'}`}><Menu size={20} /></button>
@@ -585,6 +634,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
           {children}
+          
+          <StaffAIChatbot />
         </main>
       </div>
     </div>
