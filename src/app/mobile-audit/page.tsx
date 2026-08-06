@@ -20,19 +20,19 @@ function MobileAuditScanner() {
   const [isAlreadySubmitted, setIsAlreadySubmitted] = useState(false);
   const [photos, setPhotos] = useState<Record<string, string | null>>({});
 
-  // 🌟 PREVENT DUPLICATE SUBMISSIONS (DB LOCK CHECK)
+  // 🌟 PREVENT DUPLICATE SUBMISSIONS (SMART DB LOCK CHECK)
   useEffect(() => {
     if (!assetId) return;
     
     const checkLockStatus = async () => {
       try {
-        const { data: asset } = await supabase.from('assets').select('inspection_status, status').eq('id', assetId).single();
+        const { data: asset } = await supabase.from('assets').select('inspection_status').eq('id', assetId).single();
         if (asset) {
-          const inspStatus = (asset.inspection_status || '').toLowerCase();
-          const assetStatus = (asset.status || '').toLowerCase();
+          const inspStatus = (asset.inspection_status || '').toLowerCase().trim();
           
-          // If the asset is currently pending review by an admin, lock the page
-          if (['pending', 'approved', 'return pending', 'returned to inventory', 'return approved'].some(s => inspStatus.includes(s) || assetStatus.includes(s))) {
+          // ONLY lock the page if the inspection is actively sitting in the Admin's queue.
+          // This allows "Approved", "Rejected", and "Re-Inspection" statuses to open the camera!
+          if (inspStatus === 'pending' || inspStatus === 'pending review') {
             setIsAlreadySubmitted(true);
           }
         }
@@ -142,7 +142,7 @@ function MobileAuditScanner() {
 
       if (dbError) throw dbError;
 
-      // Update asset status to lock the page
+      // Update asset status to lock the page instantly after submission
       await supabase.from('assets').update({ inspection_status: 'Pending' }).eq('id', assetId);
       
       setSuccess(true);
