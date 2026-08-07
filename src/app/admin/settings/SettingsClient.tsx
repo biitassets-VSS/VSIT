@@ -127,7 +127,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
         <div className={`w-full lg:w-72 shrink-0 ${theme.glassCard} rounded-4xl p-4 flex flex-col gap-2 h-fit`}>
           
           <Link href="/admin" className={`flex items-center gap-2 px-2 pt-2 pb-4 text-xs font-black uppercase tracking-widest transition-colors ${theme.subText} hover:text-purple-500`}>
-            <ArrowLeft size={16} className="shrink-0" /> Return to Dashboard
+            <ArrowLeft size={16} className="shrink-0" /> Back
           </Link>
 
           <div className={`p-4 mb-2 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
