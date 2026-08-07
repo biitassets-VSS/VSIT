@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Save, Trash2, Shield, Settings, Users, Database, Check, AlertTriangle, 
-  Search, Radio, RefreshCw, Power, HardDrive, ArrowLeft, ShieldCheck
+  Search, Radio, RefreshCw, Power, HardDrive, ArrowLeft, ShieldCheck, Filter, Zap
 } from 'lucide-react';
 import { UserProfile } from './page';
 import { supabase } from '@/lib/supabaseClient';
@@ -24,14 +24,19 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  
+  // 🌟 NEW: Cleanup Filter State
+  const [cleanupFilter, setCleanupFilter] = useState('All');
 
-  // MOCK DATA IF EMPTY (Now includes admin_note)
+  // MOCK DATA IF EMPTY
   useEffect(() => {
     if (!requests || requests.length === 0) {
       setRequests([
-        { id: '1', title: 'Duplicate Laptop Request', type: 'Duplicate', status: 'Pending', admin_note: 'Staff clicked twice by mistake', created_at: new Date().toISOString() },
+        { id: '1', title: 'Laptop Return Request', type: 'Duplicate', status: 'Pending', admin_note: 'Staff clicked twice by mistake', created_at: new Date().toISOString() },
         { id: '2', title: 'Wrong Asset Return', type: 'Wrong Request', status: 'Pending', admin_note: '', created_at: new Date().toISOString() },
         { id: '3', title: 'Broken Mouse Replacement', type: 'Replacement', status: 'Open', admin_note: 'Waiting on manager approval', created_at: new Date().toISOString() },
+        { id: '4', title: 'Laptop Return Request', type: 'Return', status: 'Pending', admin_note: 'Original valid request', created_at: new Date().toISOString() },
+        { id: '5', title: 'Monthly Inspection', type: 'Duplicate', status: 'Pending', admin_note: 'Submitted 3 times', created_at: new Date().toISOString() },
       ]);
     }
   }, [requests]);
@@ -73,6 +78,16 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
     alert("Records and notes manually purged successfully!");
   };
 
+  // 🌟 NEW: Auto-Select Duplicates Magic Button
+  const handleAutoSelectDuplicates = () => {
+    const duplicateIds = requests.filter(r => r.type === 'Duplicate').map(r => r.id);
+    if (duplicateIds.length === 0) {
+      alert("No duplicate requests found in the current list.");
+      return;
+    }
+    setSelectedRequests(prev => [...new Set([...prev, ...duplicateIds])]);
+  };
+
   const sendLiveCommand = async (command: string, successMessage: string) => {
     setIsBroadcasting(true);
     try {
@@ -95,6 +110,12 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
     u.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // 🌟 Filter Logic for Cleanup Tab
+  const filteredRequests = requests.filter(req => {
+    if (cleanupFilter === 'All') return true;
+    return req.type === cleanupFilter;
+  });
+
   return (
     <div className={`min-h-screen ${theme.bg} p-6 sm:p-10 font-sans relative z-0 transition-colors duration-1000`}>
       <div className="fixed top-[-10%] left-[-5%] w-[50vw] h-[50vh] bg-purple-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
@@ -105,7 +126,6 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
         {/* SIDEBAR TABS */}
         <div className={`w-full lg:w-72 shrink-0 ${theme.glassCard} rounded-4xl p-4 flex flex-col gap-2 h-fit`}>
           
-          {/* 🌟 RETURN TO DASHBOARD BACK BUTTON */}
           <Link href="/admin" className={`flex items-center gap-2 px-2 pt-2 pb-4 text-xs font-black uppercase tracking-widest transition-colors ${theme.subText} hover:text-purple-500`}>
             <ArrowLeft size={16} className="shrink-0" /> Return to Dashboard
           </Link>
@@ -121,7 +141,6 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
           <button onClick={() => setActiveTab('security')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'security' ? theme.tabActive : theme.tabInactive}`}>
             <Shield size={18} /> Security & Policies
           </button>
-          
           <button onClick={() => setActiveTab('controls')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'controls' ? theme.tabActive : theme.tabInactive}`}>
             <Radio size={18} className={activeTab === 'controls' ? 'animate-pulse' : ''} /> Live Controls
           </button>
@@ -176,14 +195,12 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
             </div>
           )}
 
-          {/* 🌟 2. SECURITY & POLICIES (Updated with Permanent Login) */}
+          {/* 2. SECURITY & POLICIES */}
           {activeTab === 'security' && (
             <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500`}>
               <h3 className={`text-lg font-black mb-6 flex items-center gap-2 ${theme.text}`}><Shield size={20} className="text-orange-500"/> Security & Access Policies</h3>
               
               <div className="grid grid-cols-1 gap-6">
-                
-                {/* PERMANENT LOGIN BADGE */}
                 <div className={`flex items-center justify-between p-5 rounded-3xl border ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'}`}>
                   <div className="flex items-start gap-4">
                     <ShieldCheck className="text-emerald-500 shrink-0 mt-0.5" size={24} />
@@ -197,7 +214,6 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                   <Check className="text-emerald-500 shrink-0 hidden sm:block" size={24} />
                 </div>
                 
-                {/* MAINTENANCE MODE */}
                 <div className={`flex items-center justify-between p-5 rounded-3xl border ${isDarkMode ? 'bg-rose-500/10 border-rose-500/20' : 'bg-rose-50 border-rose-200'}`}>
                   <div className="flex items-start gap-4">
                     <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={24} />
@@ -253,38 +269,52 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                     Execute Command
                   </button>
                 </div>
-
-                <div className={`p-5 rounded-3xl border flex flex-col gap-4 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/50 border-white/60'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-500"><HardDrive size={20} /></div>
-                    <div>
-                      <h4 className={`text-sm font-bold ${theme.text}`}>Clear Client Cache</h4>
-                      <p className={`text-[10px] font-medium mt-0.5 ${theme.subText}`}>Clears temporary app data on staff machines.</p>
-                    </div>
-                  </div>
-                  <button onClick={() => sendLiveCommand('clear_client_cache', 'Cache clear signal broadcasted.')} disabled={isBroadcasting} className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50">
-                    Execute Command
-                  </button>
-                </div>
               </div>
             </div>
           )}
 
-          {/* 🌟 4. MANUAL CLEANUP (Advanced Admin Notes added) */}
+          {/* 🌟 4. MANUAL CLEANUP (Advanced Filtering & Auto-Select) */}
           {activeTab === 'cleanup' && (
             <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 flex flex-col h-[75vh] animate-in fade-in slide-in-from-bottom-4 duration-500`}>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              
+              <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
                 <div>
                   <h3 className={`text-lg font-black flex items-center gap-2 ${theme.text}`}><Database size={20} className="text-rose-500"/> System Cleanup</h3>
-                  <p className={`text-xs font-medium mt-1 ${theme.subText}`}>Manually verify, add notes, and delete duplicate or wrong requests.</p>
+                  <p className={`text-xs font-medium mt-1 ${theme.subText}`}>Filter, Auto-Select, and Purge duplicate or incorrect requests.</p>
                 </div>
-                <button 
-                  onClick={handleDeleteSelected}
-                  disabled={selectedRequests.length === 0}
-                  className="px-5 py-3 bg-linear-to-r from-rose-500 to-rose-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg cursor-pointer"
-                >
-                  <Trash2 size={16} /> Delete Selected ({selectedRequests.length})
-                </button>
+                
+                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                  {/* Filter Dropdown */}
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${theme.inputBg}`}>
+                    <Filter size={14} className="opacity-50" />
+                    <select 
+                      value={cleanupFilter} 
+                      onChange={e => setCleanupFilter(e.target.value)} 
+                      className="bg-transparent outline-none text-xs font-bold w-full cursor-pointer appearance-none"
+                    >
+                      <option value="All">All Requests</option>
+                      <option value="Duplicate">Duplicates Only</option>
+                      <option value="Wrong Request">Wrong Requests</option>
+                      <option value="Replacement">Replacements</option>
+                    </select>
+                  </div>
+
+                  {/* Auto-Select Duplicates Button */}
+                  <button 
+                    onClick={handleAutoSelectDuplicates}
+                    className="px-4 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Zap size={14} /> Auto-Select Duplicates
+                  </button>
+
+                  <button 
+                    onClick={handleDeleteSelected}
+                    disabled={selectedRequests.length === 0}
+                    className="px-5 py-2.5 bg-linear-to-r from-rose-500 to-rose-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-md cursor-pointer"
+                  >
+                    <Trash2 size={16} /> Delete Selected ({selectedRequests.length})
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-auto custom-scrollbar border rounded-3xl bg-black/5 dark:bg-white/5 border-white/20 dark:border-white/10">
@@ -292,7 +322,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                   <thead className={`sticky top-0 backdrop-blur-xl z-10 text-[10px] font-black uppercase tracking-widest ${theme.subText} ${isDarkMode ? 'bg-zinc-900/80 border-b border-white/10' : 'bg-white/80 border-b border-slate-200'}`}>
                     <tr>
                       <th className="p-4 w-12 text-center">
-                        <input type="checkbox" onChange={(e) => setSelectedRequests(e.target.checked ? requests.map(r => r.id) : [])} checked={requests.length > 0 && selectedRequests.length === requests.length} className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer" />
+                        <input type="checkbox" onChange={(e) => setSelectedRequests(e.target.checked ? filteredRequests.map(r => r.id) : [])} checked={filteredRequests.length > 0 && selectedRequests.length === filteredRequests.length} className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer" />
                       </th>
                       <th className="p-4">Request Detail</th>
                       <th className="p-4">Flag Type</th>
@@ -300,10 +330,10 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-slate-200'}`}>
-                    {requests.length === 0 ? (
-                      <tr><td colSpan={4} className="p-10 text-center text-sm font-semibold opacity-50">No pending records to clean up.</td></tr>
+                    {filteredRequests.length === 0 ? (
+                      <tr><td colSpan={4} className="p-10 text-center text-sm font-semibold opacity-50">No records found matching this filter.</td></tr>
                     ) : (
-                      requests.map(req => (
+                      filteredRequests.map(req => (
                         <tr key={req.id} className={`transition-colors cursor-pointer ${selectedRequests.includes(req.id) ? (isDarkMode ? 'bg-rose-500/20' : 'bg-rose-50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50')}`} onClick={() => handleToggleSelect(req.id)}>
                           <td className="p-4 text-center">
                             <input type="checkbox" checked={selectedRequests.includes(req.id)} onChange={() => handleToggleSelect(req.id)} onClick={(e) => e.stopPropagation()} className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer" />
