@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { Camera, CheckCircle } from 'lucide-react';
 
 export default function NewInspectionForm() {
   const [formData, setFormData] = useState({
@@ -10,167 +11,147 @@ export default function NewInspectionForm() {
     notes: '',
   });
   
-  // State to hold the final watermarked photo
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  
-  // Reference to the hidden file input
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Handle standard text inputs
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+    setIsDarkMode(isDark);
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 📸 MAGIC CAMERA & WATERMARK FUNCTION
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const img = new Image();
     img.onload = () => {
-      // 1. Create a hidden canvas to draw the photo
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
-      
       if (!ctx) return;
-
-      // 2. Draw the original photo onto the canvas
       ctx.drawImage(img, 0, 0);
 
-      // 3. Get the exact Current Date and Time
       const currentDateTime = new Date().toLocaleString('en-US', { 
         year: 'numeric', month: 'long', day: 'numeric', 
         hour: '2-digit', minute: '2-digit', second: '2-digit' 
       });
 
-      // 4. Style the Watermark Text
-      const fontSize = canvas.width * 0.04; // Scales text size based on photo resolution
+      const fontSize = canvas.width * 0.04; 
       ctx.font = `bold ${fontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 1)'; // Solid White text
+      ctx.fillStyle = 'rgba(255, 255, 255, 1)'; 
       ctx.textAlign = 'right';
-      
-      // 5. Add a dark shadow behind text so it's readable on bright or dark photos
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 15;
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 3;
 
-      // 6. Stamp the text in the bottom right corner
       const padding = canvas.width * 0.04;
       ctx.fillText(currentDateTime, canvas.width - padding, canvas.height - padding);
 
-      // 7. Save the canvas as a final image URL and put it in our app
       const watermarkedImage = canvas.toDataURL('image/jpeg', 0.9);
       setPhotoUrl(watermarkedImage);
     };
 
-    // Load the file into the image object to trigger the onload above
     img.src = URL.createObjectURL(file);
   };
 
-  // Submit the entire form (Data + Photo)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!photoUrl) {
       alert("Please capture a photo before saving the inspection.");
       return;
     }
-    console.log('Saved Inspection Data:', formData);
-    console.log('Saved Photo Data:', photoUrl);
     alert('Inspection and Watermarked Photo Saved Successfully!');
   };
 
-  const inputClassName = "w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white outline-none shadow-sm font-medium";
+  const theme = {
+    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    glassCard: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
+      : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)]',
+    glassInner: isDarkMode 
+      ? 'bg-black/30 backdrop-blur-xl border border-white/10 shadow-inner' 
+      : 'bg-white/50 backdrop-blur-xl border border-white/80 shadow-sm',
+    inputBg: isDarkMode 
+      ? 'bg-black/40 border border-white/10 text-white focus:border-purple-500/50' 
+      : 'bg-white/50 border border-white/60 text-slate-900 focus:bg-white/70 focus:ring-4 focus:ring-purple-500/10',
+  };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-12">
+    <div className={`min-h-screen ${theme.bg} p-6 font-sans relative z-0 transition-colors duration-1000`}>
+      <div className="fixed top-[-10%] left-[-5%] w-[50vw] h-[50vh] bg-purple-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">New Inspection</h1>
-          <p className="text-sm text-gray-500">Log asset conditions and capture live photos.</p>
-        </div>
-        <Link href="/admin/inspections" className="bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold shadow-sm">
-          Back
-        </Link>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        
-        {/* FORM DETAILS */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
-          <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-2">Inspection Details</h2>
-          
+      <div className="max-w-3xl mx-auto space-y-6 pb-12 relative z-10">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1.5">Asset ID / Name *</label>
-            <input type="text" name="assetId" required value={formData.assetId} onChange={handleChange} placeholder="e.g. LPT-204" className={inputClassName} />
+            <h1 className={`text-2xl font-black ${theme.textMain}`}>New Inspection</h1>
+            <p className={`text-xs font-semibold ${theme.textSub}`}>Log asset conditions and capture live photos.</p>
           </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1.5">Condition *</label>
-            <select name="condition" value={formData.condition} onChange={handleChange} className={inputClassName}>
-              <option value="Excellent">Excellent</option>
-              <option value="Good">Good</option>
-              <option value="Fair">Fair (Needs minor repair)</option>
-              <option value="Poor">Poor (Needs replacement)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1.5">Inspector Notes</label>
-            <textarea name="notes" rows={3} value={formData.notes} onChange={handleChange} placeholder="Any visible damage?" className={inputClassName} />
-          </div>
+          <Link href="/admin/inspections" className={`px-5 py-2.5 ${theme.glassInner} ${theme.textMain} hover:scale-105 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-sm`}>
+            Back
+          </Link>
         </div>
 
-        {/* 📸 CAMERA SECTION */}
-        <div className="bg-purple-50/50 p-6 rounded-2xl shadow-sm border border-purple-100 text-center">
-          <h2 className="text-lg font-bold text-purple-900 mb-2">Live Photo Capture</h2>
-          <p className="text-sm text-purple-700 mb-6">Take a photo of the asset. The exact date and time will be permanently watermarked.</p>
-          
-          {/* Hidden File Input that forces mobile camera to open */}
-          <input 
-            type="file" 
-            accept="image/*" 
-            capture="environment" /* THIS forces the rear camera on phones! */
-            onChange={handleCapture}
-            ref={fileInputRef}
-            className="hidden"
-          />
-
-          <button 
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-blue-500/30 flex items-center justify-center gap-3 w-full sm:w-auto mx-auto transition-all text-lg"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Open Camera & Capture
-          </button>
-
-          {/* DISPLAY THE WATERMARKED PHOTO LIVE */}
-          {photoUrl && (
-            <div className="mt-8">
-              <p className="text-sm font-bold text-gray-700 mb-3">Live Watermarked Result:</p>
-              <div className="border-4 border-white shadow-md rounded-xl overflow-hidden relative inline-block max-w-full">
-                <img src={photoUrl} alt="Inspection Watermarked" className="w-full max-w-md h-auto" />
-              </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className={`${theme.glassCard} p-6 rounded-3xl space-y-4`}>
+            <h2 className={`text-sm font-black uppercase tracking-widest ${theme.textMain} border-b ${isDarkMode ? 'border-white/10' : 'border-slate-200'} pb-3`}>Inspection Details</h2>
+            
+            <div>
+              <label className={`block text-[10px] font-bold uppercase tracking-widest ${theme.textSub} mb-1.5`}>Asset ID / Name *</label>
+              <input type="text" name="assetId" required value={formData.assetId} onChange={handleChange} placeholder="e.g. LPT-204" className={`w-full p-3.5 rounded-2xl outline-none font-semibold transition-all ${theme.inputBg}`} />
             </div>
-          )}
-        </div>
 
-        {/* SAVE BUTTON */}
-        <div className="flex justify-end pt-4">
-          <button 
-            type="submit"
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold shadow-md transition-all text-lg w-full sm:w-auto"
-          >
-            Save Inspection Record
-          </button>
-        </div>
+            <div>
+              <label className={`block text-[10px] font-bold uppercase tracking-widest ${theme.textSub} mb-1.5`}>Condition *</label>
+              <select name="condition" value={formData.condition} onChange={handleChange} className={`w-full p-3.5 rounded-2xl outline-none font-semibold transition-all cursor-pointer ${theme.inputBg}`}>
+                <option value="Excellent" className="dark:bg-zinc-900">Excellent</option>
+                <option value="Good" className="dark:bg-zinc-900">Good</option>
+                <option value="Fair" className="dark:bg-zinc-900">Fair (Needs minor repair)</option>
+                <option value="Poor" className="dark:bg-zinc-900">Poor (Needs replacement)</option>
+              </select>
+            </div>
 
-      </form>
+            <div>
+              <label className={`block text-[10px] font-bold uppercase tracking-widest ${theme.textSub} mb-1.5`}>Inspector Notes</label>
+              <textarea name="notes" rows={3} value={formData.notes} onChange={handleChange} placeholder="Any visible damage?" className={`w-full p-3.5 rounded-2xl outline-none font-semibold transition-all resize-none ${theme.inputBg}`} />
+            </div>
+          </div>
+
+          <div className={`${theme.glassCard} p-6 rounded-3xl text-center flex flex-col items-center`}>
+            <h2 className="text-lg font-black text-purple-500 mb-2">Live Photo Capture</h2>
+            <p className={`text-xs font-semibold ${theme.textSub} mb-6 max-w-sm`}>Take a photo of the asset. The exact date and time will be permanently watermarked.</p>
+            
+            <input type="file" accept="image/*" capture="environment" onChange={handleCapture} ref={fileInputRef} className="hidden" />
+
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-purple-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 border border-purple-400/50 cursor-pointer">
+              <Camera size={20} /> Open Camera
+            </button>
+
+            {photoUrl && (
+              <div className="mt-8">
+                <p className={`text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-3 flex items-center justify-center gap-1.5`}><CheckCircle size={14}/> Watermark Applied</p>
+                <div className={`p-2 ${theme.glassInner} rounded-3xl inline-block shadow-lg`}>
+                  <img src={photoUrl} alt="Inspection" className="w-full max-w-md h-auto rounded-2xl" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button type="submit" className="bg-linear-to-r from-emerald-500 to-emerald-600 hover:opacity-90 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-emerald-500/25 transition-all active:scale-95 border border-emerald-400/50 cursor-pointer w-full sm:w-auto">
+              Save Secure Record
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

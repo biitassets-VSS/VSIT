@@ -9,18 +9,21 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   const [incomingRequest, setIncomingRequest] = useState<{ adminName: string; adminCode: string; channelId: string } | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const signalingChannelRef = useRef<any>(null);
   const controlChannelRef = useRef<any>(null);
-
   const latestMouseCmdRef = useRef<any>(null);
   const isExecutingMouseRef = useRef(false);
 
   useEffect(() => {
+    // 🌟 FIX: Removed the line that forced light mode! Now it gracefully detects the theme.
+    const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+    setIsDarkMode(isDark);
+
     if (!staffId) return;
-    document.documentElement.classList.remove('dark'); 
 
     const signalingChannel = supabase.channel(`webrtc_signaling_${staffId}`)
       .on('broadcast', { event: 'request_screen_share' }, (payload) => {
@@ -56,27 +59,6 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
   };
 
   const executeAdminCommand = async (cmd: any) => {
-    if (cmd.type === 'set_quality') {
-      const senders = peerRef.current?.getSenders() || [];
-      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-      
-      if (videoSender) {
-        const params = videoSender.getParameters();
-        if (!params.encodings) params.encodings = [{}];
-        
-        params.encodings[0].scaleResolutionDownBy = cmd.scale;
-        params.encodings[0].maxFramerate = cmd.fps;
-        
-        videoSender.setParameters(params)
-          .catch(e => console.error("Quality change failed:", e));
-      }
-      return; 
-    }
-
-    if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
-      console.log("⚡ COMMAND EXECUTING ON STAFF PC:", cmd.type, cmd);
-    }
-
     if (cmd.type === 'mousemove') {
       latestMouseCmdRef.current = cmd;
       processMouseQueue();
@@ -106,9 +88,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
             toast.success("Clipboard securely synced to IT Admin.");
           }
         }
-      } catch (e) {
-        console.error("OS execution failed:", e);
-      }
+      } catch (e) {}
     }
   };
 
@@ -117,48 +97,16 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsConnecting(true);
 
     try {
-      // 🌟 FIX: Removed max-width and max-height constraints! 
-      // This forces the browser to capture the true 16:10 resolution so the taskbar isn't cropped off.
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { 
-          frameRate: { ideal: 30, max: 30 } 
-        },
-        audio: false
-      });
-
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false });
       streamRef.current = stream;
 
-      stream.getVideoTracks()[0].onended = () => {
-        stopSharing();
-        toast.error("Screen sharing stopped by user.");
-      };
+      stream.getVideoTracks()[0].onended = () => { stopSharing(); toast.error("Screen sharing stopped by user."); };
 
-      const peer = new RTCPeerConnection({ 
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' }, 
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'turn:vsit-portal.metered.ca:80', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' },
-          { urls: 'turn:vsit-portal.metered.ca:443', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' },
-          { urls: 'turn:vsit-portal.metered.ca:443?transport=tcp', username: 'b13ed4c71d2d26a5a93f2f60', credential: 'oIXCegcSeNTsCZSG' }
-        ] 
-      });
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       peerRef.current = peer;
 
-      peer.oniceconnectionstatechange = () => {
-        if (peer.iceConnectionState === 'disconnected' || peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'closed') {
-          console.log("WebRTC connection dropped. Cleaning up...");
-          stopSharing(); 
-        }
-      };
-
       peer.ondatachannel = (event) => {
-        const receiveChannel = event.channel;
-        receiveChannel.onmessage = (e) => {
-          try {
-            const cmd = JSON.parse(e.data);
-            executeAdminCommand(cmd); 
-          } catch (err) {}
-        };
+        event.channel.onmessage = (e) => { try { executeAdminCommand(JSON.parse(e.data)); } catch (err) {} };
       };
 
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
@@ -169,9 +117,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       const controlChannel = supabase.channel(`${incomingRequest.channelId}_controls`, { config: { broadcast: { ack: false } } });
       controlChannelRef.current = controlChannel;
 
-      controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
-        executeAdminCommand(payload.payload);
-      }).subscribe();
+      controlChannel.on('broadcast', { event: 'control_command' }, (payload) => executeAdminCommand(payload.payload)).subscribe();
 
       peer.onicecandidate = (event) => {
         if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
@@ -180,9 +126,7 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
         if (peer.signalingState === 'have-local-offer') {
           await peer.setRemoteDescription(new RTCSessionDescription(payload.payload.sdp));
-          setIsConnecting(false);
-          setIsStreaming(true);
-          setIncomingRequest(null);
+          setIsConnecting(false); setIsStreaming(true); setIncomingRequest(null);
           toast.success("🟢 Live WebRTC Screen Share Established!");
           sessionChannel.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
         }
@@ -221,20 +165,29 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null);
   };
 
+  const theme = {
+    glassCard: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)] text-zinc-100' 
+      : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)] text-slate-900',
+    glassInner: isDarkMode 
+      ? 'bg-black/40 border border-white/10 text-orange-400' 
+      : 'bg-amber-50 border border-amber-200 text-amber-800',
+  };
+
   return (
     <>
       {isStreaming && (
-        <div className="fixed bottom-6 right-6 z-9999 bg-white/80 backdrop-blur-2xl border border-white/80 text-slate-800 p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6">
+        <div className={`fixed bottom-6 right-6 z-9999 ${theme.glassCard} p-4 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] flex items-center gap-4 animate-in slide-in-from-bottom-6`}>
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.8)] shrink-0" />
             <div>
-              <p className="text-xs font-bold text-orange-600 uppercase tracking-widest flex items-center gap-2">
-                Screen Share Active <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded font-black">V3-TUNNEL</span>
+              <p className="text-xs font-bold text-orange-500 uppercase tracking-widest flex items-center gap-2">
+                Screen Share Active <span className="bg-orange-500/20 text-orange-500 border border-orange-500/30 px-1.5 py-0.5 rounded font-black">V3-TUNNEL</span>
               </p>
-              <p className="text-[11px] font-semibold text-slate-500">IT Support is actively monitoring your workspace.</p>
+              <p className={`text-[11px] font-semibold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>IT Support is actively monitoring your workspace.</p>
             </div>
           </div>
-          <button onClick={stopSharing} className="px-4 py-2.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ml-2">
+          <button onClick={stopSharing} className="px-4 py-2.5 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-500 text-xs font-black rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ml-2">
             <StopCircle size={15} /> <span>Stop Sharing</span>
           </button>
         </div>
@@ -242,21 +195,21 @@ export default function StaffRemoteBroadcaster({ staffId, staffName }: { staffId
 
       {incomingRequest && !isStreaming && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white/90 backdrop-blur-3xl border border-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-sm animate-bounce">
+          <div className={`${theme.glassCard} rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-in zoom-in-95`}>
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/30 text-orange-500 flex items-center justify-center mx-auto shadow-sm animate-bounce">
               <Monitor size={32} />
             </div>
             <div className="text-center space-y-1.5">
-              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Live IT Support Access</h3>
-              <p className="text-sm font-medium text-slate-500"><strong className="text-slate-800">{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view and control your screen.</p>
+              <h3 className="text-xl font-black tracking-tight">Live IT Support Access</h3>
+              <p className={`text-sm font-medium ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}><strong className={isDarkMode ? 'text-zinc-100' : 'text-slate-800'}>{incomingRequest.adminName}</strong> ({incomingRequest.adminCode}) is requesting permission to view and control your screen.</p>
             </div>
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 flex items-start gap-3 shadow-sm">
-              <ShieldAlert size={20} className="shrink-0 text-amber-600 mt-0.5" />
+            <div className={`p-4 rounded-2xl text-xs font-semibold flex items-start gap-3 shadow-sm ${theme.glassInner}`}>
+              <ShieldAlert size={20} className="shrink-0 mt-0.5" />
               <p className="leading-relaxed">This connection is secure and allows full remote control access for IT assistance.</p>
             </div>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className="flex-1 py-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all cursor-pointer">Decline</button>
-              <button onClick={startScreenShare} disabled={isConnecting} className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer">
+              <button onClick={() => setIncomingRequest(null)} disabled={isConnecting} className={`flex-1 py-3.5 rounded-xl border text-xs font-black transition-all cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Decline</button>
+              <button onClick={startScreenShare} disabled={isConnecting} className="flex-1 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(249,115,22,0.3)] border border-orange-400 transition-all cursor-pointer">
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 <span>{isConnecting ? 'Connecting...' : 'Accept & Share'}</span>
               </button>
