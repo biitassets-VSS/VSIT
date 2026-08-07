@@ -49,22 +49,29 @@ export default async function SettingsPage() {
         console.error("Supabase Error fetching users:", usersError?.message);
       }
 
-      // 2. Fetch Requests for Cleanup
+      // 2. Fetch Requests for Cleanup (Now correctly joining profiles to get Staff Name & Emp Code!)
       const { data: requests, error: reqError } = await supabase
         .from('tickets') 
-        .select('*')
+        .select(`
+          *,
+          profiles:user_id (full_name, name, emp_code)
+        `)
         .order('created_at', { ascending: false })
         .limit(100);
         
       if (!reqError && requests) {
-        dbRequests = requests;
+        // Flatten the data so the client component can easily read it
+        dbRequests = requests.map(req => ({
+          ...req,
+          staff_name: req.profiles?.full_name || req.profiles?.name || 'Unknown Staff',
+          emp_code: req.profiles?.emp_code || 'N/A'
+        }));
       }
     }
   } catch (error) {
     console.error("Unexpected error connecting to Supabase:", error);
   }
 
-  // 🌟 THE FIX: Passing all three required properties to the Client Component
   return (
     <SettingsClient 
       initialSettings={liveSettings} 

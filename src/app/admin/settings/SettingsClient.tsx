@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Save, Trash2, Shield, Settings, Users, Database, Check, AlertTriangle, 
-  Search, Radio, RefreshCw, Power, HardDrive, ArrowLeft, ShieldCheck, Filter, Zap
+  Search, Radio, RefreshCw, Power, HardDrive, ArrowLeft, ShieldCheck, Filter, Zap,
+  Sun, Moon
 } from 'lucide-react';
 import { UserProfile } from './page';
 import { supabase } from '@/lib/supabaseClient';
@@ -24,27 +25,38 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  
-  // 🌟 NEW: Cleanup Filter State
   const [cleanupFilter, setCleanupFilter] = useState('All');
 
-  // MOCK DATA IF EMPTY
+  // MOCK DATA IF DB IS EMPTY (Now strictly includes staff details for the UI)
   useEffect(() => {
     if (!requests || requests.length === 0) {
       setRequests([
-        { id: '1', title: 'Laptop Return Request', type: 'Duplicate', status: 'Pending', admin_note: 'Staff clicked twice by mistake', created_at: new Date().toISOString() },
-        { id: '2', title: 'Wrong Asset Return', type: 'Wrong Request', status: 'Pending', admin_note: '', created_at: new Date().toISOString() },
-        { id: '3', title: 'Broken Mouse Replacement', type: 'Replacement', status: 'Open', admin_note: 'Waiting on manager approval', created_at: new Date().toISOString() },
-        { id: '4', title: 'Laptop Return Request', type: 'Return', status: 'Pending', admin_note: 'Original valid request', created_at: new Date().toISOString() },
-        { id: '5', title: 'Monthly Inspection', type: 'Duplicate', status: 'Pending', admin_note: 'Submitted 3 times', created_at: new Date().toISOString() },
+        { id: '1', title: 'Duplicate Laptop Request', type: 'Duplicate', status: 'Pending', admin_note: 'Staff clicked twice by mistake', created_at: new Date().toISOString(), staff_name: 'John Doe', emp_code: 'EMP-882' },
+        { id: '2', title: 'Wrong Asset Return', type: 'Wrong Request', status: 'Pending', admin_note: '', created_at: new Date().toISOString(), staff_name: 'Jane Smith', emp_code: 'EMP-405' },
+        { id: '3', title: 'Broken Mouse Replacement', type: 'Replacement', status: 'Open', admin_note: 'Waiting on manager approval', created_at: new Date().toISOString(), staff_name: 'Mike Johnson', emp_code: 'EMP-911' },
       ]);
     }
   }, [requests]);
 
+  // 🌟 INIT THEME
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
     setIsDarkMode(isDark);
+    if (isDark) document.documentElement.classList.add('dark');
   }, []);
+
+  // 🌟 NEW: THEME TOGGLE HANDLER
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    if (newTheme) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('vsit_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('vsit_theme', 'light');
+    }
+  };
 
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
@@ -78,7 +90,6 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
     alert("Records and notes manually purged successfully!");
   };
 
-  // 🌟 NEW: Auto-Select Duplicates Magic Button
   const handleAutoSelectDuplicates = () => {
     const duplicateIds = requests.filter(r => r.type === 'Duplicate').map(r => r.id);
     if (duplicateIds.length === 0) {
@@ -110,7 +121,6 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
     u.emp_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 🌟 Filter Logic for Cleanup Tab
   const filteredRequests = requests.filter(req => {
     if (cleanupFilter === 'All') return true;
     return req.type === cleanupFilter;
@@ -121,14 +131,25 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
       <div className="fixed top-[-10%] left-[-5%] w-[50vw] h-[50vh] bg-purple-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-[-10%] right-[-5%] w-[50vw] h-[50vh] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
+      <div className="max-w-350 mx-auto flex flex-col lg:flex-row gap-8">
         
         {/* SIDEBAR TABS */}
         <div className={`w-full lg:w-72 shrink-0 ${theme.glassCard} rounded-4xl p-4 flex flex-col gap-2 h-fit`}>
           
-          <Link href="/admin" className={`flex items-center gap-2 px-2 pt-2 pb-4 text-xs font-black uppercase tracking-widest transition-colors ${theme.subText} hover:text-purple-500`}>
-            <ArrowLeft size={16} className="shrink-0" /> Back
-          </Link>
+          <div className="flex items-center justify-between px-2 pt-2 pb-4 border-b border-transparent">
+            <Link href="/admin" className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-colors ${theme.subText} hover:text-purple-500`}>
+              <ArrowLeft size={16} className="shrink-0" /> Return
+            </Link>
+            
+            {/* 🌟 NEW: THEME TOGGLE BUTTON */}
+            <button 
+              onClick={toggleTheme} 
+              className={`p-2 rounded-xl transition-all shadow-sm border ${isDarkMode ? 'bg-zinc-800 text-amber-400 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-indigo-600 border-slate-200 hover:bg-slate-50'}`}
+              title="Toggle Light/Dark Mode"
+            >
+              {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+          </div>
 
           <div className={`p-4 mb-2 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
             <h2 className={`text-xl font-black tracking-tight ${theme.text}`}>Admin Settings</h2>
@@ -176,7 +197,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                   <input value={settings.systemAnnouncement} onChange={e => handleSettingChange('systemAnnouncement', e.target.value)} placeholder="Displays at the top of staff dashboard..." className={`w-full px-4 py-3 rounded-2xl outline-none font-semibold shadow-inner transition-all ${theme.inputBg}`} />
                 </div>
                 
-                <div className="space-y-2 md:col-span-2 mt-4 p-5 rounded-3xl bg-purple-500/5 border border-purple-500/20">
+                <div className={`space-y-2 md:col-span-2 mt-4 p-5 rounded-3xl border ${isDarkMode ? 'bg-purple-500/10 border-purple-500/20' : 'bg-purple-50 border-purple-200'}`}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h4 className={`text-sm font-black ${theme.text}`}>Camera Watermark Settings</h4>
@@ -273,14 +294,14 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
             </div>
           )}
 
-          {/* 🌟 4. MANUAL CLEANUP (Advanced Filtering & Auto-Select) */}
+          {/* 🌟 4. MANUAL CLEANUP (WITH EMPLOYEE NAME AND CODE DISPLAYED) */}
           {activeTab === 'cleanup' && (
-            <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 flex flex-col h-[75vh] animate-in fade-in slide-in-from-bottom-4 duration-500`}>
+            <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 flex flex-col h-[80vh] animate-in fade-in slide-in-from-bottom-4 duration-500`}>
               
               <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
                 <div>
                   <h3 className={`text-lg font-black flex items-center gap-2 ${theme.text}`}><Database size={20} className="text-rose-500"/> System Cleanup</h3>
-                  <p className={`text-xs font-medium mt-1 ${theme.subText}`}>Filter, Auto-Select, and Purge duplicate or incorrect requests.</p>
+                  <p className={`text-xs font-medium mt-1 ${theme.subText}`}>Verify Employee, Auto-Select, and Purge duplicate or incorrect requests.</p>
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
@@ -290,16 +311,15 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                     <select 
                       value={cleanupFilter} 
                       onChange={e => setCleanupFilter(e.target.value)} 
-                      className="bg-transparent outline-none text-xs font-bold w-full cursor-pointer appearance-none"
+                      className="bg-transparent outline-none text-xs font-bold w-full cursor-pointer appearance-none dark:text-white"
                     >
-                      <option value="All">All Requests</option>
-                      <option value="Duplicate">Duplicates Only</option>
-                      <option value="Wrong Request">Wrong Requests</option>
-                      <option value="Replacement">Replacements</option>
+                      <option value="All" className="dark:bg-zinc-900">All Requests</option>
+                      <option value="Duplicate" className="dark:bg-zinc-900">Duplicates Only</option>
+                      <option value="Wrong Request" className="dark:bg-zinc-900">Wrong Requests</option>
+                      <option value="Replacement" className="dark:bg-zinc-900">Replacements</option>
                     </select>
                   </div>
 
-                  {/* Auto-Select Duplicates Button */}
                   <button 
                     onClick={handleAutoSelectDuplicates}
                     className="px-4 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all cursor-pointer"
@@ -325,13 +345,14 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                         <input type="checkbox" onChange={(e) => setSelectedRequests(e.target.checked ? filteredRequests.map(r => r.id) : [])} checked={filteredRequests.length > 0 && selectedRequests.length === filteredRequests.length} className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer" />
                       </th>
                       <th className="p-4">Request Detail</th>
+                      <th className="p-4">Raised By (Employee)</th>
                       <th className="p-4">Flag Type</th>
-                      <th className="p-4 w-64">Admin Notes / Last Updated</th>
+                      <th className="p-4 w-56 xl:w-64">Admin Notes / Date</th>
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-slate-200'}`}>
                     {filteredRequests.length === 0 ? (
-                      <tr><td colSpan={4} className="p-10 text-center text-sm font-semibold opacity-50">No records found matching this filter.</td></tr>
+                      <tr><td colSpan={5} className="p-10 text-center text-sm font-semibold opacity-50">No records found matching this filter.</td></tr>
                     ) : (
                       filteredRequests.map(req => (
                         <tr key={req.id} className={`transition-colors cursor-pointer ${selectedRequests.includes(req.id) ? (isDarkMode ? 'bg-rose-500/20' : 'bg-rose-50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50')}`} onClick={() => handleToggleSelect(req.id)}>
@@ -340,8 +361,17 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                           </td>
                           <td className="p-4">
                             <p className={`text-sm font-bold ${theme.text}`}>{req.title || 'Unknown Request'}</p>
-                            <p className={`text-[10px] font-semibold uppercase tracking-widest mt-1 ${theme.subText}`}>ID: {req.id} | {new Date(req.created_at).toLocaleDateString()}</p>
+                            <p className={`text-[10px] font-semibold uppercase tracking-widest mt-1 ${theme.subText}`}>ID: {req.id}</p>
                           </td>
+                          
+                          {/* 🌟 NEW: RAISED BY COLUMN (Shows Emp Name and Code for verification) */}
+                          <td className="p-4">
+                            <p className={`text-sm font-bold ${theme.text}`}>{req.staff_name || 'Unknown'}</p>
+                            <span className={`inline-block mt-1 font-mono text-[10px] font-black px-2 py-0.5 rounded-lg border shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+                              {req.emp_code || 'N/A'}
+                            </span>
+                          </td>
+
                           <td className="p-4">
                             <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border ${req.type === 'Duplicate' ? 'bg-orange-500/10 text-orange-600 border-orange-500/20' : req.type === 'Wrong Request' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 'bg-purple-500/10 text-purple-600 border-purple-500/20'}`}>
                               {req.type}
@@ -354,8 +384,9 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                               onChange={(e) => handleNoteChange(req.id, e.target.value)}
                               onClick={(e) => e.stopPropagation()} 
                               placeholder="Add reason for deletion..." 
-                              className={`w-full px-4 py-2.5 rounded-xl outline-none text-xs font-semibold shadow-inner transition-all border ${isDarkMode ? 'bg-black/40 border-white/10 text-white focus:border-purple-500/50' : 'bg-white/50 border-white/60 text-slate-900 focus:bg-white/70 focus:ring-2 focus:ring-purple-500/20'}`}
+                              className={`w-full px-3 py-2 rounded-xl outline-none text-xs font-semibold shadow-inner transition-all border mb-1.5 ${isDarkMode ? 'bg-black/40 border-white/10 text-white focus:border-purple-500/50' : 'bg-white/50 border-white/60 text-slate-900 focus:bg-white/70 focus:ring-2 focus:ring-purple-500/20'}`}
                             />
+                            <p className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>{new Date(req.created_at).toLocaleDateString()}</p>
                           </td>
                         </tr>
                       ))
@@ -368,7 +399,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
 
           {/* 5. STAFF ACCOUNTS */}
           {activeTab === 'users' && (
-            <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 flex flex-col h-[75vh] animate-in fade-in slide-in-from-bottom-4 duration-500`}>
+            <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 flex flex-col h-[80vh] animate-in fade-in slide-in-from-bottom-4 duration-500`}>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                   <h3 className={`text-lg font-black flex items-center gap-2 ${theme.text}`}><Users size={20} className="text-blue-500"/> Staff Directory</h3>
@@ -400,7 +431,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                             <p className={`text-[11px] font-medium mt-0.5 ${theme.subText}`}>{user.email}</p>
                           </td>
                           <td className="p-4">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest border ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200 shadow-sm'}`}>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest border shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
                               EMP- {user.emp_code || 'N/A'}
                             </span>
                           </td>
