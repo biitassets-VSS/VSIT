@@ -54,6 +54,7 @@ export default function StaffRequestsPage() {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500', // FIXED: Added subText property to prevent TypeScript build failure
     glassCard: isDarkMode 
       ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
       : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
@@ -82,7 +83,7 @@ export default function StaffRequestsPage() {
         <div className="absolute bottom-0 left-0 w-40 h-40 bg-linear-to-tr from-purple-400/10 to-orange-500/10 blur-3xl -z-10 rounded-full" />
         
         <div>
-          <h1 className={`text-2xl sm:text-3xl font-black ${theme.textMain} tracking-tight flex items-center gap-3`}>
+          <h1 className={`text-2xl sm:text-3xl font-bold ${theme.textMain} tracking-tight flex items-center gap-3`}>
             <Package className="text-purple-500" /> Asset Requests
           </h1>
           <p className={`text-xs sm:text-sm font-medium ${theme.textSub} mt-1 max-w-xl`}>
@@ -90,7 +91,7 @@ export default function StaffRequestsPage() {
           </p>
         </div>
         
-        <button className="flex items-center justify-center gap-2 px-6 py-3.5 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-purple-600/20 shrink-0 border border-purple-400/50">
+        <button className="flex items-center justify-center gap-2 px-6 py-3.5 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-2xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-purple-600/20 shrink-0 border border-purple-400/50">
           <PlusCircle size={18} /> New Request
         </button>
       </div>
@@ -101,15 +102,15 @@ export default function StaffRequestsPage() {
         <div className="flex items-center justify-between mb-6 px-1">
           <div className="flex items-center gap-2.5">
             <ShieldCheck size={20} className={theme.textMain} />
-            <h2 className={`text-sm sm:text-base font-black ${theme.textMain} tracking-widest uppercase`}>Request History</h2>
+            <h2 className={`text-sm sm:text-base font-bold ${theme.textMain} tracking-widest uppercase`}>Request History</h2>
           </div>
-          <span className={`text-xs sm:text-sm font-black ${theme.textSub}`}>{requests.length} Records</span>
+          <span className={`text-xs sm:text-sm font-bold ${theme.textSub}`}>{requests.length} Records</span>
         </div>
 
         {requests.length === 0 ? (
           <div className={`py-20 text-center border-2 border-dashed ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200/50 bg-white/30'} rounded-4xl flex flex-col items-center`}>
             <Package size={48} className={`${theme.textSub} mb-4 opacity-50`} />
-            <h3 className={`text-base font-black ${theme.textMain}`}>No Asset Requests</h3>
+            <h3 className={`text-base font-bold ${theme.textMain}`}>No Asset Requests</h3>
             <p className={`text-xs ${theme.textSub} mt-1 max-w-sm font-semibold`}>You have no pending or historical asset requests.</p>
           </div>
         ) : (
@@ -127,14 +128,14 @@ export default function StaffRequestsPage() {
 
                   {/* Card Header & Status */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                    <h3 className={`text-base sm:text-lg font-black ${theme.textMain} tracking-tight flex items-center gap-2.5`}>
+                    <h3 className={`text-base sm:text-lg font-bold ${theme.textMain} tracking-tight flex items-center gap-2.5`}>
                       <div className={`w-8 h-8 rounded-lg ${theme.glassInner} text-purple-500 flex items-center justify-center shadow-xs shrink-0`}>
                         <Package size={16} />
                       </div>
                       <span className="line-clamp-1">{req.title}</span>
                     </h3>
                     
-                    <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border flex items-center gap-1.5 shrink-0 shadow-sm ${getBadge(req.status)}`}>
+                    <span className={`px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest border flex items-center gap-1.5 shrink-0 shadow-xs ${getBadge(req.status)}`}>
                       {req.status || 'Pending'}
                     </span>
                   </div>
@@ -142,19 +143,19 @@ export default function StaffRequestsPage() {
                   {/* Request Details */}
                   <div className="flex-1 flex flex-col gap-4">
                     <div className={`${theme.glassInner} p-4 rounded-2xl flex-1`}>
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subText} mb-1.5`}>Reason for Request:</p>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest ${theme.subText} mb-1.5`}>Reason for Request:</p>
                       <p className={`text-sm font-semibold ${theme.textMain} leading-relaxed wrap-break-word`}>{req.description || req.note || 'No description provided.'}</p>
                     </div>
 
                     <div className={`pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/50'} flex justify-between items-center mt-auto`}>
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Request ID</span>
-                      <span className={`text-[10px] font-black ${theme.textMain} ${theme.glassInner} px-2 py-1 rounded-md`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Request ID</span>
+                      <span className={`text-[10px] font-bold ${theme.textMain} ${theme.glassInner} px-2 py-1 rounded-md`}>
                         {req.id.substring(0, 8).toUpperCase()}
                       </span>
                     </div>
                     <div className="flex justify-between items-center mt-1">
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Requested On</span>
-                      <span className={`text-xs font-black ${theme.textMain}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Requested On</span>
+                      <span className={`text-xs font-bold ${theme.textMain}`}>
                         {new Date(req.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/')}
                       </span>
                     </div>
