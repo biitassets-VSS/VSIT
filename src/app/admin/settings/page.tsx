@@ -73,10 +73,16 @@ export default async function SettingsPage() {
   }
 
   return (
-    <SettingsClient 
-      initialSettings={liveSettings} 
-      initialUsers={dbUsers} 
-      initialRequests={dbRequests} 
-    />
+    <div className="min-h-screen bg-transparent relative overflow-x-hidden transition-colors duration-1000">
+      {/* 🌟 GLOBAL BACKGROUND ORBS */}
+      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      
+      <SettingsClient 
+        initialSettings={liveSettings} 
+        initialUsers={dbUsers} 
+        initialRequests={dbRequests} 
+      />
+    </div>
   );
 }

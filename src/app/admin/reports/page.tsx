@@ -171,7 +171,7 @@ function AdminReportsContent() {
   }, [assets]);
 
   const getGroupTitle = (group: ReportGroup) => {
-    return group.replace('CATEGORY_SUMMARY', 'Category Global Summary').replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)').replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory').replace('COMBO_KITS', 'Combo Kits (Keyboard + Mouse)').replace('WIRED_KEYBOARDS', 'USB Wired Keyboards Inventory').replace('WIRED_MICE', 'USB Wired Mice Inventory').replace('HEADPHONES', 'Headphones & Audio Gear').replace('RETIRED_DISCARD', 'Discarded Ledger Records');
+    return group.replace('CATEGORY_SUMMARY', 'Category Global Summary').replace('LAPTOPS', 'Laptops Inventory (Brand-Wise)').replace('WIRELESS_KEYBOARDS', 'Wireless Keyboards Inventory').replace('COMBO_KITS', 'Combo Kits (Keyboard + Mouse)').replace('WIRED_KEYBOARDS', 'USB Wired Keyboards Inventory').replace('WIRED_MICE', 'USB Wired Mice Inventory').replace('HEADPHONES', 'Headphones & Audio Gear').replace('RETIRED_DISCARD', 'Discarded Asset Ledger');
   };
 
   const handleExportPDF = () => {
@@ -194,52 +194,67 @@ function AdminReportsContent() {
       autoTable(doc, {
         head: [["Brand Profile", "Total Count", "In Use", "Available", "Pending Return", "Discarded"]],
         body: brandSummary.map(b => [b.brand, b.total.toString(), b.inUse.toString(), b.available.toString(), b.pendingReturn.toString(), b.discarded.toString()]),
-        startY: 48, headStyles: { fillColor: [234, 88, 12] },
+        startY: 48, headStyles: { fillColor: [249, 115, 22] }, // Orange branding for PDF
       });
       const nextY = (doc as any).lastAutoTable.finalY + 12;
       doc.text("Individual Serialized Register Tracking Logs", 14, nextY);
       columns = ["Asset Name", "Tag ID", "Brand", "Status Mapping", "Assigned Holder Details"];
       rows = filteredAssets.map(a => [a.name, a.tagId, a.brand || 'Other', a.status, a.status === 'In Use' ? (a.assignedToName || 'N/A') : 'N/A']);
-      autoTable(doc, { head: [columns], body: rows, startY: nextY + 5, headStyles: { fillColor: [147, 51, 234] } });
+      autoTable(doc, { head: [columns], body: rows, startY: nextY + 5, headStyles: { fillColor: [147, 51, 234] } }); // Purple branding for PDF
       doc.save(`VSIT_${activeReport}_Report_${new Date().toISOString().slice(0,10)}.pdf`);
       return;
     }
-    autoTable(doc, { head: [columns], body: rows, startY: 38, headStyles: { fillColor: [234, 88, 12] } });
+    autoTable(doc, { head: [columns], body: rows, startY: 38, headStyles: { fillColor: [249, 115, 22] } });
     doc.save(`VSIT_Global_Summary_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
-  // 🌟 DYNAMIC BRAND THEME DICTIONARY (100% LIGHT ORANGE & PURPLE HARMONY)
+  // 🎨 PURE MAC OS 2026 FROSTED GLASS THEME
   const theme = {
-    bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
-    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-slate-200/80',
-    textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
-    tableHead: isDarkMode ? 'bg-[#0f0a1c] text-purple-300 border-purple-900/50' : 'bg-slate-50 text-slate-500 border-slate-200',
-    tableRowHover: isDarkMode ? 'hover:bg-purple-950/40' : 'hover:bg-purple-50/50',
-    divider: isDarkMode ? 'border-purple-900/40' : 'border-slate-100',
+    bg: 'bg-transparent',
+    glassCard: isDarkMode 
+      ? 'bg-[#18181b]/40 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/30 backdrop-blur-3xl border border-white/50 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
+    glassItem: isDarkMode
+      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.2)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-300'
+      : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-300',
+    glassInner: isDarkMode
+      ? 'bg-black/40 backdrop-blur-md border border-white/5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]'
+      : 'bg-white/50 backdrop-blur-md border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.04)]',
+    inputBg: isDarkMode 
+      ? 'bg-black/50 border border-white/20 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20' 
+      : 'bg-white/50 border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    tableHead: isDarkMode ? 'bg-black/40 text-purple-300 border-white/10' : 'bg-white/40 text-slate-500 border-white/60',
+    tableRowHover: isDarkMode ? 'hover:bg-purple-500/10' : 'hover:bg-purple-500/10',
+    divider: isDarkMode ? 'border-white/10' : 'border-white/40',
   };
 
   if (!isLoaded) return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0712] flex flex-col items-center justify-center gap-3">
+    <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-3">
       <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
       <span className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-purple-300">Syncing Real-time Asset Logs...</span>
     </div>
   );
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 overflow-x-hidden relative`}>
+      {/* 🌟 GLOBAL BACKGROUND ORBS */}
+      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+
       {/* 🌟 FULL-SCREEN ENTERPRISE FLUID CONTAINER */}
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-4 sm:space-y-6 pt-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-12 mx-auto space-y-4 sm:space-y-6 pt-4 relative z-10">
         
         {/* 🌟 ASSET DETAILS MODAL (100% ADAPTIVE & MOBILE RESPONSIVE) */}
         {selectedAsset && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className={`rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border ${theme.card}`}>
-              <div className={`p-5 sm:p-6 border-b flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-purple-50 border-purple-100'}`}>
+          <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xl z-9999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className={`rounded-4xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border-2 ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'} ${theme.glassCard}`}>
+              <div className={`p-5 sm:p-6 border-b flex items-center justify-between ${theme.divider}`}>
                 <h3 className={`font-black text-base sm:text-lg flex items-center gap-2 ${theme.textMain}`}>
-                  <Laptop className="text-orange-600 dark:text-orange-400 w-5 h-5 shrink-0"/> Asset Details
+                  <Laptop className="text-orange-500 dark:text-orange-400 w-5 h-5 shrink-0"/> Asset Details
                 </h3>
-                <button onClick={() => setSelectedAsset(null)} className={`p-2 rounded-full transition-all hover:scale-110 cursor-pointer border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                <button onClick={() => setSelectedAsset(null)} className={`p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${theme.glassInner} ${theme.textMain}`}>
                   <X size={16}/>
                 </button>
               </div>
@@ -251,11 +266,11 @@ function AdminReportsContent() {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className={`p-3 rounded-2xl ${theme.glassInner}`}>
                     <span className={`text-[10px] uppercase tracking-widest font-bold block mb-1 ${theme.textSub}`}>Tag ID</span>
-                    <p className="font-mono text-xs sm:text-sm font-bold text-orange-600 dark:text-orange-400">{selectedAsset.tagId}</p>
+                    <p className="font-mono text-xs sm:text-sm font-bold text-orange-500 dark:text-orange-400">{selectedAsset.tagId}</p>
                   </div>
-                  <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/50' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className={`p-3 rounded-2xl ${theme.glassInner}`}>
                     <span className={`text-[10px] uppercase tracking-widest font-bold block mb-1 ${theme.textSub}`}>Detected Brand</span>
                     <p className={`font-bold text-xs sm:text-sm ${theme.textMain}`}>{selectedAsset.brand}</p>
                   </div>
@@ -264,7 +279,7 @@ function AdminReportsContent() {
                 <div className={`pt-4 border-t space-y-3.5 ${theme.divider}`}>
                   <div>
                     <span className={`text-[10px] uppercase tracking-widest font-bold block mb-1 ${theme.textSub}`}>Current Real Status</span>
-                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black tracking-wide uppercase border ${
+                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black tracking-wide uppercase border shadow-sm ${
                       selectedAsset.status === 'Available' ? (isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60') :
                       selectedAsset.status === 'In Use' ? (isDarkMode ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200/60') :
                       selectedAsset.status === 'Pending Return' ? (isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200/60') :
@@ -274,8 +289,8 @@ function AdminReportsContent() {
                     </span>
                   </div>
                   
-                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-orange-50/50 border-orange-100'}`}>
-                    <span className="text-[10px] uppercase tracking-widest font-black text-orange-600 dark:text-orange-400 mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Information</span>
+                  <div className={`p-4 rounded-2xl ${theme.glassInner} border ${isDarkMode ? 'border-orange-500/30' : 'border-orange-200'}`}>
+                    <span className="text-[10px] uppercase tracking-widest font-black text-orange-500 dark:text-orange-400 mb-1 flex items-center gap-1.5"><UserCheck size={12}/> Assignment Information</span>
                     <p className={`font-bold text-xs sm:text-sm mt-1 ${isDarkMode ? 'text-orange-200' : 'text-orange-900'}`}>
                       {selectedAsset.status === 'In Use' ? selectedAsset.assignedToName : 'Not currently assigned out.'}
                     </p>
@@ -287,10 +302,10 @@ function AdminReportsContent() {
         )}
 
         {/* 🌟 STANDARDIZED HEADER WITH MOBILE BUTTON GRID */}
-        <div className={`${theme.card} p-4 sm:p-6 rounded-3xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-300`}>
+        <div className={`${theme.glassCard} p-4 sm:p-6 rounded-4xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-300`}>
           <div>
             <h1 className={`text-xl sm:text-2xl md:text-3xl font-black tracking-tight flex items-center gap-2.5 ${theme.textMain}`}>
-              <FileText className="text-orange-600 dark:text-orange-400 w-6 h-6 sm:w-7 sm:h-7 shrink-0" /> 
+              <FileText className="text-orange-500 dark:text-orange-400 w-6 h-6 sm:w-7 sm:h-7 shrink-0" /> 
               <span>VSIT Advanced Metrics Engine</span>
             </h1>
             <p className={`text-xs sm:text-sm font-semibold mt-1.5 ${theme.textSub}`}>Extract high-fidelity brand profiles, deployment summaries, and configurations records matrix logs</p>
@@ -298,13 +313,13 @@ function AdminReportsContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:flex items-center gap-2.5 sm:gap-3 w-full md:w-auto justify-end">
             <Link 
               href="/admin" 
-              className={`w-full sm:w-auto px-4 py-2.5 sm:py-3 border rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all duration-200 hover:-translate-x-0.5 shrink-0 uppercase tracking-wider ${isDarkMode ? 'bg-[#18181b] border-purple-900/50 text-purple-300 hover:text-white hover:border-orange-500' : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'}`}
+              className={`w-full sm:w-auto px-4 py-2.5 sm:py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all duration-200 shrink-0 uppercase tracking-wider cursor-pointer ${theme.glassItem} ${theme.textMain} hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`}
             >
               <ArrowLeft size={16} /> <span>Dashboard</span>
             </Link>
             <button 
               onClick={handleExportPDF} 
-              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 sm:py-3 rounded-xl shadow-md shadow-purple-600/20 transition-all hover:scale-105 active:scale-95 font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white px-5 py-2.5 sm:py-3 rounded-xl shadow-[0_4px_15px_rgba(168,85,247,0.3)] transition-all active:scale-95 font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer border border-purple-400"
             >
               <Download size={16} /> <span>Compile PDF</span>
             </button>
@@ -315,7 +330,7 @@ function AdminReportsContent() {
         <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">
           
           {/* Mobile Horizontal Filter Bar / Desktop Sidebar */}
-          <div className={`w-full lg:w-72 shrink-0 p-3 sm:p-4 rounded-3xl border shadow-sm transition-all ${theme.card}`}>
+          <div className={`w-full lg:w-72 shrink-0 p-3 sm:p-4 rounded-3xl transition-all ${theme.glassCard}`}>
             <h3 className={`hidden lg:block text-[10px] font-black uppercase tracking-widest mb-3 px-2 ${theme.textSub}`}>Global Summary Matrix</h3>
             
             {/* Scrollable Container on Mobile */}
@@ -324,8 +339,8 @@ function AdminReportsContent() {
                 onClick={() => setActiveReport('CATEGORY_SUMMARY')}
                 className={`flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
                   activeReport === 'CATEGORY_SUMMARY' 
-                    ? (isDarkMode ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 shadow-sm scale-[1.02]' : 'bg-orange-50 border-orange-200/60 text-orange-700 shadow-sm scale-[1.02]') 
-                    : `${theme.textSub} hover:bg-purple-500/10 border-transparent hover:text-orange-500 dark:hover:text-orange-400`
+                    ? 'bg-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] scale-[1.02] border-orange-500' 
+                    : `${theme.glassItem} ${theme.textSub} hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`
                 }`}
               >
                 <BarChart3 size={15}/> <span>Global Summary Overview</span>
@@ -348,8 +363,8 @@ function AdminReportsContent() {
                   onClick={() => setActiveReport(tab.id as ReportGroup)}
                   className={`flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
                     activeReport === tab.id 
-                      ? (isDarkMode ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 shadow-sm scale-[1.02]' : 'bg-orange-50 border-orange-200/60 text-orange-700 shadow-sm scale-[1.02]') 
-                      : `${theme.textSub} hover:bg-purple-500/10 border-transparent hover:text-orange-500 dark:hover:text-orange-400`
+                      ? 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border-purple-600' 
+                      : `${theme.glassItem} ${theme.textSub} hover:border-purple-500/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] dark:hover:border-purple-400`
                   }`}
                 >
                   {tab.icon} <span>{tab.label}</span>
@@ -362,47 +377,46 @@ function AdminReportsContent() {
           <div className="flex-1 w-full space-y-4 sm:space-y-5">
             
             {/* Search Input Box */}
-            <div className={`p-3 sm:p-4 rounded-3xl border shadow-sm transition-all ${theme.card}`}>
+            <div className={`p-2.5 rounded-2xl transition-all shadow-sm flex items-center focus-within:ring-4 focus-within:ring-orange-500/20 ${theme.inputBg}`}>
               <div className="relative w-full max-w-md">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500 dark:text-orange-400" size={16} />
+                <Search className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} size={16} />
                 <input 
                   type="text" 
                   placeholder={`Search inside ${activeReport.replace('_',' ')}...`} 
                   value={searchQuery} 
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
-                  className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-xl border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-xs font-bold transition-all" 
+                  className={`w-full pl-11 pr-4 py-2 rounded-xl border-transparent bg-transparent outline-none text-xs font-semibold transition-all ${theme.textMain} placeholder:text-slate-400 dark:placeholder:text-zinc-500`} 
                 />
               </div>
             </div>
 
             {/* Responsive Metrics Summary Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all ${theme.card}`}>
+              <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${theme.glassCard} hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 cursor-default`}>
                 <p className={`text-[10px] font-black tracking-wider uppercase ${theme.textSub}`}>Total Count</p>
                 <h3 className={`text-lg sm:text-xl font-black mt-1 ${theme.textMain}`}>{filteredAssets.length}</h3>
               </div>
-              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all ${theme.card}`}>
+              <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${theme.glassCard} hover:border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.4)] dark:hover:border-purple-500 cursor-default`}>
                 <p className={`text-[10px] font-black tracking-wider uppercase ${theme.textSub}`}>In Use</p>
                 <h3 className="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400 mt-1">{filteredAssets.filter(a => a.status === 'In Use').length}</h3>
               </div>
-              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all ${theme.card}`}>
+              <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${theme.glassCard} hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] dark:hover:border-emerald-500 cursor-default`}>
                 <p className={`text-[10px] font-black tracking-wider uppercase ${theme.textSub}`}>Available</p>
                 <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{filteredAssets.filter(a => a.status === 'Available').length}</h3>
               </div>
-              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all ${theme.card}`}>
+              <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${theme.glassCard} hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] dark:hover:border-amber-500 cursor-default`}>
                 <p className={`text-[10px] font-black tracking-wider uppercase ${theme.textSub}`}>Pending Return</p>
                 <h3 className="text-lg sm:text-xl font-black text-amber-500 dark:text-amber-400 mt-1">{filteredAssets.filter(a => a.status === 'Pending Return').length}</h3>
               </div>
-              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all col-span-2 sm:col-span-1 ${theme.card}`}>
+              <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all col-span-2 sm:col-span-1 ${theme.glassCard} hover:border-rose-400 hover:shadow-[0_0_20px_rgba(243,64,84,0.4)] dark:hover:border-rose-500 cursor-default`}>
                 <p className={`text-[10px] font-black tracking-wider uppercase ${theme.textSub}`}>Discarded</p>
                 <h3 className="text-lg sm:text-xl font-black text-rose-600 dark:text-rose-400 mt-1">{filteredAssets.filter(a => a.status === 'Discarded').length}</h3>
               </div>
             </div>
 
             {/* Main Report Data Table */}
-            <div className={`rounded-3xl border shadow-sm overflow-hidden transition-all ${theme.card}`}>
-              <div className={`p-4 sm:p-5 border-b ${isDarkMode ? 'border-purple-900/40 bg-[#0f0a1c]/60' : 'border-slate-100 bg-slate-50/50'}`}>
+            <div className={`rounded-3xl border overflow-hidden transition-all ${theme.glassCard}`}>
+              <div className={`p-4 sm:p-5 border-b ${theme.divider}`}>
                 <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>{getGroupTitle(activeReport)}</h3>
               </div>
               
@@ -419,7 +433,7 @@ function AdminReportsContent() {
                         <th className="p-3.5 sm:p-4">Discarded</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y text-xs font-bold ${isDarkMode ? 'divide-purple-900/30 text-purple-100' : 'divide-slate-100 text-slate-900'}`}>
+                    <tbody className={`divide-y text-xs font-bold ${theme.divider}`}>
                       {categorySummary.map((cat, i) => (
                         <tr key={i} className={`transition-colors ${theme.tableRowHover}`}>
                           <td className={`p-3.5 sm:p-4 ${theme.textMain}`}>{cat.category}</td>
@@ -435,8 +449,8 @@ function AdminReportsContent() {
                 </div>
               ) : (
                 <div className="space-y-4 sm:space-y-6">
-                  <div className={`p-3.5 sm:p-4 rounded-2xl border mx-3 sm:mx-5 mt-4 ${isDarkMode ? 'bg-[#0f0a1c]/80 border-purple-900/50' : 'bg-purple-50/40 border-purple-100'}`}>
-                    <h4 className={`text-[10px] font-black uppercase tracking-wider mb-2 ${isDarkMode ? 'text-orange-400' : 'text-purple-800'}`}>Dynamic Brand Configuration Summary Matrix</h4>
+                  <div className={`p-3.5 sm:p-4 rounded-2xl border mx-3 sm:mx-5 mt-4 ${theme.glassInner}`}>
+                    <h4 className={`text-[10px] font-black uppercase tracking-wider mb-2 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>Dynamic Brand Configuration Summary Matrix</h4>
                     <div className="overflow-x-auto custom-scrollbar">
                       <table className="w-full text-left border-collapse min-w-125">
                         <thead className={`text-[9px] uppercase font-black tracking-wider border-b ${theme.textSub} ${theme.divider}`}>
@@ -449,7 +463,7 @@ function AdminReportsContent() {
                             <th className="pb-2">Discarded</th>
                           </tr>
                         </thead>
-                        <tbody className={`text-xs font-bold divide-y ${isDarkMode ? 'divide-purple-900/30 text-purple-100' : 'divide-slate-200/40 text-slate-700'}`}>
+                        <tbody className={`text-xs font-bold divide-y ${theme.divider}`}>
                           {brandSummary.map((b, idx) => (
                             <tr key={idx} className={`transition-colors ${theme.tableRowHover}`}>
                               <td className={`py-2.5 font-black ${theme.textMain}`}>{b.brand}</td>
@@ -467,14 +481,14 @@ function AdminReportsContent() {
 
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse min-w-150">
-                      <thead className={`uppercase text-[10px] font-black tracking-widest border-b ${theme.tableHead}`}>
+                      <thead className={`uppercase text-[10px] font-black tracking-widest border-y ${theme.tableHead}`}>
                         <tr>
                           <th className="p-3.5 sm:p-4">Asset Identification Name</th>
                           <th className="p-3.5 sm:p-4">Brand Profile</th>
                           <th className="p-3.5 sm:p-4">Current Verified Status</th>
                         </tr>
                       </thead>
-                      <tbody className={`divide-y text-xs font-bold ${isDarkMode ? 'divide-purple-900/30 text-purple-100' : 'divide-slate-100 text-slate-900'}`}>
+                      <tbody className={`divide-y text-xs font-bold ${theme.divider}`}>
                         {filteredAssets.length === 0 ? (
                           <tr>
                             <td colSpan={3} className={`p-8 text-center font-medium ${theme.textSub}`}>No serialized assets matched the selected matrix criteria.</td>
@@ -521,7 +535,7 @@ function AdminReportsContent() {
 export default function AdminReportsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0b0712] flex flex-col items-center justify-center gap-3 text-slate-400">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-3 text-slate-400 transition-colors">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
         <span className="text-xs font-bold tracking-widest uppercase text-slate-500 dark:text-purple-300">Loading Metrics Engine...</span>
       </div>

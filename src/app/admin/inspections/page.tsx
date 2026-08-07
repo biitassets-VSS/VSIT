@@ -10,6 +10,16 @@ import {
   Bell, Send, ShieldCheck, Check, AlertTriangle
 } from 'lucide-react';
 
+const getNextDueDate = (baseDateStr: string | null, cat: string) => {
+  if (!baseDateStr) return null;
+  const baseDate = new Date(baseDateStr);
+  const monthsToAdd = (cat || '').toLowerCase().includes('laptop') ? 1 : 3; 
+  const lastDay = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd + 1, 0);
+  const lastSat = new Date(lastDay);
+  while (lastSat.getDay() !== 6) lastSat.setDate(lastSat.getDate() - 1);
+  return lastSat;
+};
+
 function AdminInspectionReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,17 +29,28 @@ function AdminInspectionReviewContent() {
 
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<any[]>([]);
-  const [filterTab, setFilterTab] = useState<'pending' | 'approved' | 're-inspection' | 'rejected' | 'admin' | 'all'>('pending');
+  const [filterTab, setFilterTab] = useState<'pending' | 'approved' | 're-inspection' | 'rejected' | 'admin' | 'overdue' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
   
   const [assetFilter, setAssetFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [sendingAlertId, setSendingAlertId] = useState<string | null>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
+  // 🌟 THEME SYNC
   useEffect(() => {
-    document.documentElement.classList.remove('dark'); // Enforce light glass theme
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
+    };
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
     fetchVerificationLedger();
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -67,8 +88,9 @@ function AdminInspectionReviewContent() {
       const profilesData = profilesRes.data || [];
 
       const masterLedger: any[] = [];
-      const processedAssetIds = new Set();
+      const activeAssetIds = new Set<string>();
 
+      // 🌟 Phase 1: Process Existing Logs
       rawInspections.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
         
@@ -78,7 +100,6 @@ function AdminInspectionReviewContent() {
           (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase())
         );
 
-        processedAssetIds.add(String(matchedAsset.id));
         const itemIdentifier = insp.id || `insp-${insp.asset_id}-${idx}-${Date.now()}`;
         
         const isProfileAdmin = matchedProfile && (
@@ -91,7 +112,6 @@ function AdminInspectionReviewContent() {
         );
 
         const inspByLower = String(insp.inspected_by || '').toLowerCase().trim();
-        const emailLower = String(insp.user_email || '').toLowerCase().trim();
         const notesLower = String(insp.notes || '').toLowerCase();
         const statusLower = String(insp.status || '').toLowerCase();
 
@@ -109,32 +129,32 @@ function AdminInspectionReviewContent() {
 
         const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
 
+        // Add to active set ONLY if it's currently pending review/re-inspection
+        const isHistorical = ['approved', 'pass', 'resolved'].some(k => statusLower.includes(k)) || isAdminAction;
+        if (!isHistorical) {
+          activeAssetIds.add(String(matchedAsset.id));
+        }
+
         let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
-        
         if (!recoveredName && insp.notes && insp.notes.includes('Digitally Signed')) {
           const match = insp.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
           if (match) recoveredName = match[1].trim();
         }
-
         if (!recoveredName && (insp.user_email || insp.inspected_by)) {
           const historicalSignature = rawInspections.find(r => 
             ((insp.user_email && r.user_email?.toLowerCase() === insp.user_email.toLowerCase()) || 
              (insp.inspected_by && String(r.inspected_by) === String(insp.inspected_by))) &&
             r.notes && r.notes.includes('Digitally Signed Handover Agreement by')
           );
-          
           if (historicalSignature && historicalSignature.notes) {
             const match = historicalSignature.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
             if (match) recoveredName = match[1].trim();
           }
         }
-        
         if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
           recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
         
-        let recoveredEmpCode = insp.emp_code || insp.employee_code || insp.staff_id;
-
         let finalName = '';
         let finalEmpCode = '';
         let isDeletedUser = false;
@@ -144,9 +164,7 @@ function AdminInspectionReviewContent() {
           finalName = 'Administrator / System';
           finalEmpCode = 'ADMIN USER';
           isDeletedUser = false;
-          if (normalizedStatus === 'Pending' || !insp.status) {
-            normalizedStatus = 'Admin Update';
-          }
+          if (normalizedStatus === 'Pending' || !insp.status) normalizedStatus = 'Admin Update';
         } else if (matchedProfile) {
           finalName = matchedProfile.full_name || matchedProfile.name;
           finalEmpCode = matchedProfile.emp_code || insp.emp_code;
@@ -154,7 +172,7 @@ function AdminInspectionReviewContent() {
           if (insp.inspected_by || insp.user_email) {
             isDeletedUser = true;
             finalName = recoveredName || (insp.user_email ? insp.user_email : 'Unknown Past User');
-            finalEmpCode = recoveredEmpCode || (insp.inspected_by ? `ID-${String(insp.inspected_by).substring(0, 5).toUpperCase()}` : 'OLD-RECORD');
+            finalEmpCode = insp.emp_code || insp.employee_code || (insp.inspected_by ? `ID-${String(insp.inspected_by).substring(0, 5).toUpperCase()}` : 'OLD-RECORD');
           } else {
             finalName = 'Unassigned Asset';
             finalEmpCode = 'NO-EMP-RECORD';
@@ -175,65 +193,70 @@ function AdminInspectionReviewContent() {
           emp_code: finalEmpCode,
           is_deleted_user: isDeletedUser,
           status: normalizedStatus,
-          photos: photosArray
+          photos: photosArray,
+          next_due: getNextDueDate(insp.created_at, matchedAsset.category || 'Laptop')
         });
       });
 
+      // 🌟 Phase 2: Detect OVERDUE and Missing Inspections
       assetsData.forEach(asset => {
+        if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
+        if (asset.status?.toLowerCase().includes('return')) return;
+
+        // Skip if there's already an active (unapproved) log in the queue for this asset
+        if (activeAssetIds.has(String(asset.id))) return;
+
+        const latestInsp = rawInspections.find(i => String(i.asset_id) === String(asset.id));
+        let nextDue = null;
+        if (asset.next_inspection_date) {
+          nextDue = new Date(asset.next_inspection_date);
+        } else if (latestInsp?.created_at || asset.last_inspection_date) {
+          nextDue = getNextDueDate(latestInsp?.created_at || asset.last_inspection_date, asset.category);
+        } else {
+          nextDue = getNextDueDate(asset.created_at, asset.category);
+        }
+
+        const now = new Date();
+        now.setHours(0,0,0,0);
+        const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < now.getTime()) : false;
+
         const s = (asset.inspection_status || '').toLowerCase();
-        if ((s.includes('pending') || s.includes('overdue') || s.includes('re-inspection')) && !asset.status?.toLowerCase().includes('return')) {
-          
-          if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
+        const needsAction = s.includes('pending') || s.includes('action required');
 
-          if (!processedAssetIds.has(String(asset.id))) {
-            const matchedStaff = profilesData.find(p => p.id === asset.assigned_to);
-            
-            let sName = matchedStaff?.full_name || matchedStaff?.name;
-            let sCode = matchedStaff?.emp_code || matchedStaff?.emp_id;
+        if (isOverdue || needsAction) {
+          const matchedStaff = profilesData.find(p => p.id === asset.assigned_to);
+          let sName = matchedStaff?.full_name || matchedStaff?.name;
+          let sCode = matchedStaff?.emp_code || matchedStaff?.emp_id;
 
-            if (!sName) {
-              const historicalSignature = rawInspections.find(i => 
-                String(i.asset_id) === String(asset.id) && 
-                i.notes && i.notes.includes('Digitally Signed Handover Agreement by')
-              );
-              
-              if (historicalSignature && historicalSignature.notes) {
-                const match = historicalSignature.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
-                if (match) sName = match[1].trim();
-              }
-              
-              if (!sName) {
-                const historicalRecord = rawInspections.find(i => String(i.asset_id) === String(asset.id));
-                let fallbackName = historicalRecord?.user_name || historicalRecord?.staff_name || historicalRecord?.full_name;
-                if (!fallbackName && historicalRecord?.user_email) {
-                  fallbackName = historicalRecord.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                }
-                sName = fallbackName || (asset.assigned_to ? 'Unregistered User' : 'Unassigned Asset');
-              }
-              
-              const historicalRecordForCode = rawInspections.find(i => String(i.asset_id) === String(asset.id));
-              sCode = historicalRecordForCode?.emp_code || historicalRecordForCode?.employee_code || (asset.assigned_to ? `ID-${String(asset.assigned_to).substring(0,5).toUpperCase()}` : 'NO-ID');
+          if (!sName) {
+            const historicalRecord = rawInspections.find(i => String(i.asset_id) === String(asset.id));
+            let fallbackName = historicalRecord?.user_name || historicalRecord?.staff_name || historicalRecord?.full_name;
+            if (!fallbackName && historicalRecord?.user_email) {
+              fallbackName = historicalRecord.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
             }
-
-            masterLedger.push({
-              id: `missing-${asset.id}`,
-              asset_id: asset.id,
-              is_submission: false,
-              is_admin_action: false,
-              staff_id: matchedStaff?.id || asset.assigned_to,
-              created_at: asset.created_at || new Date().toISOString(),
-              asset_name: asset.name || asset.asset_name,
-              category: asset.category || 'Hardware', 
-              serial_number: asset.serial_number || asset.serial,
-              asset_tag: asset.asset_tag || 'NO-TAG',
-              staff_name: sName,
-              emp_code: sCode || 'N/A',
-              is_deleted_user: !matchedStaff,
-              status: 'Awaiting Staff Action',
-              notes: 'Staff member has not submitted the visual inspection yet.',
-              photos: []
-            });
+            sName = fallbackName || 'Unregistered User';
+            sCode = historicalRecord?.emp_code || `ID-${String(asset.assigned_to).substring(0,5).toUpperCase()}`;
           }
+
+          masterLedger.push({
+            id: `missing-${asset.id}-${Date.now()}`,
+            asset_id: asset.id,
+            is_submission: false,
+            is_admin_action: false,
+            staff_id: matchedStaff?.id || asset.assigned_to,
+            created_at: asset.created_at || new Date().toISOString(),
+            asset_name: asset.name || asset.asset_name,
+            category: asset.category || 'Hardware', 
+            serial_number: asset.serial_number || asset.serial,
+            asset_tag: asset.asset_tag || 'NO-TAG',
+            staff_name: sName,
+            emp_code: sCode || 'N/A',
+            is_deleted_user: !matchedStaff,
+            status: isOverdue ? 'Overdue' : 'Awaiting Staff Action',
+            notes: isOverdue ? 'CRITICAL: Staff member missed the required deadline to submit this inspection.' : 'Staff member has not submitted the visual inspection yet.',
+            photos: [],
+            next_due: nextDue
+          });
         }
       });
 
@@ -246,16 +269,21 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, isReInspection: boolean = false) => {
+  const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, status: string) => {
     if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-')) {
       return alert("Cannot send alert: No valid active employee profile ID attached to this record.");
     }
 
     setSendingAlertId(staffId);
     try {
-      const title = isReInspection ? `⚠️ Mandatory Re-Inspection Required` : `🔔 Hardware Audit Reminder Due`;
-      const message = isReInspection
+      const isReInspect = status === 'Re-Inspection';
+      const isOverdue = status === 'Overdue';
+
+      const title = isReInspect ? `⚠️ Mandatory Re-Inspection Required` : isOverdue ? `🚨 OVERDUE: Hardware Audit Required` : `🔔 Hardware Audit Reminder Due`;
+      const message = isReInspect
         ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
+        : isOverdue
+        ? `Your hardware inspection for ${assetName} (${tagId}) is OVERDUE. Please submit your visual verification immediately to avoid compliance strikes.`
         : `Please submit your scheduled visual inspection photos for ${assetName} (${tagId}) via your staff portal dashboard.`;
 
       const { error } = await supabase.from('notifications').insert([{
@@ -263,7 +291,7 @@ function AdminInspectionReviewContent() {
         title: title,
         message: message,
         is_read: false,
-        type: isReInspection ? 'warning' : 'info'
+        type: isReInspect || isOverdue ? 'warning' : 'info'
       }]);
 
       if (error) throw error;
@@ -313,7 +341,6 @@ function AdminInspectionReviewContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
       if (assetErr) throw assetErr;
 
-      // 🌟 FULLY OPTIMIZED NOTIFICATION PAYLOAD 
       if (staffId && !isDeletedUser && !staffId.includes('ADMIN') && !staffId.includes('ID-')) {
         try {
           await supabase.from('notifications').insert([{
@@ -323,9 +350,7 @@ function AdminInspectionReviewContent() {
             is_read: false,
             type: verdict === 'Approved' ? 'success' : 'warning'
           }]);
-        } catch (notifError) {
-          console.error("Non-fatal notification error:", notifError);
-        }
+        } catch (notifError) {}
       }
 
       setInspections(prev => prev.map(item => 
@@ -349,11 +374,13 @@ function AdminInspectionReviewContent() {
     const isApproved = s === 'approved' || s === 'pass';
     const isRejected = s === 'rejected' || s === 'fail';
     const isReInspect = s === 're-inspection';
+    const isOverdue = s === 'overdue';
     const isPending = s === 'pending' || s === 'awaiting staff action';
     const isAdminLog = item.is_admin_action === true;
 
     const matchesTab = 
       filterTab === 'all' ? true :
+      filterTab === 'overdue' ? isOverdue :
       filterTab === 'pending' ? (isPending && !isAdminLog) :
       filterTab === 'approved' ? isApproved :
       filterTab === 're-inspection' ? isReInspect :
@@ -376,34 +403,36 @@ function AdminInspectionReviewContent() {
     return (st === 'pending' || st === 'awaiting staff action') && !item.is_admin_action;
   }).length;
 
-  const calculateNextDueDate = (lastInspectionDate: string, category: string = 'Laptop') => {
-    if (!lastInspectionDate) return 'N/A';
-    const baseDate = new Date(lastInspectionDate);
-    const monthsToAdd = (category || '').toLowerCase().includes('laptop') ? 1 : 3; 
-    const lastDayOfTargetMonth = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd + 1, 0);
-    const lastSaturday = new Date(lastDayOfTargetMonth);
-    while (lastSaturday.getDay() !== 6) lastSaturday.setDate(lastSaturday.getDate() - 1);
-    return lastSaturday.toLocaleDateString('en-IN'); 
-  };
+  const overdueCount = inspections.filter(item => item.status === 'Overdue').length;
 
   const clearAssetFilter = () => {
     setAssetFilter(null);
     router.replace('/admin/inspections'); 
   };
 
-  // 🎨 PURE MAC OS 2026 TRANSPARENT GLASS THEME
+  // 🎨 PURE MAC OS 2026 FROSTED GLASS THEME
   const theme = {
-    bg: 'bg-[#FFF9F2]', // Match the staff background perfectly
-    glassCard: 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
-    glassItem: 'bg-white/50 border border-white/60 shadow-sm hover:shadow-md backdrop-blur-2xl transition-all duration-300',
-    glassInner: 'bg-white/70 border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)] backdrop-blur-md',
-    textMain: 'text-slate-900',
-    textSub: 'text-slate-600',
+    bg: 'bg-transparent',
+    glassCard: isDarkMode 
+      ? 'bg-[#18181b]/40 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/30 backdrop-blur-3xl border border-white/50 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
+    glassItem: isDarkMode
+      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.2)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-300'
+      : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-300',
+    glassInner: isDarkMode
+      ? 'bg-black/40 backdrop-blur-md border border-white/5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]'
+      : 'bg-white/50 backdrop-blur-md border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.04)]',
+    inputBg: isDarkMode 
+      ? 'bg-black/50 border border-white/20 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20' 
+      : 'bg-white/50 border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
 
   const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
     if (isAdminAction) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
     const s = (status || '').toLowerCase().trim();
+    if (s === 'overdue') return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(249,115,22,0.4)] group-hover:shadow-[0_0_12px_rgba(249,115,22,0.7)] animate-pulse';
     if (s === 'approved') return 'bg-transparent border border-emerald-400 text-emerald-600 shadow-[0_0_8px_rgba(52,211,153,0.4)] group-hover:shadow-[0_0_12px_rgba(52,211,153,0.7)]';
     if (s === 're-inspection') return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.4)] group-hover:shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse';
     if (s === 'rejected') return 'bg-transparent border border-rose-400 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.4)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.7)]';
@@ -412,27 +441,31 @@ function AdminInspectionReviewContent() {
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 relative z-0 overflow-hidden`}>
-      {/* 🌟 Premium Background Orbs to match Staff Dashboard */}
-      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 relative z-0 overflow-x-hidden`}>
+      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
+      <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-12 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
         <div className={`${theme.glassCard} rounded-4xl p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
           <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 bg-white/60 backdrop-blur-md border border-white/80 hover:bg-white shadow-sm rounded-2xl text-slate-600 transition-all cursor-pointer`}>
+            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 ${theme.glassItem} rounded-2xl ${theme.textSub} cursor-pointer hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`}>
               <ArrowLeft size={18} />
             </button>
             <div>
               <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
                 <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
-                  <ShieldCheck className="text-orange-600 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                  <ShieldCheck className="text-orange-500 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
                   <span>Inspection Command Center</span>
                 </h1>
                 {pendingCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-orange-600 text-white font-bold text-[10px] uppercase tracking-widest rounded-full animate-pulse shadow-sm">
+                  <span className="px-3 py-1 bg-orange-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
                     {pendingCount} Action Required
+                  </span>
+                )}
+                {overdueCount > 0 && !assetFilter && (
+                  <span className="px-3 py-1 bg-orange-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full shadow-sm animate-pulse">
+                    {overdueCount} Overdue
                   </span>
                 )}
               </div>
@@ -443,25 +476,25 @@ function AdminInspectionReviewContent() {
           <button 
             onClick={fetchVerificationLedger} 
             disabled={loading}
-            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 bg-white/60 backdrop-blur-md border border-white/80 text-slate-700 hover:bg-white shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0`}
+            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 ${theme.glassItem} text-slate-700 dark:text-zinc-200 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer disabled:opacity-50 shrink-0 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`}
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin text-orange-600' : 'text-purple-600'} />
+            <RefreshCw size={16} className={loading ? 'animate-spin text-orange-500' : 'text-purple-500 dark:text-purple-400'} />
             <span>Sync Database</span>
           </button>
         </div>
 
         {assetFilter && (
           <div className={`${theme.glassCard} p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4`}>
-             <div className={`flex items-center gap-4 text-orange-900`}>
-                <div className={`p-3 border rounded-xl shadow-sm bg-white/70 border-white/80 text-orange-600`}>
+             <div className={`flex items-center gap-4 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                <div className={`p-3 rounded-xl ${theme.glassInner} text-orange-500`}>
                   <HistoryIcon size={24} />
                 </div>
                 <div>
-                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 text-orange-700`}>Asset Timeline Filter Active</p>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>Asset Timeline Filter Active</p>
                   <p className="text-sm font-bold">Showing complete historical track record for selected hardware.</p>
                 </div>
              </div>
-             <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm cursor-pointer transition-all duration-200 flex items-center justify-center gap-2">
+             <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer transition-all duration-200 flex items-center justify-center gap-2 border border-orange-400">
                <FilterX size={16}/> Clear Filter
              </button>
           </div>
@@ -470,7 +503,8 @@ function AdminInspectionReviewContent() {
         <div className="space-y-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {[
-              { id: 'pending', label: `Pending (${pendingCount})`, icon: <AlertTriangle size={14} /> },
+              { id: 'overdue', label: `Overdue (${overdueCount})`, icon: <AlertTriangle size={14} /> },
+              { id: 'pending', label: `Pending (${pendingCount})`, icon: <Clock size={14} /> },
               { id: 'approved', label: 'Approved', icon: <CheckCircle2 size={14} /> },
               { id: 're-inspection', label: 'Re-Inspection', icon: <RefreshCw size={14} /> },
               { id: 'rejected', label: 'Rejected', icon: <XCircle size={14} /> },
@@ -481,28 +515,30 @@ function AdminInspectionReviewContent() {
               return (
                 <button
                   key={tab.id} onClick={() => setFilterTab(tab.id as any)}
-                  className={`group flex items-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer transition-all duration-200 border ${
+                  className={`group flex items-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer ${
                     isActive 
-                      ? 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border-purple-600' 
-                      : `bg-white/40 backdrop-blur-md border border-white/60 text-slate-700 hover:bg-white/60 shadow-sm`
+                      ? tab.id === 'overdue' 
+                        ? 'bg-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] scale-[1.02] border border-orange-500' 
+                        : 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border border-purple-600' 
+                      : `${theme.glassItem} ${theme.textSub} hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`
                   }`}
                 >
-                  <span className={isActive ? 'text-white' : 'text-purple-600 group-hover:text-purple-700 transition-colors'}>{tab.icon}</span>
+                  <span className={isActive ? 'text-white' : tab.id === 'overdue' ? 'text-orange-500 group-hover:text-orange-600 dark:text-orange-400 dark:group-hover:text-orange-300' : 'text-purple-500 group-hover:text-purple-600 dark:text-purple-400 dark:group-hover:text-purple-300 transition-colors'}>{tab.icon}</span>
                   <span>{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className={`p-2.5 rounded-2xl transition-all shadow-sm flex items-center focus-within:ring-4 focus-within:ring-purple-500/10 ${theme.glassInner}`}>
+          <div className={`p-2.5 rounded-2xl flex items-center ${theme.inputBg}`}>
             <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 text-slate-400`} />
+              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`} />
               <input 
                 type="text" 
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
-                className="w-full pl-12 pr-4 py-1.5 text-sm font-semibold outline-none bg-transparent placeholder:text-slate-400"
+                className={`w-full pl-12 pr-4 py-1.5 text-sm font-semibold outline-none bg-transparent ${isDarkMode ? 'text-zinc-100 placeholder:text-zinc-500' : 'text-slate-900 placeholder:text-slate-400'}`}
               />
             </div>
           </div>
@@ -510,12 +546,12 @@ function AdminInspectionReviewContent() {
 
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-600"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500"></div>
             <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Fetching Submissions...</span>
           </div>
         ) : filteredList.length === 0 ? (
-          <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.glassCard}`}>
-            <ClipboardCheck size={48} className="mx-auto text-purple-600 opacity-60" />
+          <div className={`w-full py-24 rounded-3xl text-center space-y-3 ${theme.glassCard}`}>
+            <ClipboardCheck size={48} className={`mx-auto opacity-60 ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`} />
             <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Logs Found</h3>
             <p className={`text-xs font-semibold ${theme.textSub}`}>The tracking timeline is clear for these parameters.</p>
           </div>
@@ -523,6 +559,7 @@ function AdminInspectionReviewContent() {
           <div className="space-y-6">
             {filteredList.map((item, index) => {
               const isPending = item.status === 'Pending' || item.status === 'Awaiting Staff Action';
+              const isOverdue = item.status === 'Overdue';
               const photosArray = item.photos || [];
               const isHighlighted = highlightedId === String(item.id);
               const canSendReminder = !item.is_admin_action && item.staff_id && !item.is_deleted_user;
@@ -531,19 +568,17 @@ function AdminInspectionReviewContent() {
                 <div 
                   key={`${item.id}-${index}`} 
                   id={`inspection-${item.id}`}
-                  className={`p-6 md:p-8 rounded-3xl transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.glassItem} ${
+                  className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${
                     isHighlighted 
-                      ? 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' 
-                      : (isPending && item.is_submission && !item.is_admin_action) 
-                        ? 'ring-2 ring-orange-400/50'
-                        : ''
+                      ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' 
+                      : ''
                   }`}
                 >
-                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 border-white/50`}>
+                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${
-                        item.is_admin_action ? 'bg-purple-100 text-purple-700 border border-purple-200' : 
-                        item.is_submission ? 'bg-white/80 border border-white text-orange-600' : 'bg-slate-100 text-slate-500 border-white'
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 ${theme.glassInner} ${
+                        item.is_admin_action ? 'text-purple-600 dark:text-purple-400' : 
+                        item.is_submission ? 'text-orange-500 dark:text-orange-400' : 'text-slate-500'
                       }`}>
                         {item.is_admin_action ? <Settings size={20} /> : <User size={20} />}
                       </div>
@@ -551,17 +586,15 @@ function AdminInspectionReviewContent() {
                         <div className="flex items-center gap-2">
                            <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
                            {item.is_deleted_user && (
-                             <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 border border-rose-200 text-rose-700 uppercase tracking-widest shadow-sm">Removed</span>
+                             <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest shadow-sm ${isDarkMode ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'bg-rose-100 border border-rose-200 text-rose-700'}`}>Removed</span>
                            )}
                         </div>
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-sm border ${
-                            item.is_admin_action ? 'bg-purple-50/80 text-purple-900 border-purple-200/50' : 'bg-white/60 text-slate-700 border-white/80'
-                          }`}>
+                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md ${theme.glassInner}`}>
                             {item.emp_code}
                           </span>
                           {item.is_admin_action && (
-                            <span className="text-[9px] bg-purple-600 text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-sm">
+                            <span className="text-[9px] bg-purple-500 text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-sm">
                               Admin Action
                             </span>
                           )}
@@ -571,20 +604,20 @@ function AdminInspectionReviewContent() {
 
                     <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
                       <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
-                        <Laptop size={14} className="text-orange-600 shrink-0" />
+                        <Laptop size={14} className="text-orange-500 shrink-0" />
                         <button 
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
                           }}
-                          className={`truncate cursor-pointer text-left font-bold transition-colors hover:text-orange-600 hover:underline`}
+                          className={`truncate cursor-pointer text-left font-bold transition-colors hover:text-orange-500 dark:hover:text-orange-400 hover:underline`}
                           title="View Asset Details"
                         >
                           {item.asset_name}
                         </button>
                       </div>
-                      <div className={`flex justify-between items-center text-[11px] border-t border-white/50 pt-2.5 mt-2.5`}>
+                      <div className={`flex justify-between items-center text-[11px] border-t pt-2.5 mt-2.5 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
                         <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
                         <span className={`font-mono font-bold ${theme.textMain}`}>{item.serial_number}</span>
                       </div>
@@ -596,7 +629,7 @@ function AdminInspectionReviewContent() {
                             e.stopPropagation();
                             router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
                           }}
-                          className={`font-mono font-bold cursor-pointer flex items-center gap-1 transition-colors text-purple-700 hover:text-purple-800 hover:underline`}
+                          className={`font-mono font-bold cursor-pointer flex items-center gap-1 transition-colors ${isDarkMode ? 'text-purple-400 hover:text-purple-300' : 'text-purple-600 hover:text-purple-700'} hover:underline`}
                           title="View Asset Details"
                         >
                           {item.asset_tag} <ExternalLink size={10} className="mb-0.5" />
@@ -607,7 +640,7 @@ function AdminInspectionReviewContent() {
                     <div className="space-y-3 text-[12px]">
                       <div className="flex items-center justify-between">
                         <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Clock size={14} className="text-purple-600" /> 
+                          <Clock size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-500'} /> 
                           <span className="text-[10px] font-bold uppercase tracking-widest">
                             {item.is_submission ? 'Recorded Date' : 'Last Inspection'}
                           </span>
@@ -616,28 +649,28 @@ function AdminInspectionReviewContent() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Calendar size={14} className="text-orange-600" /> 
+                          <Calendar size={14} className={isDarkMode ? 'text-orange-400' : 'text-orange-500'} /> 
                           <span className="text-[10px] font-bold uppercase tracking-widest">Upcoming Due</span>
                         </div>
-                        <span className={`font-bold ${theme.textMain}`}>
-                          {calculateNextDueDate(item.created_at, item.category)}
+                        <span className={`font-bold ${isOverdue ? 'text-orange-500 dark:text-orange-400 animate-pulse' : theme.textMain}`}>
+                          {item.next_due ? new Date(item.next_due).toLocaleDateString('en-IN') : 'N/A'}
                         </span>
                       </div>
                     </div>
 
-                    {canSendReminder && (isPending || item.status === 'Re-Inspection') && (
+                    {canSendReminder && (isPending || isOverdue || item.status === 'Re-Inspection') && (
                       <button
                         type="button"
                         disabled={sendingAlertId === item.staff_id}
-                        onClick={() => sendStaffAuditReminder(item.staff_id, item.asset_name, item.asset_tag, item.status === 'Re-Inspection')}
+                        onClick={() => sendStaffAuditReminder(item.staff_id, item.asset_name, item.asset_tag, item.status)}
                         className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 ${
-                          item.status === 'Re-Inspection'
-                            ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)]'
-                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)]'
+                          item.status === 'Re-Inspection' || isOverdue
+                            ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400'
+                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] border border-purple-500'
                         }`}
                       >
                         <Send size={14} className={sendingAlertId === item.staff_id ? 'animate-bounce' : ''} />
-                        <span>{sendingAlertId === item.staff_id ? 'Transmitting Alert...' : item.status === 'Re-Inspection' ? '⚡ Request Re-Inspection' : '⚡ Remind Staff via Ping'}</span>
+                        <span>{sendingAlertId === item.staff_id ? 'Transmitting Alert...' : item.status === 'Re-Inspection' ? '⚡ Request Re-Inspection' : isOverdue ? '🚨 Ping Overdue Staff' : '⚡ Remind Staff via Ping'}</span>
                       </button>
                     )}
                   </div>
@@ -651,13 +684,14 @@ function AdminInspectionReviewContent() {
                     </div>
 
                     <div className="space-y-2.5">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className="text-orange-600"/> Photographic Evidence ({photosArray.length})</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className={isDarkMode ? 'text-orange-400' : 'text-orange-500'}/> Photographic Evidence ({photosArray.length})</span>
                       {!item.is_submission ? (
-                        <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 border-amber-300 bg-amber-50/50 text-amber-800`}>
-                          <Clock size={14} /> Awaiting staff member to upload visual verification photos.
+                        <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 ${isOverdue ? (isDarkMode ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : 'border-orange-300 bg-orange-50/50 text-orange-800') : (isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-amber-300 bg-amber-50/50 text-amber-800')}`}>
+                          {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
+                          {isOverdue ? 'CRITICAL: Staff missed deadline. No photos uploaded.' : 'Awaiting staff member to upload visual verification photos.'}
                         </div>
                       ) : photosArray.length === 0 ? (
-                        <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 text-slate-500 ${theme.glassInner}`}>
+                        <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${theme.textSub} ${theme.glassInner}`}>
                           <ShieldAlert size={14} /> No graphical assets required or attached to this registry record log.
                         </div>
                       ) : (
@@ -667,7 +701,7 @@ function AdminInspectionReviewContent() {
                               key={idx}
                               type="button"
                               onClick={() => setPreviewPhotoModal(url)}
-                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 border-white/80 hover:border-orange-400 bg-white/40`}
+                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 ${isDarkMode ? 'border-white/10 hover:border-orange-500 bg-black/40' : 'border-white/80 hover:border-orange-400 bg-white/40'}`}
                             >
                               <img src={url} alt={`Evidence Shot ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                               <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
@@ -689,24 +723,25 @@ function AdminInspectionReviewContent() {
 
                     {item.admin_remarks && (
                       <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
-                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 text-purple-700`}>Administrative Action Remarks:</span>
+                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Administrative Action Remarks:</span>
                         <p className={theme.textMain}>"{item.admin_remarks}"</p>
                       </div>
                     )}
 
-                    <div className={`pt-4 border-t mt-auto border-white/50`}>
+                    <div className={`pt-4 border-t mt-auto ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
                       {item.is_admin_action ? (
-                        <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-purple-50/60 backdrop-blur-md border-purple-200`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest text-purple-800`}>System Registry Asset Audit</span>
-                          <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-orange-600`}>
+                        <div className={`flex items-center justify-between px-5 py-4 rounded-2xl ${theme.glassInner}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-purple-300' : 'text-purple-800'}`}>System Registry Asset Audit</span>
+                          <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}>
                             <CheckCircle2 size={14} /> Log Sealed Automatically
                           </div>
                         </div>
                       ) : !item.is_submission ? (
-                         <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-amber-50/60 backdrop-blur-md border-amber-200`}>
-                           <span className={`text-[10px] font-bold uppercase tracking-widest text-amber-800`}>Pending Staff Action</span>
-                           <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700`}>
-                             <Clock size={14} /> Waiting on Employee
+                         <div className={`flex items-center justify-between px-5 py-4 rounded-2xl ${theme.glassInner}`}>
+                           <span className={`text-[10px] font-bold uppercase tracking-widest ${isOverdue ? (isDarkMode ? 'text-orange-300' : 'text-orange-800') : (isDarkMode ? 'text-amber-300' : 'text-amber-800')}`}>{isOverdue ? 'DEADLINE MISSED' : 'Pending Staff Action'}</span>
+                           <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest ${isOverdue ? (isDarkMode ? 'text-orange-400 animate-pulse' : 'text-orange-600 animate-pulse') : (isDarkMode ? 'text-amber-400' : 'text-amber-700')}`}>
+                             {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
+                             {isOverdue ? 'Overdue' : 'Waiting on Employee'}
                            </div>
                          </div>
                       ) : isPending ? (
@@ -715,7 +750,7 @@ function AdminInspectionReviewContent() {
                             type="button"
                             disabled={updatingId === item.id}
                             onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(5,150,105,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                            className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
                           >
                             <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
                           </button>
@@ -724,7 +759,7 @@ function AdminInspectionReviewContent() {
                             type="button"
                             disabled={updatingId === item.id}
                             onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                            className="flex items-center justify-center gap-2 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
                           >
                             <RefreshCw size={16} /> Re-Inspect
                           </button>
@@ -733,22 +768,22 @@ function AdminInspectionReviewContent() {
                             type="button"
                             disabled={updatingId === item.id}
                             onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(225,29,72,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                            className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
                           >
                             <XCircle size={16} /> Reject
                           </button>
                         </div>
                       ) : (
                         <div className={`flex items-center justify-between px-5 py-4 rounded-xl ${theme.glassInner}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Adjudication Complete</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Admin Verdict Recorded</span>
                           <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
-                            {item.status === 'Approved' && <CheckCircle2 size={14} className={"text-emerald-600"}/>}
-                            {item.status === 'Re-Inspection' && <RefreshCw size={14} className={"text-orange-600"}/>}
-                            {item.status === 'Rejected' && <XCircle size={14} className={"text-rose-600"}/>}
+                            {item.status === 'Approved' && <CheckCircle2 size={14} className={isDarkMode ? "text-emerald-400" : "text-emerald-500"}/>}
+                            {item.status === 'Re-Inspection' && <RefreshCw size={14} className={isDarkMode ? "text-orange-400" : "text-orange-500"}/>}
+                            {item.status === 'Rejected' && <XCircle size={14} className={isDarkMode ? "text-rose-400" : "text-rose-500"}/>}
                             <span className={
-                              item.status === 'Approved' ? 'text-emerald-700' : 
-                              item.status === 'Re-Inspection' ? 'text-orange-700' : 
-                              'text-rose-700'
+                              item.status === 'Approved' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : 
+                              item.status === 'Re-Inspection' ? (isDarkMode ? 'text-orange-400' : 'text-orange-600') : 
+                              (isDarkMode ? 'text-rose-400' : 'text-rose-600')
                             }>
                               {item.status}
                             </span>
@@ -795,9 +830,9 @@ function AdminInspectionReviewContent() {
 export default function AdminInspectionReviewPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#FFF9F2] flex flex-col items-center justify-center gap-4 transition-colors">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-orange-600"></div>
-        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500">Loading Core Engine...</span>
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 transition-colors">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-500 dark:border-t-orange-500"></div>
+        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500 dark:text-zinc-500">Loading Core Engine...</span>
       </div>
     }>
       <AdminInspectionReviewContent />
