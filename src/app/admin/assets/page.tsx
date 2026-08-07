@@ -92,7 +92,57 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
   return `${cpu} | 16GB RAM | 512GB NVMe SSD | Windows 11 Pro`;
 }
 
-// 🌟 Highly Legible Dropdown Component
+// ==========================================
+// 🌟 PREMIUM CUSTOM GLASS DROPDOWN 
+// (Replaces native black <select> tags)
+// ==========================================
+const PremiumGlassDropdown = ({ value, onChange, options, theme, isDarkMode, className = "px-3.5 py-2.5" }: any) => {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabel = options.find((o:any) => o.value === value)?.label || value;
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div 
+        onClick={() => setOpen(!open)} 
+        className={`flex items-center justify-between w-full ${className} ${theme.inputBg} rounded-2xl transition-all shadow-inner cursor-pointer`}
+      >
+        <span className={`text-xs font-bold truncate pr-4 ${theme.text}`}>{selectedLabel}</span>
+        <ChevronDown size={14} className={`${theme.subText} shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </div>
+
+      {open && (
+        <div className={`absolute z-9999 w-full min-w-45 mt-2 py-1.5 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.3)] backdrop-blur-2xl border ${isDarkMode ? 'bg-zinc-900/90 border-white/10' : 'bg-white/90 border-white/80'} overflow-hidden`}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
+            {options.map((opt:any) => (
+              <div
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`px-4 py-2.5 text-xs font-bold cursor-pointer transition-colors flex items-center gap-2 ${
+                  value === opt.value
+                    ? (isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700')
+                    : (isDarkMode ? 'text-zinc-300 hover:bg-white/10' : 'text-slate-700 hover:bg-black/5')
+                }`}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Type employee name or EMP code...", theme, isDarkMode }: any) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -116,7 +166,7 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Ty
   const filtered = query.trim().length === 0 ? [] : staffList.filter((s: any) => `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <div className="relative" ref={wrapperRef}>
+    <div className="relative w-full" ref={wrapperRef}>
       <div className={`flex items-center w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all shadow-inner`}>
         <Search size={16} className={`mr-2 shrink-0 ${theme.subText}`} />
         <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className={`w-full text-xs font-semibold outline-none bg-transparent ${theme.text} placeholder:text-slate-400 dark:placeholder:text-zinc-500`} />
@@ -189,6 +239,49 @@ function AssetRegistryContent() {
   const [isEditingAsset, setIsEditingAsset] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // 🌟 Premium Options Arrays for Custom Dropdowns
+  const filterStatusOptions = [
+    { value: 'All', label: '📦 All Stock Statuses' },
+    { value: 'In Stock', label: '🟢 In Stock (Unassigned)' },
+    { value: 'Assigned', label: '👤 Assigned' },
+    { value: 'Pending Handover', label: '⏳ Pending Handover' },
+    { value: 'In Repair', label: '🛠️ In Repair' },
+    { value: 'Demo Use', label: '🧪 Demo Use' }
+  ];
+
+  const filterConditionOptions = [
+    { value: 'All', label: '✨ All Conditions' },
+    { value: 'New', label: '✨ New' },
+    { value: 'Refurbished', label: '🔄 Refurbished' },
+    { value: 'Repaired', label: '🛠️ Repaired' }
+  ];
+
+  const formConditionOptions = [
+    { value: 'New', label: '✨ New' },
+    { value: 'Refurbished', label: '🔄 Refurbished' },
+    { value: 'Repaired', label: '🛠️ Repaired' }
+  ];
+
+  const formStatusOptions = [
+    { value: 'In Stock (Unassigned)', label: '📦 In Stock' },
+    { value: 'Assigned', label: '👤 Assigned' },
+    { value: 'Demo Use', label: '🧪 Demo' },
+    { value: 'In Repair', label: '⚠️ Repair' },
+    { value: 'Discard', label: '🗑️ Discard' }
+  ];
+
+  const newAssetStockOptions = [
+    { value: 'In Stock (Unassigned)', label: '📦 In Stock' },
+    { value: 'Demo Use', label: '🧪 Demo' }
+  ];
+
+  const inspectionOptions = [
+    { value: 'Approved', label: '✅ Approved' },
+    { value: 'Re-Inspection', label: '🔄 Re-Inspection' },
+    { value: 'Not Approved', label: '⚠️ Not Approved' },
+    { value: 'Rejected', label: '❌ Rejected' }
+  ];
 
   useEffect(() => {
     const syncTheme = () => {
@@ -556,36 +649,34 @@ function AssetRegistryContent() {
             </div>
           </div>
 
-          {/* 🌟 FIXED CONTRAST FILTER TABS */}
+          {/* 🌟 FIXED CONTRAST FILTER TABS USING CUSTOM GLASS DROPDOWNS */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto custom-scrollbar">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               <span className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${theme.text}`}>
                 <Filter size={16} className="text-orange-500" /> Filter:
               </span>
               
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className={`text-xs font-bold py-2.5 px-3.5 ${theme.inputBg} rounded-2xl transition-all shadow-inner outline-none cursor-pointer`}
-              >
-                <option value="All" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">📦 All Stock Statuses</option>
-                <option value="In Stock" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🟢 In Stock (Unassigned)</option>
-                <option value="Assigned" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">👤 Assigned</option>
-                <option value="Pending Handover" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">⏳ Pending Handover</option>
-                <option value="In Repair" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ In Repair</option>
-                <option value="Demo Use" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🧪 Demo Use</option>
-              </select>
+              <div className="w-45">
+                <PremiumGlassDropdown 
+                  value={statusFilter} 
+                  onChange={setStatusFilter} 
+                  options={filterStatusOptions} 
+                  theme={theme} 
+                  isDarkMode={isDarkMode}
+                  className="py-2.5 px-3.5"
+                />
+              </div>
 
-              <select
-                value={conditionFilter}
-                onChange={e => setConditionFilter(e.target.value)}
-                className={`text-xs font-bold py-2.5 px-3.5 ${theme.inputBg} rounded-2xl transition-all shadow-inner outline-none cursor-pointer`}
-              >
-                <option value="All" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ All Conditions</option>
-                <option value="New" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ New</option>
-                <option value="Refurbished" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Refurbished</option>
-                <option value="Repaired" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ Repaired</option>
-              </select>
+              <div className="w-45">
+                <PremiumGlassDropdown 
+                  value={conditionFilter} 
+                  onChange={setConditionFilter} 
+                  options={filterConditionOptions} 
+                  theme={theme} 
+                  isDarkMode={isDarkMode}
+                  className="py-2.5 px-3.5"
+                />
+              </div>
 
               {(statusFilter !== 'All' || conditionFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
                 <button
@@ -675,12 +766,7 @@ function AssetRegistryContent() {
                         <span className={`font-black uppercase text-[9px] tracking-wider ${theme.subText}`}>Holder</span> 
                         <span className={`font-bold text-xs truncate ${theme.text} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
                       </div>
-                      
-                      {/* 🌟 HIGHLY VISIBLE EMP CODE BADGE */}
-                      <span className={`font-mono font-black px-2.5 py-1 rounded-lg text-[10px] ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shadow-sm shrink-0`}>
-                        {asset.emp_code}
-                      </span>
-
+                      <span className={`font-mono font-black px-2.5 py-1 rounded-lg text-[10px] shadow-sm shrink-0 border ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>{asset.emp_code}</span>
                     </div>
                   </div>
 
@@ -731,10 +817,17 @@ function AssetRegistryContent() {
                 <h4 className={`text-xs font-black uppercase tracking-widest text-orange-500`}>Sheet Formatting</h4>
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Paper Size</label>
-                  <select value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className={`w-full p-3 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}>
-                    <option value="A4" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">A4 (210 x 297mm)</option>
-                    <option value="Letter" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">US Letter (8.5 x 11in)</option>
-                  </select>
+                  <PremiumGlassDropdown 
+                    value={printConfig.pageSize} 
+                    onChange={(val: string) => setPrintConfig({...printConfig, pageSize: val})} 
+                    options={[
+                      { value: 'A4', label: 'A4 (210 x 297mm)' },
+                      { value: 'Letter', label: 'US Letter (8.5 x 11in)' }
+                    ]} 
+                    theme={theme} 
+                    isDarkMode={isDarkMode}
+                    className="py-3 px-4"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-3 ${theme.inputBg} rounded-2xl outline-none font-semibold`} /></div>
@@ -812,18 +905,21 @@ function AssetRegistryContent() {
                     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 ${theme.glassInnerCard} rounded-3xl`}>
                       <div>
                         <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Asset Category *</label>
-                        <select value={editForm.category} onChange={e => { 
-                          const newCat = e.target.value; 
-                          setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) }); 
-                        }} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold cursor-pointer`}>
-                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">{cat}</option>)}
-                        </select>
+                        <PremiumGlassDropdown 
+                          value={editForm.category} 
+                          onChange={(newCat: string) => { 
+                            setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) }); 
+                          }} 
+                          options={ASSET_CATEGORIES.map(c => ({ value: c, label: c }))} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3.5 px-4"
+                        />
                       </div>
                       <div>
                         <div className={`flex justify-between mb-1.5`}>
                           <label className="text-[10px] font-bold uppercase text-orange-500">Asset Tag ID</label>
-                          {/* 🌟 HIGH VISIBILITY REGENERATE BUTTON */}
-                          <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'}`}>
+                          <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className={`text-[9px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30`}>
                             <RefreshCw size={12}/> Generate New
                           </button>
                         </div>
@@ -841,8 +937,7 @@ function AssetRegistryContent() {
                       <div>
                         <div className={`flex justify-between mb-1.5`}>
                           <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>Assets Name</label>
-                          {/* 🌟 HIGH VISIBILITY AUTO DETECT BUTTON */}
-                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className={`text-[9px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30`}>
                             <Zap size={12}/> Auto-Detect Specs
                           </button>
                         </div>
@@ -857,9 +952,9 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center mb-1.5">
                         <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>System Hardware Specifications / Configuration</label>
-                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className={`text-[9px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30`}>
                           <Zap size={12}/> Auto-Detect Specs
                         </button>
                       </div>
@@ -885,13 +980,38 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="New" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ Repaired</option></select></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">📦 In Stock</option><option value="Assigned" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">👤 Assigned</option><option value="Demo Use" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🧪 Demo</option><option value="In Repair" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">⚠️ Repair</option><option value="Discard" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🗑️ Discard</option></select></div>
+                      <div>
+                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label>
+                        <PremiumGlassDropdown 
+                          value={editForm.condition} 
+                          onChange={(val: string) => setEditForm({...editForm, condition: val})} 
+                          options={formConditionOptions} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3.5 px-4"
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label>
+                        <PremiumGlassDropdown 
+                          value={editForm.status} 
+                          onChange={(val: string) => setEditForm({...editForm, status: val})} 
+                          options={formStatusOptions} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3.5 px-4"
+                        />
+                      </div>
                       <div>
                         <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Inspection State</label>
-                        <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}>
-                          <option value="Approved" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✅ Approved</option><option value="Re-Inspection" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Re-Inspection</option><option value="Not Approved" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">⚠️ Not Approved</option><option value="Rejected" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">❌ Rejected</option>
-                        </select>
+                        <PremiumGlassDropdown 
+                          value={editForm.inspection_status} 
+                          onChange={(val: string) => setEditForm({...editForm, inspection_status: val})} 
+                          options={inspectionOptions} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3.5 px-4"
+                        />
                       </div>
                     </div>
 
@@ -939,8 +1059,7 @@ function AssetRegistryContent() {
                       </div>
                       <div className="flex flex-col items-end">
                          <span className={`text-[8px] font-black uppercase tracking-widest mb-1 ${theme.subText}`}>EMP CODE</span>
-                         {/* 🌟 HIGHLY VISIBLE EMP CODE BADGE IN VIEW MODAL */}
-                         <span className={`font-mono font-black px-2.5 py-1 rounded-lg text-[10px] ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shadow-sm shrink-0`}>
+                         <span className={`font-mono font-black px-3 py-1.5 rounded-xl text-[11px] border shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shrink-0`}>
                            {viewAssetModal.emp_code}
                          </span>
                       </div>
@@ -1042,22 +1161,25 @@ function AssetRegistryContent() {
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 p-5 ${theme.glassInnerCard} rounded-3xl`}>
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Asset Category *</label>
-                  <select value={newAssetCategory} onChange={e => {
-                    const newCat = e.target.value;
-                    setNewAssetCategory(newCat);
-                    setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
-                    if (newCat === 'Laptop') setNewAssetSpecs('Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
-                    else if (newCat.includes('Keyboard') || newCat.includes('Mouse')) setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
-                    else setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
-                  }} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold cursor-pointer`}>
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">{cat}</option>)}
-                  </select>
+                  <PremiumGlassDropdown 
+                    value={newAssetCategory} 
+                    onChange={(newCat: string) => { 
+                      setNewAssetCategory(newCat);
+                      setNewAssetTag(generateCategoryPrefix(newCat, newAssetTag));
+                      if (newCat === 'Laptop') setNewAssetSpecs('Intel Core i7 (11th/12th Gen vPro) | 16GB DDR4 RAM | 512GB NVMe SSD | Windows 11 Pro');
+                      else if (newCat.includes('Keyboard') || newCat.includes('Mouse')) setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
+                      else setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
+                    }} 
+                    options={ASSET_CATEGORIES.map(c => ({ value: c, label: c }))} 
+                    theme={theme} 
+                    isDarkMode={isDarkMode}
+                    className="py-3.5 px-4"
+                  />
                 </div>
                 <div>
                   <div className={`flex justify-between mb-1.5`}>
                     <label className="text-[10px] font-bold uppercase text-orange-500">Asset Tag ID</label>
-                    {/* 🌟 HIGH VISIBILITY REGENERATE BUTTON */}
-                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'}`}>
+                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className={`text-[9px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30`}>
                       <RefreshCw size={12}/> Generate New
                     </button>
                   </div>
@@ -1081,8 +1203,7 @@ function AssetRegistryContent() {
                 <div>
                   <div className={`flex justify-between mb-1.5`}>
                     <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>Assets Name *</label>
-                    {/* 🌟 HIGH VISIBILITY AUTO DETECT BUTTON */}
-                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className={`text-[9px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30`}>
                       <Zap size={12}/> Auto-Detect Specs
                     </button>
                   </div>
@@ -1097,10 +1218,10 @@ function AssetRegistryContent() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-1.5">
                   <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>System Hardware Specifications / Configuration</label>
-                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
-                    <Zap size={12}/> Auto-Detect
+                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className={`text-[9px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30`}>
+                    <Zap size={12}/> Auto-Detect Specs
                   </button>
                 </div>
                 <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} />
@@ -1125,8 +1246,28 @@ function AssetRegistryContent() {
               </div>
 
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="New" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">📦 In Stock</option><option value="Demo Use" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🧪 Demo</option></select></div>
+                <div>
+                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label>
+                  <PremiumGlassDropdown 
+                    value={newAssetCondition} 
+                    onChange={(val: string) => setNewAssetCondition(val)} 
+                    options={formConditionOptions} 
+                    theme={theme} 
+                    isDarkMode={isDarkMode}
+                    className="py-3.5 px-4"
+                  />
+                </div>
+                <div>
+                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label>
+                  <PremiumGlassDropdown 
+                    value={newAssetStatus} 
+                    onChange={(val: string) => setNewAssetStatus(val)} 
+                    options={newAssetStockOptions} 
+                    theme={theme} 
+                    isDarkMode={isDarkMode}
+                    className="py-3.5 px-4"
+                  />
+                </div>
               </div>
 
               <div className={`p-5 ${theme.glassInnerCard} rounded-3xl`}>
