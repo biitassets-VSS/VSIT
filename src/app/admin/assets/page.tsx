@@ -92,7 +92,8 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
   return `${cpu} | 16GB RAM | 512GB NVMe SSD | Windows 11 Pro`;
 }
 
-const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Type employee name or EMP code...", theme }: any) => {
+// 🌟 Highly Legible Dropdown Component
+const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Type employee name or EMP code...", theme, isDarkMode }: any) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -118,22 +119,22 @@ const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Ty
     <div className="relative" ref={wrapperRef}>
       <div className={`flex items-center w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all shadow-inner`}>
         <Search size={16} className={`mr-2 shrink-0 ${theme.subText}`} />
-        <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className={`w-full text-xs font-semibold outline-none bg-transparent ${theme.text}`} />
+        <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className={`w-full text-xs font-semibold outline-none bg-transparent ${theme.text} placeholder:text-slate-400 dark:placeholder:text-zinc-500`} />
         {value && <X size={16} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-2" onClick={() => { onChange(''); setQuery(''); }} />}
         <ChevronDown size={16} className={`cursor-pointer ${theme.subText}`} onClick={() => setOpen(!open)} />
       </div>
       {open && (
-        <div className={`absolute z-50 w-full mt-2 rounded-3xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar ${theme.glassCard}`}>
-          <div onClick={() => { onChange(''); setQuery(''); setOpen(false); }} className="p-4 text-xs font-black uppercase cursor-pointer border-b border-white/10 text-orange-500 hover:bg-white/10">📦 Unassign / Return to Stock</div>
+        <div className={`absolute z-50 w-full mt-2 rounded-2xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar border ${isDarkMode ? 'bg-zinc-900/95 border-zinc-700' : 'bg-white/95 border-slate-200'}`}>
+          <div onClick={() => { onChange(''); setQuery(''); setOpen(false); }} className={`p-3 text-[11px] font-black uppercase cursor-pointer border-b ${isDarkMode ? 'border-zinc-700 text-orange-400 hover:bg-zinc-800' : 'border-slate-200 text-orange-600 hover:bg-slate-50'}`}>📦 Unassign / Return to Stock</div>
           {query.trim().length === 0 ? (
-            <div className={`p-4 text-center text-xs font-semibold ${theme.subText}`}>🔍 Type an employee name or EMP code above...</div>
+            <div className={`p-4 text-center text-xs font-semibold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>🔍 Type an employee name or EMP code above...</div>
           ) : filtered.length === 0 ? (
             <div className="p-4 text-center text-xs font-semibold text-rose-500">No matched employee found for "{query}".</div>
           ) : (
             filtered.map((s: any) => (
-              <div key={s.id} className={`p-4 text-xs cursor-pointer border-b border-white/10 flex justify-between items-center hover:bg-white/10 ${theme.text}`} onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}>
+              <div key={s.id} className={`p-3 text-xs cursor-pointer border-b flex justify-between items-center ${isDarkMode ? 'border-zinc-700 text-zinc-200 hover:bg-zinc-800' : 'border-slate-200 text-slate-800 hover:bg-slate-50'}`} onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}>
                 <span className="font-bold">{s.full_name || s.name}</span>
-                <span className="font-mono text-[10px] px-2.5 py-1 rounded-lg font-black bg-purple-500/20 text-purple-300 border border-purple-500/30">{s.emp_code || s.email}</span>
+                <span className={`font-mono text-[10px] px-2.5 py-1 rounded-lg font-black border shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>{s.emp_code || s.email}</span>
               </div>
             ))
           )}
@@ -265,13 +266,13 @@ function AssetRegistryContent() {
     if (s.includes('Repair')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.2)] animate-pulse';
     if (s.includes('Demo')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.2)]';
     if (s.includes('Pending')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.2)]';
-    return 'bg-blue-500/10 border border-blue-500/30 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]';
+    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.2)]';
   };
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
     if (s.includes('approved')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.2)]';
-    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.2)]';
+    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.2)]';
     if (s.includes('rejected')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-[0_0_12px_rgba(243,64,84,0.2)]';
     return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.2)]';
   };
@@ -549,13 +550,13 @@ function AssetRegistryContent() {
                   value={searchQuery} 
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search by Asset Name, Tag ID, Brand, Category, S/N, or Staff..." 
-                  className={`w-full pl-12 pr-4 py-2 text-xs font-semibold outline-none bg-transparent ${theme.text} placeholder:text-zinc-500`}
+                  className={`w-full pl-12 pr-4 py-2 text-xs font-semibold outline-none bg-transparent ${theme.text} placeholder:text-slate-400 dark:placeholder:text-zinc-500`}
                 />
               </div>
             </div>
           </div>
 
-          {/* FILTER TABS */}
+          {/* 🌟 FIXED CONTRAST FILTER TABS */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto custom-scrollbar">
               <span className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${theme.text}`}>
@@ -567,12 +568,12 @@ function AssetRegistryContent() {
                 onChange={e => setStatusFilter(e.target.value)}
                 className={`text-xs font-bold py-2.5 px-3.5 ${theme.inputBg} rounded-2xl transition-all shadow-inner outline-none cursor-pointer`}
               >
-                <option value="All" className="dark:bg-zinc-900">📦 All Stock Statuses</option>
-                <option value="In Stock" className="dark:bg-zinc-900">🟢 In Stock (Unassigned)</option>
-                <option value="Assigned" className="dark:bg-zinc-900">👤 Assigned</option>
-                <option value="Pending Handover" className="dark:bg-zinc-900">⏳ Pending Handover</option>
-                <option value="In Repair" className="dark:bg-zinc-900">🛠️ In Repair</option>
-                <option value="Demo Use" className="dark:bg-zinc-900">🧪 Demo Use</option>
+                <option value="All" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">📦 All Stock Statuses</option>
+                <option value="In Stock" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🟢 In Stock (Unassigned)</option>
+                <option value="Assigned" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">👤 Assigned</option>
+                <option value="Pending Handover" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">⏳ Pending Handover</option>
+                <option value="In Repair" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ In Repair</option>
+                <option value="Demo Use" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🧪 Demo Use</option>
               </select>
 
               <select
@@ -580,10 +581,10 @@ function AssetRegistryContent() {
                 onChange={e => setConditionFilter(e.target.value)}
                 className={`text-xs font-bold py-2.5 px-3.5 ${theme.inputBg} rounded-2xl transition-all shadow-inner outline-none cursor-pointer`}
               >
-                <option value="All" className="dark:bg-zinc-900">✨ All Conditions</option>
-                <option value="New" className="dark:bg-zinc-900">✨ New</option>
-                <option value="Refurbished" className="dark:bg-zinc-900">🔄 Refurbished</option>
-                <option value="Repaired" className="dark:bg-zinc-900">🛠️ Repaired</option>
+                <option value="All" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ All Conditions</option>
+                <option value="New" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ New</option>
+                <option value="Refurbished" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Refurbished</option>
+                <option value="Repaired" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ Repaired</option>
               </select>
 
               {(statusFilter !== 'All' || conditionFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
@@ -655,7 +656,7 @@ function AssetRegistryContent() {
 
                     <div className="flex items-center gap-2">
                       <span className={`px-2.5 py-1 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                      <span className={`px-2.5 py-1 rounded-xl font-black text-[9px] uppercase tracking-wider border border-zinc-500/30 text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
+                      <span className={`px-2.5 py-1 rounded-xl font-black text-[9px] uppercase tracking-wider border border-zinc-500/30 text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
                     </div>
                   </div>
 
@@ -674,7 +675,12 @@ function AssetRegistryContent() {
                         <span className={`font-black uppercase text-[9px] tracking-wider ${theme.subText}`}>Holder</span> 
                         <span className={`font-bold text-xs truncate ${theme.text} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
                       </div>
-                      <span className={`font-mono font-black px-2.5 py-1 rounded-xl text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0`}>{asset.emp_code}</span>
+                      
+                      {/* 🌟 HIGHLY VISIBLE EMP CODE BADGE */}
+                      <span className={`font-mono font-black px-2.5 py-1 rounded-lg text-[10px] ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shadow-sm shrink-0`}>
+                        {asset.emp_code}
+                      </span>
+
                     </div>
                   </div>
 
@@ -713,7 +719,7 @@ function AssetRegistryContent() {
                 <h3 className={`text-lg font-black tracking-tight flex items-center gap-3 ${theme.text}`}>
                   <Settings2 size={20} className="text-orange-500"/> Label Print Layout
                 </h3>
-                <p className={`text-[10px] mt-1.5 uppercase tracking-widest font-black text-amber-500 bg-amber-500/10 inline-block px-3 py-1 rounded-xl border border-amber-500/20`}>
+                <p className={`text-[10px] mt-1.5 uppercase tracking-widest font-black text-amber-600 bg-amber-500/10 inline-block px-3 py-1 rounded-xl border border-amber-500/20`}>
                   Important: When printing, uncheck "Fit to Page" and set Margins to "None".
                 </p>
               </div>
@@ -726,8 +732,8 @@ function AssetRegistryContent() {
                 <div>
                   <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Paper Size</label>
                   <select value={printConfig.pageSize} onChange={e => setPrintConfig({...printConfig, pageSize: e.target.value})} className={`w-full p-3 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}>
-                    <option value="A4" className="dark:bg-zinc-900">A4 (210 x 297mm)</option>
-                    <option value="Letter" className="dark:bg-zinc-900">US Letter (8.5 x 11in)</option>
+                    <option value="A4" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">A4 (210 x 297mm)</option>
+                    <option value="Letter" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">US Letter (8.5 x 11in)</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -810,14 +816,17 @@ function AssetRegistryContent() {
                           const newCat = e.target.value; 
                           setEditForm({ ...editForm, category: newCat, asset_tag: generateCategoryPrefix(newCat, editForm.asset_tag) }); 
                         }} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold cursor-pointer`}>
-                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="dark:bg-zinc-900">{cat}</option>)}
+                          {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">{cat}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-orange-500`}>
-                          <span>Asset Tag ID</span>
-                          <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className="text-[9px] lowercase hover:underline cursor-pointer">(force regenerate)</button>
-                        </label>
+                        <div className={`flex justify-between mb-1.5`}>
+                          <label className="text-[10px] font-bold uppercase text-orange-500">Asset Tag ID</label>
+                          {/* 🌟 HIGH VISIBILITY REGENERATE BUTTON */}
+                          <button type="button" onClick={() => setEditForm({...editForm, asset_tag: generateCategoryPrefix(editForm.category)})} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'}`}>
+                            <RefreshCw size={12}/> Generate New
+                          </button>
+                        </div>
                         <input type="text" value={editForm.asset_tag} onChange={e => setEditForm({...editForm, asset_tag: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl font-mono uppercase transition-all outline-none font-semibold`} />
                       </div>
                     </div>
@@ -830,10 +839,13 @@ function AssetRegistryContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Brand</label><input type="text" value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} /></div>
                       <div>
-                        <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.subText}`}>
-                          <span>Assets Name</span>
-                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-500 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Re-Detect Specs</button>
-                        </label>
+                        <div className={`flex justify-between mb-1.5`}>
+                          <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>Assets Name</label>
+                          {/* 🌟 HIGH VISIBILITY AUTO DETECT BUTTON */}
+                          <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                            <Zap size={12}/> Auto-Detect Specs
+                          </button>
+                        </div>
                         <input type="text" value={editForm.name} onChange={e => { const v = e.target.value; setEditForm({...editForm, name: v, system_specs: autoDetectSpecs(`${v} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)}); }} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} />
                       </div>
                     </div>
@@ -847,7 +859,9 @@ function AssetRegistryContent() {
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>System Hardware Specifications / Configuration</label>
-                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className="text-[9px] text-orange-500 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                        <button type="button" onClick={() => setEditForm({...editForm, system_specs: autoDetectSpecs(`${editForm.name} ${editForm.brand} ${editForm.serial}`, editForm.category, editForm.system_specs)})} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                          <Zap size={12}/> Auto-Detect Specs
+                        </button>
                       </div>
                       <input type="text" value={editForm.system_specs} onChange={e => setEditForm({...editForm, system_specs: e.target.value})} placeholder="e.g. Intel Core i7 (12th Gen) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} />
                       <div className="flex flex-wrap gap-1.5 pt-1.5">
@@ -871,19 +885,19 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className={`grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="New" className="dark:bg-zinc-900">✨ New</option><option value="Refurbished" className="dark:bg-zinc-900">🔄 Refurbished</option><option value="Repaired" className="dark:bg-zinc-900">🛠️ Repaired</option></select></div>
-                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="In Stock (Unassigned)" className="dark:bg-zinc-900">📦 In Stock</option><option value="Assigned" className="dark:bg-zinc-900">👤 Assigned</option><option value="Demo Use" className="dark:bg-zinc-900">🧪 Demo</option><option value="In Repair" className="dark:bg-zinc-900">⚠️ Repair</option><option value="Discard" className="dark:bg-zinc-900">🗑️ Discard</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="New" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ Repaired</option></select></div>
+                      <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">📦 In Stock</option><option value="Assigned" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">👤 Assigned</option><option value="Demo Use" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🧪 Demo</option><option value="In Repair" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">⚠️ Repair</option><option value="Discard" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🗑️ Discard</option></select></div>
                       <div>
                         <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Inspection State</label>
                         <select value={editForm.inspection_status} onChange={e => setEditForm({...editForm, inspection_status: e.target.value})} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}>
-                          <option value="Approved" className="dark:bg-zinc-900">✅ Approved</option><option value="Re-Inspection" className="dark:bg-zinc-900">🔄 Re-Inspection</option><option value="Not Approved" className="dark:bg-zinc-900">⚠️ Not Approved</option><option value="Rejected" className="dark:bg-zinc-900">❌ Rejected</option>
+                          <option value="Approved" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✅ Approved</option><option value="Re-Inspection" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Re-Inspection</option><option value="Not Approved" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">⚠️ Not Approved</option><option value="Rejected" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">❌ Rejected</option>
                         </select>
                       </div>
                     </div>
 
                     <div className={`p-5 ${theme.glassInnerCard} rounded-3xl`}>
                       <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.subText}`}>Re-Assign Holder</label>
-                      <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} placeholder="Type employee name or EMP code..." theme={theme} />
+                      <SearchableStaffDropdown value={editForm.assignee} onChange={(val: string) => setEditForm({...editForm, assignee: val})} staffList={staffList} placeholder="Type employee name or EMP code..." theme={theme} isDarkMode={isDarkMode} />
                     </div>
 
                     <div className={`flex gap-4 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
@@ -925,7 +939,10 @@ function AssetRegistryContent() {
                       </div>
                       <div className="flex flex-col items-end">
                          <span className={`text-[8px] font-black uppercase tracking-widest mb-1 ${theme.subText}`}>EMP CODE</span>
-                         <span className={`text-xs font-mono font-black px-3 py-1.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl`}>{viewAssetModal.emp_code}</span>
+                         {/* 🌟 HIGHLY VISIBLE EMP CODE BADGE IN VIEW MODAL */}
+                         <span className={`font-mono font-black px-2.5 py-1 rounded-lg text-[10px] ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shadow-sm shrink-0`}>
+                           {viewAssetModal.emp_code}
+                         </span>
                       </div>
                     </div>
 
@@ -1033,14 +1050,17 @@ function AssetRegistryContent() {
                     else if (newCat.includes('Keyboard') || newCat.includes('Mouse')) setNewAssetSpecs('USB / Wireless Plug-and-Play Standard Business Accessory');
                     else setNewAssetSpecs('Standard Business Grade IT Hardware Configuration');
                   }} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold cursor-pointer`}>
-                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="dark:bg-zinc-900">{cat}</option>)}
+                    {ASSET_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">{cat}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 text-orange-500`}>
-                    <span>Asset Tag ID</span>
-                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className="text-[9px] lowercase hover:underline cursor-pointer">(generate new)</button>
-                  </label>
+                  <div className={`flex justify-between mb-1.5`}>
+                    <label className="text-[10px] font-bold uppercase text-orange-500">Asset Tag ID</label>
+                    {/* 🌟 HIGH VISIBILITY REGENERATE BUTTON */}
+                    <button type="button" onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'}`}>
+                      <RefreshCw size={12}/> Generate New
+                    </button>
+                  </div>
                   <input type="text" value={newAssetTag} onChange={e => setNewAssetTag(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl font-mono uppercase transition-all outline-none font-semibold`} />
                 </div>
               </div>
@@ -1059,10 +1079,13 @@ function AssetRegistryContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Brand</label><input type="text" value={newAssetBrand} onChange={e => setNewAssetBrand(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} /></div>
                 <div>
-                  <label className={`text-[10px] font-bold uppercase flex justify-between mb-1.5 ${theme.subText}`}>
-                    <span>Assets Name *</span>
-                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-500 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect Specs</button>
-                  </label>
+                  <div className={`flex justify-between mb-1.5`}>
+                    <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>Assets Name *</label>
+                    {/* 🌟 HIGH VISIBILITY AUTO DETECT BUTTON */}
+                    <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                      <Zap size={12}/> Auto-Detect Specs
+                    </button>
+                  </div>
                   <input type="text" required value={newAssetName} onChange={e => { const v = e.target.value; setNewAssetName(v); setNewAssetSpecs(autoDetectSpecs(`${v} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs)); }} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} />
                 </div>
               </div>
@@ -1076,7 +1099,9 @@ function AssetRegistryContent() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className={`text-[10px] font-bold uppercase ${theme.subText}`}>System Hardware Specifications / Configuration</label>
-                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className="text-[9px] text-orange-500 hover:underline cursor-pointer flex items-center gap-1 font-extrabold"><Zap size={10}/> ⚡ Auto-Detect from Model/SN</button>
+                  <button type="button" onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200'}`}>
+                    <Zap size={12}/> Auto-Detect
+                  </button>
                 </div>
                 <input type="text" value={newAssetSpecs} onChange={e => setNewAssetSpecs(e.target.value)} placeholder="e.g. Intel Core i7 (vPro) | 16GB RAM | 512GB SSD | Win 11 Pro" className={`w-full p-3.5 ${theme.inputBg} rounded-2xl transition-all outline-none font-semibold`} />
                 <div className="flex flex-wrap gap-1.5 pt-1.5">
@@ -1100,13 +1125,13 @@ function AssetRegistryContent() {
               </div>
 
               <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="New" className="dark:bg-zinc-900">✨ New</option><option value="Refurbished" className="dark:bg-zinc-900">🔄 Refurbished</option><option value="Repaired" className="dark:bg-zinc-900">🛠️ Repaired</option></select></div>
-                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="In Stock (Unassigned)" className="dark:bg-zinc-900">📦 In Stock</option><option value="Demo Use" className="dark:bg-zinc-900">🧪 Demo</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Condition</label><select value={newAssetCondition} onChange={e => setNewAssetCondition(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="New" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">✨ New</option><option value="Refurbished" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🔄 Refurbished</option><option value="Repaired" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🛠️ Repaired</option></select></div>
+                <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.subText}`}>Stock Status</label><select value={newAssetStatus} onChange={e => setNewAssetStatus(e.target.value)} className={`w-full p-3.5 ${theme.inputBg} rounded-2xl outline-none font-semibold cursor-pointer`}><option value="In Stock (Unassigned)" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">📦 In Stock</option><option value="Demo Use" className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-zinc-100">🧪 Demo</option></select></div>
               </div>
 
               <div className={`p-5 ${theme.glassInnerCard} rounded-3xl`}>
                 <label className={`text-[10px] font-bold uppercase block mb-2 ${theme.subText}`}>Assign to Employee (Optional)</label>
-                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} placeholder="Type employee name or EMP code..." theme={theme} />
+                <SearchableStaffDropdown value={newAssetAssignee} onChange={(val: string) => setNewAssetAssignee(val)} staffList={staffList} placeholder="Type employee name or EMP code..." theme={theme} isDarkMode={isDarkMode} />
               </div>
 
               <div className={`flex gap-4 pt-6 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
