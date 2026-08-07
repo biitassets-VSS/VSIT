@@ -13,9 +13,6 @@ import {
   Filter, FilterX, ShieldCheck, FileText, Cpu, Zap
 } from 'lucide-react';
 
-// ==========================================
-// 🌟 EXACT ASSET CATEGORIES FROM ADMIN
-// ==========================================
 const ASSET_CATEGORIES = [
   'Laptop', 'Stand', 'USB Wired Keyboard', 'USB Keyboard Mouse Kit', 
   'Wireless Keyboard kit', 'USB Wired Mouse', 'Headphone', 'Cleaning Kit', 'Others'
@@ -92,9 +89,6 @@ function autoDetectSpecs(textToParse: string, category: string, fallback?: strin
   return `${cpu} | 16GB RAM | 512GB NVMe SSD | Windows 11 Pro`;
 }
 
-// ==========================================
-// 🌟 PREMIUM CUSTOM GLASS DROPDOWN 
-// ==========================================
 const PremiumGlassDropdown = ({ value, onChange, options, theme, isDarkMode, className = "px-3 py-2.5" }: any) => {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -213,14 +207,12 @@ function AssetRegistryContent() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   
-  // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [conditionFilter, setConditionFilter] = useState<string>('All');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
 
-  // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
@@ -863,19 +855,17 @@ function AssetRegistryContent() {
         </div>
       )}
 
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE (COMPACT DETAILS WITH FIXED TOP CLEARANCE) */}
+      {/* 🚀 VIEW MODAL & HISTORY ENGINE (NO OVERLAP) */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
 
         return (
-          <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xl animate-in fade-in duration-200 ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/20'}`}>
-            <div className={`max-w-3xl w-full max-h-[80vh] mt-12 sm:mt-16 my-auto overflow-hidden flex flex-col ${theme.glassCard} rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
+          <div className={`fixed inset-0 z-50 flex flex-col justify-center items-center p-3 sm:p-4 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/20'}`}>
+            <div className={`max-w-3xl w-full max-h-[80vh] my-auto overflow-hidden flex flex-col ${theme.glassCard} rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
               
-              {/* 🌟 ENTERPRISE COMPACT HEADER WITH FIXED CLOSING & ACTION PADDING */}
-              <div className={`w-full p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-white/50 border-slate-200/60'} shrink-0 relative z-30`}>
-                <button onClick={() => setViewAssetModal(null)} className={`absolute top-3.5 right-3.5 p-2 rounded-full ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 transition-all cursor-pointer shadow-xs active:scale-90 z-20`}><X size={16}/></button>
-
+              {/* HEADER WITH PROPER MARGIN & NO OVERLAP */}
+              <div className={`w-full p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-white/50 border-slate-200/60'} shrink-0 relative z-30`}>
                 <div className="flex items-center gap-3 w-full md:w-auto min-w-0 pr-12">
                   <div className={`p-2 rounded-xl ${theme.glassInnerCard} shrink-0`}>
                     <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(getAssetViewUrl(viewAssetModal))}`} alt="QR Code" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
@@ -891,24 +881,26 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end shrink-0 mt-1 md:mt-0 pr-10 md:pr-12">
-                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`px-3.5 py-1.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 transition-all cursor-pointer border border-orange-400`}>
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end shrink-0 mt-1 md:mt-0 pr-12 md:pr-14">
+                  <button onClick={() => handlePrintPhysicalSticker(viewAssetModal, liveModalTag)} className={`px-3 py-1.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 transition-all cursor-pointer border border-orange-400`}>
                     <Printer size={14} /> <span>Print QR</span>
                   </button>
                   {!isEditingAsset && (
                     <>
-                      <button onClick={() => setIsEditingAsset(true)} className={`px-3.5 py-1.5 ${theme.glassInnerCard} ${theme.textMain} hover:opacity-90 hover:text-orange-500 rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors`}>
+                      <button onClick={() => setIsEditingAsset(true)} className={`px-3 py-1.5 ${theme.glassInnerCard} ${theme.textMain} hover:opacity-90 hover:text-orange-500 rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors`}>
                         <Edit2 size={14} /> Edit
                       </button>
-                      <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-3.5 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/30 rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors`}>
+                      <button onClick={() => handleDeleteAsset(viewAssetModal.id)} className={`px-3 py-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/30 rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors`}>
                         <Trash2 size={14} /> Delete
                       </button>
                     </>
                   )}
                 </div>
+
+                <button onClick={() => setViewAssetModal(null)} className={`absolute top-4 right-4 p-2 rounded-full ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 transition-all cursor-pointer shadow-xs active:scale-90 z-40`}><X size={16}/></button>
               </div>
 
-              {/* 🌟 SCROLLABLE MODAL BODY */}
+              {/* SCROLLABLE BODY */}
               <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 ${isEditingAsset ? 'pb-32' : 'pb-4'}`}>
                 {isEditingAsset ? (
                   <div className="space-y-4 animate-in fade-in duration-200">
@@ -1149,7 +1141,7 @@ function AssetRegistryContent() {
                 )}
               </div>
 
-              {/* 🌟 FIXED MODAL FOOTER */}
+              {/* FIXED FOOTER */}
               {isEditingAsset && (
                 <div className={`p-4 sm:p-5 shrink-0 flex gap-3 border-t ${isDarkMode ? 'border-white/10 bg-black/40' : 'border-slate-200/60 bg-white/50'}`}>
                   <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-6 py-2.5 rounded-xl ${isDarkMode ? 'bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-zinc-700' : 'bg-white/60 border-slate-200 text-slate-700 hover:bg-white'} backdrop-blur-xl border transition-all text-[11px] font-bold uppercase tracking-widest cursor-pointer shadow-xs active:scale-95`}>Cancel</button>
@@ -1164,15 +1156,15 @@ function AssetRegistryContent() {
         );
       })()}
 
-      {/* 🚀 ADD NEW ASSET MODAL - 2026 MAC OS FROSTED GLASS UI/UX */}
+      {/* 🚀 ADD NEW ASSET MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/50 backdrop-blur-xl animate-in fade-in duration-200">
           <div 
-            className={`max-w-2xl w-full max-h-[85vh] mt-12 sm:mt-16 my-auto overflow-hidden flex flex-col ${theme.glassCard} rounded-4xl border-2 ${
+            className={`max-w-2xl w-full max-h-[85vh] my-auto overflow-hidden flex flex-col ${theme.glassCard} rounded-4xl border-2 ${
               isDarkMode ? 'border-orange-500/30 bg-zinc-900/80' : 'border-white/90 bg-white/70'
             } shadow-[0_32px_80px_rgba(0,0,0,0.3)] animate-in zoom-in-95 duration-200`}
           >
-            {/* 🌟 MAC OS MODAL HEADER - ABSOLUTE CLOSE BUTTON TO PREVENT OVERLAP */}
+            {/* MAC OS MODAL HEADER */}
             <div 
               className={`p-4 sm:p-5 border-b ${
                 isDarkMode ? 'border-white/10 bg-black/40' : 'border-slate-200/60 bg-white/50'
@@ -1201,7 +1193,7 @@ function AssetRegistryContent() {
               </div>
             </div>
             
-            {/* 🌟 FORM BODY (Scrollable with Bottom Padding for Dropdowns) */}
+            {/* FORM BODY */}
             <form onSubmit={handleSaveNewAsset} className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
               <div className="p-4 sm:p-6 space-y-5 pb-32">
                 
@@ -1233,7 +1225,6 @@ function AssetRegistryContent() {
                         Asset Tag ID
                       </label>
                       
-                      {/* 🌟 HIGH-CONTRAST GENERATE BUTTON */}
                       <button 
                         type="button" 
                         onClick={() => setNewAssetTag(generateCategoryPrefix(newAssetCategory))} 
@@ -1302,7 +1293,6 @@ function AssetRegistryContent() {
                         Asset Name *
                       </label>
 
-                      {/* 🌟 HIGH-CONTRAST AUTO-DETECT BUTTON */}
                       <button 
                         type="button" 
                         onClick={() => setNewAssetSpecs(autoDetectSpecs(`${newAssetName} ${newAssetBrand} ${newAssetSerial}`, newAssetCategory, newAssetSpecs))} 
@@ -1463,7 +1453,7 @@ function AssetRegistryContent() {
                 </div>
               </div>
 
-              {/* FOOTER ACTIONS (Fixed at bottom so it doesn't overlap) */}
+              {/* FOOTER ACTIONS */}
               <div className={`p-4 sm:p-5 shrink-0 flex gap-4 border-t ${isDarkMode ? 'border-white/10 bg-black/40' : 'border-slate-200/60 bg-white/50'}`}>
                 <button 
                   type="button" 
