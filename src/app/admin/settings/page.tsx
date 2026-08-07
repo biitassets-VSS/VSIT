@@ -18,7 +18,7 @@ export interface UserProfile {
 export default async function SettingsPage() {
   const liveSettings = {
     appName: 'Virtual Staffing IT Portal',
-    supportEmail: 'lakhwinder.bi@outlook.com',
+    supportEmail: 'support@vsit.com',
     allowStaffLogin: true,
     allowStaffEditAssets: false,
     requireAdminApproval: true,
@@ -64,11 +64,12 @@ export default async function SettingsPage() {
     console.error("Unexpected error connecting to Supabase:", error);
   }
 
-  // 🌟 Make absolutely sure the prop names match the Client component interface
+  // 🌟 THE FIX: Passing all three required properties to the Client Component
   return (
     <SettingsClient 
       initialSettings={liveSettings} 
       initialUsers={dbUsers} 
+      initialRequests={dbRequests} 
     />
   );
 }
