@@ -533,7 +533,108 @@ function AssetRegistryContent() {
   }
 
   const handleGenerateHandoverPDF = (asset: any) => {
-    alert('PDF Handover generation triggered for ' + asset.safe_display_name);
+    const printDate = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+    const assetTag = asset.clean_tag || asset.asset_tag;
+    const staffName = asset.staff_name || 'Unassigned';
+    const empCode = asset.emp_code || 'N/A';
+    
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Handover Agreement - ${assetTag}</title>
+          <style>
+            body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px; }
+            .header { text-align: center; border-bottom: 2px solid #ea580c; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo-placeholder { font-size: 24px; font-weight: 900; color: #ea580c; text-transform: uppercase; letter-spacing: 2px; }
+            .title { font-size: 28px; font-weight: bold; margin-top: 10px; color: #1e293b; }
+            .date { text-align: right; font-size: 14px; color: #64748b; margin-bottom: 30px; }
+            .section { margin-bottom: 25px; }
+            .section-title { font-size: 16px; font-weight: bold; color: #ea580c; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+            th { font-weight: 600; color: #475569; width: 40%; }
+            td { font-weight: 700; color: #0f172a; }
+            .terms { font-size: 12px; color: #475569; background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 40px; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 60px; }
+            .sig-box { width: 45%; }
+            .sig-line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 10px; }
+            .sig-name { font-weight: bold; font-size: 14px; }
+            .sig-title { font-size: 12px; color: #64748b; }
+            @media print {
+              body { padding: 0; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-placeholder">VIRTUAL STAFFING SOLUTIONS</div>
+            <div class="title">Official IT Asset Handover Agreement</div>
+          </div>
+          
+          <div class="date">Date of Handover: <strong>${printDate}</strong></div>
+
+          <div class="section">
+            <div class="section-title">1. Employee Information</div>
+            <table>
+              <tr><th>Full Name</th><td>${staffName}</td></tr>
+              <tr><th>Employee Code</th><td>${empCode}</td></tr>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">2. Asset Details</div>
+            <table>
+              <tr><th>Asset Tag ID</th><td>${assetTag}</td></tr>
+              <tr><th>Asset Category</th><td>${asset.category || 'N/A'}</td></tr>
+              <tr><th>Asset Name</th><td>${asset.safe_display_name}</td></tr>
+              <tr><th>Brand / Manufacturer</th><td>${asset.brand || 'N/A'}</td></tr>
+              <tr><th>Serial Number (S/N)</th><td>${asset.serial_number || 'N/A'}</td></tr>
+              <tr><th>Hardware Specifications</th><td>${asset.system_specs || 'Standard Configuration'}</td></tr>
+              <tr><th>Condition at Handover</th><td>${asset.asset_condition || 'New'}</td></tr>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">3. Terms and Conditions</div>
+            <div class="terms">
+              <p>By signing this document, I acknowledge receipt of the IT asset(s) listed above in good working condition. I agree to the following terms:</p>
+              <ol>
+                <li><strong>Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
+                <li><strong>Acceptable Use:</strong> The asset is to be used strictly for official company business. Unauthorized software installation or tampering with security settings is strictly prohibited.</li>
+                <li><strong>Return Policy:</strong> I agree to return the equipment in its original condition (fair wear and tear excepted) upon termination of employment or immediately upon request by the IT Department.</li>
+                <li><strong>Damage/Loss:</strong> I will immediately report any damage, loss, or theft of the asset to the IT Department. I understand that I may be held financially liable for damages caused by negligence.</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="signatures">
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-name">Authorized IT Administrator</div>
+              <div class="sig-title">Virtual Staffing Solutions</div>
+            </div>
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-name">${staffName}</div>
+              <div class="sig-title">Employee (${empCode})</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    } else {
+      alert("Please allow pop-ups to generate the PDF agreement.");
+    }
   }
 
   const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
@@ -551,8 +652,8 @@ function AssetRegistryContent() {
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
     
     glassCard: isDarkMode 
-      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/40 backdrop-blur-[40px] border border-white/50 shadow-[0_16px_40px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
+      ? 'bg-zinc-900/30 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
     
     glassInnerCard: isDarkMode 
       ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
