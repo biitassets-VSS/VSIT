@@ -551,8 +551,8 @@ function AssetRegistryContent() {
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
     
     glassCard: isDarkMode 
-      ? 'bg-zinc-900/30 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
+      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/40 backdrop-blur-[40px] border border-white/50 shadow-[0_16px_40px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
     
     glassInnerCard: isDarkMode 
       ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
@@ -867,7 +867,7 @@ function AssetRegistryContent() {
         const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
 
         return (
-          <div className={`fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/40' : 'bg-black/20'}`}>
+          <div className={`fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto ${isDarkMode ? 'bg-black/40' : 'bg-black/20'}`}>
             <div className={`relative max-w-3xl w-full flex flex-col overflow-hidden flex-1 max-h-full ${theme.glassCard} rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
               
               {/* 🌟 ENTERPRISE COMPACT HEADER WITH FIXED CLOSING & ACTION PADDING */}
@@ -1069,19 +1069,19 @@ function AssetRegistryContent() {
                     </div>
 
                     {(viewAssetModal.assigned_to || viewAssetModal.status === 'Assigned' || viewAssetModal.status === 'Pending Handover') && (
-                      <div className={`p-5 bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md rounded-3xl shadow-xs`}>
+                      <div className={`p-4 sm:p-5 ${theme.glassInnerCard} rounded-3xl`}>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
-                            <div className="p-3 bg-emerald-500 text-white rounded-xl shadow-[0_4px_15px_rgba(16,185,129,0.3)] shrink-0 border border-emerald-400">
+                            <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200'}`}>
                               <FileText size={20} />
                             </div>
                             <div>
-                              <h4 className={`text-[12px] font-bold uppercase tracking-widest text-emerald-500 dark:text-emerald-400`}>Official Handover Agreement</h4>
-                              <p className={`text-[11px] font-semibold text-emerald-600/80 dark:text-emerald-500/80 mt-0.5`}>Digitally executed custody document with specs and policies.</p>
+                              <h4 className={`text-[11px] font-bold uppercase tracking-widest ${theme.textMain}`}>Official Handover Agreement</h4>
+                              <p className={`text-[10px] font-semibold mt-0.5 ${theme.textSub}`}>Digitally executed custody document with specs and policies.</p>
                             </div>
                           </div>
-                          <button onClick={() => handleGenerateHandoverPDF(viewAssetModal)} className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_4px_15px_rgba(16,185,129,0.3)] rounded-xl text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 border border-emerald-400">
-                            <Download size={16} /> <span>PDF</span>
+                          <button onClick={() => handleGenerateHandoverPDF(viewAssetModal)} className={`px-5 py-2.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 border border-orange-400 active:scale-95`}>
+                            <Download size={14} /> <span>PDF</span>
                           </button>
                         </div>
                       </div>
