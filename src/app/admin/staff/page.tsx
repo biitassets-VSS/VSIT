@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -8,10 +8,122 @@ import {
   PlusCircle, Upload, Download, FileSpreadsheet, 
   X, RefreshCw, Save, Building, Power, Edit2, 
   Package, CalendarDays, Lock, KeyRound, ShieldCheck, Trash2,
-  CheckCircle2, AlertTriangle
+  Loader2, ChevronDown
 } from 'lucide-react';
-// 🌟 FIXED IMPORT: Points directly to your server action file
 import { setupStaffAuth } from './actions';
+
+// ==========================================
+// 🌟 PREMIUM CUSTOM GLASS DROPDOWN 
+// ==========================================
+const PremiumGlassDropdown = ({ value, onChange, options, theme, isDarkMode, className = "px-3 py-3" }: any) => {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabel = options.find((o:any) => o.value === value)?.label || value;
+
+  return (
+    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`} ref={wrapperRef}>
+      <div 
+        onClick={() => setOpen(!open)} 
+        className={`flex items-center justify-between w-full ${className} ${theme.inputBg} rounded-xl transition-all shadow-sm cursor-pointer border ${
+          open ? 'border-orange-500 ring-2 ring-orange-500/20' : isDarkMode ? 'border-white/20' : 'border-white/60'
+        }`}
+      >
+        <span className={`text-sm font-semibold truncate pr-4 ${theme.textMain}`}>{selectedLabel}</span>
+        <ChevronDown size={16} className={`${theme.textSub} shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </div>
+
+      {open && (
+        <div className={`absolute top-full left-0 mt-1 w-full min-w-48 p-1.5 rounded-xl shadow-2xl backdrop-blur-3xl border ${
+          isDarkMode ? 'bg-zinc-900/95 border-zinc-700/80 shadow-black' : 'bg-white/95 border-white/90 shadow-slate-300/50'
+        } overflow-hidden`}>
+          <div className="max-h-56 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
+            {options.map((opt:any) => (
+              <div
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`px-3 py-2.5 text-sm font-semibold rounded-lg cursor-pointer transition-all flex items-center gap-2 ${
+                  value === opt.value
+                    ? 'bg-linear-to-r from-orange-500 to-orange-600 text-white shadow-md'
+                    : (isDarkMode ? 'text-zinc-200 hover:bg-zinc-800/90' : 'text-slate-800 hover:bg-slate-100')
+                }`}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Type employee name or EMP code...", theme, isDarkMode }: any) => {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (value) {
+      const s = staffList.find((st: any) => st.id === value);
+      if (s) setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`);
+    } else setQuery('');
+  }, [value, staffList]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = query.trim().length === 0 ? [] : staffList.filter((s: any) => `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase().includes(query.toLowerCase()));
+
+  return (
+    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`} ref={wrapperRef}>
+      <div className={`flex items-center w-full p-3 ${theme.inputBg} rounded-xl transition-all shadow-sm border ${open ? 'border-orange-500 ring-2 ring-orange-500/20' : isDarkMode ? 'border-white/20' : 'border-white/60'}`}>
+        <Search size={16} className={`mr-2 shrink-0 ${theme.textSub}`} />
+        <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className={`w-full text-sm font-semibold outline-none bg-transparent ${theme.textMain} placeholder:text-slate-500 dark:placeholder:text-zinc-400`} />
+        {value && <X size={16} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-2" onClick={() => { onChange(''); setQuery(''); }} />}
+        <ChevronDown size={16} className={`cursor-pointer ${theme.textSub}`} onClick={() => setOpen(!open)} />
+      </div>
+      
+      {open && (
+        <div className={`absolute top-full left-0 mt-1 w-full p-1.5 rounded-xl shadow-2xl backdrop-blur-3xl border ${
+          isDarkMode ? 'bg-zinc-900/95 border-zinc-700/80 shadow-black' : 'bg-white/95 border-slate-200/90 shadow-slate-300/50'
+        } overflow-hidden`}>
+          <div onClick={() => { onChange(''); setQuery(''); setOpen(false); }} className={`p-2.5 text-xs font-bold uppercase cursor-pointer rounded-lg flex items-center justify-center gap-2 mb-1 ${isDarkMode ? 'text-orange-400 bg-zinc-800 hover:bg-zinc-700' : 'text-orange-600 bg-slate-100 hover:bg-slate-200'}`}>
+            <Package size={14}/> Unassign / Return to Stock
+          </div>
+          
+          <div className="max-h-56 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
+            {query.trim().length === 0 ? (
+              <div className={`p-3 text-center text-xs font-semibold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>🔍 Type an employee name or EMP code...</div>
+            ) : filtered.length === 0 ? (
+              <div className="p-3 text-center text-xs font-semibold text-rose-500">No employee found for "{query}".</div>
+            ) : (
+              filtered.map((s: any) => (
+                <div key={s.id} className={`p-3 text-xs cursor-pointer rounded-lg flex justify-between items-center transition-all ${isDarkMode ? 'text-zinc-200 hover:bg-zinc-800' : 'text-slate-800 hover:bg-slate-100'}`} onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}>
+                  <span className="font-semibold text-sm">{s.full_name || s.name}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-800'}`}>{s.emp_code || s.email}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function AdminStaffDirectoryContent() {
   const router = useRouter();
@@ -340,94 +452,97 @@ function AdminStaffDirectoryContent() {
            s.emp_code?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
   });
 
-  // 🌟 PREMIUM BRAND THEME DICTIONARY (WITH BALANCED PURPLE & ORANGE HARMONY)
+  // 🌟 EXACT PREMIUM 2026 FROSTED GLASS THEME (Perfect Contrast & Blur)
   const theme = {
-    bg: isDarkMode ? 'bg-[#0b0712]' : 'bg-slate-50',
-    card: isDarkMode ? 'bg-[#150f24] border-purple-900/40' : 'bg-white border-purple-200/80',
-    cardHover: isDarkMode ? 'hover:border-orange-500/60 hover:bg-[#1c1430]' : 'hover:border-orange-500 hover:shadow-lg hover:-translate-y-1',
-    textMain: isDarkMode ? 'text-purple-50' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-purple-300/70' : 'text-slate-500', 
-    inputBg: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60 focus:border-orange-500 text-purple-100 placeholder-purple-400/50' : 'bg-slate-50 border-slate-200 focus:border-orange-600 text-slate-900 placeholder-slate-400 font-medium',
-    modalOverlay: 'bg-black/80 backdrop-blur-md z-50 animate-in fade-in duration-200',
-    modalBody: isDarkMode ? 'bg-[#150f24] border-purple-900/60' : 'bg-white border-slate-200',
-    modalHeader: isDarkMode ? 'bg-[#0f0a1c] border-purple-900/60' : 'bg-orange-50/80 border-orange-100',
-    iconBgPrimary: isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600 font-bold',
+    bg: 'bg-transparent font-sans',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
+    glassCard: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
+      : 'bg-white/40 backdrop-blur-[40px] border border-white/50 shadow-[0_16px_40px_rgba(31,38,135,0.05)]',
+    glassInnerCard: isDarkMode 
+      ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-sm' 
+      : 'bg-white/20 backdrop-blur-md border border-white/40 shadow-sm', // 🌟 Pure Frosted Glass Inner Container
+    glassItem: isDarkMode
+      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 transition-all duration-300'
+      : 'bg-white/50 backdrop-blur-2xl border border-white/60 transition-all duration-300',
+    inputBg: isDarkMode 
+      ? 'bg-black/40 border border-white/20 text-white shadow-inner focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 placeholder-zinc-500' 
+      : 'bg-white/60 border border-white/60 shadow-sm text-slate-800 focus:bg-white/90 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-400', // 🌟 Highly legible inputs
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12`}>
-      {/* 🌟 FULL-SCREEN ENTERPRISE FLUID WRAPPER */}
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4">
+    <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden antialiased pb-12 transition-colors duration-1000`}>
+      {/* 🌟 GLOBAL BACKGROUND ORBS */}
+      <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+
+      <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-12 mx-auto space-y-6 pt-6 relative z-10">
         
-        {/* 🌟 COMPACT MOBILE HEADER & TITLE SIZING */}
-        <div className={`${theme.card} rounded-3xl p-4 sm:p-6 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
-          <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 ${theme.textSub}`}>
+        {/* COMPACT HEADER */}
+        <div className={`${theme.glassCard} rounded-4xl p-4 sm:p-5 border flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-all duration-300`}>
+          <div className="flex items-center gap-3.5 sm:gap-4">
+            <button onClick={() => router.push('/admin')} className={`p-2.5 rounded-2xl border transition-all duration-200 cursor-pointer ${theme.glassItem} hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 ${theme.textSub}`}>
               <ArrowLeft size={18} />
             </button>
             <div>
-              <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
+              <div className="flex flex-wrap items-center gap-2 mb-0.5">
                 <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
-                  <Users className="text-orange-600 dark:text-orange-400 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                  <Users className="text-orange-500 dark:text-orange-400 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
                   <span>Staff Directory</span>
                 </h1>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
+                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200'}`}>
                   {staff.length} Active Profiles
                 </span>
               </div>
-              <p className={`text-xs sm:text-sm font-semibold ${theme.textSub}`}>Manage employee records, passwords, and system access levels</p>
+              <p className={`text-xs font-semibold ${theme.textSub}`}>Manage employee records, passwords, and system access levels</p>
             </div>
           </div>
 
-          {/* 🌟 MOBILE-OPTIMIZED 2-COLUMN BUTTON GRID (BULK UPLOAD & ADD NEW HIRE) */}
           <div className="grid grid-cols-2 sm:flex items-center gap-2.5 sm:gap-3 w-full md:w-auto">
             <button 
               onClick={() => setIsBulkModalOpen(true)} 
-              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all duration-200 text-xs font-bold uppercase tracking-wider cursor-pointer ${theme.card} hover:border-orange-500 hover:text-orange-600 dark:hover:text-orange-400 ${theme.textMain}`}
+              className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border transition-all duration-200 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${theme.glassItem} hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 ${theme.textMain}`}
             >
-              <FileSpreadsheet size={15} /> <span>Bulk Upload</span>
+              <FileSpreadsheet size={14} className="text-orange-500" /> <span>Bulk Upload</span>
             </button>
             <button 
               onClick={handleOpenAdd} 
-              className="flex items-center justify-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-orange-600/20 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-5 py-2.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-[0_4px_15px_rgba(249,115,22,0.4)] transition-all duration-200 cursor-pointer border border-orange-400"
             >
-              <PlusCircle size={15} /> <span>Add New Hire</span>
+              <PlusCircle size={14} /> <span>New Hire</span>
             </button>
           </div>
         </div>
 
-        {/* 100% Adaptive Search Bar (No White Box Glitch in Dark Mode) */}
-        <div 
-          style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', borderColor: isDarkMode ? '#581c87' : '#e2e8f0' }}
-          className="p-2.5 rounded-2xl border shadow-sm flex items-center transition-all duration-200 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 hover:border-orange-300"
-        >
+        {/* 100% Adaptive Search Bar */}
+        <div className={`p-1.5 ${theme.inputBg} rounded-xl transition-all border flex items-center`}>
           <div className="relative w-full">
-            <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+            <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
             <input 
               type="text" 
               value={searchQuery} 
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search by staff name, email, EMP code, or department..." 
-              style={{ backgroundColor: 'transparent', color: isDarkMode ? '#f3e8ff' : '#0f172a', colorScheme: isDarkMode ? 'dark' : 'light' }}
-              className="w-full pl-12 pr-4 py-3 rounded-xl text-xs sm:text-sm font-semibold outline-none transition-all bg-transparent border-0 shadow-none"
+              className={`w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm font-semibold outline-none bg-transparent ${theme.textMain} placeholder:text-slate-500 dark:placeholder:text-zinc-400 border-0 shadow-none`}
             />
           </div>
         </div>
 
-        {/* 🌟 STAFF DIRECTORY GRID (DECREASED CARD HEIGHTS & RICH PURPLE/ORANGE HARMONY) */}
+        {/* 🌟 STAFF DIRECTORY GRID */}
         {loading ? (
-          <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className={`animate-spin rounded-full h-10 w-10 border-b-2 ${isDarkMode ? 'border-orange-400' : 'border-orange-600'}`}></div>
-            <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Loading Directory...</span>
+          <div className={`${theme.glassCard} rounded-3xl w-full py-24 flex flex-col items-center justify-center gap-3`}>
+            <Loader2 size={32} className="animate-spin text-orange-500" />
+            <span className={`text-[11px] font-bold tracking-widest uppercase ${theme.textMain}`}>Loading Directory...</span>
           </div>
         ) : filteredStaff.length === 0 ? (
-          <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm transition-all hover:shadow-md ${theme.card}`}>
-            <Users size={48} className={`mx-auto ${isDarkMode ? 'text-zinc-700' : 'text-purple-200'}`} />
-            <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Staff Found</h3>
-            <p className={`text-xs font-semibold ${theme.textSub}`}>No matching employee records exist in the current view.</p>
+          <div className={`${theme.glassCard} rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-3`}>
+            <Users size={48} className={`mx-auto opacity-60 text-orange-500`} />
+            <h3 className={`text-lg font-bold uppercase tracking-widest ${theme.textMain}`}>No Staff Found</h3>
+            <p className={`text-[11px] font-medium max-w-sm ${theme.textSub}`}>No matching employee records exist in the current view.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredStaff.map(user => {
               const isActive = user.status === 'Active';
               const isAdmin = user.role?.toLowerCase() === 'admin';
@@ -435,34 +550,33 @@ function AdminStaffDirectoryContent() {
               return (
                 <div 
                   key={user.id} 
-                  className={`rounded-3xl border shadow-sm flex flex-col justify-between group transition-all duration-300 overflow-hidden ${
-                    isActive ? theme.card + ' ' + theme.cardHover : isDarkMode ? 'bg-rose-950/10 border-rose-900/40 hover:-translate-y-1 hover:shadow-lg' : 'bg-rose-50/40 border-rose-200 hover:-translate-y-1 hover:shadow-lg'
+                  className={`rounded-3xl border flex flex-col justify-between group transition-all duration-300 overflow-hidden ${
+                    isActive ? `${theme.glassItem} hover:-translate-y-1 hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)]` : `${theme.glassInnerCard} opacity-60 grayscale`
                   }`}
                 >
-                  {/* Card Top: Compact Avatar & Header */}
-                  <div className={`p-4 sm:p-5 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-purple-100'}`}>
+                  <div className={`p-4 border-b ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-base shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-105 ${
+                      <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 transition-transform duration-300 group-hover:scale-105 ${
                           isActive 
                             ? (isAdmin 
-                                ? (isDarkMode ? 'bg-purple-500/10 text-purple-300 border border-purple-500/20' : 'bg-purple-100 text-purple-800 border border-purple-200') 
+                                ? (isDarkMode ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-800 border border-purple-200') 
                                 : (isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200')) 
-                            : (isDarkMode ? 'bg-zinc-900 text-zinc-600 border border-zinc-800' : 'bg-slate-100 text-slate-400 border border-slate-200')
+                            : (isDarkMode ? 'bg-zinc-800 text-zinc-500 border border-zinc-700' : 'bg-slate-200 text-slate-500 border border-slate-300')
                         }`}>
-                          <span className="relative z-10">{user.full_name?.charAt(0) || <UserCheck size={18} />}</span>
+                          <span className="relative z-10">{user.full_name?.charAt(0) || <UserCheck size={16} />}</span>
                         </div>
 
-                        <div className="overflow-hidden">
+                        <div className="overflow-hidden min-w-0">
                           <button 
                             type="button"
                             onClick={() => handleOpenEdit(user)}
-                            className={`text-sm font-bold text-left leading-tight truncate w-full cursor-pointer transition-colors ${isActive ? theme.textMain + ' hover:text-orange-600 dark:hover:text-orange-400 hover:underline' : theme.textSub}`}
+                            className={`text-sm font-bold text-left leading-tight truncate w-full cursor-pointer transition-colors ${isActive ? theme.textMain + ' group-hover:text-orange-500 dark:group-hover:text-orange-400 hover:underline' : theme.textSub}`}
                           >
                             {user.full_name || 'Unnamed Employee'}
                           </button>
-                          <div className={`flex items-center gap-1 text-[11px] font-semibold mt-1 ${theme.textSub}`}>
-                            <Building size={11} className={isActive ? (isDarkMode ? "text-orange-400" : "text-orange-600") : ""} />
+                          <div className={`flex items-center gap-1.5 text-[10px] font-semibold mt-1 ${theme.textSub}`}>
+                            <Building size={10} className={isActive ? (isDarkMode ? "text-orange-400" : "text-orange-500") : ""} />
                             <span className="truncate">{user.department || 'Migration'}</span>
                           </div>
                         </div>
@@ -471,7 +585,7 @@ function AdminStaffDirectoryContent() {
                       <button 
                         type="button"
                         onClick={() => handleOpenEdit(user)} 
-                        className={`p-2 rounded-xl transition-all duration-200 cursor-pointer border hover:scale-105 active:scale-95 ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:bg-orange-600 hover:text-white hover:border-orange-600' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-orange-600 hover:text-white hover:border-orange-600 shadow-2xs'}`}
+                        className={`p-2 rounded-lg transition-all duration-200 cursor-pointer ${theme.glassInnerCard} ${theme.textMain} hover:text-orange-500 hover:scale-110 active:scale-95 shrink-0`}
                         title="Edit Employee Dossier"
                       >
                         <Edit2 size={14} />
@@ -479,56 +593,53 @@ function AdminStaffDirectoryContent() {
                     </div>
                   </div>
 
-                  {/* Card Middle: Compact Details (Decreased Padding & Rich Purple/Orange Harmony) */}
-                  <div className={`p-4 sm:p-5 space-y-2 sm:space-y-2.5 flex-1 ${isDarkMode ? 'bg-[#0f0a1c]/60' : 'bg-purple-50/20'}`}>
-                    
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${isDarkMode ? 'bg-[#150f24] border-purple-900/50' : 'bg-white border-purple-100'} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
+                  <div className={`p-4 space-y-2 flex-1 ${isDarkMode ? 'bg-white/5' : 'bg-black/5'}`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl transition-colors duration-200 ${theme.glassInnerCard}`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
-                        <Hash size={13} className={isDarkMode ? "text-orange-400" : "text-orange-600"} />
+                        <Hash size={12} className={isDarkMode ? "text-orange-400" : "text-orange-500"} />
                         <span className="font-bold text-[9px] uppercase tracking-widest">EMP CODE</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className={`font-mono font-extrabold text-xs ${theme.textMain}`}>{user.emp_code || 'NO-EMP-CODE'}</span>
-                        <span className={`text-[8px] px-2 py-0.5 rounded-md font-bold uppercase tracking-widest shadow-2xs ${
+                        <span className={`font-semibold tracking-wider text-[11px] ${theme.textMain}`}>{user.emp_code || 'NO-EMP-CODE'}</span>
+                        <span className={`text-[8px] px-2 py-0.5 rounded-md font-bold uppercase tracking-widest shadow-xs ${
                           isAdmin 
-                            ? (isDarkMode ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-purple-100 text-purple-800 border border-purple-200') 
-                            : (isDarkMode ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-orange-100 text-orange-800 border border-orange-200')
+                            ? (isDarkMode ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-800 border border-purple-200') 
+                            : (isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-800 border border-orange-200')
                         }`}>
                           {user.role || 'Staff'}
                         </span>
                       </div>
                     </div>
 
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${isDarkMode ? 'bg-[#150f24] border-purple-900/50' : 'bg-white border-purple-100'} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl transition-colors duration-200 ${theme.glassInnerCard}`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
-                        <Mail size={13} className="text-purple-600 dark:text-purple-400" />
+                        <Mail size={12} className="text-purple-500 dark:text-purple-400" />
                         <span className="font-bold text-[9px] uppercase tracking-widest">Email</span>
                       </div>
-                      <span className={`font-semibold text-[11px] truncate max-w-37.5 ${theme.textMain}`} title={user.email}>{user.email}</span>
+                      <span className={`font-semibold text-[10px] truncate max-w-36 ${theme.textMain}`} title={user.email}>{user.email}</span>
                     </div>
 
-                    <div className={`flex justify-between items-center p-2.5 rounded-xl border shadow-2xs transition-colors duration-200 ${isDarkMode ? 'bg-[#150f24] border-purple-900/50' : 'bg-white border-purple-100'} group-hover:border-orange-300 dark:group-hover:border-purple-800`}>
+                    <div className={`flex justify-between items-center p-2.5 rounded-xl transition-colors duration-200 ${theme.glassInnerCard}`}>
                       <div className={`flex items-center gap-1.5 ${theme.textSub}`}>
-                        <KeyRound size={13} className={isDarkMode ? "text-orange-400" : "text-orange-600"}/>
+                        <KeyRound size={12} className={isDarkMode ? "text-orange-400" : "text-orange-500"}/>
                         <span className="font-bold text-[9px] uppercase tracking-widest">Login Auth</span>
                       </div>
                       <button 
                         type="button" 
                         onClick={() => handleManualAuthSync(user)}
-                        className={`px-3 py-1 rounded-lg border font-bold text-[9px] uppercase tracking-widest transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer shadow-2xs ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-600 hover:text-white' : 'bg-orange-50 hover:bg-orange-600 border-orange-200 hover:border-transparent text-orange-700 hover:text-white'}`}
+                        className={`px-2.5 py-1 rounded-md border font-bold text-[8px] uppercase tracking-widest transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer shadow-xs ${isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-600 hover:text-white' : 'bg-orange-50 hover:bg-orange-600 border-orange-200 hover:border-transparent text-orange-700 hover:text-white'}`}
                       >
                         Overwrite Pass
                       </button>
                     </div>
                   </div>
 
-                  {/* Card Bottom: Compact Footer */}
-                  <div className={`p-3.5 sm:p-4 border-t flex items-center justify-between ${isDarkMode ? 'bg-[#0f0a1c] border-purple-900/40' : 'bg-purple-50/40 border-purple-100'}`}>
+                  <div className={`p-4 border-t flex items-center justify-between ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
                     <div className="flex items-center gap-1.5">
-                      <Package size={13} className={theme.textSub} />
+                      <Package size={12} className={theme.textSub} />
                       <div className="flex flex-col">
-                        <span className={`text-[8px] font-extrabold uppercase tracking-widest ${theme.textSub}`}>Asset Load</span>
-                        <span className={`text-[10px] font-black tracking-wider uppercase ${user.assetCount > 0 ? (isDarkMode ? 'text-orange-400' : 'text-orange-600') : theme.textSub}`}>
+                        <span className={`text-[7px] font-bold uppercase tracking-widest ${theme.textSub}`}>Asset Load</span>
+                        <span className={`text-[9px] font-bold tracking-wider uppercase ${user.assetCount > 0 ? (isDarkMode ? 'text-orange-400' : 'text-orange-500') : theme.textSub}`}>
                           {user.assetCount} Assigned
                         </span>
                       </div>
@@ -537,13 +648,13 @@ function AdminStaffDirectoryContent() {
                     <button 
                       type="button"
                       onClick={() => handleToggleStatus(user)}
-                      className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer border shadow-2xs ${
+                      className={`px-2.5 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer border shadow-xs ${
                         isActive 
                           ? (isDarkMode ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200') 
                           : (isDarkMode ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200')
                       }`}
                     >
-                      <Power size={11} /> {isActive ? 'Access Active' : 'Access Disabled'}
+                      <Power size={10} /> {isActive ? 'Access Active' : 'Access Disabled'}
                     </button>
                   </div>
 
@@ -553,18 +664,19 @@ function AdminStaffDirectoryContent() {
           </div>
         )}
 
-        {/* HR DOSSIER MODAL (100% ADAPTIVE IN DARK MODE) */}
+        {/* 🌟 HR DOSSIER MODAL (FROSTED GLASS) WITH FIXED TOP MARGIN (pt-24 to avoid Announcement Bar) */}
         {isDossierModalOpen && (
-          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
-            <div className={`rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 ${theme.modalBody}`}>
+          <div className={`fixed inset-0 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 z-100 animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/20 backdrop-blur-md'}`}>
+            <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] border flex-1 max-h-full rounded-4xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
               
-              <div className={`p-6 border-b flex justify-between items-center ${theme.modalHeader}`}>
+              {/* MODAL HEADER */}
+              <div className={`p-4 sm:p-5 border-b flex justify-between items-center relative z-30 shrink-0 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'}`}>
                 <div>
-                  <h3 className={`text-base font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}>
-                    {isEditing ? <Edit2 size={16} className={isDarkMode ? "text-orange-400" : "text-orange-600"}/> : <UserCheck size={16} className={isDarkMode ? "text-orange-400" : "text-orange-600"}/>} 
+                  <h3 className={`text-sm sm:text-base font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}>
+                    {isEditing ? <Edit2 size={16} className="text-orange-500"/> : <UserCheck size={16} className="text-orange-500"/>} 
                     {isEditing ? 'Edit Employee Dossier' : 'Register New Employee'}
                   </h3>
-                  {isEditing && <p className={`text-[10px] font-mono font-bold mt-1 tracking-widest ${theme.textSub}`}>ID: {formData.id}</p>}
+                  {isEditing && <p className={`text-[9px] font-semibold mt-1 tracking-widest ${theme.textSub}`}>ID: {formData.id}</p>}
                 </div>
                 <div className="flex items-center gap-3">
                   {isEditing && (
@@ -572,156 +684,153 @@ function AdminStaffDirectoryContent() {
                       type="button" 
                       onClick={handleDeleteStaff} 
                       disabled={isDeleting}
-                      className="px-4 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest cursor-pointer disabled:opacity-50 shadow-sm"
+                      className={`px-3.5 py-1.5 rounded-lg border transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest cursor-pointer disabled:opacity-50 shadow-xs ${isDarkMode ? 'border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white' : 'border-rose-300 bg-rose-50/50 text-rose-600 hover:bg-rose-500 hover:text-white hover:border-rose-500'}`}
                     >
                       <Trash2 size={12} /> {isDeleting ? 'Deleting...' : 'Delete Staff'}
                     </button>
                   )}
-                  <button onClick={() => setIsDossierModalOpen(false)} className={`p-2 rounded-full border shadow-sm cursor-pointer transition-all hover:scale-110 ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-900'}`}><X size={16}/></button>
+                  <button onClick={() => setIsDossierModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-all hover:scale-110 active:scale-90 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-500`}><X size={16}/></button>
                 </div>
               </div>
 
-              <form onSubmit={handleSaveDossier} className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar">
+              {/* MODAL BODY (SCROLLABLE FORM) - ALL FROSTED GLASS & READABLE INPUTS */}
+              <form onSubmit={handleSaveDossier} className="flex-1 overflow-y-auto custom-scrollbar flex flex-col p-4 sm:p-6 space-y-5">
                 
-                <div className="space-y-5">
-                  <div className={`flex items-center gap-3 border-b pb-2 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
-                    <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center text-[10px] font-black shadow-sm">1</span>
-                    <span className={`text-[11px] font-black uppercase tracking-widest ${theme.textMain}`}>Employee Identity & Auth</span>
+                <div className={`p-4 sm:p-5 ${theme.glassInnerCard} rounded-3xl space-y-4`}>
+                  <div className={`flex items-center gap-2 border-b pb-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+                    <span className="w-5 h-5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">1</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>Employee Identity & Auth</span>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>Full Legal Name *</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Full Legal Name *</label>
                       <input 
                         type="text" required placeholder="e.g. Marcus Vance" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>Company Email *</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Company Email *</label>
                       <input 
                         type="email" required placeholder="m.vance@company.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1.5 ${isDarkMode ? 'text-orange-400' : 'text-orange-700'}`}><Lock size={12}/> Portal Login Password *</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><Lock size={10} className="text-orange-500"/> Portal Login Password *</label>
                       <input 
                         type="text" required={!isEditing} placeholder={isEditing ? "Type to overwrite password" : "e.g. SecurePass#2026"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-mono font-bold outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>Contact Phone</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Contact Phone</label>
                       <input 
                         type="text" placeholder="+1 (555) 019-2834" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>Employee Code</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Employee Code</label>
                       <input 
                         type="text" placeholder="EMP-xxxx" value={formData.emp_code} onChange={e => setFormData({...formData, emp_code: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-mono font-bold uppercase outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold uppercase outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={12}/> Date of Birth</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={10} className="text-orange-500"/> Date of Birth</label>
                       <input 
                         type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1', colorScheme: isDarkMode ? 'dark' : 'light' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={12}/> Joining Date</label>
+                      <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={10} className="text-orange-500"/> Joining Date</label>
                       <input 
                         type="date" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1', colorScheme: isDarkMode ? 'dark' : 'light' }}
-                        className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-all duration-200 border shadow-sm" 
+                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-5">
-                  <div className={`flex items-center gap-3 border-b pb-2 ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
-                    <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center text-[10px] font-black shadow-sm">2</span>
-                    <span className={`text-[11px] font-black uppercase tracking-widest ${theme.textMain}`}>Organizational Assignment</span>
+                <div className={`p-4 sm:p-5 ${theme.glassInnerCard} rounded-3xl space-y-4`}>
+                  <div className={`flex items-center gap-2 border-b pb-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+                    <span className="w-5 h-5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">2</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>Organizational Assignment</span>
                   </div>
                   
-                  <div>
-                    <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>Department</label>
-                    <select 
-                      style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                  <div className="relative z-70">
+                    <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Department</label>
+                    <PremiumGlassDropdown 
                       value={formData.department} 
-                      onChange={e => setFormData({...formData, department: e.target.value})} 
-                      className="w-full p-3.5 rounded-xl text-xs font-bold outline-none transition-all duration-200 cursor-pointer border shadow-sm"
-                    >
-                      <option value="Migration" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Migration</option>
-                      <option value="Calling Team" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Calling Team</option>
-                      <option value="DOE" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>DOE</option>
-                      <option value="Accounts" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Accounts</option>
-                      <option value="Education" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Education</option>
-                      <option value="Social Media" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Social Media</option>
-                      <option value="Administration" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>Administration</option>
-                    </select>
+                      onChange={(val: string) => setFormData({...formData, department: val})} 
+                      options={[
+                        {value: 'Migration', label: 'Migration'},
+                        {value: 'Calling Team', label: 'Calling Team'},
+                        {value: 'DOE', label: 'DOE'},
+                        {value: 'Accounts', label: 'Accounts'},
+                        {value: 'Education', label: 'Education'},
+                        {value: 'Social Media', label: 'Social Media'},
+                        {value: 'Administration', label: 'Administration'}
+                      ]} 
+                      theme={theme} 
+                      isDarkMode={isDarkMode}
+                      className="py-3 px-3"
+                    />
                   </div>
                 </div>
 
-                <div className={`p-5 rounded-2xl border shadow-sm transition-colors duration-200 ${
-                  formData.status === 'Active' 
-                    ? (isDarkMode ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-emerald-50/50 border-emerald-200') 
-                    : (isDarkMode ? 'bg-rose-500/5 border-rose-500/20' : 'bg-rose-50/50 border-rose-200')
-                }`}>
-                  <span className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-4 ${formData.status === 'Active' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-800') : (isDarkMode ? 'text-rose-400' : 'text-rose-800')}`}>
+                <div className={`p-4 sm:p-5 rounded-3xl border transition-colors duration-200 ${theme.glassInnerCard}`}>
+                  <span className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest mb-4 ${formData.status === 'Active' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : (isDarkMode ? 'text-rose-400' : 'text-rose-600')}`}>
                     <ShieldCheck size={14} /> 3. System Access & Security
                   </span>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-60">
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>System Access Level</label>
-                      <select 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>System Access Level</label>
+                      <PremiumGlassDropdown 
                         value={formData.role} 
-                        onChange={e => setFormData({...formData, role: e.target.value})} 
-                        className="w-full p-3.5 rounded-xl text-xs font-bold uppercase tracking-wider outline-none cursor-pointer shadow-sm border transition-all duration-200"
-                      >
-                        <option value="Staff" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟢 Staff Access</option>
-                        <option value="Admin" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟣 Admin Access</option>
-                      </select>
+                        onChange={(val: string) => setFormData({...formData, role: val})} 
+                        options={[
+                          {value: 'Staff', label: '🟢 Staff Access'},
+                          {value: 'Admin', label: '🟣 Admin Access'}
+                        ]} 
+                        theme={theme} 
+                        isDarkMode={isDarkMode}
+                        className="py-3 px-3"
+                      />
                     </div>
                     <div>
-                      <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${theme.textSub}`}>Employee Account State</label>
-                      <select 
-                        style={{ backgroundColor: isDarkMode ? '#130d24' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a', borderColor: isDarkMode ? '#581c87' : '#cbd5e1' }}
+                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Employee Account State</label>
+                      <PremiumGlassDropdown 
                         value={formData.status} 
-                        onChange={e => setFormData({...formData, status: e.target.value})} 
-                        className="w-full p-3.5 rounded-xl text-xs font-bold uppercase tracking-wider outline-none cursor-pointer shadow-sm border transition-all duration-200"
-                      >
-                        <option value="Active" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🟢 Active</option>
-                        <option value="Disabled" style={{ backgroundColor: isDarkMode ? '#181130' : '#ffffff', color: isDarkMode ? '#f3e8ff' : '#0f172a' }}>🔴 Disabled</option>
-                      </select>
+                        onChange={(val: string) => setFormData({...formData, status: val})} 
+                        options={[
+                          {value: 'Active', label: '🟢 Active'},
+                          {value: 'Disabled', label: '🔴 Disabled'}
+                        ]} 
+                        theme={theme} 
+                        isDarkMode={isDarkMode}
+                        className="py-3 px-3"
+                      />
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-4 flex gap-4">
-                  <button type="button" onClick={() => setIsDossierModalOpen(false)} className={`px-8 py-4 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 border shadow-sm ${isDarkMode ? 'bg-[#150f24] border-purple-900/50 text-zinc-300 hover:bg-[#1c1430]' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                  <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 shadow-lg shadow-orange-600/20 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:opacity-50">
-                    {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                    <span>{isSaving ? 'Syncing to Database...' : (isEditing ? 'Save Dossier Updates' : 'Activate Employee Account')}</span>
+                {/* MODAL FOOTER */}
+                <div className={`pt-5 mt-auto border-t flex gap-3 shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+                  <button type="button" onClick={() => setIsDossierModalOpen(false)} className={`px-6 py-3.5 rounded-xl ${theme.glassInnerCard} ${theme.textMain} hover:opacity-80 transition-all text-[11px] font-bold uppercase tracking-widest cursor-pointer shadow-xs active:scale-95`}>Cancel</button>
+                  <button type="submit" disabled={isSaving} className="flex-1 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest flex justify-center items-center gap-1.5 shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer transition-all active:scale-95 disabled:opacity-50 border border-orange-400">
+                    {isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                    <span>{isSaving ? 'Syncing...' : (isEditing ? 'Save Dossier Updates' : 'Activate Account')}</span>
                   </button>
                 </div>
               </form>
@@ -731,26 +840,26 @@ function AdminStaffDirectoryContent() {
 
         {/* BULK CSV IMPORTER MODAL */}
         {isBulkModalOpen && (
-          <div className={`fixed inset-0 flex items-center justify-center p-4 ${theme.modalOverlay}`}>
-            <div className={`rounded-3xl max-w-md w-full p-8 shadow-2xl border space-y-6 text-center animate-in fade-in zoom-in-95 duration-200 ${theme.modalBody}`}>
-              <div className={`flex justify-between items-center pb-4 border-b ${isDarkMode ? 'border-purple-900/40' : 'border-slate-100'}`}>
-                <h3 className={`text-sm font-extrabold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}><Upload size={18}/> Bulk CSV Staff Import</h3>
-                <button onClick={() => setIsBulkModalOpen(false)} className={`p-2 rounded-full cursor-pointer transition-all hover:scale-110 active:scale-95 border ${isDarkMode ? 'bg-[#18181b] border-[#27272a] text-zinc-400 hover:text-white' : 'text-slate-400 hover:text-slate-900 bg-slate-100'}`}><X size={16}/></button>
+          <div className={`fixed inset-0 flex flex-col items-center justify-start pt-24 sm:pt-28 px-4 z-100 animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/50 backdrop-blur-md' : 'bg-black/20 backdrop-blur-md'}`}>
+            <div className={`max-w-md w-full p-6 sm:p-8 shadow-[0_32px_80px_rgba(0,0,0,0.15)] border space-y-5 text-center animate-in zoom-in-95 duration-200 rounded-4xl ${theme.glassCard}`}>
+              <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+                <h3 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}><Upload size={16} className="text-orange-500"/> Bulk CSV Import</h3>
+                <button onClick={() => setIsBulkModalOpen(false)} className={`p-1.5 rounded-full cursor-pointer transition-all hover:scale-110 active:scale-90 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-500`}><X size={14}/></button>
               </div>
 
-              <div className="space-y-4 text-left">
-                <button onClick={downloadStaffCsvTemplate} className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.02] active:scale-95 cursor-pointer border shadow-sm ${isDarkMode ? 'bg-purple-900/30 border-purple-800/50 text-purple-300 hover:bg-purple-900/50' : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200'}`}>
-                  <Download size={16}/> <span>1. Download Staff CSV Template</span>
+              <div className="space-y-3 text-left">
+                <button onClick={downloadStaffCsvTemplate} className={`w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 hover:scale-[1.02] active:scale-95 cursor-pointer border shadow-xs ${theme.glassInnerCard} ${theme.textMain} hover:border-orange-400 dark:hover:border-orange-500 hover:text-orange-500`}>
+                  <Download size={14}/> <span>1. Download CSV Template</span>
                 </button>
-                <p className={`text-[11px] font-semibold leading-relaxed px-1 ${theme.textSub}`}>Notice: Column 3 is <b className={theme.textMain}>Password</b>. If you upload an existing staff member to add a missing phone number, leave the password blank and it will keep their old password safe.</p>
+                <p className={`text-[9px] font-semibold leading-relaxed px-1 ${theme.textSub}`}>Notice: Column 3 is <b className={theme.textMain}>Password</b>. Leave blank to keep existing passwords safe.</p>
               </div>
 
-              <div className={`p-8 border-2 border-dashed rounded-3xl transition-all duration-200 flex flex-col items-center justify-center gap-4 hover:shadow-md ${isDarkMode ? 'border-purple-900/60 bg-[#0f0a1c] hover:bg-[#18181b] hover:border-orange-500/50' : 'border-slate-300 bg-slate-50 hover:bg-white hover:border-orange-300'}`}>
-                <FileSpreadsheet size={48} className="text-orange-500 animate-pulse" />
-                <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className={`w-full text-xs font-bold cursor-pointer transition-all file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:tracking-wider file:cursor-pointer ${isDarkMode ? 'text-zinc-400 file:bg-orange-600 file:text-white hover:file:bg-orange-700' : 'text-slate-700 file:bg-orange-600 file:text-white hover:file:bg-orange-700 file:shadow-md'}`} />
+              <div className={`p-6 border-2 border-dashed rounded-3xl transition-all duration-200 flex flex-col items-center justify-center gap-3 hover:shadow-md ${theme.glassInnerCard} ${isDarkMode ? 'hover:border-orange-500/50' : 'hover:border-orange-300'}`}>
+                <FileSpreadsheet size={40} className="text-orange-500 animate-pulse" />
+                <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className={`w-full text-[10px] font-bold cursor-pointer transition-all file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:uppercase file:tracking-wider file:cursor-pointer ${theme.textMain} file:bg-orange-500 file:text-white hover:file:bg-orange-600 shadow-sm`} />
               </div>
 
-              <button onClick={executeStaffBulkImport} disabled={isImporting || !bulkFile} className={`w-full py-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all duration-200 ${bulkFile ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-600/20 cursor-pointer hover:scale-[1.02] active:scale-95' : isDarkMode ? 'bg-[#27272a] text-zinc-500 cursor-not-allowed' : 'bg-slate-300 text-white cursor-not-allowed'}`}>
+              <button onClick={executeStaffBulkImport} disabled={isImporting || !bulkFile} className={`w-full py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all duration-200 border ${bulkFile ? 'bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer hover:scale-[1.02] active:scale-95 border-orange-400' : isDarkMode ? 'bg-[#27272a]/40 text-zinc-500 border-zinc-700 cursor-not-allowed' : 'bg-slate-300/40 text-slate-500 border-slate-300 cursor-not-allowed'}`}>
                 {isImporting ? 'Parsing CSV Rows...' : '2. Execute Batch Staff Upload'}
               </button>
             </div>
@@ -765,8 +874,8 @@ function AdminStaffDirectoryContent() {
 export default function AdminStaffDirectoryPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0b0712] flex flex-col items-center justify-center gap-4 text-slate-400 transition-colors">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-600 dark:border-t-orange-500"></div>
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 text-slate-400 transition-colors">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-orange-500 dark:border-t-orange-500"></div>
         <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500 dark:text-purple-300">Loading Directory...</span>
       </div>
     }>
