@@ -6,8 +6,10 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, CheckCircle2, AlertTriangle, 
-  Loader2, CheckCircle, Lock, Monitor, LogOut, Star, Camera, ArrowRight
+  Loader2, CheckCircle, Lock, Monitor, LogOut, Star, Camera, ArrowRight,
+  ChevronDown, PackageOpen // Added missing icons for the new modal
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 // 🌟 SMART AUDIT WINDOW ENGINE
@@ -86,6 +88,12 @@ export default function StaffDashboardPage() {
     isOpen: false,
     type: '',
   });
+
+  // 🌟 PURE LIQUID GLASS REPLACEMENT MODAL STATE
+  const [showReplaceModal, setShowReplaceModal] = useState(false);
+  const [replaceAssetId, setReplaceAssetId] = useState('');
+  const [replaceReason, setReplaceReason] = useState('');
+  const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
   // 🌟 THEME SYNC
   useEffect(() => {
@@ -212,8 +220,65 @@ export default function StaffDashboardPage() {
       toast.success("Thank you for rating our IT support!");
     } catch (e) { console.error(e); }
   };
+
+  // 🌟 NEW: LIQUID GLASS REPLACE SUBMIT LOGIC
+  const handleReplacementSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replaceAssetId || !replaceReason.trim()) return;
+
+    const asset = assignedAssets.find(a => String(a.id) === replaceAssetId);
+    if (!asset) return;
+
+    const confirmed = window.confirm(
+      `RECONFIRM REPLACEMENT:\n\nAre you sure you want to request a replacement for:\nAsset: ${asset.name || asset.asset_name}\nTag ID: ${asset.asset_tag}\nSerial: ${asset.serial_number || 'N/A'}\n\nThis will immediately alert IT logistics to prepare a replacement.`
+    );
+
+    if (!confirmed) return;
+
+    setIsSubmittingReplace(true);
+    try {
+      const description = `Tag ID: ${asset.asset_tag} | S/N: ${asset.serial_number || 'N/A'}\n\nReason: ${replaceReason}`;
+      const title = `Replacement Request: ${asset.name || asset.asset_name || asset.category}`;
+
+      const cleanEmail = currentUser.email.toLowerCase().trim();
+      const finalEmp = currentUser.emp_id || 'STAFF';
+      let humanName = currentUser.name || cleanEmail.split('@')[0];
+      humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
+      humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
+
+      const { error } = await supabase.from('tickets').insert([{
+        title,
+        description,
+        category: 'Asset Replacement',
+        priority: 'High',
+        status: 'Pending',
+        created_by: cleanEmail,
+        emp_code: finalEmp,
+        staff_name: humanName,
+        created_at: new Date().toISOString(),
+      }]);
+
+      if (error) throw error;
+      
+      // Update asset status
+      await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', asset.id);
+
+      setShowReplaceModal(false);
+      setReplaceReason('');
+      setReplaceAssetId('');
+      
+      loadRealDatabase(false); // Refresh dashboard silently
+
+      toast.success("Replacement request submitted successfully.");
+    } catch (error) {
+      console.error("Error submitting request:", error);
+      toast.error("Failed to submit request. Please try again.");
+    } finally {
+      setIsSubmittingReplace(false);
+    }
+  };
   
-  // 🌟 CRISP BADGES FOR TICKETS (Removed black/dark backgrounds entirely)
+  // 🌟 CRISP BADGES FOR TICKETS
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s === 'open' || s === 'pending') return 'bg-orange-50 text-orange-600 font-extrabold border border-orange-200 shadow-sm';
@@ -259,21 +324,28 @@ export default function StaffDashboardPage() {
     return { disabled: false, text: "Audit Device", classes: "bg-linear-to-r from-orange-500 to-purple-600 hover:opacity-90 font-bold text-white cursor-pointer shadow-lg shadow-orange-500/20 border-transparent" };
   };
 
-  // 🎨 PURE MAC OS 2026 TRANSPARENT GLASS THEME (Based on Mockup)
+  // 🎨 PURE MAC OS 2026 TRANSPARENT GLASS THEME (Matched to Replacement Log Portal)
   const theme = {
     glassCard: isDarkMode 
-      ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]' 
-      : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
+      ? 'bg-zinc-900/60 backdrop-blur-2xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_16px_40px_rgba(0,0,0,0.5)]' 
+      : 'bg-white/70 backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/80 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.9),0_12px_32px_rgba(230,210,200,0.35)]', 
     glassButton: isDarkMode
-      ? 'bg-black/20 hover:bg-black/40 border border-white/10 shadow-sm'
-      : 'bg-white/30 hover:bg-white/60 backdrop-blur-2xl border border-white/80 shadow-sm hover:shadow-md transition-all duration-300',
+      ? 'bg-zinc-800/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-700 transition-all text-white'
+      : 'bg-white/80 backdrop-blur-2xl border border-white shadow-[inset_0_1px_2px_rgba(255,255,255,0.9),0_4px_12px_rgba(0,0,0,0.03)] hover:bg-white hover:shadow-[inset_0_1px_2px_rgba(255,255,255,0.9),0_6px_16px_rgba(0,0,0,0.05)] transition-all text-[#0f172a]',
     glassItem: isDarkMode
       ? 'bg-black/20 border border-white/10 hover:border-white/20'
       : 'bg-white/50 border border-white/60 shadow-sm hover:shadow-md backdrop-blur-2xl transition-all duration-300',
     glassInner: isDarkMode
       ? 'bg-black/40 border border-white/10'
       : 'bg-white/70 border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)] backdrop-blur-md',
+    
+    // Exact Liquid Glass inner cards for the Replacement modal
+    glassInnerCard: isDarkMode 
+      ? 'bg-black/40 backdrop-blur-xl border border-white/10' 
+      : 'bg-white/60 backdrop-blur-2xl border border-white shadow-[inset_0_1px_2px_rgba(255,255,255,0.9),0_2px_8px_rgba(0,0,0,0.02)]',
       
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
   };
@@ -484,9 +556,13 @@ export default function StaffDashboardPage() {
                           </button>
                         )}
 
+                        {/* 🌟 TRIGGER FOR NEW PURE GLASS REPLACEMENT MODAL */}
                         <button 
                           disabled={isReturnPending && !isReturnRejected}
-                          onClick={() => setModal({ isOpen: true, type: 'REPLACEMENT', targetAsset: asset })}
+                          onClick={() => {
+                            setReplaceAssetId(asset.id);
+                            setShowReplaceModal(true);
+                          }}
                           className={`px-5 py-2.5 font-bold text-xs rounded-xl transition-all border shadow-sm ${
                             (isReturnPending && !isReturnRejected)
                               ? 'bg-white/40 border-white/60 text-slate-400 cursor-not-allowed opacity-60'
@@ -582,7 +658,7 @@ export default function StaffDashboardPage() {
 
       </div>
       
-      {/* 🌟 PURE WHITE GLASS DATABASE MODAL (No Solid White Backgrounds) */}
+      {/* 🌟 FALLBACK GENERIC DATABASE MODAL (Tickets, Audit, Return) */}
       {modal.isOpen && (
         <LiveDatabaseModal 
           type={modal.type} 
@@ -593,6 +669,144 @@ export default function StaffDashboardPage() {
           onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(); }} 
         />
       )}
+
+      {/* 🌟 PURE LIQUID GLASS REPLACEMENT MODAL FOR STAFF DASHBOARD */}
+      <AnimatePresence>
+        {showReplaceModal && (
+          <div className="fixed inset-0 z-999 flex items-center justify-center p-4">
+            
+            {/* Backdrop Blur overlay */}
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowReplaceModal(false)}
+              className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`}
+            />
+            
+            {/* Modal Glass Container - Pure Liquid Glass matched to Dashboard theme */}
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className={`relative w-full max-w-120 rounded-[2.5rem] flex flex-col overflow-hidden ${theme.glassCard}`}
+            >
+              {/* Header */}
+              <div className="px-8 pt-8 pb-5 flex justify-between items-center relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${
+                    isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_2px_8px_rgba(168,85,247,0.15)] text-[#a855f7]'
+                  }`}>
+                     <PackageOpen size={26} strokeWidth={2} />
+                  </div>
+                  <h2 className={`text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>
+                    Assets Replacement
+                  </h2>
+                </div>
+                <button 
+                  onClick={() => setShowReplaceModal(false)}
+                  className={`w-12 h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}
+                >
+                  <X size={20} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* Top Divider */}
+              <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
+
+              {/* Form Body */}
+              <form onSubmit={handleReplacementSubmit} className="px-8 pt-6 pb-6 flex flex-col gap-6 relative z-10">
+                
+                {/* Select Asset */}
+                <div className="flex flex-col gap-2.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                    Select Assigned Asset
+                  </label>
+                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-5 transition-all ${theme.glassInnerCard}`}>
+                    <select
+                      value={replaceAssetId}
+                      onChange={(e) => setReplaceAssetId(e.target.value)}
+                      required
+                      className={`w-full pl-5 pr-10 py-4.5 text-[15px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
+                    >
+                      <option value="" disabled className={isDarkMode ? 'text-black' : ''}>Choose Hardware...</option>
+                      {assignedAssets.map(asset => (
+                        <option key={asset.id} value={asset.id} className={isDarkMode ? 'text-black' : ''}>
+                          {asset.name || asset.asset_name} ({asset.asset_tag})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={20} className={`absolute right-5 pointer-events-none ${theme.textSub}`} />
+                  </div>
+                </div>
+
+                {/* Auto-populated details */}
+                <AnimatePresence>
+                  {replaceAssetId && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0, marginTop: -10 }} 
+                      animate={{ opacity: 1, height: 'auto', marginTop: -5 }} 
+                      exit={{ opacity: 0, height: 0, marginTop: -10 }}
+                      className="overflow-hidden"
+                    >
+                      <div className={`px-6 py-5 rounded-2xl flex gap-4 ${theme.glassInnerCard}`}>
+                        <div className="flex-1 space-y-1.5">
+                          <span className={`text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
+                          <span className={`text-[13px] font-bold ${theme.textMain}`}>
+                            {assignedAssets.find(a => String(a.id) === replaceAssetId)?.asset_tag}
+                          </span>
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <span className={`text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
+                          <span className={`text-[13px] font-bold ${theme.textMain}`}>
+                            {assignedAssets.find(a => String(a.id) === replaceAssetId)?.serial_number || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Detailed Explanation Textarea */}
+                <div className="flex flex-col gap-2.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                    Detailed Explanation
+                  </label>
+                  <textarea
+                    value={replaceReason}
+                    onChange={(e) => setReplaceReason(e.target.value)}
+                    required
+                    placeholder="Describe what happened..."
+                    className={`w-full px-6 py-5 rounded-2xl text-[15px] font-semibold transition-all outline-none min-h-35 resize-none ${theme.glassInnerCard} ${
+                      isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'
+                    }`}
+                  />
+                </div>
+
+              </form>
+
+              {/* Bottom Divider */}
+              <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
+
+              {/* Footer Buttons */}
+              <div className="px-8 py-7 flex justify-center items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowReplaceModal(false)}
+                  className={`w-35 py-3.5 rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReplace || !replaceAssetId || !replaceReason.trim()}
+                  className="w-35 py-3.5 bg-linear-to-r from-[#a78bfa] to-[#8b5cf6] text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all shadow-[0_4px_20px_rgba(139,92,246,0.35)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
+                >
+                  {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Transmit'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -678,7 +892,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, setAssignedAssets, o
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-999 flex items-center justify-center p-4 animate-in fade-in">
       <div className={`rounded-4xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] ${theme.modalBg}`}>
         
         <div className={`p-6 border-b flex items-center justify-between shrink-0 ${theme.headerBg}`}>
