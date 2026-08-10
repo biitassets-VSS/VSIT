@@ -532,8 +532,9 @@ export default function AdminDashboardPage() {
                     <div className="flex items-start justify-between w-full relative">
                       <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
                         <m.icon size={20} strokeWidth={2.2} />
+                        {/* 🌟 2026 Liquid Glass Translucent Badge */}
                         {m.badge > 0 && (
-                          <span className="absolute -top-2.5 -right-2.5 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-linear-to-br from-rose-500 to-red-600 shadow-sm border border-white dark:border-[#18181b] z-50">
+                          <span className="absolute -top-2.5 -right-2.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-gradient-to-tr from-orange-500/80 to-purple-600/80 backdrop-blur-xl backdrop-saturate-150 text-white text-[10px] font-black rounded-full border border-white/50 dark:border-white/20 shadow-[0_4px_10px_rgba(249,115,22,0.3),inset_0_1px_3px_rgba(255,255,255,0.8)] drop-shadow-sm z-50 transition-all hover:scale-110">
                             {m.badge}
                           </span>
                         )}

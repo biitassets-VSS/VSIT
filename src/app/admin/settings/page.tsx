@@ -49,7 +49,7 @@ export default async function SettingsPage() {
         console.error("Supabase Error fetching users:", usersError?.message);
       }
 
-      // 2. Fetch Requests for Cleanup (Now correctly joining profiles to get Staff Name & Emp Code!)
+      // 2. Fetch Requests for Cleanup
       const { data: requests, error: reqError } = await supabase
         .from('tickets') 
         .select(`
@@ -60,7 +60,6 @@ export default async function SettingsPage() {
         .limit(100);
         
       if (!reqError && requests) {
-        // Flatten the data so the client component can easily read it
         dbRequests = requests.map(req => ({
           ...req,
           staff_name: req.profiles?.full_name || req.profiles?.name || 'Unknown Staff',
@@ -73,10 +72,9 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent relative overflow-x-hidden transition-colors duration-1000">
-      {/* 🌟 GLOBAL BACKGROUND ORBS */}
-      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
-      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+    <div className="min-h-screen bg-transparent relative z-10 p-4 sm:p-6 lg:p-8">
+      {/* 🌟 Removed the fixed background orbs from here to eliminate the double background. 
+          The portal will now rely solely on the clean layout.tsx background! */}
       
       <SettingsClient 
         initialSettings={liveSettings} 

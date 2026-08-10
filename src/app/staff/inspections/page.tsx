@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
-  ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
-  Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
-  X, Image as ImageIcon, History as HistoryIcon, FilterX, ExternalLink, Settings,
-  Bell, Send, ShieldCheck, Check, AlertTriangle
+  ArrowLeft, Laptop, Camera, Clock, AlertTriangle, 
+  CheckCircle2, XCircle, RefreshCw, Info, Calendar, Monitor, ShieldCheck,
+  Image as ImageIcon, Eye, X
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const getNextDueDate = (baseDateStr: string | null, cat: string) => {
   if (!baseDateStr) return null;
@@ -20,182 +20,76 @@ const getNextDueDate = (baseDateStr: string | null, cat: string) => {
   return lastSat;
 };
 
-function AdminInspectionReviewContent() {
+function StaffInspectionsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  
-  const highlightedId = searchParams.get('id'); 
-  const targetAssetId = searchParams.get('asset_id'); 
-
   const [loading, setLoading] = useState(true);
-  const [inspections, setInspections] = useState<any[]>([]);
-  const [filterTab, setFilterTab] = useState<'pending' | 'approved' | 're-inspection' | 'rejected' | 'admin' | 'overdue' | 'all'>('pending');
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [assetFilter, setAssetFilter] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [sendingAlertId, setSendingAlertId] = useState<string | null>(null);
+  const [myAssets, setMyAssets] = useState<any[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [staffProfile, setStaffProfile] = useState<any>(null);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
   useEffect(() => {
-    document.documentElement.classList.remove('dark'); 
-    fetchVerificationLedger();
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
+    };
+    syncTheme();
+    
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    loadMyInspections();
+
+    return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (targetAssetId) {
-      setAssetFilter(targetAssetId);
-      setFilterTab('all'); 
-    }
-  }, [targetAssetId]);
-
-  useEffect(() => {
-    if (highlightedId && !loading && inspections.length > 0) {
-      setTimeout(() => {
-        const el = document.getElementById(`inspection-${highlightedId}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100); 
-    }
-  }, [highlightedId, loading, inspections]);
-
-  const fetchVerificationLedger = async () => {
-    setLoading(true);
+  const loadMyInspections = async () => {
     try {
-      const [inspRes, assetsRes, profilesRes] = await Promise.all([
-        supabase.from('inspections').select('*')
-          .not('notes', 'ilike', '%[RETURN REQUEST]%')
-          .not('status', 'ilike', '%Return%')
-          .not('notes', 'ilike', '%[REPLACEMENT REQUEST]%') 
-          .not('status', 'ilike', '%Replace%')              
-          .order('created_at', { ascending: false }),
-        supabase.from('assets').select('*'),
-        supabase.from('profiles').select('*')
-      ]);
+      const rawSession = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
+      if (!rawSession) {
+        router.push('/');
+        return;
+      }
+      
+      const sessionData = JSON.parse(rawSession);
+      const userEmail = sessionData.email;
 
-      const rawInspections = inspRes.data || [];
-      const assetsData = assetsRes.data || [];
-      const profilesData = profilesRes.data || [];
+      // 1. Fetch Staff Profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, name, emp_code')
+        .eq('email', userEmail)
+        .single();
 
-      const masterLedger: any[] = [];
-      const activeAssetIds = new Set<string>();
+      if (!profile) throw new Error("Profile not found.");
+      setStaffProfile(profile);
 
-      // 🌟 Phase 1: Process Existing Logs
-      rawInspections.forEach((insp, idx) => {
-        const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
+      // 2. Fetch Assets Assigned to this Staff
+      const { data: assets } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('assigned_to', profile.id)
+        .not('status', 'ilike', '%Return%');
+
+      if (!assets) {
+        setMyAssets([]);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Fetch latest inspection logs for these assets
+      const assetIds = assets.map(a => a.id);
+      const { data: inspections } = await supabase
+        .from('inspections')
+        .select('*')
+        .in('asset_id', assetIds)
+        .order('created_at', { ascending: false });
+
+      const compiledAssets = assets.map(asset => {
+        // Find the most recent inspection for this specific asset
+        const latestInsp = (inspections || []).find(i => String(i.asset_id) === String(asset.id));
         
-        const matchedProfile = profilesData.find(p => 
-          (insp.user_email && p.email?.toLowerCase() === insp.user_email.toLowerCase()) || 
-          (insp.inspected_by && String(p.id) === String(insp.inspected_by)) ||
-          (insp.inspected_by && p.emp_code?.toLowerCase() === String(insp.inspected_by).toLowerCase())
-        );
-
-        const itemIdentifier = insp.id || `insp-${insp.asset_id}-${idx}-${Date.now()}`;
-        
-        const isProfileAdmin = matchedProfile && (
-          matchedProfile.role?.toLowerCase() === 'admin' || 
-          matchedProfile.user_type?.toLowerCase() === 'admin' || 
-          matchedProfile.is_admin === true ||
-          String(matchedProfile.emp_code || '').toUpperCase() === 'ADMIN' ||
-          String(matchedProfile.emp_code || '').toUpperCase() === 'SYS' ||
-          String(matchedProfile.emp_code || '').toUpperCase().startsWith('ADM')
-        );
-
-        const inspByLower = String(insp.inspected_by || '').toLowerCase().trim();
-        const notesLower = String(insp.notes || '').toLowerCase();
-        const statusLower = String(insp.status || '').toLowerCase();
-
-        const isSystemOrAdminKeyword = 
-          inspByLower === 'admin' || inspByLower === 'system' || inspByLower === 'administrator' ||
-          notesLower.includes('asset configuration updated') || 
-          notesLower.includes('asset initially registered') ||
-          notesLower.includes('asset forcefully unassigned') ||
-          notesLower.includes('asset re-assigned') ||
-          statusLower === 'stock intake';
-
-        const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
-        const isUnmappedAdminAction = !matchedProfile && (!!insp.user_email || !!insp.inspected_by) && 
-          (isSystemOrAdminKeyword || photosArray.length === 0);
-
-        const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
-
-        // Add to active set ONLY if it's currently pending review/re-inspection
-        const isHistorical = ['approved', 'pass', 'resolved'].some(k => statusLower.includes(k)) || isAdminAction;
-        if (!isHistorical) {
-          activeAssetIds.add(String(matchedAsset.id));
-        }
-
-        let recoveredName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
-        if (!recoveredName && insp.notes && insp.notes.includes('Digitally Signed')) {
-          const match = insp.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
-          if (match) recoveredName = match[1].trim();
-        }
-        if (!recoveredName && (insp.user_email || insp.inspected_by)) {
-          const historicalSignature = rawInspections.find(r => 
-            ((insp.user_email && r.user_email?.toLowerCase() === insp.user_email.toLowerCase()) || 
-             (insp.inspected_by && String(r.inspected_by) === String(insp.inspected_by))) &&
-            r.notes && r.notes.includes('Digitally Signed Handover Agreement by')
-          );
-          if (historicalSignature && historicalSignature.notes) {
-            const match = historicalSignature.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
-            if (match) recoveredName = match[1].trim();
-          }
-        }
-        if (!recoveredName && insp.user_email && insp.user_email.includes('@')) {
-          recoveredName = insp.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        }
-        
-        let finalName = '';
-        let finalEmpCode = '';
-        let isDeletedUser = false;
-        let normalizedStatus = insp.status === 'Pending Review' || !insp.status ? 'Pending' : insp.status;
-
-        if (isAdminAction) {
-          finalName = 'Administrator / System';
-          finalEmpCode = 'ADMIN USER';
-          isDeletedUser = false;
-          if (normalizedStatus === 'Pending' || !insp.status) normalizedStatus = 'Admin Update';
-        } else if (matchedProfile) {
-          finalName = matchedProfile.full_name || matchedProfile.name;
-          finalEmpCode = matchedProfile.emp_code || insp.emp_code;
-        } else {
-          if (insp.inspected_by || insp.user_email) {
-            isDeletedUser = true;
-            finalName = recoveredName || (insp.user_email ? insp.user_email : 'Unknown Past User');
-            finalEmpCode = insp.emp_code || insp.employee_code || (insp.inspected_by ? `ID-${String(insp.inspected_by).substring(0, 5).toUpperCase()}` : 'OLD-RECORD');
-          } else {
-            finalName = 'Unassigned Asset';
-            finalEmpCode = 'NO-EMP-RECORD';
-          }
-        }
-
-        masterLedger.push({
-          ...insp,
-          id: itemIdentifier,
-          is_submission: !isAdminAction,
-          is_admin_action: isAdminAction,
-          staff_id: matchedProfile?.id || insp.inspected_by, 
-          asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
-          category: matchedAsset.category || 'Laptop', 
-          serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
-          asset_tag: matchedAsset.asset_tag || 'NO-TAG',
-          staff_name: finalName,
-          emp_code: finalEmpCode,
-          is_deleted_user: isDeletedUser,
-          status: normalizedStatus,
-          photos: photosArray,
-          next_due: getNextDueDate(insp.created_at, matchedAsset.category || 'Laptop')
-        });
-      });
-
-      // 🌟 Phase 2: Detect OVERDUE and Missing Inspections
-      assetsData.forEach(asset => {
-        if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
-        if (asset.status?.toLowerCase().includes('return')) return;
-
-        // Skip if there's already an active (unapproved) log in the queue for this asset
-        if (activeAssetIds.has(String(asset.id))) return;
-
-        const latestInsp = rawInspections.find(i => String(i.asset_id) === String(asset.id));
         let nextDue = null;
         if (asset.next_inspection_date) {
           nextDue = new Date(asset.next_inspection_date);
@@ -209,618 +103,349 @@ function AdminInspectionReviewContent() {
         now.setHours(0,0,0,0);
         const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < now.getTime()) : false;
 
-        const s = (asset.inspection_status || '').toLowerCase();
-        const needsAction = s.includes('pending') || s.includes('action required');
-
-        if (isOverdue || needsAction) {
-          const matchedStaff = profilesData.find(p => p.id === asset.assigned_to);
-          let sName = matchedStaff?.full_name || matchedStaff?.name;
-          let sCode = matchedStaff?.emp_code || matchedStaff?.emp_id;
-
-          if (!sName) {
-            const historicalRecord = rawInspections.find(i => String(i.asset_id) === String(asset.id));
-            let fallbackName = historicalRecord?.user_name || historicalRecord?.staff_name || historicalRecord?.full_name;
-            if (!fallbackName && historicalRecord?.user_email) {
-              fallbackName = historicalRecord.user_email.split('@')[0].split(/[._-]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            }
-            sName = fallbackName || 'Unregistered User';
-            sCode = historicalRecord?.emp_code || `ID-${String(asset.assigned_to).substring(0,5).toUpperCase()}`;
-          }
-
-          masterLedger.push({
-            id: `missing-${asset.id}-${Date.now()}`,
-            asset_id: asset.id,
-            is_submission: false,
-            is_admin_action: false,
-            staff_id: matchedStaff?.id || asset.assigned_to,
-            created_at: asset.created_at || new Date().toISOString(),
-            asset_name: asset.name || asset.asset_name,
-            category: asset.category || 'Hardware', 
-            serial_number: asset.serial_number || asset.serial,
-            asset_tag: asset.asset_tag || 'NO-TAG',
-            staff_name: sName,
-            emp_code: sCode || 'N/A',
-            is_deleted_user: !matchedStaff,
-            status: isOverdue ? 'Overdue' : 'Awaiting Staff Action',
-            notes: isOverdue ? 'CRITICAL: Staff member missed the required deadline to submit this inspection.' : 'Staff member has not submitted the visual inspection yet.',
-            photos: [],
-            next_due: nextDue
-          });
+        const assetInspStatus = (asset.inspection_status || '').toLowerCase();
+        let currentStatus = latestInsp?.status || 'Pending';
+        
+        if (isOverdue && !['pending', 're-inspection'].includes(currentStatus.toLowerCase())) {
+          currentStatus = 'Overdue';
+        } else if (assetInspStatus.includes('action required') || assetInspStatus === 'pending') {
+          currentStatus = assetInspStatus === 'pending' ? 'Pending Review' : 'Action Required';
         }
+
+        return {
+          ...asset,
+          latest_inspection: latestInsp,
+          computed_status: currentStatus,
+          is_overdue: isOverdue,
+          next_due: nextDue
+        };
       });
 
-      masterLedger.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setInspections(masterLedger);
-    } catch (err: any) {
-      alert("Failed to fetch inspection records.");
+      setMyAssets(compiledAssets);
+    } catch (error) {
+      console.error("Error loading staff inspections:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, status: string) => {
-    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-')) {
-      return alert("Cannot send alert: No valid active employee profile ID attached to this record.");
-    }
-
-    setSendingAlertId(staffId);
-    try {
-      const isReInspect = status === 'Re-Inspection';
-      const isOverdue = status === 'Overdue';
-
-      const title = isReInspect ? `⚠️ Mandatory Re-Inspection Required` : isOverdue ? `🚨 OVERDUE: Hardware Audit Required` : `🔔 Hardware Audit Reminder Due`;
-      const message = isReInspect
-        ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
-        : isOverdue
-        ? `Your hardware inspection for ${assetName} (${tagId}) is OVERDUE. Please submit your visual verification immediately to avoid compliance strikes.`
-        : `Please submit your scheduled visual inspection photos for ${assetName} (${tagId}) via your staff portal dashboard.`;
-
-      const { error } = await supabase.from('notifications').insert([{
-        target_user: staffId,
-        title: title,
-        message: message,
-        is_read: false,
-        type: isReInspect || isOverdue ? 'warning' : 'info'
-      }]);
-
-      if (error) throw error;
-      alert(`✔ Success: Immediate notification push sent directly to employee dashboard!`);
-    } catch (err: any) {
-      alert(`Error sending notification push: ${err.message}`);
-    } finally {
-      setSendingAlertId(null);
-    }
-  };
-
-  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string, isDeletedUser: boolean) => {
-    if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
-
-    let remarks = '';
-    if (verdict === 'Re-Inspection' || verdict === 'Rejected') {
-      remarks = prompt(`Provide administrative remarks/reason for marking this device as ${verdict}:`) || '';
-      if (!remarks.trim()) return alert("Remarks are required to issue returned actions.");
-    }
-
-    if (!confirm(`Are you sure you want to mark this submission as "${verdict}"?`)) return;
-
-    setUpdatingId(inspectionId);
-    try {
-      const isTemporaryId = String(inspectionId).startsWith('insp-') || String(inspectionId).startsWith('missing-');
-      let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
-      
-      if (isTemporaryId) {
-        query = query.eq('asset_id', assetId).eq('status', 'Pending');
-      } else {
-        query = query.eq('id', inspectionId).eq('asset_id', assetId);
-      }
-
-      const { error: inspErr } = await query;
-      if (inspErr) throw inspErr;
-
-      const assetUpdatePayload: any = { inspection_status: verdict };
-      if (verdict === 'Approved') {
-        assetUpdatePayload.last_inspection_date = new Date().toISOString();
-        assetUpdatePayload.status = 'Assigned'; 
-      } else if (verdict === 'Re-Inspection') {
-        assetUpdatePayload.status = 'Re-Inspection';
-      } else {
-        assetUpdatePayload.status = 'Action Required';
-      }
-
-      const { error: assetErr } = await supabase.from('assets').update(assetUpdatePayload).eq('id', assetId);
-      if (assetErr) throw assetErr;
-
-      if (staffId && !isDeletedUser && !staffId.includes('ADMIN') && !staffId.includes('ID-')) {
-        try {
-          await supabase.from('notifications').insert([{
-            target_user: staffId,
-            title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ Action Required: ${verdict}`,
-            message: verdict === 'Approved' ? `Your recent hardware audit has been successfully approved by the IT Admin.` : `Your asset inspection was marked as ${verdict}. Reason: ${remarks}`,
-            is_read: false,
-            type: verdict === 'Approved' ? 'success' : 'warning'
-          }]);
-        } catch (notifError) {}
-      }
-
-      setInspections(prev => prev.map(item => 
-        (item.id === inspectionId && item.asset_id === assetId) 
-          ? { ...item, status: verdict, admin_remarks: remarks || item.admin_remarks } 
-          : item
-      ));
-
-      alert(`Success: Review locked in as ${verdict}. Live alert pushed to staff dashboard.`);
-    } catch (err: any) {
-      alert(`Error transmitting verdict: ${err.message}`);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const filteredList = inspections.filter(item => {
-    if (assetFilter && item.asset_id !== assetFilter) return false;
-
-    const s = (item.status || '').toLowerCase().trim();
-    const isApproved = s === 'approved' || s === 'pass';
-    const isRejected = s === 'rejected' || s === 'fail';
-    const isReInspect = s === 're-inspection';
-    const isOverdue = s === 'overdue';
-    const isPending = s === 'pending' || s === 'awaiting staff action';
-    const isAdminLog = item.is_admin_action === true;
-
-    const matchesTab = 
-      filterTab === 'all' ? true :
-      filterTab === 'overdue' ? isOverdue :
-      filterTab === 'pending' ? (isPending && !isAdminLog) :
-      filterTab === 'approved' ? isApproved :
-      filterTab === 're-inspection' ? isReInspect :
-      filterTab === 'rejected' ? isRejected :
-      filterTab === 'admin' ? isAdminLog : true;
-
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = 
-      (item.staff_name || '').toLowerCase().includes(query) ||
-      (item.emp_code || '').toLowerCase().includes(query) ||
-      (item.asset_name || '').toLowerCase().includes(query) ||
-      (item.serial_number || '').toLowerCase().includes(query) ||
-      (item.asset_tag || '').toLowerCase().includes(query);
-
-    return matchesTab && matchesSearch;
-  });
-
-  const pendingCount = inspections.filter(item => {
-    const st = (item.status || '').toLowerCase().trim();
-    return (st === 'pending' || st === 'awaiting staff action') && !item.is_admin_action;
-  }).length;
-
-  const overdueCount = inspections.filter(item => item.status === 'Overdue').length;
-
-  const clearAssetFilter = () => {
-    setAssetFilter(null);
-    router.replace('/admin/inspections'); 
-  };
-
+  // 🌟 PREMIUM 2026 LIQUID GLASS THEME
   const theme = {
-    bg: 'bg-[#FFF9F2]', 
-    glassCard: 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
-    glassItem: 'bg-white/50 border border-white/60 shadow-sm hover:shadow-md backdrop-blur-2xl transition-all duration-300',
-    glassInner: 'bg-white/70 border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)] backdrop-blur-md',
-    textMain: 'text-slate-900',
-    textSub: 'text-slate-600',
+    bg: 'bg-transparent',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    glassCard: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-2xl border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.15)] hover:border-white/20 transition-all duration-500' 
+      : 'bg-white/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/60 shadow-[0_16px_40px_rgba(31,38,135,0.05)] shadow-[inset_0_0_4px_2px_rgba(255,255,255,0.8)] hover:border-white/80 transition-all duration-500',
+    glassInnerCard: isDarkMode 
+      ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/50 backdrop-blur-xl border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)]',
+    glassButton: isDarkMode
+      ? 'bg-zinc-800/50 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] hover:bg-zinc-700/50 transition-all text-white'
+      : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)] hover:bg-white/90 transition-all text-slate-800',
   };
 
-  const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
-    if (isAdminAction) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
-    const s = (status || '').toLowerCase().trim();
-    if (s === 'overdue') return 'bg-transparent border border-rose-500 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.6)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.8)] animate-pulse';
-    if (s === 'approved') return 'bg-transparent border border-emerald-400 text-emerald-600 shadow-[0_0_8px_rgba(52,211,153,0.4)] group-hover:shadow-[0_0_12px_rgba(52,211,153,0.7)]';
-    if (s === 're-inspection') return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.4)] group-hover:shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse';
-    if (s === 'rejected') return 'bg-transparent border border-rose-400 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.4)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.7)]';
-    if (!isSubmission || s.includes('awaiting')) return 'bg-transparent border border-amber-400 text-amber-600 shadow-[0_0_8px_rgba(251,191,36,0.4)] group-hover:shadow-[0_0_12px_rgba(251,191,36,0.7)]'; 
-    return 'bg-transparent border border-slate-400 text-slate-500 shadow-[0_0_8px_rgba(148,163,184,0.3)] group-hover:shadow-[0_0_12px_rgba(148,163,184,0.5)]'; 
-  };
+  if (loading) {
+    return (
+      <div className="w-full h-[70vh] flex flex-col items-center justify-center gap-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500"></div>
+        <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Loading Your Assets...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 relative z-0 overflow-hidden`}>
-      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-
-      <div className="w-full max-w-400 px-3 sm:px-6 lg:px-10 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
+    <div className={`min-h-screen ${theme.bg} p-4 sm:p-6 lg:p-8 font-sans relative z-10 transition-colors duration-1000`}>
+      <div className="max-w-6xl mx-auto space-y-8">
         
-        <div className={`${theme.glassCard} rounded-4xl p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
-          <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 bg-white/60 backdrop-blur-md border border-white/80 hover:bg-white shadow-sm rounded-2xl text-slate-600 transition-all cursor-pointer`}>
+        {/* HEADER */}
+        <div className={`${theme.glassCard} rounded-4xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.back()} className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:scale-105 cursor-pointer ${theme.glassInnerCard} ${theme.textMain}`}>
               <ArrowLeft size={18} />
             </button>
             <div>
-              <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
-                <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
-                  <ShieldCheck className="text-orange-600 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                  <span>Inspection Command Center</span>
-                </h1>
-                {pendingCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-orange-600 text-white font-bold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
-                    {pendingCount} Action Required
-                  </span>
-                )}
-                {overdueCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-rose-600 text-white font-bold text-[10px] uppercase tracking-widest rounded-full shadow-sm animate-pulse">
-                    {overdueCount} Overdue
-                  </span>
-                )}
-              </div>
-              <p className={`text-xs sm:text-sm font-semibold ${theme.textSub}`}>Adjudicate smartphone hardware captures, issue audit pings, and enforce compliance</p>
+              <h1 className={`text-2xl font-black tracking-tight flex items-center gap-2 ${theme.textMain}`}>
+                <Camera className="text-purple-500" size={24} /> My Inspections
+              </h1>
+              <p className={`text-xs font-semibold mt-1 ${theme.textSub}`}>Submit visual audits for your assigned hardware to maintain compliance.</p>
             </div>
           </div>
-
-          <button 
-            onClick={fetchVerificationLedger} 
-            disabled={loading}
-            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 bg-white/60 backdrop-blur-md border border-white/80 text-slate-700 hover:bg-white shadow-sm rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:opacity-50 shrink-0`}
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin text-orange-600' : 'text-purple-600'} />
-            <span>Sync Database</span>
+          <button onClick={loadMyInspections} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer shadow-sm ${theme.glassButton} active:scale-95`}>
+            <RefreshCw size={14} /> Refresh
           </button>
         </div>
 
-        {assetFilter && (
-          <div className={`${theme.glassCard} p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4`}>
-             <div className={`flex items-center gap-4 text-orange-900`}>
-                <div className={`p-3 border rounded-xl shadow-sm bg-white/70 border-white/80 text-orange-600`}>
-                  <HistoryIcon size={24} />
-                </div>
-                <div>
-                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 text-orange-700`}>Asset Timeline Filter Active</p>
-                  <p className="text-sm font-bold">Showing complete historical track record for selected hardware.</p>
-                </div>
-             </div>
-             <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm cursor-pointer transition-all duration-200 flex items-center justify-center gap-2">
-               <FilterX size={16}/> Clear Filter
-             </button>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
-            {[
-              { id: 'overdue', label: `Overdue (${overdueCount})`, icon: <AlertTriangle size={14} /> },
-              { id: 'pending', label: `Pending (${pendingCount})`, icon: <Clock size={14} /> },
-              { id: 'approved', label: 'Approved', icon: <CheckCircle2 size={14} /> },
-              { id: 're-inspection', label: 'Re-Inspection', icon: <RefreshCw size={14} /> },
-              { id: 'rejected', label: 'Rejected', icon: <XCircle size={14} /> },
-              { id: 'admin', label: `Admin Edits (${inspections.filter(i => i.is_admin_action).length})`, icon: <Settings size={14} /> },
-              { id: 'all', label: `All Logs (${inspections.length})`, icon: <ClipboardCheck size={14} /> },
-            ].map(tab => {
-              const isActive = filterTab === tab.id;
-              return (
-                <button
-                  key={tab.id} onClick={() => setFilterTab(tab.id as any)}
-                  className={`group flex items-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer transition-all duration-200 border ${
-                    isActive 
-                      ? tab.id === 'overdue' ? 'bg-rose-600 text-white shadow-[0_4px_15px_rgba(225,29,72,0.3)] scale-[1.02] border-rose-600' : 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border-purple-600' 
-                      : `bg-white/40 backdrop-blur-md border border-white/60 text-slate-700 hover:bg-white/60 shadow-sm`
-                  }`}
-                >
-                  <span className={isActive ? 'text-white' : tab.id === 'overdue' ? 'text-rose-500 group-hover:text-rose-600' : 'text-purple-600 group-hover:text-purple-700 transition-colors'}>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className={`p-2.5 rounded-2xl transition-all shadow-sm flex items-center focus-within:ring-4 focus-within:ring-purple-500/10 ${theme.glassInner}`}>
-            <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 text-slate-400`} />
-              <input 
-                type="text" 
-                value={searchQuery} 
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
-                className="w-full pl-12 pr-4 py-1.5 text-sm font-semibold outline-none bg-transparent placeholder:text-slate-400"
-              />
-            </div>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-600"></div>
-            <span className={`text-xs font-bold tracking-widest uppercase ${theme.textSub}`}>Fetching Submissions...</span>
-          </div>
-        ) : filteredList.length === 0 ? (
-          <div className={`w-full py-24 rounded-3xl border text-center space-y-3 shadow-sm ${theme.glassCard}`}>
-            <ClipboardCheck size={48} className="mx-auto text-purple-600 opacity-60" />
-            <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Logs Found</h3>
-            <p className={`text-xs font-semibold ${theme.textSub}`}>The tracking timeline is clear for these parameters.</p>
+        {/* ASSET LIST */}
+        {myAssets.length === 0 ? (
+          <div className={`w-full py-24 rounded-4xl text-center space-y-3 ${theme.glassCard}`}>
+            <ShieldCheck size={48} className={`mx-auto opacity-50 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-500'}`} />
+            <h3 className={`text-base font-bold uppercase tracking-widest ${theme.textMain}`}>No Hardware Assigned</h3>
+            <p className={`text-xs font-semibold ${theme.textSub}`}>You currently have no active assets requiring inspection.</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {filteredList.map((item, index) => {
-              const isPending = item.status === 'Pending' || item.status === 'Awaiting Staff Action';
-              const isOverdue = item.status === 'Overdue';
-              const photosArray = item.photos || [];
-              const isHighlighted = highlightedId === String(item.id);
-              const canSendReminder = !item.is_admin_action && item.staff_id && !item.is_deleted_user;
+          <div className="grid grid-cols-1 gap-6">
+            <AnimatePresence>
+              {myAssets.map((asset, index) => {
+                const status = (asset.computed_status || 'Pending').toLowerCase();
+                const isOverdue = asset.is_overdue || status === 'overdue';
+                const isReInspect = status === 're-inspection';
+                const isPendingReview = status.includes('pending') || asset.inspection_status?.toLowerCase().includes('pending');
+                const isApproved = status === 'approved' || status === 'pass';
+                const isRejected = status === 'rejected' || status === 'fail';
 
-              return (
-                <div 
-                  key={`${item.id}-${index}`} 
-                  id={`inspection-${item.id}`}
-                  className={`p-6 md:p-8 rounded-3xl transition-all flex flex-col xl:flex-row gap-8 duration-300 ${theme.glassItem} ${
-                    isHighlighted 
-                      ? 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' 
-                      : isOverdue 
-                        ? 'ring-2 ring-rose-400/50 border-rose-300'
-                        : (isPending && item.is_submission && !item.is_admin_action) 
-                          ? 'ring-2 ring-orange-400/50'
-                          : ''
-                  }`}
-                >
-                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 border-white/50`}>
-                    <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${
-                        item.is_admin_action ? 'bg-purple-100 text-purple-700 border border-purple-200' : 
-                        item.is_submission ? 'bg-white/80 border border-white text-orange-600' : 'bg-slate-100 text-slate-500 border-white'
-                      }`}>
-                        {item.is_admin_action ? <Settings size={20} /> : <User size={20} />}
-                      </div>
-                      <div className="overflow-hidden">
-                        <div className="flex items-center gap-2">
-                           <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
-                           {item.is_deleted_user && (
-                             <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 border border-rose-200 text-rose-700 uppercase tracking-widest shadow-sm">Removed</span>
-                           )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-sm border ${
-                            item.is_admin_action ? 'bg-purple-50/80 text-purple-900 border-purple-200/50' : 'bg-white/60 text-slate-700 border-white/80'
-                          }`}>
-                            {item.emp_code}
-                          </span>
-                          {item.is_admin_action && (
-                            <span className="text-[9px] bg-purple-600 text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-sm">
-                              Admin Action
+                // Determine styling based on current state
+                let statusColor = 'text-slate-500';
+                let statusBg = isDarkMode ? 'bg-slate-500/10 border-slate-500/20' : 'bg-slate-50 border-slate-200';
+                let StatusIcon = Clock;
+                let cardGlow = '';
+
+                if (isApproved) {
+                  statusColor = isDarkMode ? 'text-emerald-400' : 'text-emerald-600';
+                  statusBg = isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200';
+                  StatusIcon = CheckCircle2;
+                  cardGlow = 'hover:border-emerald-400/50 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]';
+                } else if (isOverdue) {
+                  statusColor = isDarkMode ? 'text-rose-400' : 'text-rose-600';
+                  statusBg = isDarkMode ? 'bg-rose-500/10 border-rose-500/30' : 'bg-rose-50 border-rose-200';
+                  StatusIcon = AlertTriangle;
+                  cardGlow = 'border-rose-500/50 shadow-[0_0_30px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30';
+                } else if (isReInspect || isRejected) {
+                  statusColor = isDarkMode ? 'text-orange-400' : 'text-orange-600';
+                  statusBg = isDarkMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-orange-50 border-orange-200';
+                  StatusIcon = RefreshCw;
+                  cardGlow = 'border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.2)] ring-1 ring-orange-500/30';
+                } else if (isPendingReview) {
+                  statusColor = isDarkMode ? 'text-blue-400' : 'text-blue-600';
+                  statusBg = isDarkMode ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200';
+                  StatusIcon = Clock;
+                  cardGlow = 'hover:border-blue-400/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.2)]';
+                }
+
+                // Extract latest inspection logic
+                const latestInsp = asset.latest_inspection;
+                const photosArray = latestInsp?.photos || [];
+
+                // Determine if we show the camera button
+                const needsAction = isOverdue || isReInspect || isRejected || (!isApproved && !isPendingReview);
+
+                return (
+                  <motion.div 
+                    key={asset.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 ${cardGlow}`}
+                  >
+                    <div className="flex flex-col lg:flex-row gap-8">
+                      
+                      {/* ASSET INFO (LEFT) */}
+                      <div className="w-full lg:w-1/3 flex flex-col gap-6 border-b lg:border-b-0 lg:border-r border-white/20 pb-6 lg:pb-0 lg:pr-8">
+                        <div className="flex items-start gap-4">
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${theme.glassInnerCard} ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                            {asset.category?.toLowerCase().includes('laptop') ? <Laptop size={24} /> : <Monitor size={24} />}
+                          </div>
+                          <div>
+                            <h2 className={`text-lg font-black leading-tight ${theme.textMain}`}>{asset.name || asset.asset_name}</h2>
+                            <span className={`inline-block mt-1.5 px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${theme.glassInnerCard} ${theme.textSub}`}>
+                              {asset.category || 'Hardware'}
                             </span>
+                          </div>
+                        </div>
+
+                        <div className={`p-5 rounded-3xl space-y-3 ${theme.glassInnerCard}`}>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Tag ID:</span>
+                            <span className={`text-xs font-mono font-bold ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>{asset.asset_tag}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
+                            <span className={`text-xs font-mono font-bold ${theme.textMain}`}>{asset.serial_number || 'N/A'}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-auto">
+                          <div className={`p-4 rounded-2xl ${theme.glassInnerCard}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Calendar size={14} className={isDarkMode ? 'text-orange-400' : 'text-orange-500'} />
+                              <span className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Next Due</span>
+                            </div>
+                            <p className={`text-sm font-bold ${isOverdue ? 'text-rose-500' : theme.textMain}`}>
+                              {asset.next_due ? new Date(asset.next_due).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Pending Setup'}
+                            </p>
+                          </div>
+
+                          <div className={`p-4 rounded-2xl ${theme.glassInnerCard}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Clock size={14} className={theme.textSub} />
+                              <span className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Last Submitted</span>
+                            </div>
+                            <p className={`text-sm font-bold ${theme.textMain}`}>
+                              {latestInsp?.created_at ? new Date(latestInsp.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Never'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* STATUS & SUBMISSION DETAILS (RIGHT) */}
+                      <div className="w-full lg:w-2/3 flex flex-col">
+                        
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                          <h3 className={`text-[11px] font-black uppercase tracking-widest ${theme.textSub}`}>Current Compliance Status</h3>
+                          <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 shadow-sm ${statusBg} ${statusColor} ${isOverdue || isReInspect ? 'animate-pulse' : ''}`}>
+                            <StatusIcon size={14} /> {isPendingReview ? 'Review in Progress' : asset.computed_status}
+                          </span>
+                        </div>
+
+                        {/* 🌟 NEW: LAST SUBMISSION DETAILS */}
+                        {latestInsp ? (
+                          <div className="flex-1 flex flex-col space-y-5">
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              {/* Photos & Staff Note */}
+                              <div className="space-y-5">
+                                {photosArray.length > 0 && (
+                                  <div>
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-2.5 ${theme.textSub}`}>
+                                      <ImageIcon size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'}/> Uploaded Evidence
+                                    </span>
+                                    <div className="flex flex-wrap gap-2 overflow-x-auto custom-scrollbar pb-2">
+                                      {photosArray.map((url: string, i: number) => (
+                                        <button
+                                          key={i}
+                                          type="button"
+                                          onClick={() => setPreviewPhotoModal(url)}
+                                          className={`relative group w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 shrink-0 ${isDarkMode ? 'border-white/10 hover:border-purple-500 bg-black/40' : 'border-white/80 hover:border-purple-400 bg-white/40'}`}
+                                        >
+                                          <img src={url} alt={`Evidence ${i+1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-sm">
+                                            <Eye size={16} className="text-purple-400" />
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {latestInsp.notes && (
+                                  <div>
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-2.5 ${theme.textSub}`}>
+                                      Staff Declaration Note
+                                    </span>
+                                    <div className={`p-4 rounded-2xl text-xs font-semibold italic leading-relaxed ${theme.glassInnerCard}`}>
+                                      "{latestInsp.notes}"
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Admin Verdict & Notes */}
+                              <div className="space-y-5">
+                                {(latestInsp.admin_remarks || !isPendingReview) && (
+                                  <div>
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-2.5 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                                      Admin Verdict & Remarks
+                                    </span>
+                                    <div className={`p-5 rounded-2xl text-xs font-semibold ${theme.glassInnerCard} flex flex-col gap-3 h-full`}>
+                                      <div className="flex items-center gap-2">
+                                          <span className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
+                                            isApproved ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:text-emerald-400' :
+                                            isRejected ? 'bg-rose-500/10 text-rose-600 border-rose-500/30 dark:text-rose-400' :
+                                            isReInspect ? 'bg-orange-500/10 text-orange-600 border-orange-500/30 dark:text-orange-400' :
+                                            'bg-blue-500/10 text-blue-600 border-blue-500/30 dark:text-blue-400'
+                                          }`}>
+                                            {latestInsp.status || 'Pending'}
+                                          </span>
+                                      </div>
+                                      {latestInsp.admin_remarks ? (
+                                        <p className={`${theme.textMain} leading-relaxed text-[13px] mt-1`}>"{latestInsp.admin_remarks}"</p>
+                                      ) : (
+                                        <p className={`${theme.textSub} italic opacity-70 mt-1`}>No administrative remarks provided.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                          </div>
+                        ) : (
+                          <div className={`flex-1 flex flex-col items-center justify-center p-8 rounded-3xl border border-dashed ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-slate-300 bg-white/40'}`}>
+                             <Info size={32} className={`mb-3 opacity-50 ${theme.textSub}`} />
+                             <p className={`text-sm font-bold ${theme.textMain}`}>No Inspection Records Found</p>
+                             <p className={`text-xs font-medium mt-1 ${theme.textSub}`}>You have not submitted an audit for this device yet.</p>
+                          </div>
+                        )}
+
+                        {/* Action Area */}
+                        <div className="mt-auto pt-6 border-t border-white/20 dark:border-white/10">
+                          {needsAction ? (
+                            <button 
+                              onClick={() => {
+                                const url = `/mobile-audit?assetId=${asset.id}&empCode=${staffProfile?.emp_code}&name=${encodeURIComponent(staffProfile?.full_name || staffProfile?.name)}&cat=${encodeURIComponent(asset.category)}`;
+                                router.push(url);
+                              }}
+                              className="w-full py-4 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(168,85,247,0.4)] transition-all active:scale-95 cursor-pointer border border-purple-400"
+                            >
+                              <Camera size={18} /> Open Camera & Begin Audit
+                            </button>
+                          ) : isPendingReview ? (
+                            <div className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                              <RefreshCw size={16} className="animate-spin" /> Audit Submitted & Awaiting Admin Approval
+                            </div>
+                          ) : (
+                            <div className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest border ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                              <CheckCircle2 size={16} /> Asset Compliance Up To Date
+                            </div>
                           )}
                         </div>
+
                       </div>
                     </div>
-
-                    <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
-                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
-                        <Laptop size={14} className="text-orange-600 shrink-0" />
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
-                          }}
-                          className={`truncate cursor-pointer text-left font-bold transition-colors hover:text-orange-600 hover:underline`}
-                          title="View Asset Details"
-                        >
-                          {item.asset_name}
-                        </button>
-                      </div>
-                      <div className={`flex justify-between items-center text-[11px] border-t border-white/50 pt-2.5 mt-2.5`}>
-                        <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
-                        <span className={`font-mono font-bold ${theme.textMain}`}>{item.serial_number}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>TAG:</span>
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
-                          }}
-                          className={`font-mono font-bold cursor-pointer flex items-center gap-1 transition-colors text-purple-700 hover:text-purple-800 hover:underline`}
-                          title="View Asset Details"
-                        >
-                          {item.asset_tag} <ExternalLink size={10} className="mb-0.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 text-[12px]">
-                      <div className="flex items-center justify-between">
-                        <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Clock size={14} className="text-purple-600" /> 
-                          <span className="text-[10px] font-bold uppercase tracking-widest">
-                            {item.is_submission ? 'Recorded Date' : 'Last Inspection'}
-                          </span>
-                        </div>
-                        <span className={`font-bold ${theme.textMain}`}>{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Calendar size={14} className="text-orange-600" /> 
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Upcoming Due</span>
-                        </div>
-                        <span className={`font-bold ${isOverdue ? 'text-rose-600 animate-pulse' : theme.textMain}`}>
-                          {item.next_due ? new Date(item.next_due).toLocaleDateString('en-IN') : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {canSendReminder && (isPending || isOverdue || item.status === 'Re-Inspection') && (
-                      <button
-                        type="button"
-                        disabled={sendingAlertId === item.staff_id}
-                        onClick={() => sendStaffAuditReminder(item.staff_id, item.asset_name, item.asset_tag, item.status)}
-                        className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 ${
-                          item.status === 'Re-Inspection'
-                            ? 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_4px_15px_rgba(249,115,22,0.3)]'
-                            : isOverdue
-                            ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-[0_4px_15px_rgba(225,29,72,0.3)]'
-                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)]'
-                        }`}
-                      >
-                        <Send size={14} className={sendingAlertId === item.staff_id ? 'animate-bounce' : ''} />
-                        <span>{sendingAlertId === item.staff_id ? 'Transmitting Alert...' : item.status === 'Re-Inspection' ? '⚡ Request Re-Inspection' : isOverdue ? '🚨 Ping Overdue Staff' : '⚡ Remind Staff via Ping'}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Compliance Evaluation Workspace</h4>
-                      <span className={`px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 shadow-sm cursor-default w-fit ${getSemanticColor(item.status, item.is_submission, item.is_admin_action)}`}>
-                        {item.status === 'Pending' ? 'Ready For Review' : item.status}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className="text-orange-600"/> Photographic Evidence ({photosArray.length})</span>
-                      {!item.is_submission ? (
-                        <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 ${isOverdue ? 'border-rose-300 bg-rose-50/50 text-rose-800' : 'border-amber-300 bg-amber-50/50 text-amber-800'}`}>
-                          {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
-                          {isOverdue ? 'CRITICAL: Staff missed deadline. No photos uploaded.' : 'Awaiting staff member to upload visual verification photos.'}
-                        </div>
-                      ) : photosArray.length === 0 ? (
-                        <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 text-slate-500 ${theme.glassInner}`}>
-                          <ShieldAlert size={14} /> No graphical assets required or attached to this registry record log.
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-3">
-                          {photosArray.map((url: any, idx: number) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setPreviewPhotoModal(url)}
-                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 border-white/80 hover:border-orange-400 bg-white/40`}
-                            >
-                              <img src={url} alt={`Evidence Shot ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                              <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
-                                <Eye size={20} className="mb-1 text-orange-400" />
-                                <span className="text-[9px] font-bold uppercase tracking-widest px-1 text-center leading-tight">Shot {idx + 1}</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>{item.is_admin_action ? 'System Log Notes' : item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
-                      <div className={`p-4 rounded-2xl text-xs font-semibold italic leading-relaxed ${theme.glassInner}`}>
-                        "{item.notes || 'No comments or written declaration provided.'}"
-                      </div>
-                    </div>
-
-                    {item.admin_remarks && (
-                      <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
-                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 text-purple-700`}>Administrative Action Remarks:</span>
-                        <p className={theme.textMain}>"{item.admin_remarks}"</p>
-                      </div>
-                    )}
-
-                    <div className={`pt-4 border-t mt-auto border-white/50`}>
-                      {item.is_admin_action ? (
-                        <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm bg-purple-50/60 backdrop-blur-md border-purple-200`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest text-purple-800`}>System Registry Asset Audit</span>
-                          <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-orange-600`}>
-                            <CheckCircle2 size={14} /> Log Sealed Automatically
-                          </div>
-                        </div>
-                      ) : !item.is_submission ? (
-                         <div className={`flex items-center justify-between px-5 py-4 border rounded-2xl shadow-sm backdrop-blur-md ${isOverdue ? 'bg-rose-50/60 border-rose-200' : 'bg-amber-50/60 border-amber-200'}`}>
-                           <span className={`text-[10px] font-bold uppercase tracking-widest ${isOverdue ? 'text-rose-800' : 'text-amber-800'}`}>{isOverdue ? 'DEADLINE MISSED' : 'Pending Staff Action'}</span>
-                           <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest ${isOverdue ? 'text-rose-700 animate-pulse' : 'text-amber-700'}`}>
-                             {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
-                             {isOverdue ? 'Overdue' : 'Waiting on Employee'}
-                           </div>
-                         </div>
-                      ) : isPending ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(5,150,105,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                          >
-                            <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
-                          </button>
-                          
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                          >
-                            <RefreshCw size={16} /> Re-Inspect
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(225,29,72,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                          >
-                            <XCircle size={16} /> Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <div className={`flex items-center justify-between px-5 py-4 rounded-xl ${theme.glassInner}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Admin Verdict Recorded</span>
-                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
-                            {item.status === 'Approved' && <CheckCircle2 size={14} className={"text-emerald-600"}/>}
-                            {item.status === 'Re-Inspection' && <RefreshCw size={14} className={"text-orange-600"}/>}
-                            {item.status === 'Rejected' && <XCircle size={14} className={"text-rose-600"}/>}
-                            <span className={
-                              item.status === 'Approved' ? 'text-emerald-700' : 
-                              item.status === 'Re-Inspection' ? 'text-orange-700' : 
-                              'text-rose-700'
-                            }>
-                              {item.status}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                </div>
-              );
-            })}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
 
+        {/* 🌟 FULL SCREEN PHOTO PREVIEW MODAL */}
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
-              className="absolute top-6 right-6 w-12 h-12 bg-white/80 hover:bg-white text-slate-800 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg border border-white/80 hover:scale-110 active:scale-95"
+              className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg border border-white/20 hover:scale-110 active:scale-95"
             >
               <X size={20} />
             </button>
             
-            <div className="max-w-6xl w-full h-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
+            <div className="max-w-7xl w-full h-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
               <img 
                 src={previewPhotoModal} 
                 alt="Hardware High-Res Verification" 
-                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/60 bg-white/20 p-2" 
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/20 bg-white/5" 
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
 }
 
-export default function AdminInspectionReviewPage() {
+export default function StaffInspectionsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#FFF9F2] flex flex-col items-center justify-center gap-4 transition-colors">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-orange-600"></div>
-        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500">Loading Core Engine...</span>
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 transition-colors">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 dark:border-purple-900 border-t-purple-600 dark:border-t-purple-500"></div>
+        <span className="text-[11px] font-bold tracking-widest uppercase text-slate-500 dark:text-zinc-500">Loading Workspace...</span>
       </div>
     }>
-      <AdminInspectionReviewContent />
+      <StaffInspectionsContent />
     </Suspense>
   );
 }

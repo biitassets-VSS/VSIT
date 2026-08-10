@@ -353,6 +353,8 @@ function AssetRegistryContent() {
           clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
           live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
+          latest_notes: latestInspection?.notes || null,
+          latest_photos: latestInspection?.photos || null,
           system_specs: asset.system_specs || asset.specs || autoDetectSpecs(`${asset.name || ''} ${asset.brand || ''} ${asset.serial_number || ''}`, asset.category)
         };
       });
@@ -362,19 +364,19 @@ function AssetRegistryContent() {
 
   const getStockStatusBadge = (status: string) => {
     const s = safeString(status);
-    if (s.includes('Assigned')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-xs';
-    if (s.includes('Repair')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-xs animate-pulse';
-    if (s.includes('Demo')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-400 shadow-xs';
-    if (s.includes('Pending')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-xs';
-    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-xs';
+    if (s.includes('Assigned')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('Repair')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-sm animate-pulse';
+    if (s.includes('Demo')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-400 shadow-sm';
+    if (s.includes('Pending')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-xs';
-    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-xs';
-    if (s.includes('rejected')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-xs';
-    return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-xs';
+    if (s.includes('approved')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+    if (s.includes('rejected')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -532,108 +534,476 @@ function AssetRegistryContent() {
     setIsPrintConfigModalOpen(false);
   }
 
+  // 🌟 BRANDED HTML/CSS PDF GENERATOR WITH ULTRA-PREMIUM SILVER HOLOGRAM STAMPS
   const handleGenerateHandoverPDF = (asset: any) => {
-    const printDate = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    // Map the print date strictly to the historical inspection date if available
+    const sourceDate = asset.live_inspection_date ? new Date(asset.live_inspection_date) : new Date();
+    const printDate = sourceDate.toLocaleString('en-IN', { 
+      year: 'numeric', month: '2-digit', day: '2-digit', 
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true 
+    }).replace(/,/g, '');
+
     const assetTag = asset.clean_tag || asset.asset_tag;
     const staffName = asset.staff_name || 'Unassigned';
     const empCode = asset.emp_code || 'N/A';
+    const staffEmail = asset.staff_email || 'N/A';
+    const condition = asset.asset_condition || 'New';
+
+    // Dynamic Admin Authentication values
+    const adminAuthCode = `SEC-ADM-${Math.floor(Math.random() * 9000) + 1000}`;
+    const adminNameDisplay = "SYSTEM.ADMIN";
     
+    // Dynamic Photos and Notes handling
+    let photosHtml = '<p style="font-style: italic; color: #64748b; font-size: 12px; margin: 0;">No inspection photos available on record.</p>';
+    if (asset.latest_photos) {
+      let photosArr: string[] = [];
+      try {
+        if (Array.isArray(asset.latest_photos)) photosArr = asset.latest_photos;
+        else photosArr = JSON.parse(asset.latest_photos);
+      } catch(e){}
+      if (photosArr.length > 0) {
+        photosHtml = '<div style="display: flex; gap: 10px; flex-wrap: wrap;">' + 
+          photosArr.map((url: string) => `<img src="${url}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);" />`).join('') + 
+          '</div>';
+      }
+    }
+
+    const notesHtml = asset.latest_notes 
+      ? `<p style="font-family: monospace; font-size: 13px; color: #1e293b; margin: 0; background: #f1f5f9; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">${asset.latest_notes}</p>` 
+      : '<p style="font-size: 12px; color: #64748b; margin: 0;">No inspector notes recorded.</p>';
+
+    // Mock Device Verification Code based on ID & timestamp
+    const deviceVerificationCode = `AUTH-${assetTag.split('-').pop()}-${Math.floor(Math.random() * 9000) + 1000}`;
+
+    // SVG ENGINE: Exactly rebuilds the requested Scalloped Silver Hologram Sticker
     const htmlContent = `
-      <html>
+      <!DOCTYPE html>
+      <html lang="en">
         <head>
+          <meta charset="UTF-8">
           <title>Handover Agreement - ${assetTag}</title>
           <style>
-            body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px; }
-            .header { text-align: center; border-bottom: 2px solid #ea580c; padding-bottom: 20px; margin-bottom: 30px; }
-            .logo-placeholder { font-size: 24px; font-weight: 900; color: #ea580c; text-transform: uppercase; letter-spacing: 2px; }
-            .title { font-size: 28px; font-weight: bold; margin-top: 10px; color: #1e293b; }
-            .date { text-align: right; font-size: 14px; color: #64748b; margin-bottom: 30px; }
-            .section { margin-bottom: 25px; }
-            .section-title { font-size: 16px; font-weight: bold; color: #ea580c; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 15px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
-            th { font-weight: 600; color: #475569; width: 40%; }
-            td { font-weight: 700; color: #0f172a; }
-            .terms { font-size: 12px; color: #475569; background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 40px; }
-            .signatures { display: flex; justify-content: space-between; margin-top: 60px; }
-            .sig-box { width: 45%; }
-            .sig-line { border-bottom: 1px solid #333; height: 40px; margin-bottom: 10px; }
-            .sig-name { font-weight: bold; font-size: 14px; }
-            .sig-title { font-size: 12px; color: #64748b; }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap');
+            
+            html, body { 
+              background-color: #f8fafc !important; 
+              color: #1e293b !important;
+              font-family: 'Inter', sans-serif; 
+              line-height: 1.6; 
+              margin: 0; 
+              padding: 0;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .page-container {
+              max-width: 850px;
+              margin: 40px auto;
+              padding: 50px;
+              background-color: #ffffff;
+              border-radius: 16px;
+              box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1);
+              position: relative;
+              z-index: 10;
+              border: 1px solid #e2e8f0;
+            }
+            
+            /* Background Watermark */
+            .watermark {
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              opacity: 0.03;
+              width: 80%;
+              height: 80%;
+              background-image: url('/logo.png');
+              background-size: contain;
+              background-repeat: no-repeat;
+              background-position: center;
+              z-index: -10;
+              pointer-events: none;
+            }
+
+            .header { 
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2px solid #e2e8f0; 
+              padding-bottom: 24px; 
+              margin-top: 10px;
+              margin-bottom: 30px; 
+            }
+            .brand-wrapper { display: flex; flex-direction: column; }
+            .logo-text { 
+              font-size: 32px; 
+              line-height: 1.1;
+              font-weight: 900; 
+              background: linear-gradient(to right, #f97316, #ea580c);
+              -webkit-background-clip: text;
+              color: transparent;
+              text-transform: uppercase; 
+              letter-spacing: 1px;
+              margin: 0;
+            }
+            .logo-sub { font-size: 13px; font-weight: 800; color: #334155; letter-spacing: 0.5px; margin-top: 8px; }
+            .header-right { text-align: right; }
+            .doc-title { 
+              font-size: 22px; 
+              line-height: 1.1;
+              font-weight: 900; 
+              color: #0f172a; 
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              margin-bottom: 10px;
+            }
+            .doc-meta { font-size: 12px; color: #64748b; font-weight: 700; margin-top: 4px; }
+            .badge {
+              display: inline-block;
+              float: right;
+              padding: 6px 12px;
+              background: #ecfdf5;
+              border: 1px solid #10b981;
+              color: #059669;
+              border-radius: 8px;
+              font-size: 11px;
+              font-weight: 800;
+              margin-top: 12px;
+              box-shadow: 0 2px 4px rgba(16,185,129,0.1);
+            }
+            
+            .attention-box { 
+              background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+              border: 1px solid #fecdd3; 
+              border-radius: 12px; 
+              padding: 16px; 
+              margin-bottom: 24px; 
+            }
+            .attention-title { color: #e11d48; font-size: 14px; font-weight: 800; margin-bottom: 6px; display:flex; align-items:center; gap:6px;}
+            .attention-text { color: #9f1239; font-size: 12px; font-weight: 600; margin: 0; }
+
+            .section { margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+            .section-title { font-size: 15px; font-weight: 900; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase;}
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+            .info-group { display: flex; flex-direction: column; gap: 4px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
+            .info-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+            .info-value { font-size: 14px; font-weight: 700; color: #0f172a; }
+            .info-value.tag { color: #ea580c; font-family: monospace; font-size: 16px; }
+
+            .evidence-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+            
+            .terms { font-size: 12px; color: #334155; }
+            .terms p { margin-top: 0; font-weight: 500; }
+            .terms ul { padding-left: 20px; margin-bottom: 16px; }
+            .terms li { margin-bottom: 8px; }
+            .terms strong { color: #0f172a; }
+
+            .esign-box {
+              background: #f8fafc;
+              border: 1px dashed #cbd5e1;
+              border-radius: 12px;
+              padding: 16px;
+              margin-bottom: 30px;
+              text-align: center;
+            }
+            .esign-title { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+            .esign-main { font-size: 13px; font-weight: 700; color: #0f172a; }
+            .esign-sub { font-size: 11px; color: #94a3b8; margin: 4px 0 0; }
+
+            .signatures { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 20px; }
+            .sig-block { width: 45%; position: relative; }
+            
+            /* Reduced Size & Correct Alignment for Stickers */
+            .hologram-stamp-svg { 
+              position: absolute;
+              top: -105px;
+              right: 15px;
+              transform: rotate(-5deg);
+              opacity: 0.95;
+              z-index: 10;
+            }
+
+            .sig-line { border-bottom: 1px solid #cbd5e1; height: 20px; margin-top: 15px; margin-bottom: 8px; }
+            .sig-name { font-weight: 900; font-size: 16px; color: #0f172a; margin-top: 10px; position:relative; z-index:20; }
+            .sig-role { font-size: 11px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 1px; position:relative; z-index:20; }
+
             @media print {
-              body { padding: 0; }
-              button { display: none; }
+              html, body { background: white !important; }
+              .page-container { padding: 0; margin: 0; border: none; box-shadow: none; }
+              .watermark { position: fixed; }
+              .info-group { border: 1px solid #e2e8f0; }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="logo-placeholder">VIRTUAL STAFFING SOLUTIONS</div>
-            <div class="title">Official IT Asset Handover Agreement</div>
+          <div class="watermark"></div>
+          <div class="page-container">
+            <div class="header">
+              <div class="brand-wrapper">
+                <h1 class="logo-text">VIRTUAL STAFFING<br/>SOLUTIONS</h1>
+                <div class="logo-sub">IT Infrastructure & Asset Compliance Division</div>
+              </div>
+              <div class="header-right">
+                <div class="doc-title">HARDWARE HANDOVER<br/>AGREEMENT</div>
+                <div class="doc-meta">Release Date: ${printDate.split(',')[0]}</div>
+                <div class="doc-meta">Digital Signed Date: ${printDate}</div>
+                <div class="badge">✓ DIGITALLY EXECUTED & VERIFIED</div>
+              </div>
+            </div>
+
+            <div class="attention-box">
+              <div class="attention-title">⚠️ ATTENTION REQUIRED</div>
+              <p class="attention-text">Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.</p>
+            </div>
+
+            <!-- SECTION 1: EMPLOYEE PROFILE -->
+            <div class="section">
+              <div class="section-title">1. Custodian Profile & Auth</div>
+              <div class="info-grid">
+                <div class="info-group">
+                  <span class="info-label">Assigned Employee:</span>
+                  <span class="info-value">${staffName}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Employee Code:</span>
+                  <span class="info-value font-mono">${empCode}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Login Email Address:</span>
+                  <span class="info-value">${staffEmail}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Authorization Role:</span>
+                  <span class="info-value">Staff / Custodian</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 2: ASSET DETAILS -->
+            <div class="section">
+              <div class="section-title">2. Hardware Specifications & Asset Details</div>
+              <div class="info-grid">
+                <div class="info-group">
+                  <span class="info-label">Asset Name:</span>
+                  <span class="info-value">${asset.safe_display_name}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Asset Category:</span>
+                  <span class="info-value">${asset.category || 'Hardware'}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Asset Tag ID:</span>
+                  <span class="info-value tag">${assetTag}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Factory Serial (S/N):</span>
+                  <span class="info-value font-mono">${asset.serial_number || 'N/A'}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Brand / Model:</span>
+                  <span class="info-value">${asset.brand || 'Standard'}</span>
+                </div>
+                <div class="info-group">
+                  <span class="info-label">Hardware Specifications:</span>
+                  <span class="info-value">${asset.system_specs || 'Standard Business Configuration'}</span>
+                </div>
+                <div class="info-group" style="grid-column: span 2;">
+                  <span class="info-label">Physical Condition:</span>
+                  <span class="info-value">${condition}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="evidence-box">
+              <div class="section-title" style="border:none; margin-bottom: 16px; padding:0; color:#ea580c;">Latest Inspection & Condition Evidence</div>
+              <div style="margin-bottom: 20px;">
+                <span class="info-label">Inspector Notes:</span>
+                ${notesHtml}
+              </div>
+              <div>
+                <span class="info-label">Asset Photos:</span>
+                ${photosHtml}
+              </div>
+            </div>
+
+            <div class="section" style="border:none; padding: 0; background: transparent; box-shadow: none;">
+              <div class="section-title">3. Terms and Conditions</div>
+              <div class="terms">
+                <p>By signing this document, I acknowledge receipt of the IT asset(s) listed above in good working condition. I agree to the following terms:</p>
+                <ul style="list-style-type: none; padding-left: 0;">
+                  <li><strong>Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
+                  <li><strong>Acceptable Use:</strong> The asset is to be used strictly for official company business. Unauthorized software installation or tampering with security settings is strictly prohibited.</li>
+                  <li><strong>Return Policy:</strong> I agree to return the equipment in its original condition (fair wear and tear excepted) upon termination of employment or immediately upon request by the IT Department.</li>
+                  <li><strong>Damage/Loss:</strong> I will immediately report any damage, loss, or theft of the asset to the IT Department. I understand that I may be held financially liable for damages caused by negligence.</li>
+                </ul>
+                
+                <h4 style="margin-top: 24px; margin-bottom: 10px; color: #0f172a; font-size: 13px; font-weight: 800;">Inspection Rules</h4>
+                <ul style="list-style-type: disc;">
+                  <li><strong>Laptops:</strong> Every month Last Saturday Due Date, you need inspection Done before due date, upload current condition photos and note every month.</li>
+                  <li><strong>Other Accessories:</strong> Every 3 month you need inspection Done before due date, upload current condition photos and notes Before Due date.</li>
+                  <li><strong>Exchange Assets:</strong> Without Admin Permission you could not exchange any assets without Admin Approval.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="esign-box">
+              <div class="esign-title">Logistics E-Signature Log</div>
+              <div class="esign-main">✓ Digitally Signed Handover Agreement by ${staffName} on ${printDate}</div>
+              <p class="esign-sub">This document was securely logged in the VSS IT Asset Management System and serves as a legally binding electronic signature.</p>
+            </div>
+
+            <div class="signatures">
+              
+              <!-- ADMIN SIGNATURE BLOCK -->
+              <div class="sig-block">
+                <!-- SCALLOPED SILVER METALLIC HOLOGRAM (ADMIN) -->
+                <div class="hologram-stamp-svg" style="left: 10px; right: auto; transform: rotate(-8deg);">
+                  <svg viewBox="0 0 200 200" width="130" height="130" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id="silver-rainbow-admin" x1="10%" y1="10%" x2="90%" y2="90%">
+                        <stop offset="0%" stop-color="#f1f5f9"/>
+                        <stop offset="25%" stop-color="#e2e8f0"/>
+                        <stop offset="40%" stop-color="#fbcfe8"/> <!-- Pastel Pink -->
+                        <stop offset="60%" stop-color="#e0f2fe"/> <!-- Pastel Cyan -->
+                        <stop offset="75%" stop-color="#f8fafc"/>
+                        <stop offset="100%" stop-color="#cbd5e1"/>
+                      </linearGradient>
+
+                      <!-- Perfect Circular Paths for Text. Adjusted radius to perfectly frame content -->
+                      <path id="curveTopAdmin" d="M 20,100 A 80,80 0 0,1 180,100" fill="none" />
+                      <path id="curveBotAdmin" d="M 180,100 A 80,80 0 0,1 20,100" fill="none" />
+                    </defs>
+                    
+                    <!-- Dotted outer circle creates the scalloped seal edge -->
+                    <circle cx="100" cy="100" r="92" fill="none" stroke="#e2e8f0" stroke-width="12" stroke-dasharray="0 14.45" stroke-linecap="round"/>
+                    
+                    <!-- Solid inner body -->
+                    <circle cx="100" cy="100" r="92" fill="url(#silver-rainbow-admin)" />
+                    <circle cx="100" cy="100" r="92" fill="none" stroke="#ffffff" stroke-width="2" />
+                    
+                    <!-- Geometric Spirograph Lines -->
+                    <g stroke="#ffffff" stroke-width="0.75" opacity="0.9" fill="none">
+                      <circle cx="100" cy="100" r="65" />
+                      <circle cx="100" cy="100" r="35" />
+                      <path d="M 35,100 L 165,100 M 100,35 L 100,165" />
+                      <path d="M 54,54 L 146,146 M 54,146 L 146,54" />
+                    </g>
+
+                    <!-- Circular Border Text - Adjusted so it doesn't overlap shapes -->
+                    <text font-family="Arial, sans-serif" font-size="11" font-weight="900" fill="#334155" letter-spacing="2" opacity="0.8">
+                      <textPath href="#curveTopAdmin" startOffset="50%" text-anchor="middle">ADMIN VERIFIED</textPath>
+                    </text>
+                    <text font-family="Arial, sans-serif" font-size="11" font-weight="900" fill="#334155" letter-spacing="2" opacity="0.8">
+                      <textPath href="#curveBotAdmin" startOffset="50%" text-anchor="middle">VERIFIED AUTHENTIC</textPath>
+                    </text>
+
+                    <!-- Redesigned Inner Crescents - Perfectly constrained and using background gradient -->
+                    <path d="M 60,50 Q 100,35 140,50 Q 100,45 60,50 Z" fill="url(#silver-rainbow-admin)" stroke="#ffffff" stroke-width="1"/>
+                    <path d="M 60,150 Q 100,165 140,150 Q 100,155 60,150 Z" fill="url(#silver-rainbow-admin)" stroke="#ffffff" stroke-width="1"/>
+
+                    <!-- Main Bold Typography -->
+                    <text x="100" y="83" font-family="Arial, sans-serif" font-weight="900" font-size="28" fill="#1e293b" text-anchor="middle">DIGITAL</text>
+                    <text x="100" y="103" font-family="Arial, sans-serif" font-weight="900" font-size="13" fill="#1e293b" text-anchor="middle" letter-spacing="1">AUTHENTICITY</text>
+                    <line x1="38" y1="112" x2="162" y2="112" stroke="#1e293b" stroke-width="2"/>
+                    
+                    <!-- Dynamic Details completely inside the sticker channel -->
+                    <text x="100" y="128" font-family="monospace" font-weight="800" font-size="9" fill="#0f172a" text-anchor="middle">ADMIN: ${adminNameDisplay}</text>
+                    <text x="100" y="140" font-family="monospace" font-weight="800" font-size="8" fill="#334155" text-anchor="middle">ID: ${adminAuthCode}</text>
+                  </svg>
+                </div>
+                
+                <div style="height: 10px;"></div>
+                <div class="sig-line"></div>
+                <div class="sig-name">System Administrator</div>
+                <div class="sig-role">VSS IT Department</div>
+              </div>
+
+              <!-- STAFF SIGNATURE BLOCK -->
+              <div class="sig-block">
+                <!-- SCALLOPED SILVER METALLIC HOLOGRAM (STAFF) -->
+                <div class="hologram-stamp-svg">
+                  <svg viewBox="0 0 200 200" width="130" height="130" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id="silver-rainbow-staff" x1="10%" y1="10%" x2="90%" y2="90%">
+                        <stop offset="0%" stop-color="#f1f5f9"/>
+                        <stop offset="25%" stop-color="#e2e8f0"/>
+                        <stop offset="40%" stop-color="#dcfce7"/> <!-- Pastel Green -->
+                        <stop offset="60%" stop-color="#e0f2fe"/> <!-- Pastel Blue -->
+                        <stop offset="75%" stop-color="#f8fafc"/>
+                        <stop offset="100%" stop-color="#cbd5e1"/>
+                      </linearGradient>
+
+                      <!-- Perfect Circular Paths for Text. Adjusted radius to perfectly frame content -->
+                      <path id="curveTopStaff" d="M 20,100 A 80,80 0 0,1 180,100" fill="none" />
+                      <path id="curveBotStaff" d="M 180,100 A 80,80 0 0,1 20,100" fill="none" />
+                    </defs>
+                    
+                    <!-- Scalloped Edge Trick -->
+                    <circle cx="100" cy="100" r="92" fill="none" stroke="#e2e8f0" stroke-width="12" stroke-dasharray="0 14.45" stroke-linecap="round"/>
+                    
+                    <!-- Solid inner body -->
+                    <circle cx="100" cy="100" r="92" fill="url(#silver-rainbow-staff)" />
+                    <circle cx="100" cy="100" r="92" fill="none" stroke="#ffffff" stroke-width="2" />
+                    
+                    <!-- Geometric Spirograph Lines -->
+                    <g stroke="#ffffff" stroke-width="0.75" opacity="0.9" fill="none">
+                      <circle cx="100" cy="100" r="65" />
+                      <circle cx="100" cy="100" r="35" />
+                      <path d="M 35,100 L 165,100 M 100,35 L 100,165" />
+                      <path d="M 54,54 L 146,146 M 54,146 L 146,54" />
+                    </g>
+
+                    <!-- Circular Border Text - Adjusted so it doesn't overlap shapes -->
+                    <text font-family="Arial, sans-serif" font-size="11" font-weight="900" fill="#334155" letter-spacing="2" opacity="0.8">
+                      <textPath href="#curveTopStaff" startOffset="50%" text-anchor="middle">DIGITALLY SIGNED</textPath>
+                    </text>
+                    <text font-family="Arial, sans-serif" font-size="11" font-weight="900" fill="#334155" letter-spacing="2" opacity="0.8">
+                      <textPath href="#curveBotStaff" startOffset="50%" text-anchor="middle">VERIFIED AUTHENTIC</textPath>
+                    </text>
+
+                    <!-- Redesigned Inner Crescents - Perfectly constrained and using background gradient -->
+                    <path d="M 60,50 Q 100,35 140,50 Q 100,45 60,50 Z" fill="url(#silver-rainbow-staff)" stroke="#ffffff" stroke-width="1"/>
+                    <path d="M 60,150 Q 100,165 140,150 Q 100,155 60,150 Z" fill="url(#silver-rainbow-staff)" stroke="#ffffff" stroke-width="1"/>
+
+                    <!-- Main Bold Typography -->
+                    <text x="100" y="83" font-family="Arial, sans-serif" font-weight="900" font-size="28" fill="#1e293b" text-anchor="middle">DIGITAL</text>
+                    <text x="100" y="103" font-family="Arial, sans-serif" font-weight="900" font-size="13" fill="#1e293b" text-anchor="middle" letter-spacing="1">AUTHENTICITY</text>
+                    <line x1="38" y1="112" x2="162" y2="112" stroke="#1e293b" stroke-width="2"/>
+                    
+                    <!-- Dynamic Details completely inside the sticker channel -->
+                    <text x="100" y="128" font-family="monospace" font-weight="800" font-size="10" fill="#0f172a" text-anchor="middle">EMP: ${empCode}</text>
+                    <text x="100" y="140" font-family="monospace" font-weight="800" font-size="9" fill="#334155" text-anchor="middle">ID: ${deviceVerificationCode}</text>
+                  </svg>
+                </div>
+
+                <div style="height: 10px;"></div>
+                <div class="sig-line"></div>
+                <div class="sig-name">${staffName}</div>
+                <div class="sig-role">Authorized Custodian</div>
+              </div>
+            </div>
+
           </div>
           
-          <div class="date">Date of Handover: <strong>${printDate}</strong></div>
-
-          <div class="section">
-            <div class="section-title">1. Employee Information</div>
-            <table>
-              <tr><th>Full Name</th><td>${staffName}</td></tr>
-              <tr><th>Employee Code</th><td>${empCode}</td></tr>
-            </table>
-          </div>
-
-          <div class="section">
-            <div class="section-title">2. Asset Details</div>
-            <table>
-              <tr><th>Asset Tag ID</th><td>${assetTag}</td></tr>
-              <tr><th>Asset Category</th><td>${asset.category || 'N/A'}</td></tr>
-              <tr><th>Asset Name</th><td>${asset.safe_display_name}</td></tr>
-              <tr><th>Brand / Manufacturer</th><td>${asset.brand || 'N/A'}</td></tr>
-              <tr><th>Serial Number (S/N)</th><td>${asset.serial_number || 'N/A'}</td></tr>
-              <tr><th>Hardware Specifications</th><td>${asset.system_specs || 'Standard Configuration'}</td></tr>
-              <tr><th>Condition at Handover</th><td>${asset.asset_condition || 'New'}</td></tr>
-            </table>
-          </div>
-
-          <div class="section">
-            <div class="section-title">3. Terms and Conditions</div>
-            <div class="terms">
-              <p>By signing this document, I acknowledge receipt of the IT asset(s) listed above in good working condition. I agree to the following terms:</p>
-              <ol>
-                <li><strong>Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
-                <li><strong>Acceptable Use:</strong> The asset is to be used strictly for official company business. Unauthorized software installation or tampering with security settings is strictly prohibited.</li>
-                <li><strong>Return Policy:</strong> I agree to return the equipment in its original condition (fair wear and tear excepted) upon termination of employment or immediately upon request by the IT Department.</li>
-                <li><strong>Damage/Loss:</strong> I will immediately report any damage, loss, or theft of the asset to the IT Department. I understand that I may be held financially liable for damages caused by negligence.</li>
-              </ol>
-            </div>
-          </div>
-
-          <div class="signatures">
-            <div class="sig-box">
-              <div class="sig-line"></div>
-              <div class="sig-name">Authorized IT Administrator</div>
-              <div class="sig-title">Virtual Staffing Solutions</div>
-            </div>
-            <div class="sig-box">
-              <div class="sig-line"></div>
-              <div class="sig-name">${staffName}</div>
-              <div class="sig-title">Employee (${empCode})</div>
-            </div>
-          </div>
+          <script>
+            // Allow time for images/watermarks to load before triggering print
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 750);
+            };
+          </script>
         </body>
       </html>
     `;
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-    } else {
-      alert("Please allow pop-ups to generate the PDF agreement.");
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank');
+    
+    if (!printWindow) {
+      alert("Pop-up blocked. Please allow pop-ups for this site to generate the Handover Agreement PDF.");
     }
   }
 
@@ -661,7 +1031,7 @@ function AssetRegistryContent() {
     
     glassItem: isDarkMode
       ? 'bg-white/5 backdrop-blur-xl border border-white/10 transition-all duration-300 hover:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
-      : 'bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-300 hover:bg-white/60',
+      : 'bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-300 hover:bg-white/60',
     
     inputBg: isDarkMode 
       ? 'bg-black/40 border border-white/20 text-white shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 placeholder-zinc-500' 
@@ -672,6 +1042,7 @@ function AssetRegistryContent() {
 
   return (
     <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden font-sans antialiased pb-12 transition-colors duration-1000`}>
+      {/* 🌟 GLOBAL BACKGROUND ORBS */}
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
@@ -689,7 +1060,7 @@ function AssetRegistryContent() {
                   <ShieldCheck className="text-orange-500 w-6 h-6 sm:w-8 sm:h-8 shrink-0" />
                   <span>Asset Records</span>
                 </h1>
-                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/10 text-orange-500 border border-orange-500/20 shadow-xs`}>{assets.length} Units</span>
+                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/10 text-orange-500 border border-orange-500/20 shadow-sm`}>{assets.length} Units</span>
               </div>
               <p className={`text-xs font-semibold ${theme.textSub}`}>Manage full hardware lifecycle, smart QR stickers, and S/N tags</p>
             </div>
@@ -730,7 +1101,7 @@ function AssetRegistryContent() {
                 >
                   <span className={isActive ? 'text-white' : 'text-orange-500 group-hover:text-orange-600 dark:text-orange-400 dark:group-hover:text-orange-300 transition-colors'}>{cat.icon}</span> 
                   <span className="hidden sm:inline">{cat.name}</span>
-                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-colors ${
+                  <span className={`px-2 py-0.5 rounded-md font-mono text-[9px] font-bold transition-colors ${
                     isActive ? 'bg-white/20 text-white' : 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
                   }`}>{getCatCount(cat.name)}</span>
                 </button>
@@ -747,6 +1118,7 @@ function AssetRegistryContent() {
               <span>{selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}</span>
             </button>
 
+            {/* 🌟 SEARCH BAR */}
             <div className={`flex-1 p-1 ${theme.inputBg} rounded-xl transition-all border flex items-center`}>
               <div className="relative w-full">
                 <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
@@ -755,12 +1127,13 @@ function AssetRegistryContent() {
                   value={searchQuery} 
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search by Asset Name, Tag ID, Brand, Category, S/N, or Staff..." 
-                  className={`w-full pl-9 pr-3 py-2 text-sm font-semibold outline-none bg-transparent ${theme.textMain} placeholder:text-slate-400 dark:placeholder:text-zinc-500 border-0 shadow-none`}
+                  className={`w-full pl-9 pr-3 py-1.5 text-xs font-semibold outline-none bg-transparent ${theme.textMain} placeholder:text-slate-400 dark:placeholder:text-zinc-500 border-0 shadow-none`}
                 />
               </div>
             </div>
           </div>
 
+          {/* 🌟 FIXED CONTRAST FILTER TABS USING CUSTOM GLASS DROPDOWNS */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
               <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${theme.textMain}`}>
@@ -774,7 +1147,7 @@ function AssetRegistryContent() {
                   options={filterStatusOptions} 
                   theme={theme} 
                   isDarkMode={isDarkMode}
-                  className="py-3 px-3"
+                  className="py-2 px-3"
                 />
               </div>
 
@@ -785,7 +1158,7 @@ function AssetRegistryContent() {
                   options={filterConditionOptions} 
                   theme={theme} 
                   isDarkMode={isDarkMode}
-                  className="py-3 px-3"
+                  className="py-2 px-3"
                 />
               </div>
 
@@ -797,7 +1170,7 @@ function AssetRegistryContent() {
                     setSearchQuery('');
                     setSelectedCategory('All');
                   }}
-                  className={`px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs shrink-0 border ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                  className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-sm shrink-0 border ${isDarkMode ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                 >
                   <FilterX size={12} className="text-orange-500" /> <span>Reset</span>
                 </button>
@@ -810,7 +1183,7 @@ function AssetRegistryContent() {
           </div>
         </div>
 
-        {/* ASSET GRID */}
+        {/* 🌟 ASSET GRID - COMPACT & CLEAN */}
         {loading ? (
           <div className={`${theme.glassCard} rounded-3xl w-full py-24 flex flex-col items-center justify-center gap-3`}>
             <Loader2 size={32} className="animate-spin text-orange-500" />
@@ -844,40 +1217,40 @@ function AssetRegistryContent() {
                           {getCategoryIcon(asset.category, 16)}
                         </div>
                         <div className="overflow-hidden min-w-0">
-                          <h3 className={`text-sm font-bold leading-tight truncate ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
-                          <p className={`text-[11px] font-semibold mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
+                          <h3 className={`text-xs font-bold leading-tight truncate ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
+                          <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
                         <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 ${theme.glassInnerCard} ${theme.textMain} hover:scale-110 hover:text-orange-500 cursor-pointer transition-transform rounded-lg`}>
                           <QrCode size={14} />
                         </button>
-                        <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 rounded cursor-pointer accent-orange-500" />
+                        <input type="checkbox" checked={isSelected} readOnly className="w-3.5 h-3.5 rounded cursor-pointer accent-orange-500" />
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
-                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border border-zinc-500/30 text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
+                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
+                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider border border-zinc-500/30 text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
                     </div>
                   </div>
 
                   <div className={`p-4 space-y-2 flex-1 ${isDarkMode ? 'bg-white/5' : 'bg-black/5'}`}>
-                    <div className={`flex justify-between items-center p-2.5 ${theme.glassInnerCard} rounded-xl`}>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${theme.textSub}`}>Tag ID</span> 
-                      <span className="font-mono font-bold text-[11px] text-orange-500 dark:text-orange-400">{asset.clean_tag}</span>
+                    <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Tag ID</span> 
+                      <span className="font-mono font-semibold text-[10px] text-orange-500 dark:text-orange-400">{asset.clean_tag}</span>
                     </div>
-                    <div className={`flex justify-between items-center p-2.5 ${theme.glassInnerCard} rounded-xl`}>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${theme.textSub}`}>Serial S/N</span> 
-                      <span className={`font-mono font-semibold text-[11px] truncate max-w-28 ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
+                    <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Serial S/N</span> 
+                      <span className={`font-mono font-medium text-[10px] truncate max-w-28 ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
                     </div>
                     
-                    <div className={`flex justify-between items-center p-2.5 ${theme.glassInnerCard} rounded-xl`}>
+                    <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
                       <div className="flex flex-col min-w-0 pr-1.5">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${theme.textSub}`}>Holder</span> 
-                        <span className={`font-semibold text-[11px] truncate ${theme.textMain} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Holder</span> 
+                        <span className={`font-medium text-[10px] truncate ${theme.textMain} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
                       </div>
-                      <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-[10px] shadow-xs shrink-0 border ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>{asset.emp_code}</span>
+                      <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[9px] shadow-sm shrink-0 border ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>{asset.emp_code}</span>
                     </div>
                   </div>
 
@@ -885,8 +1258,8 @@ function AssetRegistryContent() {
                     <div className="flex items-center gap-1.5">
                       <Clock size={12} className={theme.textSub} />
                       <div className="flex flex-col">
-                        <span className={`text-[8px] font-bold uppercase tracking-wider ${theme.textSub}`}>Last Audited</span>
-                        <span className={`text-[10px] font-mono font-semibold ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                        <span className={`text-[7px] font-bold uppercase tracking-wider ${theme.textSub}`}>Last Audited</span>
+                        <span className={`text-[9px] font-mono font-medium ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
                       </div>
                     </div>
                     <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-semibold transition-all duration-300 cursor-default ${getInspectionStatusColor(asset.live_inspection_status)}`}>
@@ -896,7 +1269,7 @@ function AssetRegistryContent() {
                         if (st.includes('return')) return <RefreshCw size={10} className="animate-spin" />;
                         return <AlertTriangle size={10} />;
                       })()}
-                      <span className="text-[9px] font-bold uppercase tracking-wider">{asset.live_inspection_status || 'Approved'}</span>
+                      <span className="text-[8px] font-bold uppercase tracking-wider">{asset.live_inspection_status || 'Approved'}</span>
                     </div>
                   </div>
 
@@ -907,27 +1280,27 @@ function AssetRegistryContent() {
         )}
       </div>
 
-      {/* PRINT SETTINGS UI MODAL */}
+      {/* 🚀 PRINT SETTINGS UI MODAL */}
       {isPrintConfigModalOpen && (
-        <div className={`fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-md animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/40' : 'bg-black/20'}`}>
-          <div className={`max-w-xl w-full flex flex-col p-6 space-y-5 animate-in zoom-in-95 duration-200 ${theme.glassCard} rounded-4xl border-2 ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200 ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/40'}`}>
+          <div className={`max-w-xl w-full p-6 space-y-5 animate-in zoom-in-95 duration-200 ${theme.glassCard} rounded-3xl border-2 ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
             <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
               <div>
                 <h3 className={`text-base font-bold tracking-tight flex items-center gap-2 ${theme.textMain}`}>
                   <Settings2 size={18} className="text-orange-500"/> Label Print Layout
                 </h3>
-                <p className={`text-[10px] mt-1 uppercase tracking-widest font-bold text-amber-600 bg-amber-500/10 inline-block px-2.5 py-0.5 rounded-lg border border-amber-500/20`}>
+                <p className={`text-[9px] mt-1 uppercase tracking-widest font-bold text-amber-600 bg-amber-500/10 inline-block px-2.5 py-0.5 rounded-lg border border-amber-500/20`}>
                   Important: Uncheck "Fit to Page", set Margins to "None".
                 </p>
               </div>
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`p-2 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white transition-all rounded-full cursor-pointer`}><X size={16}/></button>
+              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`p-2 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white transition-all rounded-full cursor-pointer`}><X size={14}/></button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2.5">
                 <h4 className={`text-[11px] font-bold uppercase tracking-widest text-orange-500`}>Sheet Formatting</h4>
                 <div>
-                  <label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Paper Size</label>
+                  <label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Paper Size</label>
                   <PremiumGlassDropdown 
                     value={printConfig.pageSize} 
                     onChange={(val: string) => setPrintConfig({...printConfig, pageSize: val})} 
@@ -937,26 +1310,26 @@ function AssetRegistryContent() {
                     ]} 
                     theme={theme} 
                     isDarkMode={isDarkMode}
-                    className="py-3 px-3"
+                    className="py-2 px-3"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-3 ${theme.inputBg} rounded-xl outline-none font-semibold text-sm`} /></div>
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} className={`w-full p-3 ${theme.inputBg} rounded-xl outline-none font-semibold text-sm`} /></div>
+                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
+                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
                 </div>
               </div>
               <div className="space-y-2.5">
                 <h4 className={`text-[11px] font-bold uppercase tracking-widest text-orange-500`}>Label Dimensions</h4>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} className={`w-full p-3 ${theme.inputBg} rounded-xl outline-none font-semibold text-sm`} /></div>
-                  <div><label className={`text-[10px] font-bold uppercase block mb-1.5 ${theme.textSub}`}>Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} className={`w-full p-3 ${theme.inputBg} rounded-xl outline-none font-semibold text-sm`} /></div>
+                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
+                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
                 </div>
               </div>
             </div>
 
             <div className={`flex gap-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-3 ${theme.glassInnerCard} ${theme.textMain} hover:opacity-90 rounded-xl transition-colors cursor-pointer text-[11px] font-bold uppercase tracking-wider`}>Cancel</button>
-              <button onClick={executeGridBulkPrint} className="flex-2 py-3 bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] rounded-xl text-[11px] font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer transition-all border border-purple-500"><Printer size={14}/> Generate Print Page</button>
+              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-2.5 ${theme.glassInnerCard} ${theme.textMain} hover:opacity-90 rounded-xl transition-colors cursor-pointer text-[11px] font-bold uppercase tracking-wider`}>Cancel</button>
+              <button onClick={executeGridBulkPrint} className="flex-2 py-2.5 bg-linear-to-r from-purple-600 to-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] rounded-xl text-[11px] font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer transition-all border border-purple-500"><Printer size={14}/> Generate Print Page</button>
             </div>
           </div>
         </div>
@@ -968,12 +1341,12 @@ function AssetRegistryContent() {
         const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
 
         return (
-          <div className={`fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto ${isDarkMode ? 'bg-black/40' : 'bg-black/20'}`}>
-            <div className={`relative max-w-3xl w-full flex flex-col overflow-hidden flex-1 max-h-full ${theme.glassCard} rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
+          <div className={`fixed top-16 sm:top-20 inset-x-0 bottom-0 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/20'}`}>
+            <div className={`relative max-w-3xl w-full flex flex-col overflow-hidden flex-1 max-h-full ${theme.glassCard} rounded-3xl sm:rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
               
-              {/* 🌟 ENTERPRISE COMPACT HEADER WITH FIXED CLOSING & ACTION PADDING */}
-              <div className={`w-full p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-black/20 border-white/10' : 'bg-white/30 border-white/40'} shrink-0 relative z-30`}>
-                <button onClick={() => setViewAssetModal(null)} className={`absolute top-4 right-4 p-2 rounded-full ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 transition-all cursor-pointer shadow-xs active:scale-90 z-40`}><X size={16}/></button>
+              {/* 🌟 ENTERPRISE COMPACT HEADER - ABSOLUTE CLOSE BUTTON TO PREVENT OVERLAP */}
+              <div className={`w-full p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-white/50 border-slate-200/60'} shrink-0 relative z-30`}>
+                <button onClick={() => setViewAssetModal(null)} className={`absolute top-4 right-4 p-2 rounded-full ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 transition-all cursor-pointer shadow-sm active:scale-90 z-40`}><X size={16}/></button>
 
                 <div className="flex items-center gap-3 w-full md:w-auto min-w-0 pr-12">
                   <div className={`p-2 rounded-xl ${theme.glassInnerCard} shrink-0`}>
@@ -1066,7 +1439,7 @@ function AssetRegistryContent() {
                     <div className="relative z-40 grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Price (₹)</label>
-                        <input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3 ${theme.inputBg} rounded-xl text-sm font-semibold transition-all outline-none border ${isDarkMode ? 'border-white/20' : 'border-white/70'}`} />
+                        <input type="number" step="0.01" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} className={`w-full p-3 ${theme.inputBg} rounded-xl font-mono text-sm font-semibold transition-all outline-none border ${isDarkMode ? 'border-white/20' : 'border-white/70'}`} />
                       </div>
                       <div>
                         <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Purchase Date</label>
@@ -1091,7 +1464,7 @@ function AssetRegistryContent() {
 
                     <div className={`relative z-20 grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
                       <div>
-                        <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Condition</label>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Condition</label>
                         <PremiumGlassDropdown 
                           value={editForm.condition} 
                           onChange={(val: string) => setEditForm({...editForm, condition: val})} 
@@ -1102,7 +1475,7 @@ function AssetRegistryContent() {
                         />
                       </div>
                       <div>
-                        <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Stock Status</label>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Stock Status</label>
                         <PremiumGlassDropdown 
                           value={editForm.status} 
                           onChange={(val: string) => setEditForm({...editForm, status: val})} 
@@ -1113,7 +1486,7 @@ function AssetRegistryContent() {
                         />
                       </div>
                       <div>
-                        <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Inspection State</label>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>Inspection State</label>
                         <PremiumGlassDropdown 
                           value={editForm.inspection_status} 
                           onChange={(val: string) => setEditForm({...editForm, inspection_status: val})} 
@@ -1173,7 +1546,7 @@ function AssetRegistryContent() {
                       <div className={`p-4 sm:p-5 ${theme.glassInnerCard} rounded-3xl`}>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
-                            <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-orange-100 text-orange-700 border border-orange-200'}`}>
+                            <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 text-orange-500 ${theme.glassCard}`}>
                               <FileText size={20} />
                             </div>
                             <div>
@@ -1250,7 +1623,7 @@ function AssetRegistryContent() {
 
               {/* 🌟 FIXED MODAL FOOTER */}
               {isEditingAsset && (
-                <div className={`p-4 sm:p-5 shrink-0 flex gap-3 border-t ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'}`}>
+                <div className={`p-4 sm:p-5 shrink-0 flex gap-3 border-t ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'} z-50`}>
                   <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-6 py-3.5 rounded-xl ${theme.glassInnerCard} ${theme.textMain} hover:opacity-80 transition-all text-[11px] font-bold uppercase tracking-widest cursor-pointer shadow-xs active:scale-95`}>Cancel</button>
                   <button type="button" onClick={handleUpdateExistingAsset} disabled={isUpdating} className="flex-1 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer transition-all border border-orange-400 active:scale-95 disabled:opacity-50">
                     {isUpdating ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Secure Record
@@ -1265,7 +1638,7 @@ function AssetRegistryContent() {
 
       {/* 🚀 ADD NEW ASSET MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 bg-black/20">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 bg-black/20">
           <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] border flex-1 max-h-full rounded-4xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
             
             {/* MAC OS MODAL HEADER */}
@@ -1382,7 +1755,7 @@ function AssetRegistryContent() {
                   </div>
 
                   <div>
-                    <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5">
+                    <div className="flex justify-between items-center mb-1.5">
                       <label className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>
                         Asset Name *
                       </label>
@@ -1451,7 +1824,7 @@ function AssetRegistryContent() {
                 </div>
 
                 {/* SECTION 5: HARDWARE SPECIFICATIONS & CHIPS */}
-                <div className="relative z-30 space-y-2.5">
+                <div className="relative z-30 space-y-2">
                   <div className="flex flex-wrap justify-between items-center gap-2">
                     <label className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>
                       Hardware Specifications
@@ -1501,7 +1874,7 @@ function AssetRegistryContent() {
                 </div>
 
                 {/* SECTION 6: CONDITION & STATUS */}
-                <div className={`relative z-20 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+                <div className={`relative z-20 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
                   <div>
                     <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
                       Condition State

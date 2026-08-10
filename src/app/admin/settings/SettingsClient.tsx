@@ -27,17 +27,6 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [cleanupFilter, setCleanupFilter] = useState('All');
 
-  // MOCK DATA IF DB IS EMPTY (Now strictly includes staff details for the UI)
-  useEffect(() => {
-    if (!requests || requests.length === 0) {
-      setRequests([
-        { id: '1', title: 'Duplicate Laptop Request', type: 'Duplicate', status: 'Pending', admin_note: 'Staff clicked twice by mistake', created_at: new Date().toISOString(), staff_name: 'John Doe', emp_code: 'EMP-882' },
-        { id: '2', title: 'Wrong Asset Return', type: 'Wrong Request', status: 'Pending', admin_note: '', created_at: new Date().toISOString(), staff_name: 'Jane Smith', emp_code: 'EMP-405' },
-        { id: '3', title: 'Broken Mouse Replacement', type: 'Replacement', status: 'Open', admin_note: 'Waiting on manager approval', created_at: new Date().toISOString(), staff_name: 'Mike Johnson', emp_code: 'EMP-911' },
-      ]);
-    }
-  }, [requests]);
-
   // 🌟 INIT THEME
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -59,14 +48,14 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
   };
 
   const theme = {
-    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
+    bg: 'bg-transparent', // Fixed: Removed solid backgrounds to prevent double-background issue
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     glassCard: isDarkMode 
       ? 'bg-zinc-900/40 backdrop-blur-[40px] border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)]' 
       : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border border-white/70 shadow-[0_16px_40px_rgba(31,38,135,0.1)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.8)]',
     inputBg: isDarkMode ? 'bg-black/40 border border-white/10 text-white focus:border-purple-500/50' : 'bg-white/50 border border-white/60 text-slate-900 focus:bg-white/70 focus:ring-4 focus:ring-purple-500/10',
-    tabActive: 'bg-linear-to-r from-purple-500 to-purple-600 text-white shadow-md border-transparent',
+    tabActive: 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md border-transparent scale-[1.02]',
     tabInactive: isDarkMode ? 'text-zinc-400 hover:bg-white/5 border-transparent' : 'text-slate-600 hover:bg-white/30 border-transparent',
   };
 
@@ -127,9 +116,9 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
   });
 
   return (
-    <div className={`min-h-screen ${theme.bg} p-6 sm:p-10 font-sans relative z-0 transition-colors duration-1000`}>
-      <div className="fixed top-[-10%] left-[-5%] w-[50vw] h-[50vh] bg-purple-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] right-[-5%] w-[50vw] h-[50vh] bg-orange-500/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+    <div className={`min-h-screen ${theme.bg} p-6 sm:p-10 font-sans relative z-10 transition-colors duration-1000`}>
+      
+      {/* 🌟 Background Orbs completely removed from here to fix double background. Relying on root layout.tsx */}
 
       <div className="max-w-350 mx-auto flex flex-col lg:flex-row gap-8">
         
@@ -141,10 +130,10 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
               <ArrowLeft size={16} className="shrink-0" /> Return
             </Link>
             
-            {/* 🌟 NEW: THEME TOGGLE BUTTON */}
+            {/* 🌟 THEME TOGGLE BUTTON */}
             <button 
               onClick={toggleTheme} 
-              className={`p-2 rounded-xl transition-all shadow-sm border ${isDarkMode ? 'bg-zinc-800 text-amber-400 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-indigo-600 border-slate-200 hover:bg-slate-50'}`}
+              className={`p-2 rounded-xl transition-all shadow-sm border cursor-pointer ${isDarkMode ? 'bg-zinc-800 text-amber-400 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-indigo-600 border-slate-200 hover:bg-slate-50'}`}
               title="Toggle Light/Dark Mode"
             >
               {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
@@ -156,21 +145,21 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
             <p className={`text-xs font-semibold mt-1 ${theme.subText}`}>Manage system & policies</p>
           </div>
           
-          <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'settings' ? theme.tabActive : theme.tabInactive}`}>
+          <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border cursor-pointer ${activeTab === 'settings' ? theme.tabActive : theme.tabInactive}`}>
             <Settings size={18} /> System Settings
           </button>
-          <button onClick={() => setActiveTab('security')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'security' ? theme.tabActive : theme.tabInactive}`}>
+          <button onClick={() => setActiveTab('security')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border cursor-pointer ${activeTab === 'security' ? theme.tabActive : theme.tabInactive}`}>
             <Shield size={18} /> Security & Policies
           </button>
-          <button onClick={() => setActiveTab('controls')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'controls' ? theme.tabActive : theme.tabInactive}`}>
+          <button onClick={() => setActiveTab('controls')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border cursor-pointer ${activeTab === 'controls' ? theme.tabActive : theme.tabInactive}`}>
             <Radio size={18} className={activeTab === 'controls' ? 'animate-pulse' : ''} /> Live Controls
           </button>
 
-          <button onClick={() => setActiveTab('cleanup')} className={`flex items-center justify-between px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'cleanup' ? theme.tabActive : theme.tabInactive}`}>
+          <button onClick={() => setActiveTab('cleanup')} className={`flex items-center justify-between px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border cursor-pointer ${activeTab === 'cleanup' ? theme.tabActive : theme.tabInactive}`}>
             <div className="flex items-center gap-3"><Database size={18} /> Manual Cleanup</div>
             {requests.length > 0 && <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full">{requests.length}</span>}
           </button>
-          <button onClick={() => setActiveTab('users')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border ${activeTab === 'users' ? theme.tabActive : theme.tabInactive}`}>
+          <button onClick={() => setActiveTab('users')} className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all border cursor-pointer ${activeTab === 'users' ? theme.tabActive : theme.tabInactive}`}>
             <Users size={18} /> Staff Accounts
           </button>
         </div>
@@ -294,7 +283,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
             </div>
           )}
 
-          {/* 🌟 4. MANUAL CLEANUP (WITH EMPLOYEE NAME AND CODE DISPLAYED) */}
+          {/* 4. MANUAL CLEANUP */}
           {activeTab === 'cleanup' && (
             <div className={`${theme.glassCard} rounded-4xl p-6 sm:p-8 flex flex-col h-[80vh] animate-in fade-in slide-in-from-bottom-4 duration-500`}>
               
@@ -305,40 +294,46 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-                  {/* Filter Dropdown */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${theme.inputBg}`}>
-                    <Filter size={14} className="opacity-50" />
+                  {/* 🌟 THE FIX: DROPDOWN MENU WITHOUT BLACK BACKGROUND */}
+                  <div className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl border shadow-sm transition-all ${isDarkMode ? 'bg-white/10 border-white/20 text-white hover:border-orange-500' : 'bg-white/80 border-white/60 text-slate-800 hover:border-orange-400'}`}>
+                    <Filter size={14} className="opacity-50 shrink-0" />
                     <select 
                       value={cleanupFilter} 
                       onChange={e => setCleanupFilter(e.target.value)} 
-                      className="bg-transparent outline-none text-xs font-bold w-full cursor-pointer appearance-none dark:text-white"
+                      className="appearance-none bg-transparent outline-none text-xs font-black uppercase tracking-widest w-full cursor-pointer pr-6"
                     >
-                      <option value="All" className="dark:bg-zinc-900">All Requests</option>
-                      <option value="Duplicate" className="dark:bg-zinc-900">Duplicates Only</option>
-                      <option value="Wrong Request" className="dark:bg-zinc-900">Wrong Requests</option>
-                      <option value="Replacement" className="dark:bg-zinc-900">Replacements</option>
+                      <option value="All" className="bg-white text-slate-900 font-bold">All Requests</option>
+                      <option value="Duplicate" className="bg-white text-slate-900 font-bold">Duplicates Only</option>
+                      <option value="Wrong Request" className="bg-white text-slate-900 font-bold">Wrong Requests</option>
+                      <option value="Replacement" className="bg-white text-slate-900 font-bold">Replacements</option>
                     </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
                   </div>
 
                   <button 
                     onClick={handleAutoSelectDuplicates}
-                    className="px-4 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all cursor-pointer"
+                    className="px-4 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
                   >
                     <Zap size={14} /> Auto-Select Duplicates
                   </button>
 
-                  <button 
-                    onClick={handleDeleteSelected}
-                    disabled={selectedRequests.length === 0}
-                    className="px-5 py-2.5 bg-linear-to-r from-rose-500 to-rose-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-md cursor-pointer"
-                  >
-                    <Trash2 size={16} /> Delete Selected ({selectedRequests.length})
-                  </button>
+                  {selectedRequests.length > 0 && (
+                    <button 
+                      onClick={handleDeleteSelected}
+                      className="px-5 py-2.5 bg-linear-to-r from-rose-500 to-rose-600 hover:opacity-90 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-md cursor-pointer animate-in fade-in slide-in-from-right-4 active:scale-95 border-0"
+                    >
+                      <Trash2 size={16} /> Delete Selected ({selectedRequests.length})
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="flex-1 overflow-auto custom-scrollbar border rounded-3xl bg-black/5 dark:bg-white/5 border-white/20 dark:border-white/10">
-                <table className="w-full text-left border-collapse">
+              <div className={`flex-1 overflow-auto custom-scrollbar border rounded-3xl ${isDarkMode ? 'bg-zinc-900/50 border-white/10' : 'bg-white/50 border-white/80'} shadow-sm`}>
+                <table className="w-full text-left border-collapse min-w-200">
                   <thead className={`sticky top-0 backdrop-blur-xl z-10 text-[10px] font-black uppercase tracking-widest ${theme.subText} ${isDarkMode ? 'bg-zinc-900/80 border-b border-white/10' : 'bg-white/80 border-b border-slate-200'}`}>
                     <tr>
                       <th className="p-4 w-12 text-center">
@@ -346,7 +341,7 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                       </th>
                       <th className="p-4">Request Detail</th>
                       <th className="p-4">Raised By (Employee)</th>
-                      <th className="p-4">Flag Type</th>
+                      <th className="p-4 text-center">Flag Type</th>
                       <th className="p-4 w-56 xl:w-64">Admin Notes / Date</th>
                     </tr>
                   </thead>
@@ -354,42 +349,49 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
                     {filteredRequests.length === 0 ? (
                       <tr><td colSpan={5} className="p-10 text-center text-sm font-semibold opacity-50">No records found matching this filter.</td></tr>
                     ) : (
-                      filteredRequests.map(req => (
-                        <tr key={req.id} className={`transition-colors cursor-pointer ${selectedRequests.includes(req.id) ? (isDarkMode ? 'bg-rose-500/20' : 'bg-rose-50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50')}`} onClick={() => handleToggleSelect(req.id)}>
-                          <td className="p-4 text-center">
-                            <input type="checkbox" checked={selectedRequests.includes(req.id)} onChange={() => handleToggleSelect(req.id)} onClick={(e) => e.stopPropagation()} className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer" />
-                          </td>
-                          <td className="p-4">
-                            <p className={`text-sm font-bold ${theme.text}`}>{req.title || 'Unknown Request'}</p>
-                            <p className={`text-[10px] font-semibold uppercase tracking-widest mt-1 ${theme.subText}`}>ID: {req.id}</p>
-                          </td>
-                          
-                          {/* 🌟 NEW: RAISED BY COLUMN (Shows Emp Name and Code for verification) */}
-                          <td className="p-4">
-                            <p className={`text-sm font-bold ${theme.text}`}>{req.staff_name || 'Unknown'}</p>
-                            <span className={`inline-block mt-1 font-mono text-[10px] font-black px-2 py-0.5 rounded-lg border shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
-                              {req.emp_code || 'N/A'}
-                            </span>
-                          </td>
+                      filteredRequests.map(req => {
+                        let badgeStyle = "bg-orange-100 text-orange-600 border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30";
+                        if (req.type === 'Wrong Request') badgeStyle = "bg-rose-100 text-rose-600 border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30";
+                        if (req.type === 'Replacement') badgeStyle = "bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30";
 
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border ${req.type === 'Duplicate' ? 'bg-orange-500/10 text-orange-600 border-orange-500/20' : req.type === 'Wrong Request' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 'bg-purple-500/10 text-purple-600 border-purple-500/20'}`}>
-                              {req.type}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <input 
-                              type="text" 
-                              value={req.admin_note || ''} 
-                              onChange={(e) => handleNoteChange(req.id, e.target.value)}
-                              onClick={(e) => e.stopPropagation()} 
-                              placeholder="Add reason for deletion..." 
-                              className={`w-full px-3 py-2 rounded-xl outline-none text-xs font-semibold shadow-inner transition-all border mb-1.5 ${isDarkMode ? 'bg-black/40 border-white/10 text-white focus:border-purple-500/50' : 'bg-white/50 border-white/60 text-slate-900 focus:bg-white/70 focus:ring-2 focus:ring-purple-500/20'}`}
-                            />
-                            <p className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>{new Date(req.created_at).toLocaleDateString()}</p>
-                          </td>
-                        </tr>
-                      ))
+                        const isSelected = selectedRequests.includes(req.id);
+
+                        return (
+                          <tr key={req.id} className={`transition-colors cursor-pointer ${isSelected ? (isDarkMode ? 'bg-rose-500/20' : 'bg-rose-50/50') : (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/40')}`} onClick={() => handleToggleSelect(req.id)}>
+                            <td className="p-4 text-center">
+                              <input type="checkbox" checked={isSelected} onChange={() => handleToggleSelect(req.id)} onClick={(e) => e.stopPropagation()} className="rounded border-gray-300 text-rose-500 focus:ring-rose-500 cursor-pointer accent-rose-500" />
+                            </td>
+                            <td className="p-4">
+                              <p className={`text-sm font-black ${theme.text}`}>{req.title}</p>
+                              <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${theme.subText}`}>ID: {req.id}</p>
+                            </td>
+                            <td className="p-4">
+                              <p className={`text-sm font-bold ${theme.text}`}>{req.staff_name || 'Unknown'}</p>
+                              <span className={`inline-block mt-1 font-mono text-[10px] font-black px-2 py-0.5 rounded-lg border shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+                                EMP: {req.emp_code || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border shadow-sm whitespace-nowrap ${badgeStyle}`}>
+                                {req.type}
+                              </span>
+                            </td>
+                            <td className="p-4 pr-6">
+                              <div className="space-y-1.5">
+                                <input 
+                                  type="text" 
+                                  value={req.admin_note || ''} 
+                                  onChange={(e) => handleNoteChange(req.id, e.target.value)}
+                                  onClick={(e) => e.stopPropagation()} 
+                                  placeholder="Add reason for deletion..." 
+                                  className={`w-full px-3 py-2 rounded-xl outline-none text-xs font-semibold transition-all border shadow-sm ${isDarkMode ? 'bg-black/40 border-white/10 text-white placeholder:text-zinc-600 focus:border-orange-500' : 'bg-white/60 border-white/80 text-slate-800 placeholder:text-slate-400 focus:border-orange-400 focus:bg-white'}`}
+                                />
+                                <p className={`text-[9px] font-bold uppercase tracking-widest pl-1 ${theme.subText}`}>{new Date(req.created_at).toLocaleDateString('en-GB')}</p>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -450,9 +452,9 @@ export default function SettingsClient({ initialSettings, initialUsers, initialR
           )}
 
           {/* SAVE BUTTON */}
-          {(activeTab === 'settings') && (
+          {(activeTab === 'settings' || activeTab === 'security') && (
             <div className="flex justify-end pt-4">
-              <button className="px-8 py-3.5 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/25 cursor-pointer active:scale-95">
+              <button className="px-8 py-3.5 bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/25 cursor-pointer active:scale-95 border-0">
                 <Save size={16} /> Save Configurations
               </button>
             </div>

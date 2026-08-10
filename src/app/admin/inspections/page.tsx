@@ -6,9 +6,10 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
   Eye, Laptop, User, Calendar, ShieldAlert, Search, RefreshCw, 
-  X, Image as ImageIcon, History as HistoryIcon, FilterX, ExternalLink, Settings,
-  Bell, Send, ShieldCheck, Check, AlertTriangle
+  X, Image as ImageIcon, History as HistoryIcon, FilterX, ExternalLink, Settings, Settings2,
+  Send, ShieldCheck, Check, AlertTriangle, List
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const getNextDueDate = (baseDateStr: string | null, cat: string) => {
   if (!baseDateStr) return null;
@@ -29,7 +30,7 @@ function AdminInspectionReviewContent() {
 
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<any[]>([]);
-  const [filterTab, setFilterTab] = useState<'pending' | 'approved' | 're-inspection' | 'rejected' | 'admin' | 'overdue' | 'all'>('pending');
+  const [filterTab, setFilterTab] = useState<string>('Pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   
@@ -56,7 +57,7 @@ function AdminInspectionReviewContent() {
   useEffect(() => {
     if (targetAssetId) {
       setAssetFilter(targetAssetId);
-      setFilterTab('all'); 
+      setFilterTab('All Logs'); 
     }
   }, [targetAssetId]);
 
@@ -69,6 +70,7 @@ function AdminInspectionReviewContent() {
     }
   }, [highlightedId, loading, inspections]);
 
+  // 🌟 LIVE DATA FETCHING
   const fetchVerificationLedger = async () => {
     setLoading(true);
     try {
@@ -90,7 +92,6 @@ function AdminInspectionReviewContent() {
       const masterLedger: any[] = [];
       const activeAssetIds = new Set<string>();
 
-      // 🌟 Phase 1: Process Existing Logs
       rawInspections.forEach((insp, idx) => {
         const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
         
@@ -129,7 +130,6 @@ function AdminInspectionReviewContent() {
 
         const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || insp.type?.toLowerCase() === 'admin';
 
-        // Add to active set ONLY if it's currently pending review/re-inspection
         const isHistorical = ['approved', 'pass', 'resolved'].some(k => statusLower.includes(k)) || isAdminAction;
         if (!isHistorical) {
           activeAssetIds.add(String(matchedAsset.id));
@@ -198,12 +198,9 @@ function AdminInspectionReviewContent() {
         });
       });
 
-      // 🌟 Phase 2: Detect OVERDUE and Missing Inspections
       assetsData.forEach(asset => {
         if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
         if (asset.status?.toLowerCase().includes('return')) return;
-
-        // Skip if there's already an active (unapproved) log in the queue for this asset
         if (activeAssetIds.has(String(asset.id))) return;
 
         const latestInsp = rawInspections.find(i => String(i.asset_id) === String(asset.id));
@@ -273,12 +270,10 @@ function AdminInspectionReviewContent() {
     if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-')) {
       return alert("Cannot send alert: No valid active employee profile ID attached to this record.");
     }
-
     setSendingAlertId(staffId);
     try {
       const isReInspect = status === 'Re-Inspection';
       const isOverdue = status === 'Overdue';
-
       const title = isReInspect ? `⚠️ Mandatory Re-Inspection Required` : isOverdue ? `🚨 OVERDUE: Hardware Audit Required` : `🔔 Hardware Audit Reminder Due`;
       const message = isReInspect
         ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
@@ -367,6 +362,46 @@ function AdminInspectionReviewContent() {
     }
   };
 
+  const clearAssetFilter = () => {
+    setAssetFilter(null);
+    router.replace('/admin/inspections'); 
+  };
+
+  // 🌟 THEME & FILTERING (LIQUID GLASS WITH INNER-RIM REFLECTION)
+  const theme = {
+    bg: 'bg-transparent',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    
+    // 🌟 GLASS CARD WITH LIQUID REFLECTION RIM & NEON HOVER
+    glassCard: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-2xl border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.5)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.15)] hover:border-orange-500/40 hover:shadow-[0_0_20px_rgba(249,115,22,0.25)] transition-all duration-500' 
+      : 'bg-white/40 backdrop-blur-2xl backdrop-saturate-150 border border-white/60 shadow-[0_16px_40px_rgba(31,38,135,0.05)] shadow-[inset_0_0_4px_2px_rgba(255,255,255,0.8)] hover:border-orange-400/80 hover:shadow-[0_0_25px_rgba(249,115,22,0.25)] transition-all duration-500',
+    
+    glassInnerCard: isDarkMode 
+      ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/50 backdrop-blur-xl border border-white/80 shadow-[inset_0_2px_8px_rgba(255,255,255,0.6)]',
+    
+    // 🌟 GLASS BUTTON & TAB ELEMENT WITH INNER REFLECTION
+    glassElement: isDarkMode
+      ? 'bg-zinc-900/50 backdrop-blur-2xl border border-white/15 shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.1)] hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-300'
+      : 'bg-white/40 backdrop-blur-2xl border border-white/70 shadow-[inset_0_0_4px_2px_rgba(255,255,255,0.8)] shadow-sm hover:border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all duration-300',
+    
+    // 🌟 SEARCH BAR GLASS CONTAINER
+    searchGlass: isDarkMode
+      ? 'bg-zinc-900/50 backdrop-blur-2xl border border-white/15 shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.1)] hover:border-orange-500/50 focus-within:border-orange-500 focus-within:shadow-[0_0_25px_rgba(249,115,22,0.4)] transition-all duration-300'
+      : 'bg-white/40 backdrop-blur-2xl border border-white/70 shadow-[inset_0_0_4px_2px_rgba(255,255,255,0.8)] shadow-sm hover:border-orange-400/80 focus-within:border-orange-500 focus-within:shadow-[0_0_25px_rgba(249,115,22,0.3)] transition-all duration-300',
+
+    inputBg: isDarkMode 
+      ? 'bg-black/40 border border-white/10 text-white focus:border-orange-500/50 placeholder-zinc-500' 
+      : 'bg-white/50 border border-white/60 text-slate-900 focus:bg-white/70 focus:ring-4 focus:ring-orange-500/10 placeholder-slate-400',
+    
+    tabActive: 'bg-linear-to-r from-purple-500 to-purple-600 text-white shadow-md border border-purple-400/50 scale-[1.02] shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-transform',
+    tabInactive: isDarkMode 
+      ? 'text-zinc-400 hover:bg-white/5 border-white/10 bg-black/20' 
+      : 'text-slate-600 hover:bg-white/60 border-white/60 bg-white/40',
+  };
+
   const filteredList = inspections.filter(item => {
     if (assetFilter && item.asset_id !== assetFilter) return false;
 
@@ -379,13 +414,13 @@ function AdminInspectionReviewContent() {
     const isAdminLog = item.is_admin_action === true;
 
     const matchesTab = 
-      filterTab === 'all' ? true :
-      filterTab === 'overdue' ? isOverdue :
-      filterTab === 'pending' ? (isPending && !isAdminLog) :
-      filterTab === 'approved' ? isApproved :
-      filterTab === 're-inspection' ? isReInspect :
-      filterTab === 'rejected' ? isRejected :
-      filterTab === 'admin' ? isAdminLog : true;
+      filterTab === 'All Logs' ? true :
+      filterTab === 'Overdue' ? isOverdue :
+      filterTab === 'Pending' ? (isPending && !isAdminLog) :
+      filterTab === 'Approved' ? isApproved :
+      filterTab === 'Re-Inspection' ? isReInspect :
+      filterTab === 'Rejected' ? isRejected :
+      filterTab === 'Admin Edits' ? isAdminLog : true;
 
     const query = searchQuery.toLowerCase();
     const matchesSearch = 
@@ -398,152 +433,131 @@ function AdminInspectionReviewContent() {
     return matchesTab && matchesSearch;
   });
 
-  const pendingCount = inspections.filter(item => {
-    const st = (item.status || '').toLowerCase().trim();
-    return (st === 'pending' || st === 'awaiting staff action') && !item.is_admin_action;
-  }).length;
-
-  const overdueCount = inspections.filter(item => item.status === 'Overdue').length;
-
-  const clearAssetFilter = () => {
-    setAssetFilter(null);
-    router.replace('/admin/inspections'); 
+  const getCount = (type: string) => {
+    return inspections.filter(item => {
+      const s = (item.status || '').toLowerCase().trim();
+      const isAdminLog = item.is_admin_action === true;
+      if (type === 'Pending') return (s === 'pending' || s === 'awaiting staff action') && !isAdminLog;
+      if (type === 'Overdue') return s === 'overdue';
+      if (type === 'Approved') return s === 'approved' || s === 'pass';
+      if (type === 'Re-Inspection') return s === 're-inspection';
+      if (type === 'Rejected') return s === 'rejected' || s === 'fail';
+      if (type === 'Admin Edits') return isAdminLog;
+      return true; // All Logs
+    }).length;
   };
 
-  // 🎨 PURE MAC OS 2026 FROSTED GLASS THEME
-  const theme = {
-    bg: 'bg-transparent',
-    glassCard: isDarkMode 
-      ? 'bg-[#18181b]/40 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/30 backdrop-blur-3xl border border-white/50 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
-    glassItem: isDarkMode
-      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.2)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-300'
-      : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-300',
-    glassInner: isDarkMode
-      ? 'bg-black/40 backdrop-blur-md border border-white/5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]'
-      : 'bg-white/50 backdrop-blur-md border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.04)]',
-    inputBg: isDarkMode 
-      ? 'bg-black/50 border border-white/20 shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20' 
-      : 'bg-white/50 border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10',
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-  };
-
-  const getSemanticColor = (status: string, isSubmission: boolean, isAdminAction?: boolean) => {
-    if (isAdminAction) return 'bg-transparent border border-purple-400 text-purple-600 shadow-[0_0_8px_rgba(168,85,247,0.4)] group-hover:shadow-[0_0_12px_rgba(168,85,247,0.7)]';
-    const s = (status || '').toLowerCase().trim();
-    if (s === 'overdue') return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(249,115,22,0.4)] group-hover:shadow-[0_0_12px_rgba(249,115,22,0.7)] animate-pulse';
-    if (s === 'approved') return 'bg-transparent border border-emerald-400 text-emerald-600 shadow-[0_0_8px_rgba(52,211,153,0.4)] group-hover:shadow-[0_0_12px_rgba(52,211,153,0.7)]';
-    if (s === 're-inspection') return 'bg-transparent border border-orange-400 text-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.4)] group-hover:shadow-[0_0_12px_rgba(251,146,60,0.7)] animate-pulse';
-    if (s === 'rejected') return 'bg-transparent border border-rose-400 text-rose-600 shadow-[0_0_8px_rgba(243,64,84,0.4)] group-hover:shadow-[0_0_12px_rgba(243,64,84,0.7)]';
-    if (!isSubmission || s.includes('awaiting')) return 'bg-transparent border border-amber-400 text-amber-600 shadow-[0_0_8px_rgba(251,191,36,0.4)] group-hover:shadow-[0_0_12px_rgba(251,191,36,0.7)]'; 
-    return 'bg-transparent border border-slate-400 text-slate-500 shadow-[0_0_8px_rgba(148,163,184,0.3)] group-hover:shadow-[0_0_12px_rgba(148,163,184,0.5)]'; 
-  };
+  const TABS = [
+    { id: 'Overdue', label: 'Overdue', icon: AlertTriangle, count: getCount('Overdue'), color: 'text-amber-500' },
+    { id: 'Pending', label: 'Pending', icon: Clock, count: getCount('Pending'), color: 'text-blue-500' },
+    { id: 'Approved', label: 'Approved', icon: CheckCircle2, count: getCount('Approved'), color: 'text-emerald-500' },
+    { id: 'Re-Inspection', label: 'Re-Inspection', icon: RefreshCw, count: getCount('Re-Inspection'), color: 'text-purple-500' },
+    { id: 'Rejected', label: 'Rejected', icon: XCircle, count: getCount('Rejected'), color: 'text-rose-500' },
+    { id: 'Admin Edits', label: 'Admin Edits', icon: Settings2, count: getCount('Admin Edits'), color: 'text-indigo-500' },
+    { id: 'All Logs', label: 'All Logs', icon: List, count: inspections.length, color: 'text-slate-500' },
+  ];
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300 font-sans antialiased pb-12 relative z-0 overflow-x-hidden`}>
-      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10" />
-
-      <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-12 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
+    <div className={`min-h-screen ${theme.bg} p-4 sm:p-6 lg:p-8 font-sans relative z-10 transition-colors duration-1000`}>
+      <div className="max-w-400 mx-auto space-y-6">
         
-        <div className={`${theme.glassCard} rounded-4xl p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
-          <div className="flex items-center gap-3.5 sm:gap-5">
-            <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 ${theme.glassItem} rounded-2xl ${theme.textSub} cursor-pointer hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`}>
+        {/* 🌟 HEADER: LIQUID GLASS */}
+        <div className={`${theme.glassCard} rounded-4xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/admin')} className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:scale-105 ${theme.glassInnerCard} ${theme.textMain}`}>
               <ArrowLeft size={18} />
             </button>
             <div>
-              <div className="flex flex-wrap items-center gap-2.5 mb-0.5">
-                <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${theme.textMain} flex items-center gap-2`}>
-                  <ShieldCheck className="text-orange-500 w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                  <span>Inspection Command Center</span>
-                </h1>
-                {pendingCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-orange-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
-                    {pendingCount} Action Required
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="text-orange-500" size={24} />
+                <h1 className={`text-xl sm:text-2xl font-black tracking-tight ${theme.textMain}`}>Inspection Command Center</h1>
+                {getCount('Pending') > 0 && !assetFilter && (
+                  <span className="px-2.5 py-1 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-md shadow-sm">
+                    {getCount('Pending')} Action Required
                   </span>
                 )}
-                {overdueCount > 0 && !assetFilter && (
-                  <span className="px-3 py-1 bg-orange-500 text-white font-bold text-[10px] uppercase tracking-widest rounded-full shadow-sm animate-pulse">
-                    {overdueCount} Overdue
+                {getCount('Overdue') > 0 && !assetFilter && (
+                  <span className="px-2.5 py-1 bg-amber-500/20 text-amber-600 border border-amber-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
+                    {getCount('Overdue')} Overdue
                   </span>
                 )}
               </div>
-              <p className={`text-xs sm:text-sm font-semibold ${theme.textSub}`}>Adjudicate smartphone hardware captures, issue audit pings, and enforce compliance</p>
+              <p className={`text-xs font-semibold mt-1.5 ${theme.textSub}`}>Adjudicate smartphone hardware captures, issue audit pings, and enforce compliance.</p>
             </div>
           </div>
-
+          
           <button 
             onClick={fetchVerificationLedger} 
             disabled={loading}
-            className={`flex items-center justify-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 ${theme.glassItem} text-slate-700 dark:text-zinc-200 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer disabled:opacity-50 shrink-0 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${theme.glassElement} ${isDarkMode ? 'text-purple-400' : 'text-purple-600'} disabled:opacity-50 cursor-pointer`}
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin text-orange-500' : 'text-purple-500 dark:text-purple-400'} />
-            <span>Sync Database</span>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Sync Database
           </button>
         </div>
 
+        {/* 🌟 ASSET FILTER ACTIVE INDICATOR */}
         {assetFilter && (
           <div className={`${theme.glassCard} p-5 rounded-3xl flex flex-col sm:flex-row justify-between sm:items-center gap-4`}>
-             <div className={`flex items-center gap-4 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
-                <div className={`p-3 rounded-xl ${theme.glassInner} text-orange-500`}>
-                  <HistoryIcon size={24} />
-                </div>
-                <div>
-                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>Asset Timeline Filter Active</p>
-                  <p className="text-sm font-bold">Showing complete historical track record for selected hardware.</p>
-                </div>
-             </div>
-             <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer transition-all duration-200 flex items-center justify-center gap-2 border border-orange-400">
-               <FilterX size={16}/> Clear Filter
-             </button>
+            <div className={`flex items-center gap-4 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+              <div className={`p-3 rounded-xl ${theme.glassInnerCard} text-orange-500`}><HistoryIcon size={24} /></div>
+              <div>
+                <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>Asset Timeline Filter Active</p>
+                <p className="text-sm font-bold">Showing complete historical track record for selected hardware.</p>
+              </div>
+            </div>
+            <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer transition-all duration-200 flex items-center justify-center gap-2 border border-orange-400">
+              <FilterX size={16}/> Clear Filter
+            </button>
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
-            {[
-              { id: 'overdue', label: `Overdue (${overdueCount})`, icon: <AlertTriangle size={14} /> },
-              { id: 'pending', label: `Pending (${pendingCount})`, icon: <Clock size={14} /> },
-              { id: 'approved', label: 'Approved', icon: <CheckCircle2 size={14} /> },
-              { id: 're-inspection', label: 'Re-Inspection', icon: <RefreshCw size={14} /> },
-              { id: 'rejected', label: 'Rejected', icon: <XCircle size={14} /> },
-              { id: 'admin', label: `Admin Edits (${inspections.filter(i => i.is_admin_action).length})`, icon: <Settings size={14} /> },
-              { id: 'all', label: `All Logs (${inspections.length})`, icon: <ClipboardCheck size={14} /> },
-            ].map(tab => {
-              const isActive = filterTab === tab.id;
-              return (
-                <button
-                  key={tab.id} onClick={() => setFilterTab(tab.id as any)}
-                  className={`group flex items-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shrink-0 cursor-pointer ${
-                    isActive 
-                      ? tab.id === 'overdue' 
-                        ? 'bg-orange-500 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] scale-[1.02] border border-orange-500' 
-                        : 'bg-purple-600 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] scale-[1.02] border border-purple-600' 
-                      : `${theme.glassItem} ${theme.textSub} hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`
-                  }`}
-                >
-                  <span className={isActive ? 'text-white' : tab.id === 'overdue' ? 'text-orange-500 group-hover:text-orange-600 dark:text-orange-400 dark:group-hover:text-orange-300' : 'text-purple-500 group-hover:text-purple-600 dark:text-purple-400 dark:group-hover:text-purple-300 transition-colors'}>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className={`p-2.5 rounded-2xl flex items-center ${theme.inputBg}`}>
-            <div className="relative w-full">
-              <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`} />
-              <input 
-                type="text" 
-                value={searchQuery} 
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
-                className={`w-full pl-12 pr-4 py-1.5 text-sm font-semibold outline-none bg-transparent ${isDarkMode ? 'text-zinc-100 placeholder:text-zinc-500' : 'text-slate-900 placeholder:text-slate-400'}`}
-              />
-            </div>
-          </div>
+        {/* 🌟 TABS SCROLLABLE WITH LIQUID GLASS INNER REFLECTION RIM */}
+        <div className="flex items-center gap-3 overflow-x-auto custom-scrollbar pb-2 pt-1 px-1">
+          {TABS.map(tab => {
+            const isActive = filterTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setFilterTab(tab.id)}
+                className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest whitespace-nowrap border cursor-pointer transition-all ${
+                  isActive 
+                    ? (tab.id === 'Overdue' 
+                        ? 'bg-linear-to-r from-amber-500 to-orange-500 text-white border-transparent shadow-[0_0_20px_rgba(245,158,11,0.4)]' 
+                        : theme.tabActive) 
+                    : theme.glassElement
+                }`}
+              >
+                <tab.icon size={16} className={isActive ? 'text-white' : tab.color} />
+                <span>{tab.label}</span>
+                
+                {/* 🌟 2026 Liquid Glass Translucent Badge */}
+                <span className={`ml-1.5 flex items-center justify-center min-w-5.5 h-5.5 px-1.5 rounded-full text-[10px] font-black shadow-[0_4px_10px_rgba(249,115,22,0.3),inset_0_1px_3px_rgba(255,255,255,0.8)] drop-shadow-sm transition-transform hover:scale-110 ${
+                  isActive 
+                    ? 'bg-white/20 text-white border border-white/40' 
+                    : tab.count > 0 
+                      ? 'bg-linear-to-tr from-orange-500/80 to-purple-600/80 backdrop-blur-xl backdrop-saturate-150 text-white border border-white/50 dark:border-white/20'
+                      : 'bg-white/10 text-slate-500 dark:text-zinc-400 border border-white/20 dark:border-white/5 shadow-none'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
+        {/* 🌟 SEARCH BAR WITH LIQUID GLASS BORDER & INNER RIM */}
+        <div className={`relative rounded-3xl p-1.5 ${theme.searchGlass}`}>
+          <Search size={18} className={`absolute left-5 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
+          <input 
+            type="text" 
+            placeholder="Search by Employee Name, S/N, Asset Name, or Tag ID..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full pl-14 pr-6 py-3 rounded-2xl outline-none font-semibold text-sm bg-transparent ${theme.textMain} placeholder:text-slate-400 dark:placeholder:text-zinc-500`}
+          />
+        </div>
+
+        {/* 🌟 INSPECTION CARDS */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500"></div>
@@ -557,265 +571,320 @@ function AdminInspectionReviewContent() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredList.map((item, index) => {
-              const isPending = item.status === 'Pending' || item.status === 'Awaiting Staff Action';
-              const isOverdue = item.status === 'Overdue';
-              const photosArray = item.photos || [];
-              const isHighlighted = highlightedId === String(item.id);
-              const canSendReminder = !item.is_admin_action && item.staff_id && !item.is_deleted_user;
+            <AnimatePresence mode="popLayout">
+              {filteredList.map((insp, index) => {
+                const isApproved = insp.status === 'Approved' || insp.status === 'Pass';
+                const isPending = insp.status === 'Pending' || insp.status === 'Awaiting Staff Action';
+                const isOverdue = insp.status === 'Overdue';
+                const isReInspect = insp.status === 'Re-Inspection';
+                const isRejected = insp.status === 'Rejected' || insp.status === 'Fail';
+                const photosArray = insp.photos || [];
+                const isHighlighted = highlightedId === String(insp.id);
+                const canSendReminder = !insp.is_admin_action && insp.staff_id && !insp.is_deleted_user;
 
-              return (
-                <div 
-                  key={`${item.id}-${index}`} 
-                  id={`inspection-${item.id}`}
-                  className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${
-                    isHighlighted 
-                      ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' 
-                      : ''
-                  }`}
-                >
-                  <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
-                    <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 ${theme.glassInner} ${
-                        item.is_admin_action ? 'text-purple-600 dark:text-purple-400' : 
-                        item.is_submission ? 'text-orange-500 dark:text-orange-400' : 'text-slate-500'
-                      }`}>
-                        {item.is_admin_action ? <Settings size={20} /> : <User size={20} />}
-                      </div>
-                      <div className="overflow-hidden">
-                        <div className="flex items-center gap-2">
-                           <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`} title={item.staff_name}>{item.staff_name}</h3>
-                           {item.is_deleted_user && (
-                             <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest shadow-sm ${isDarkMode ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'bg-rose-100 border border-rose-200 text-rose-700'}`}>Removed</span>
-                           )}
+                // Dynamic outer border colors & neon glowing highlights
+                let baseBorder = isDarkMode ? 'border-white/10' : 'border-white/60';
+                let baseShadow = isDarkMode 
+                  ? 'shadow-[0_16px_40px_rgba(0,0,0,0.5)] shadow-[inset_0_0_2px_1px_rgba(255,255,255,0.15)]' 
+                  : 'shadow-[0_16px_40px_rgba(31,38,135,0.05)] shadow-[inset_0_0_4px_2px_rgba(255,255,255,0.8)]';
+
+                let hoverGlow = 'hover:border-purple-400 hover:shadow-[0_0_25px_rgba(168,85,247,0.4)]';
+                let selectedGlow = 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.5)] ring-1 ring-purple-500/50';
+
+                if (isApproved) { 
+                  hoverGlow = 'hover:border-emerald-400 hover:shadow-[0_0_25px_rgba(16,185,129,0.4)]'; 
+                  selectedGlow = 'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.5)] ring-1 ring-emerald-500/50';
+                }
+                else if (isOverdue) { 
+                  hoverGlow = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.4)]'; 
+                  selectedGlow = 'border-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.5)] ring-1 ring-amber-500/50';
+                }
+                else if (isReInspect) { 
+                  hoverGlow = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(249,115,22,0.4)]'; 
+                  selectedGlow = 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.5)] ring-1 ring-orange-500/50';
+                }
+                else if (isRejected) { 
+                  hoverGlow = 'hover:border-rose-500 hover:shadow-[0_0_25px_rgba(244,63,94,0.4)]'; 
+                  selectedGlow = 'border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.5)] ring-1 ring-rose-500/50';
+                }
+
+                return (
+                  <motion.div 
+                    key={`${insp.id}-${index}`} 
+                    id={`inspection-${insp.id}`}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className={`flex flex-col xl:flex-row gap-6 p-6 sm:p-8 rounded-4xl border-[1.5px] transition-all duration-500 cursor-default ${
+                      isDarkMode ? 'bg-zinc-900/40 backdrop-blur-2xl' : 'bg-white/40 backdrop-blur-2xl backdrop-saturate-150'
+                    } ${isHighlighted ? selectedGlow : `${baseBorder} ${baseShadow} ${hoverGlow}`}`}
+                  >
+                    
+                    {/* LEFT: ASSET & STAFF DETAILS */}
+                    <div className="w-full xl:w-[35%] flex flex-col gap-6">
+                      {/* Staff Info */}
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${theme.glassInnerCard} ${insp.is_admin_action ? 'text-purple-500' : 'text-orange-500'}`}>
+                          {insp.is_admin_action ? <Settings size={20} /> : <User size={20} />}
                         </div>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md ${theme.glassInner}`}>
-                            {item.emp_code}
-                          </span>
-                          {item.is_admin_action && (
-                            <span className="text-[9px] bg-purple-500 text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-sm">
-                              Admin Action
+                        <div className="overflow-hidden">
+                          <div className="flex items-center gap-2">
+                            <h3 className={`text-lg font-black truncate ${theme.textMain}`} title={insp.staff_name}>{insp.staff_name}</h3>
+                            {insp.is_deleted_user && (
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest shadow-sm ${isDarkMode ? 'bg-rose-500/20 border-rose-500/30 text-rose-300' : 'bg-rose-100 border border-rose-200 text-rose-700'}`}>Removed</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <span className={`inline-block px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${theme.glassInnerCard} ${theme.textSub}`}>
+                              {insp.emp_code}
                             </span>
+                            {insp.is_admin_action && (
+                              <span className="text-[9px] bg-purple-500 text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest shadow-sm">Admin Action</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Asset Info */}
+                      <div className={`p-5 rounded-3xl space-y-4 ${theme.glassInnerCard}`}>
+                        <div className="flex items-center gap-2.5 pb-3 border-b border-white/20 dark:border-white/10">
+                          <Laptop size={16} className="text-orange-500" />
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/admin/assets?view=${insp.asset_tag !== 'NO-TAG' ? insp.asset_tag : insp.asset_id}`);
+                            }}
+                            className={`text-sm font-black truncate cursor-pointer text-left transition-colors hover:text-orange-500 dark:hover:text-orange-400 hover:underline ${theme.textMain}`}
+                            title="View Asset Details"
+                          >
+                            {insp.asset_name}
+                          </button>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
+                          <span className={`text-xs font-mono font-bold ${theme.textMain}`}>{insp.serial_number}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>TAG:</span>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/admin/assets?view=${insp.asset_tag !== 'NO-TAG' ? insp.asset_tag : insp.asset_id}`);
+                            }}
+                            className="text-xs font-mono font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 cursor-pointer hover:underline"
+                            title="View Asset Details"
+                          >
+                            {insp.asset_tag} <ExternalLink size={10} className="mb-0.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dates */}
+                      <div className="space-y-3 px-1">
+                        <div className="flex justify-between items-center">
+                          <span className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>
+                            <Clock size={14} className="text-purple-500"/> {insp.is_submission ? 'Recorded Date' : 'Last Inspection'}
+                          </span>
+                          <span className={`text-xs font-bold ${theme.textMain}`}>{new Date(insp.created_at).toLocaleDateString('en-GB')}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>
+                            <Calendar size={14} className="text-orange-500"/> Upcoming Due
+                          </span>
+                          <span className={`text-xs font-bold ${isOverdue ? 'text-orange-500 dark:text-orange-400 animate-pulse' : theme.textMain}`}>
+                            {insp.next_due ? new Date(insp.next_due).toLocaleDateString('en-GB') : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Button (Ping Staff) */}
+                      {canSendReminder && (isPending || isOverdue || isReInspect) && (
+                        <div className="mt-auto pt-4">
+                          <button
+                            type="button"
+                            disabled={sendingAlertId === insp.staff_id}
+                            onClick={() => sendStaffAuditReminder(insp.staff_id, insp.asset_name, insp.asset_tag, insp.status)}
+                            className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 border-0 ${
+                              isReInspect || isOverdue
+                                ? 'bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_20px_rgba(249,115,22,0.4)]'
+                                : 'bg-linear-to-r from-purple-500 to-purple-600 hover:opacity-90 text-white shadow-[0_4px_20px_rgba(168,85,247,0.4)]'
+                            }`}
+                          >
+                            <Send size={16} className={sendingAlertId === insp.staff_id ? 'animate-bounce' : ''} />
+                            {sendingAlertId === insp.staff_id ? 'Transmitting Alert...' : isReInspect ? 'Request Re-Inspection' : isOverdue ? 'Ping Overdue Staff' : 'Remind Staff via Ping'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* RIGHT: WORKSPACE */}
+                    <div className="w-full xl:w-[65%] flex flex-col">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Compliance Evaluation Workspace</h3>
+                        
+                        <span className={`px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest ${
+                          isApproved ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10' :
+                          isOverdue ? 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10' :
+                          isReInspect ? 'border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-500/10' :
+                          isRejected ? 'border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10' :
+                          'border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/10'
+                        }`}>
+                          {isPending ? 'Ready For Review' : insp.status}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 space-y-6">
+                        {/* Photos */}
+                        <div>
+                          <h4 className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-3 ${theme.textSub}`}>
+                            <ImageIcon size={14} className="text-orange-500" /> Photographic Evidence ({photosArray.length})
+                          </h4>
+                          
+                          {!insp.is_submission ? (
+                            <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 ${isOverdue ? (isDarkMode ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : 'border-orange-300 bg-orange-50/50 text-orange-800') : (isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-amber-300 bg-amber-50/50 text-amber-800')}`}>
+                              {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
+                              {isOverdue ? 'CRITICAL: Staff missed deadline. No photos uploaded.' : 'Awaiting staff member to upload visual verification photos.'}
+                            </div>
+                          ) : photosArray.length === 0 ? (
+                            <div className={`w-full p-4 rounded-2xl flex items-center gap-3 ${theme.glassInnerCard}`}>
+                              <ShieldAlert size={16} className={theme.textSub} />
+                              <p className={`text-xs font-semibold ${theme.textSub}`}>No graphical assets required or attached to this registry record log.</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-3 overflow-x-auto custom-scrollbar pb-2">
+                              {photosArray.map((url: string, i: number) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => setPreviewPhotoModal(url)}
+                                  className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 shrink-0 ${isDarkMode ? 'border-white/10 hover:border-orange-500 bg-black/40' : 'border-white/80 hover:border-orange-400 bg-white/40'}`}
+                                >
+                                  <img src={url} alt={`Evidence ${i+1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
+                                    <Eye size={20} className="mb-1 text-orange-400" />
+                                    <span className="text-[9px] font-bold uppercase tracking-widest px-1 text-center leading-tight">Shot {i + 1}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Declaration */}
+                        <div>
+                          <h4 className={`text-[10px] font-black uppercase tracking-widest mb-3 ${theme.textSub}`}>
+                            {insp.is_admin_action ? 'System Log Notes' : insp.is_submission ? 'Staff Condition Declaration' : 'System Note'}
+                          </h4>
+                          <div className={`w-full p-5 rounded-2xl ${theme.glassInnerCard}`}>
+                            <p className={`text-sm font-bold italic leading-relaxed ${theme.textMain}`}>"{insp.notes || 'No comments or written declaration provided.'}"</p>
+                          </div>
+                        </div>
+
+                        {insp.admin_remarks && (
+                          <div>
+                            <h4 className={`text-[10px] font-black uppercase tracking-widest mb-3 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Administrative Action Remarks</h4>
+                            <div className={`w-full p-5 rounded-2xl ${theme.glassInnerCard}`}>
+                              <p className={`text-sm font-bold ${theme.textMain}`}>"{insp.admin_remarks}"</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Verdict / Action Buttons */}
+                        <div className="mt-auto pt-6">
+                          {insp.is_admin_action ? (
+                            <div className={`flex items-center justify-between px-5 py-4 rounded-2xl ${theme.glassInnerCard}`}>
+                              <span className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-purple-300' : 'text-purple-800'}`}>System Registry Asset Audit</span>
+                              <div className={`flex items-center gap-1.5 text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}>
+                                <CheckCircle2 size={14} /> Log Sealed Automatically
+                              </div>
+                            </div>
+                          ) : !insp.is_submission ? (
+                             <div className={`flex items-center justify-between px-5 py-4 rounded-2xl ${theme.glassInnerCard}`}>
+                               <span className={`text-[10px] font-bold uppercase tracking-widest ${isOverdue ? (isDarkMode ? 'text-orange-300' : 'text-orange-800') : (isDarkMode ? 'text-amber-300' : 'text-amber-800')}`}>{isOverdue ? 'DEADLINE MISSED' : 'Pending Staff Action'}</span>
+                               <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest ${isOverdue ? (isDarkMode ? 'text-orange-400 animate-pulse' : 'text-orange-600 animate-pulse') : (isDarkMode ? 'text-amber-400' : 'text-amber-700')}`}>
+                                 {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
+                                 {isOverdue ? 'Overdue' : 'Waiting on Employee'}
+                               </div>
+                             </div>
+                          ) : isPending ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <button
+                                type="button"
+                                disabled={updatingId === insp.id}
+                                onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user)}
+                                className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95 border-0"
+                              >
+                                <CheckCircle2 size={16} /> {updatingId === insp.id ? 'Syncing...' : 'Approve'}
+                              </button>
+                              
+                              <button
+                                type="button"
+                                disabled={updatingId === insp.id}
+                                onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user)}
+                                className="flex items-center justify-center gap-2 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95 border-0"
+                              >
+                                <RefreshCw size={16} /> Re-Inspect
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={updatingId === insp.id}
+                                onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user)}
+                                className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95 border-0"
+                              >
+                                <XCircle size={16} /> Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <div className={`w-full p-5 rounded-2xl flex items-center justify-between border transition-colors duration-700 ${
+                              isApproved 
+                                ? (isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50/80 border-emerald-200')
+                                : isReInspect 
+                                ? (isDarkMode ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50/50 border-orange-200')
+                                : (isDarkMode ? 'bg-rose-500/10 border-rose-500/20' : 'bg-rose-50/50 border-rose-200')
+                            }`}>
+                              <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Admin Verdict Recorded</span>
+                              
+                              <span className={`flex items-center gap-1.5 text-xs font-black uppercase tracking-widest ${
+                                isApproved ? 'text-emerald-600 dark:text-emerald-400' : 
+                                isReInspect ? 'text-orange-600 dark:text-orange-400' :
+                                'text-rose-600 dark:text-rose-400'
+                              }`}>
+                                {isApproved ? <CheckCircle2 size={16} /> : isReInspect ? <RefreshCw size={14} /> : <XCircle size={14} />} {insp.status}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
-                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
-                        <Laptop size={14} className="text-orange-500 shrink-0" />
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
-                          }}
-                          className={`truncate cursor-pointer text-left font-bold transition-colors hover:text-orange-500 dark:hover:text-orange-400 hover:underline`}
-                          title="View Asset Details"
-                        >
-                          {item.asset_name}
-                        </button>
-                      </div>
-                      <div className={`flex justify-between items-center text-[11px] border-t pt-2.5 mt-2.5 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
-                        <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
-                        <span className={`font-mono font-bold ${theme.textMain}`}>{item.serial_number}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>TAG:</span>
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/admin/assets?view=${item.asset_tag !== 'NO-TAG' ? item.asset_tag : item.asset_id}`);
-                          }}
-                          className={`font-mono font-bold cursor-pointer flex items-center gap-1 transition-colors ${isDarkMode ? 'text-purple-400 hover:text-purple-300' : 'text-purple-600 hover:text-purple-700'} hover:underline`}
-                          title="View Asset Details"
-                        >
-                          {item.asset_tag} <ExternalLink size={10} className="mb-0.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 text-[12px]">
-                      <div className="flex items-center justify-between">
-                        <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Clock size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-500'} /> 
-                          <span className="text-[10px] font-bold uppercase tracking-widest">
-                            {item.is_submission ? 'Recorded Date' : 'Last Inspection'}
-                          </span>
-                        </div>
-                        <span className={`font-bold ${theme.textMain}`}>{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                          <Calendar size={14} className={isDarkMode ? 'text-orange-400' : 'text-orange-500'} /> 
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Upcoming Due</span>
-                        </div>
-                        <span className={`font-bold ${isOverdue ? 'text-orange-500 dark:text-orange-400 animate-pulse' : theme.textMain}`}>
-                          {item.next_due ? new Date(item.next_due).toLocaleDateString('en-IN') : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {canSendReminder && (isPending || isOverdue || item.status === 'Re-Inspection') && (
-                      <button
-                        type="button"
-                        disabled={sendingAlertId === item.staff_id}
-                        onClick={() => sendStaffAuditReminder(item.staff_id, item.asset_name, item.asset_tag, item.status)}
-                        className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 ${
-                          item.status === 'Re-Inspection' || isOverdue
-                            ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400'
-                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] border border-purple-500'
-                        }`}
-                      >
-                        <Send size={14} className={sendingAlertId === item.staff_id ? 'animate-bounce' : ''} />
-                        <span>{sendingAlertId === item.staff_id ? 'Transmitting Alert...' : item.status === 'Re-Inspection' ? '⚡ Request Re-Inspection' : isOverdue ? '🚨 Ping Overdue Staff' : '⚡ Remind Staff via Ping'}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="w-full xl:w-2/3 flex flex-col justify-between gap-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Compliance Evaluation Workspace</h4>
-                      <span className={`px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 shadow-sm cursor-default w-fit ${getSemanticColor(item.status, item.is_submission, item.is_admin_action)}`}>
-                        {item.status === 'Pending' ? 'Ready For Review' : item.status}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14} className={isDarkMode ? 'text-orange-400' : 'text-orange-500'}/> Photographic Evidence ({photosArray.length})</span>
-                      {!item.is_submission ? (
-                        <div className={`p-4 rounded-xl border border-dashed text-xs font-bold flex items-center gap-2 ${isOverdue ? (isDarkMode ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : 'border-orange-300 bg-orange-50/50 text-orange-800') : (isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-amber-300 bg-amber-50/50 text-amber-800')}`}>
-                          {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
-                          {isOverdue ? 'CRITICAL: Staff missed deadline. No photos uploaded.' : 'Awaiting staff member to upload visual verification photos.'}
-                        </div>
-                      ) : photosArray.length === 0 ? (
-                        <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${theme.textSub} ${theme.glassInner}`}>
-                          <ShieldAlert size={14} /> No graphical assets required or attached to this registry record log.
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-3">
-                          {photosArray.map((url: any, idx: number) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setPreviewPhotoModal(url)}
-                              className={`relative group w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-sm hover:scale-105 ${isDarkMode ? 'border-white/10 hover:border-orange-500 bg-black/40' : 'border-white/80 hover:border-orange-400 bg-white/40'}`}
-                            >
-                              <img src={url} alt={`Evidence Shot ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                              <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white backdrop-blur-sm">
-                                <Eye size={20} className="mb-1 text-orange-400" />
-                                <span className="text-[9px] font-bold uppercase tracking-widest px-1 text-center leading-tight">Shot {idx + 1}</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>{item.is_admin_action ? 'System Log Notes' : item.is_submission ? 'Staff Condition Declaration' : 'System Note'}</span>
-                      <div className={`p-4 rounded-2xl text-xs font-semibold italic leading-relaxed ${theme.glassInner}`}>
-                        "{item.notes || 'No comments or written declaration provided.'}"
-                      </div>
-                    </div>
-
-                    {item.admin_remarks && (
-                      <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
-                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Administrative Action Remarks:</span>
-                        <p className={theme.textMain}>"{item.admin_remarks}"</p>
-                      </div>
-                    )}
-
-                    <div className={`pt-4 border-t mt-auto ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
-                      {item.is_admin_action ? (
-                        <div className={`flex items-center justify-between px-5 py-4 rounded-2xl ${theme.glassInner}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-purple-300' : 'text-purple-800'}`}>System Registry Asset Audit</span>
-                          <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}>
-                            <CheckCircle2 size={14} /> Log Sealed Automatically
-                          </div>
-                        </div>
-                      ) : !item.is_submission ? (
-                         <div className={`flex items-center justify-between px-5 py-4 rounded-2xl ${theme.glassInner}`}>
-                           <span className={`text-[10px] font-bold uppercase tracking-widest ${isOverdue ? (isDarkMode ? 'text-orange-300' : 'text-orange-800') : (isDarkMode ? 'text-amber-300' : 'text-amber-800')}`}>{isOverdue ? 'DEADLINE MISSED' : 'Pending Staff Action'}</span>
-                           <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest ${isOverdue ? (isDarkMode ? 'text-orange-400 animate-pulse' : 'text-orange-600 animate-pulse') : (isDarkMode ? 'text-amber-400' : 'text-amber-700')}`}>
-                             {isOverdue ? <AlertTriangle size={14} /> : <Clock size={14} />} 
-                             {isOverdue ? 'Overdue' : 'Waiting on Employee'}
-                           </div>
-                         </div>
-                      ) : isPending ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Approved', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                          >
-                            <CheckCircle2 size={16} /> {updatingId === item.id ? 'Syncing...' : 'Approve'}
-                          </button>
-                          
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Re-Inspection', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                          >
-                            <RefreshCw size={16} /> Re-Inspect
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={updatingId === item.id}
-                            onClick={() => executeVerdict(item.id, item.asset_id, 'Rejected', item.staff_id, item.is_deleted_user)}
-                            className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                          >
-                            <XCircle size={16} /> Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <div className={`flex items-center justify-between px-5 py-4 rounded-xl ${theme.glassInner}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Admin Verdict Recorded</span>
-                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
-                            {item.status === 'Approved' && <CheckCircle2 size={14} className={isDarkMode ? "text-emerald-400" : "text-emerald-500"}/>}
-                            {item.status === 'Re-Inspection' && <RefreshCw size={14} className={isDarkMode ? "text-orange-400" : "text-orange-500"}/>}
-                            {item.status === 'Rejected' && <XCircle size={14} className={isDarkMode ? "text-rose-400" : "text-rose-500"}/>}
-                            <span className={
-                              item.status === 'Approved' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : 
-                              item.status === 'Re-Inspection' ? (isDarkMode ? 'text-orange-400' : 'text-orange-600') : 
-                              (isDarkMode ? 'text-rose-400' : 'text-rose-600')
-                            }>
-                              {item.status}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                </div>
-              );
-            })}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
 
+        {/* 🌟 FULL SCREEN PHOTO PREVIEW MODAL */}
         {previewPhotoModal && (
           <div 
             onClick={() => setPreviewPhotoModal(null)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
+            className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-9999 flex flex-col items-center justify-center p-4 md:p-12 animate-in fade-in duration-200 cursor-pointer"
           >
             <button 
               onClick={() => setPreviewPhotoModal(null)}
-              className="absolute top-6 right-6 w-12 h-12 bg-white/80 hover:bg-white text-slate-800 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg border border-white/80 hover:scale-110 active:scale-95"
+              className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg border border-white/20 hover:scale-110 active:scale-95"
             >
               <X size={20} />
             </button>
             
-            <div className="max-w-6xl w-full h-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
+            <div className="max-w-7xl w-full h-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
               <img 
                 src={previewPhotoModal} 
                 alt="Hardware High-Res Verification" 
-                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/60 bg-white/20 p-2" 
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/20 bg-white/5" 
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
