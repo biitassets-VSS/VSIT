@@ -6,10 +6,9 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, LogOut, CheckCircle2, XCircle, Clock, 
   Laptop, User, Search, RefreshCw, X, ShieldAlert,
-  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon, Loader2, Archive
+  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon, Loader2, Archive, ChevronLeft, ChevronRight, ZoomIn
 } from 'lucide-react';
 
-// Helper to format fallback names
 const formatEmailAsName = (email: string) => {
   if (!email) return null;
   return email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -24,7 +23,6 @@ function AdminReturnsContent() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState<any>(null);
 
-  // 🌟 Custom Modal State
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
     action: 'Approved' | 'Declined' | null;
@@ -36,7 +34,9 @@ function AdminReturnsContent() {
   const [adminRemarks, setAdminRemarks] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
-  // 🌟 INITIALIZATION & THEME SYNC
+  // 🌟 GLASS GALLERY STATE
+  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, scale: 1 });
+
   useEffect(() => {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -59,6 +59,18 @@ function AdminReturnsContent() {
     fetchReturns();
     return () => observer.disconnect();
   }, []);
+
+  // Keyboard navigation for Gallery
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!gallery.isOpen) return;
+      if (e.key === 'Escape') setGallery(g => ({ ...g, isOpen: false, scale: 1 }));
+      if (e.key === 'ArrowRight' && gallery.index < gallery.images.length - 1) setGallery(g => ({ ...g, index: g.index + 1, scale: 1 }));
+      if (e.key === 'ArrowLeft' && gallery.index > 0) setGallery(g => ({ ...g, index: g.index - 1, scale: 1 }));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gallery]);
 
   const fetchReturns = async () => {
     setLoading(true);
@@ -139,21 +151,22 @@ function AdminReturnsContent() {
       const allProfiles = profilesResults.flatMap((res: any) => res?.data || []);
       
       const profilesMap: Record<string, any> = {};
+      const cleanId = (id: any) => id ? String(id).trim().toLowerCase() : '';
+      
       allProfiles.forEach((p: any) => {
-        if (p.id) profilesMap[p.id] = p;
-        if (p.email) profilesMap[p.email.toLowerCase()] = p;
-        if (p.emp_code) profilesMap[p.emp_code.toUpperCase()] = p;
-        if (p.employee_code) profilesMap[p.employee_code.toUpperCase()] = p;
-        if (p.emp_id) profilesMap[p.emp_id.toUpperCase()] = p;
+        if (p.id) profilesMap[cleanId(p.id)] = p;
+        if (p.email) profilesMap[cleanId(p.email)] = p;
+        if (p.emp_code) profilesMap[cleanId(p.emp_code)] = p;
+        if (p.employee_code) profilesMap[cleanId(p.employee_code)] = p;
+        if (p.emp_id) profilesMap[cleanId(p.emp_id)] = p;
       });
 
+      // 🌟 AGGRESSIVE IDENTITY RESOLUTION ENGINE
       const mergedData = allReturns.map((item: any) => {
-        const key1 = item.user_id;
-        const key2 = item.inspected_by;
-        const key3 = item.user_email?.toLowerCase();
-        const key4 = item.assets?.assigned_to;
-        
-        const profile = profilesMap[key1] || profilesMap[key3] || profilesMap[key2] || profilesMap[key4] || profilesMap[String(key4).toLowerCase()] || null;
+        const profile = profilesMap[cleanId(item.user_id)] || 
+                        profilesMap[cleanId(item.user_email)] || 
+                        profilesMap[cleanId(item.inspected_by)] || 
+                        profilesMap[cleanId(item.assets?.assigned_to)] || null;
         
         let resolvedName = item.user_name || profile?.name || profile?.full_name || formatEmailAsName(item.user_email);
         let resolvedEmpCode = item.emp_code || profile?.emp_code || profile?.employee_code || profile?.emp_id;
@@ -162,17 +175,39 @@ function AdminReturnsContent() {
            resolvedEmpCode = String(item.inspected_by).toUpperCase();
         }
 
+        // 1. Text Regex Extractor Function
+        const extractIdentityFromText = (text: string) => {
+            if (!text) return null;
+            // Match format: [Historical User: Jaspreet Singh Brar | ID: EMP-3624]
+            let histMatch = text.match(/Historical User:\s*([^|]+?)\s*\|\s*ID:\s*([^\]]+)/i);
+            if (histMatch) return { name: histMatch[1].trim(), emp: histMatch[2].trim() };
+            
+            // Match format: Staff: Jaspreet Singh Brar (EMP-3624)
+            let staffMatch = text.match(/Staff:\s*([^(]+?)\s*\((EMP-[^)]+)\)/i);
+            if (staffMatch) return { name: staffMatch[1].trim(), emp: staffMatch[2].trim() };
+            
+            return null;
+        };
+
+        // 2. Try to extract from the current item's combined notes if name/emp is missing
+        if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+            const currentItemText = `${item.notes || ''} ${item.admin_remarks || ''} ${item.assets?.notes || ''}`;
+            const extracted = extractIdentityFromText(currentItemText);
+            if (extracted) {
+                if (!resolvedName || resolvedName === 'Staff Member') resolvedName = extracted.name;
+                if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') resolvedEmpCode = extracted.emp;
+            }
+        }
+
+        // 3. Fallback: Search deeply through ALL asset history
         if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
             const assetHistory = allAssetInspections?.filter((insp: any) => insp.asset_id === item.asset_id) || [];
             
             for (const hist of assetHistory) {
+                // Check direct fields
                 if (!resolvedName || resolvedName === 'Staff Member') {
                     if (hist.user_name) resolvedName = hist.user_name;
                     else if (hist.user_email) resolvedName = formatEmailAsName(hist.user_email);
-                    else if (hist.notes && hist.notes.includes('Digitally Signed')) {
-                        const match = hist.notes.match(/by\s+(.*?)\s+on/i);
-                        if (match && match[1]) resolvedName = match[1];
-                    }
                 }
                 
                 if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
@@ -182,10 +217,19 @@ function AdminReturnsContent() {
                     }
                 }
 
+                // Check baked-in regex text
+                const histText = `${hist.notes || ''} ${hist.admin_remarks || ''}`;
+                const extracted = extractIdentityFromText(histText);
+                if (extracted) {
+                    if (!resolvedName || resolvedName === 'Staff Member') resolvedName = extracted.name;
+                    if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') resolvedEmpCode = extracted.emp;
+                }
+
                 if (resolvedName !== 'Staff Member' && resolvedEmpCode !== 'UNKNOWN') break;
             }
         }
 
+        // Final Fallbacks
         if (!resolvedName || resolvedName === 'Staff Member') {
             if (String(item.user_id).includes('@')) resolvedName = formatEmailAsName(String(item.user_id));
             if (String(item.assets?.assigned_to).includes('@')) resolvedName = formatEmailAsName(String(item.assets?.assigned_to));
@@ -204,7 +248,7 @@ function AdminReturnsContent() {
         };
       });
 
-      // 🌟 HISTORICAL ARCHIVING ENGINE (Groups by asset, marks older dupes as historical logs)
+      // 🌟 HISTORICAL ARCHIVING ENGINE
       const assetGroups: Record<string, any[]> = {};
       mergedData.forEach((item: any) => {
         const aId = item.asset_id || item.assets?.id || `unknown-${Math.random()}`;
@@ -238,7 +282,7 @@ function AdminReturnsContent() {
     }
   };
 
-  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER (With ID bypass fallback)
+  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER
   const executeReturnAction = async (e: React.FormEvent) => {
     e.preventDefault();
     const { assetId, action, staffId, item } = actionModal;
@@ -255,7 +299,6 @@ function AdminReturnsContent() {
 
       const historicalBakedNotes = `${item.notes || ''}\n[Historical User: ${item.resolvedName} | ID: ${item.resolvedEmpCode}]`;
 
-      // 1. Prepare Base Payload for Inspections
       let payloadToUse: any = {
          status: statusStr,
          admin_remarks: `${finalRemarks} (Processed by: ${adminName})`,
@@ -268,16 +311,13 @@ function AdminReturnsContent() {
          payloadToUse = { ...payloadToUse, asset_id: assetId, user_id: staffId, condition: 'Unknown (Legacy)', notes: historicalBakedNotes };
       }
 
-      // 2. Auto-Healing Schema Engine (Bypasses missing ID column by updating via asset_id and date)
       let dbSuccess = false;
       for (let i = 0; i < 5; i++) {
          let dbErr;
-         
          if (item.isSynthetic) {
              const res = await supabase.from('inspections').insert(payloadToUse);
              dbErr = res.error;
          } else {
-             // MATCH BY ASSET ID AND CREATED DATE TO BYPASS MISSING 'ID' COLUMN
              const res = await supabase.from('inspections')
                 .update(payloadToUse)
                 .eq('asset_id', assetId)
@@ -299,7 +339,6 @@ function AdminReturnsContent() {
       
       if (!dbSuccess) throw new Error("Failed to process inspection log due to database schema conflict.");
 
-      // 3. Process Asset Inventory Table (Permanent Tracking Update)
       let assetPayload: any = {};
       if (action === 'Approved') {
         const combinedNotes = `[RETURNED] Staff: ${item.resolvedName} (${item.resolvedEmpCode}) | Reason: ${cleanStaffNotes} | Admin Validation: ${finalRemarks} (${adminName})`;
@@ -320,7 +359,6 @@ function AdminReturnsContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetPayload).eq('id', assetId);
       if (assetErr) throw new Error(`Asset Update Failed: ${assetErr.message}`);
 
-      // 4. Process Notifications
       if (staffId && String(staffId).toUpperCase().includes('ADMIN') === false) {
         await supabase.from('notifications').insert([{
           target_user: staffId,
@@ -333,7 +371,6 @@ function AdminReturnsContent() {
         }]);
       }
 
-      // Close modal and sync UI
       setActionModal({ isOpen: false, action: null, assetId: '', staffId: '', item: null });
       fetchReturns(); 
       
@@ -344,6 +381,10 @@ function AdminReturnsContent() {
       setUpdatingId(null);
       setIsProcessingAction(false);
     }
+  };
+
+  const openGallery = (images: string[], startIndex: number) => {
+    setGallery({ isOpen: true, images, index: startIndex, scale: 1 });
   };
 
   const filteredList = returnRequests.filter(item => {
@@ -380,6 +421,52 @@ function AdminReturnsContent() {
     <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden font-sans antialiased pb-12 transition-colors duration-1000`}>
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+
+      {/* 🌟 FULL SCREEN GLASS GALLERY MODAL */}
+      {gallery.isOpen && (
+        <div className="fixed inset-0 z-99999 flex items-center justify-center bg-slate-900/90 backdrop-blur-3xl animate-in fade-in">
+          <div className="absolute inset-0" onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })}></div>
+          
+          <button onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })} className="absolute top-6 right-6 text-white/60 hover:text-white z-50 bg-white/10 p-3 rounded-full backdrop-blur-md transition-all hover:scale-110">
+             <X size={24} />
+          </button>
+          
+          <div className="relative w-full max-w-6xl h-[85vh] flex items-center justify-between px-4 z-40 pointer-events-none">
+              
+              <button 
+                onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index - 1, scale: 1 }); }} 
+                disabled={gallery.index === 0}
+                className={`pointer-events-auto p-4 rounded-full backdrop-blur-xl border border-white/20 transition-all ${gallery.index === 0 ? 'opacity-30 cursor-not-allowed bg-black/20' : 'bg-white/10 hover:bg-white/20 text-white cursor-pointer hover:scale-110'}`}
+              >
+                 <ChevronLeft size={32} />
+              </button>
+
+              <div className="flex-1 h-full flex items-center justify-center pointer-events-auto relative px-8 overflow-hidden">
+                <img 
+                   src={gallery.images[gallery.index]} 
+                   style={{ transform: `scale(${gallery.scale})` }}
+                   onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, scale: gallery.scale === 1 ? 2 : 1 }); }}
+                   className={`max-w-full max-h-full object-contain transition-transform duration-300 rounded-lg shadow-2xl ${gallery.scale === 1 ? 'cursor-zoom-in' : 'cursor-zoom-out'}`} 
+                   alt="Gallery View"
+                />
+              </div>
+
+              <button 
+                onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index + 1, scale: 1 }); }} 
+                disabled={gallery.index === gallery.images.length - 1}
+                className={`pointer-events-auto p-4 rounded-full backdrop-blur-xl border border-white/20 transition-all ${gallery.index === gallery.images.length - 1 ? 'opacity-30 cursor-not-allowed bg-black/20' : 'bg-white/10 hover:bg-white/20 text-white cursor-pointer hover:scale-110'}`}
+              >
+                 <ChevronRight size={32} />
+              </button>
+          </div>
+
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/10 border border-white/20 backdrop-blur-xl px-6 py-2.5 rounded-full text-white font-black tracking-widest text-xs flex items-center gap-3">
+             <ImageIcon size={14}/> {gallery.index + 1} / {gallery.images.length}
+             <span className="w-px h-3 bg-white/30 mx-2"></span>
+             <ZoomIn size={14} className="opacity-70"/> Click to Zoom
+          </div>
+        </div>
+      )}
 
       <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-12 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
@@ -445,7 +532,7 @@ function AdminReturnsContent() {
           <div className="space-y-6">
             {filteredList.map((item, index) => {
               const uniqueKey = item.id ? `return-${item.id}-${index}` : `return-fallback-${index}`;
-              const isHistorical = !item.isLatest; // True if this is an older duplicate entry
+              const isHistorical = !item.isLatest; 
               const isPending = !isHistorical && (item.status || '').toLowerCase().includes('pending');
               const asset = item.assets || {};
               const photosList = Array.isArray(item.photos) ? item.photos : item.photo_url ? [item.photo_url] : [];
@@ -458,7 +545,7 @@ function AdminReturnsContent() {
                     {/* 🌟 HISTORICAL BADGE */}
                     {isHistorical && (
                       <span className={`inline-flex w-max items-center gap-1.5 px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>
-                        <Archive size={12} /> Historical Log
+                        <Archive size={12} /> Archived Return Log
                       </span>
                     )}
 
@@ -477,7 +564,7 @@ function AdminReturnsContent() {
                     <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
                       {item.isSynthetic && (
                         <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-500 mb-2 border-b border-amber-500/20 pb-2">
-                          <AlertTriangle size={12} /> Legacy Submission (Missing Photos)
+                          <AlertTriangle size={12} /> Legacy Submission
                         </div>
                       )}
                       <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isHistorical ? theme.textSub : theme.textMain}`}>
@@ -524,7 +611,7 @@ function AdminReturnsContent() {
                       </div>
                     </div>
 
-                    {/* 📸 PHOTOS SECTION */}
+                    {/* 📸 PHOTOS SECTION - UPDATED TO USE GLASS GALLERY */}
                     {photosList.length > 0 && (
                       <div className={`space-y-2 ${isHistorical ? 'opacity-60' : ''}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}>
@@ -532,12 +619,16 @@ function AdminReturnsContent() {
                         </span>
                         <div className={`p-4 rounded-2xl flex flex-wrap gap-3 ${theme.glassInner}`}>
                           {photosList.map((url: string, idx: number) => (
-                            <a key={`photo-${item.id || index}-${idx}`} href={url} target="_blank" rel="noopener noreferrer" className="block relative group">
+                            <div 
+                              key={`photo-${item.id || index}-${idx}`} 
+                              onClick={() => openGallery(photosList, idx)}
+                              className="relative group cursor-pointer"
+                            >
                               <img src={url} alt="Return Attachment" className="w-20 h-20 object-cover rounded-xl border-2 border-transparent transition-all group-hover:border-orange-500 group-hover:scale-105" />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                <ExternalLink size={16} className="text-white" />
+                                <ZoomIn size={16} className="text-white" />
                               </div>
-                            </a>
+                            </div>
                           ))}
                         </div>
                       </div>
