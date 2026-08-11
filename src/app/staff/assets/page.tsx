@@ -9,6 +9,16 @@ import {
   PenTool, X, AlertCircle, Eye, Camera, Send, LogOut, Image as ImageIcon, RefreshCcw, QrCode, ChevronLeft
 } from 'lucide-react';
 
+const calculateNextDueDate = (baseDateStr: string | null, cat: string) => {
+  if (!baseDateStr) return null;
+  const baseDate = new Date(baseDateStr);
+  const monthsToAdd = (cat || '').toLowerCase().includes('laptop') ? 1 : 3; 
+  const lastDay = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd + 1, 0);
+  const lastSat = new Date(lastDay);
+  while (lastSat.getDay() !== 6) lastSat.setDate(lastSat.getDate() - 1);
+  return lastSat;
+};
+
 function getNextDueDate(category: string, lastDateString: string | null, createdAtString: string | null) {
   const isLaptop = (category || '').toLowerCase().includes('laptop');
   const intervalMonths = isLaptop ? 1 : 3;
@@ -39,6 +49,20 @@ const triggerDesktopAlert = (title: string, body: string) => {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(title, { body, icon: '/logo.png' });
   }
+};
+
+const extractAdminReason = (remarks: string, notes: string) => {
+  if (remarks && remarks.trim() !== '') return remarks;
+  const lowerNotes = (notes || '').toLowerCase();
+  if (lowerNotes.includes('declin') || lowerNotes.includes('reject')) {
+    const parts = notes.split(/reason:/i);
+    return parts.length > 1 ? parts[1].trim() : notes;
+  }
+  if (lowerNotes.includes('approv')) {
+     const parts = notes.split(/reason:|remarks:/i);
+     return parts.length > 1 ? parts[1].trim() : "Return has been processed and approved.";
+  }
+  return 'No administrative remarks provided.';
 };
 
 export default function StaffAssetsPage() {
@@ -103,17 +127,106 @@ export default function StaffAssetsPage() {
       
       const { data: inspectionsRes } = await supabase
         .from('inspections')
-        .select('asset_id, status, notes, photos, created_at')
+        .select('asset_id, status, notes, photos, created_at, admin_remarks')
         .order('created_at', { ascending: false });
 
+      // 🌟 UNIFIED ASSET STATUS ENGINE (Exactly matching Dashboard logic)
       const compiledAssets = (assetsRes || []).map(asset => {
         const latestInsp = (inspectionsRes || []).find(i => i.asset_id === asset.id);
+        
+        let nextDue = null;
+        if (asset.next_inspection_date) {
+           nextDue = new Date(asset.next_inspection_date);
+        } else if (latestInsp?.created_at || asset.last_inspection_date) {
+           nextDue = calculateNextDueDate(latestInsp?.created_at || asset.last_inspection_date, asset.category);
+        } else {
+           nextDue = calculateNextDueDate(asset.created_at, asset.category); 
+        }
+        
+        const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < new Date().setHours(0,0,0,0)) : false;
+
+        // Forcefully catch all variables of Admin interventions across multiple DB fields
+        const assetStatus = (asset.status || '').toLowerCase();
+        const fallbackInspStatus = (asset.inspection_status || '').toLowerCase();
+        const inspStatus = (latestInsp?.status || fallbackInspStatus).toLowerCase();
+        const assetNotes = (asset.notes || '').toLowerCase();
+        const inspNotes = (latestInsp?.notes || '').toLowerCase();
+        const adminRemarks = ((asset.admin_remarks || '') + ' ' + (latestInsp?.admin_remarks || '')).toLowerCase();
+
+        const isReturnInsp = inspNotes.includes('return') || assetNotes.includes('return') || fallbackInspStatus.includes('return') || assetStatus.includes('return');
+        
+        let isReturnApproved = false;
+        let isReturnRejected = false;
+        let isReturnPending = false;
+
+        // 1. Determine if Return is Approved
+        if (
+            assetStatus.includes('return approved') || 
+            assetStatus === 'in stock' || 
+            assetStatus === 'unassigned' ||
+            fallbackInspStatus.includes('return approved') ||
+            assetNotes.includes('[return approved]') || 
+            adminRemarks.includes('return approved') ||
+            adminRemarks.includes('return accepted') ||
+            inspStatus === 'return approved'
+        ) {
+            isReturnApproved = true;
+        }
+
+        // 2. Determine if Return was Declined/Rejected
+        if (
+            assetStatus.includes('return reject') || 
+            assetStatus.includes('return decline') || 
+            fallbackInspStatus.includes('return reject') || 
+            fallbackInspStatus.includes('return decline') ||
+            fallbackInspStatus.includes('declined') ||
+            assetNotes.includes('[return declined]') || 
+            assetNotes.includes('[return rejected]') ||
+            adminRemarks.includes('return declin') ||
+            adminRemarks.includes('return reject') ||
+            inspStatus.includes('return reject') ||
+            inspStatus.includes('return decline') ||
+            inspStatus === 'rejected'
+        ) {
+            isReturnRejected = true;
+        }
+
+        // 3. Determine if Return is Pending
+        if (
+            assetStatus.includes('return pending') || 
+            assetStatus.includes('pending return') || 
+            fallbackInspStatus.includes('return pending') ||
+            fallbackInspStatus.includes('pending return') ||
+            inspStatus.includes('return pending') ||
+            inspStatus.includes('pending return')
+        ) {
+            isReturnPending = true;
+        }
+
+        // 4. Incorporate the physical inspection logs if they hold the return truth
+        if (isReturnInsp) {
+            if (inspStatus.includes('approve')) isReturnApproved = true;
+            if (inspStatus.includes('reject') || inspStatus.includes('decline') || inspStatus.includes('not approved')) isReturnRejected = true;
+            if (inspStatus.includes('pending') && !isReturnApproved && !isReturnRejected) isReturnPending = true;
+        }
+
+        // 5. Resolving Conflicts: Final Admin action strictly overrides a stuck "Pending" state
+        if (isReturnApproved || isReturnRejected) {
+            isReturnPending = false;
+        }
+
         return {
           ...asset,
           live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
           live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
           live_inspection_notes: latestInsp?.notes || null,
-          live_inspection_photos: latestInsp?.photos || null
+          live_inspection_photos: latestInsp?.photos || null,
+          live_admin_remarks: asset.admin_remarks || latestInsp?.admin_remarks || null,
+          nextDue,
+          isOverdue,
+          isReturnPending,
+          isReturnRejected,
+          isReturnApproved
         };
       });
 
@@ -135,7 +248,8 @@ export default function StaffAssetsPage() {
             setAssignedAssets(current => current.filter(a => a.id !== payload.old.id));
             triggerDesktopAlert('Asset Removed', `Admin has processed and detached an asset from your profile.`);
           } else {
-            setAssignedAssets(current => current.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a));
+            // Soft refresh to fetch full inspection context
+            fetchMyAssets();
           }
         } else if (payload.eventType === 'DELETE') {
           setAssignedAssets(current => current.filter(a => a.id !== payload.old.id));
@@ -224,7 +338,7 @@ export default function StaffAssetsPage() {
 
       await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr }).eq('id', selectedReturnAsset.id);
 
-      setAssignedAssets(prev => prev.map(a => a.id === selectedReturnAsset.id ? { ...a, status: 'Return Pending Approval' } : a));
+      fetchMyAssets(); // Refresh from DB
       resetModals();
       triggerDesktopAlert('Return Sent', `Return request for ${selectedReturnAsset.asset_tag} sent to Admin.`);
     } catch (err: any) { alert(err.message); } finally { setIsSubmittingReturn(false); }
@@ -254,7 +368,7 @@ export default function StaffAssetsPage() {
 
       await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', selectedReplaceAsset.id);
 
-      setAssignedAssets(prev => prev.map(a => a.id === selectedReplaceAsset.id ? { ...a, status: 'Replacement Requested' } : a));
+      fetchMyAssets(); // Refresh from DB
       resetModals();
       triggerDesktopAlert('Replacement Sent', `Replacement request for ${selectedReplaceAsset.asset_tag} sent to Admin.`);
     } catch (err: any) { alert(err.message); } finally { setIsSubmittingReplace(false); }
@@ -270,7 +384,8 @@ export default function StaffAssetsPage() {
       if (assetError) throw assetError;
       const signatureNote = `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`;
       await supabase.from('inspections').insert({ asset_id: signModalAsset.id, inspected_by: currentUser.id || currentUser.emp_id, user_email: currentUser.email, condition: 'Pristine / Flawless', status: 'Approved', notes: signatureNote });
-      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned', live_inspection_notes: signatureNote } : a));
+      
+      fetchMyAssets(); // Refresh from DB
       setSignModalAsset(null); setSignatureName('');
     } catch (err: any) { alert(err.message); } finally { setIsSigning(false); }
   };
@@ -279,8 +394,8 @@ export default function StaffAssetsPage() {
 
   // Active Asset Context for Modals
   const activeAsset = selectedReturnAsset || selectedReplaceAsset;
-  const isLaptop = (activeAsset?.category || '').toLowerCase().includes('laptop');
-  const REQUIRED_PHOTOS = isLaptop ? 5 : 2;
+  const isLaptopObj = (activeAsset?.category || '').toLowerCase().includes('laptop');
+  const REQUIRED_PHOTOS = isLaptopObj ? 5 : 2;
   const currentPhotoCount = remotePhotos.length + localPhotos.length;
   const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
 
@@ -303,9 +418,7 @@ export default function StaffAssetsPage() {
         ) : (
           <div className="space-y-6">
             {assignedAssets.map(asset => {
-              const currentStatus = (asset.status || 'Assigned').toLowerCase();
-              const isReturnPending = currentStatus.includes('return pending');
-              const isReplacePending = currentStatus.includes('replacement requested');
+              const isReplacePending = (asset.status || '').toLowerCase().includes('replacement requested');
 
               return (
                 <div key={asset.id} className="bg-white/20 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white/40 shadow-sm relative overflow-hidden">
@@ -313,7 +426,15 @@ export default function StaffAssetsPage() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
                     
-                    {isReturnPending ? (
+                    {asset.isReturnApproved ? (
+                      <span className="px-4 py-2 bg-emerald-100 text-emerald-700 text-xs font-black uppercase tracking-widest rounded-lg border border-emerald-200 shadow-sm">
+                        Return Approved - Awaiting Unassignment
+                      </span>
+                    ) : asset.isReturnRejected ? (
+                      <span className="px-4 py-2 bg-rose-100 text-rose-700 text-xs font-black uppercase tracking-widest rounded-lg border border-rose-200 shadow-sm animate-pulse">
+                        Return Request Declined
+                      </span>
+                    ) : asset.isReturnPending ? (
                       <span className="px-4 py-2 bg-orange-100 text-orange-700 text-xs font-black uppercase tracking-widest rounded-lg border border-orange-200 shadow-sm">
                         Return Request Sent to Admin - Pending Approval
                       </span>
@@ -328,22 +449,65 @@ export default function StaffAssetsPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-4">
                     <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span><span className="font-bold text-sm text-slate-900">{asset.asset_tag || 'N/A'}</span></div>
                     <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span><span className="font-bold text-sm text-slate-900">{asset.serial_number || 'N/A'}</span></div>
                     <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span><span className="font-bold text-sm text-slate-900">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'N/A'}</span></div>
                     <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span><span className="font-bold text-sm text-slate-900">{asset.status || 'Assigned'}</span></div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-white/40">
-                    {(isReturnPending || isReplacePending) ? (
+                  {/* 🌟 REJECTION / APPROVAL REASON NOTIFICATION */}
+                  { (asset.isReturnRejected || asset.isReturnApproved) && (
+                    <div className={`p-4 mt-6 mb-2 rounded-2xl border text-xs font-bold flex gap-3 ${
+                      asset.isReturnApproved
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : 'bg-rose-50 border-rose-200 text-rose-700'
+                    }`}>
+                      {asset.isReturnApproved ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
+                        {extractAdminReason(asset.live_admin_remarks, asset.notes)}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-white/40 mt-4">
+                    {asset.isReturnApproved ? (
+                      <button disabled className="px-6 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed border border-emerald-200 shadow-sm">
+                        Return Approved
+                      </button>
+                    ) : asset.isReturnPending || isReplacePending ? (
                       <button disabled className="px-6 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed">
                         Waiting on Admin
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => { resetModals(); setSelectedReturnAsset(asset); setReturnModalOpen(true); }} className="px-6 py-2.5 rounded-2xl border border-orange-200 text-orange-600 hover:bg-orange-50 text-xs font-bold bg-white/40 cursor-pointer">Return Asset</button>
-                        <button onClick={() => { resetModals(); setSelectedReplaceAsset(asset); setReplaceModalOpen(true); }} className="px-6 py-2.5 rounded-2xl border border-purple-200 text-purple-600 hover:bg-purple-50 text-xs font-bold bg-white/40 cursor-pointer">Replace Asset</button>
+                        <button 
+                          onClick={async () => { 
+                            if (asset.isReturnRejected) {
+                              // Reset the status allowing retry
+                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
+                              fetchMyAssets();
+                            }
+                            resetModals(); 
+                            setSelectedReturnAsset(asset); 
+                            setReturnModalOpen(true); 
+                          }} 
+                          className={`px-6 py-2.5 rounded-2xl border text-xs font-bold bg-white/40 cursor-pointer transition-all hover:shadow-md ${
+                            asset.isReturnRejected 
+                            ? 'border-rose-200 text-rose-600 hover:bg-rose-50 hover:shadow-rose-100' 
+                            : 'border-orange-200 text-orange-600 hover:bg-orange-50 hover:shadow-orange-100'
+                          }`}
+                        >
+                          {asset.isReturnRejected ? 'Return Asset (Retry)' : 'Return Asset'}
+                        </button>
+                        
+                        <button 
+                          onClick={() => { resetModals(); setSelectedReplaceAsset(asset); setReplaceModalOpen(true); }} 
+                          className="px-6 py-2.5 rounded-2xl border border-purple-200 text-purple-600 hover:bg-purple-50 hover:shadow-purple-100 hover:shadow-md text-xs font-bold bg-white/40 cursor-pointer transition-all"
+                        >
+                          Replace Asset
+                        </button>
                       </>
                     )}
                   </div>
@@ -449,7 +613,7 @@ export default function StaffAssetsPage() {
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
                   <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
-                    {isLaptop ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
+                    {isLaptopObj ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
                   </p>
                   
                   <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-4">
