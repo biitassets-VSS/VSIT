@@ -9,7 +9,6 @@ import {
   ChevronDown, UploadCloud, ImagePlus
 } from 'lucide-react';
 
-// 🌟 TIME CALCULATION ENGINE
 const calculateResolutionTime = (raisedAt: string, closedAt: string | null) => {
   if (!raisedAt || !closedAt) return null;
   const start = new Date(raisedAt).getTime();
@@ -35,7 +34,7 @@ const calculateResolutionTime = (raisedAt: string, closedAt: string | null) => {
 const calculateWaitingTime = (raisedAt: string) => {
   if (!raisedAt) return null;
   const start = new Date(raisedAt).getTime();
-  const end = new Date().getTime(); // Current Time
+  const end = new Date().getTime(); 
   const diffMs = end - start;
 
   const diffMins = Math.floor(diffMs / (1000 * 60));
@@ -52,7 +51,6 @@ const calculateWaitingTime = (raisedAt: string) => {
   return parts.join(' ');
 };
 
-// 🌟 TICKET RATING COMPONENT
 function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRatingSubmitted: (rating: number, feedback: string) => void }) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -163,7 +161,7 @@ export default function StaffTicketsPage() {
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [viewTicket, setViewTicket] = useState<any>(null);
 
-  // 🌟 NEW DASHBOARD TICKET FORM STATE
+  // Form State matching the Liquid Glass Dashboard exactly
   const [formTitle, setFormTitle] = useState('');
   const [formCategory, setFormCategory] = useState('Hardware');
   const [formText, setFormText] = useState('');
@@ -423,7 +421,6 @@ export default function StaffTicketsPage() {
                             <span className="font-bold uppercase tracking-widest text-slate-400">Resolution Time:</span>
                             <span className="font-black text-emerald-600 flex items-center gap-1"><Timer size={12}/> {calculateResolutionTime(ticket.raisedAt, ticket.closedAt)}</span>
                           </div>
-                          {/* Rating Preview */}
                           <div className="flex justify-between items-center text-[11px] pt-3 border-t border-white/40">
                             <span className="font-bold uppercase tracking-widest text-slate-400">Your Rating:</span>
                             {ticket.rating > 0 ? (
@@ -443,7 +440,6 @@ export default function StaffTicketsPage() {
                       )}
                     </div>
 
-                    {/* Admin Note Preview (If Closed) */}
                     {!isOpen && ticket.adminNotes && (
                       <div className="text-xs mt-1">
                         <span className="font-black uppercase tracking-widest text-slate-800 block mb-1 text-[9px]">Admin Note:</span>
@@ -452,7 +448,6 @@ export default function StaffTicketsPage() {
                     )}
                   </div>
 
-                  {/* Card Footer Button */}
                   <div className="pt-5 mt-auto">
                     <button 
                       onClick={() => setViewTicket(ticket)} 
@@ -471,7 +466,7 @@ export default function StaffTicketsPage() {
 
       {/* 🌟 NEW DASHBOARD SYNCED RAISE TICKET MODAL */}
       {mounted && isRaiseModalOpen && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
           <div className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`} onClick={() => { setIsRaiseModalOpen(false); resetForm(); }} />
           
           <div className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
@@ -479,7 +474,7 @@ export default function StaffTicketsPage() {
             {/* Header */}
             <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-3xl flex items-center justify-center ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner'}`}>
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner'}`}>
                    <Ticket size={24} strokeWidth={2} />
                 </div>
                 <div>

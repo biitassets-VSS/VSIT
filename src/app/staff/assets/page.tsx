@@ -19,27 +19,6 @@ const calculateNextDueDate = (baseDateStr: string | null, cat: string) => {
   return lastSat;
 };
 
-function getNextDueDate(category: string, lastDateString: string | null, createdAtString: string | null) {
-  const isLaptop = (category || '').toLowerCase().includes('laptop');
-  const intervalMonths = isLaptop ? 1 : 3;
-
-  const getLastSaturday = (targetDate: Date) => {
-    const year = targetDate.getFullYear();
-    const month = targetDate.getMonth();
-    const date = new Date(year, month + 1, 0); 
-    while (date.getDay() !== 6) {
-      date.setDate(date.getDate() - 1);
-    }
-    date.setHours(23, 59, 59, 999);
-    return date;
-  };
-
-  const baseDate = lastDateString ? new Date(lastDateString) : (createdAtString ? new Date(createdAtString) : new Date());
-  if (!lastDateString) return getLastSaturday(baseDate);
-  const targetMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + intervalMonths, 1);
-  return getLastSaturday(targetMonthDate);
-}
-
 const formatDate = (date: Date) => {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
 };
@@ -71,25 +50,20 @@ export default function StaffAssetsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   
-  // E-Sign Modal State
-  const [signModalAsset, setSignModalAsset] = useState<any>(null);
-  const [signatureName, setSignatureName] = useState('');
-  const [isSigning, setIsSigning] = useState(false);
+  // 🌟 View Agreement Modal
+  const [viewAgreementAsset, setViewAgreementAsset] = useState<any>(null);
 
-  // 🌟 Unified QR & Photo Sync State
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
   const [localPhotos, setLocalPhotos] = useState<File[]>([]);
   
-  // Return Modal State
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [selectedReturnAsset, setSelectedReturnAsset] = useState<any>(null);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnCondition, setReturnCondition] = useState('Pristine / Flawless');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
-  // Replace Modal State
   const [replaceModalOpen, setReplaceModalOpen] = useState(false);
   const [selectedReplaceAsset, setSelectedReplaceAsset] = useState<any>(null);
   const [replaceReason, setReplaceReason] = useState('');
@@ -125,14 +99,26 @@ export default function StaffAssetsPage() {
       
       if (error) throw error;
       
-      const { data: inspectionsRes } = await supabase
-        .from('inspections')
-        .select('asset_id, status, notes, photos, created_at, admin_remarks')
-        .order('created_at', { ascending: false });
+      let inspectionsRes: any[] = [];
+      if (assetsRes && assetsRes.length > 0) {
+        const assetIds = assetsRes.map(a => a.id);
+        const { data } = await supabase
+          .from('inspections')
+          .select('*')
+          .in('asset_id', assetIds)
+          .order('created_at', { ascending: false });
+        inspectionsRes = data || [];
+      }
 
-      // 🌟 UNIFIED ASSET STATUS ENGINE (Exactly matching Dashboard logic)
+      // 🌟 STRICT SEPARATED ASSET STATUS ENGINE
       const compiledAssets = (assetsRes || []).map(asset => {
-        const latestInsp = (inspectionsRes || []).find(i => i.asset_id === asset.id);
+        const assetInspections = inspectionsRes.filter(i => i.asset_id === asset.id);
+        const latestInsp = assetInspections[0];
+        
+        const latestReturnInsp = assetInspections.find(i => 
+            (i.status || '').toLowerCase().includes('return') || 
+            (i.notes || '').toLowerCase().includes('return')
+        );
         
         let nextDue = null;
         if (asset.next_inspection_date) {
@@ -142,77 +128,53 @@ export default function StaffAssetsPage() {
         } else {
            nextDue = calculateNextDueDate(asset.created_at, asset.category); 
         }
-        
         const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < new Date().setHours(0,0,0,0)) : false;
 
-        // Forcefully catch all variables of Admin interventions across multiple DB fields
-        const assetStatus = (asset.status || '').toLowerCase();
-        const fallbackInspStatus = (asset.inspection_status || '').toLowerCase();
-        const inspStatus = (latestInsp?.status || fallbackInspStatus).toLowerCase();
-        const assetNotes = (asset.notes || '').toLowerCase();
-        const inspNotes = (latestInsp?.notes || '').toLowerCase();
-        const adminRemarks = ((asset.admin_remarks || '') + ' ' + (latestInsp?.admin_remarks || '')).toLowerCase();
-
-        const isReturnInsp = inspNotes.includes('return') || assetNotes.includes('return') || fallbackInspStatus.includes('return') || assetStatus.includes('return');
+        const assetStatus = (asset.status || '').toLowerCase().trim();
+        const inspStatus = (asset.inspection_status || '').toLowerCase().trim();
+        const liveInspStatus = (latestInsp?.status || '').toLowerCase().trim();
+        const fullNotes = ((asset.notes || '') + ' ' + (latestInsp?.notes || '')).toLowerCase();
         
+        const allAdminRemarks = ((asset.admin_remarks || '') + ' ' + (latestReturnInsp?.admin_remarks || '') + ' ' + (latestInsp?.admin_remarks || '')).toLowerCase();
+
         let isReturnApproved = false;
         let isReturnRejected = false;
         let isReturnPending = false;
+        
+        let isReplacePending = false;
+        let isReplaceRejected = false;
+        
+        let isInspectionRejected = false;
 
-        // 1. Determine if Return is Approved
-        if (
-            assetStatus.includes('return approved') || 
-            assetStatus === 'in stock' || 
-            assetStatus === 'unassigned' ||
-            fallbackInspStatus.includes('return approved') ||
-            assetNotes.includes('[return approved]') || 
-            adminRemarks.includes('return approved') ||
-            adminRemarks.includes('return accepted') ||
-            inspStatus === 'return approved'
-        ) {
+        const hasRejectionKeywords = ['reject', 'declin', 'missing', 'upload', 'resend', 'again'].some(kw => allAdminRemarks.includes(kw));
+
+        if (assetStatus.includes('return approved') || assetStatus === 'in stock' || assetStatus === 'unassigned' || liveInspStatus.includes('return approved')) {
             isReturnApproved = true;
-        }
-
-        // 2. Determine if Return was Declined/Rejected
-        if (
-            assetStatus.includes('return reject') || 
-            assetStatus.includes('return decline') || 
-            fallbackInspStatus.includes('return reject') || 
-            fallbackInspStatus.includes('return decline') ||
-            fallbackInspStatus.includes('declined') ||
-            assetNotes.includes('[return declined]') || 
-            assetNotes.includes('[return rejected]') ||
-            adminRemarks.includes('return declin') ||
-            adminRemarks.includes('return reject') ||
-            inspStatus.includes('return reject') ||
-            inspStatus.includes('return decline') ||
-            inspStatus === 'rejected'
+        } else if (
+            assetStatus.includes('return reject') || assetStatus.includes('return decline') ||
+            liveInspStatus.includes('return reject') || liveInspStatus.includes('return decline') ||
+            (fullNotes.includes('return') && (liveInspStatus === 'rejected' || liveInspStatus === 'declined')) ||
+            fullNotes.includes('[return declined]') || fullNotes.includes('[return rejected]') ||
+            ((assetStatus.includes('return pending') || assetStatus.includes('pending return')) && hasRejectionKeywords)
         ) {
             isReturnRejected = true;
-        }
-
-        // 3. Determine if Return is Pending
-        if (
-            assetStatus.includes('return pending') || 
-            assetStatus.includes('pending return') || 
-            fallbackInspStatus.includes('return pending') ||
-            fallbackInspStatus.includes('pending return') ||
-            inspStatus.includes('return pending') ||
-            inspStatus.includes('pending return')
-        ) {
+        } else if (assetStatus.includes('return pending') || assetStatus.includes('pending return') || liveInspStatus.includes('return pending')) {
             isReturnPending = true;
         }
 
-        // 4. Incorporate the physical inspection logs if they hold the return truth
-        if (isReturnInsp) {
-            if (inspStatus.includes('approve')) isReturnApproved = true;
-            if (inspStatus.includes('reject') || inspStatus.includes('decline') || inspStatus.includes('not approved')) isReturnRejected = true;
-            if (inspStatus.includes('pending') && !isReturnApproved && !isReturnRejected) isReturnPending = true;
+        if (!isReturnPending && !isReturnRejected && !isReturnApproved) {
+            if (assetStatus.includes('replacement request') || assetStatus.includes('replace pending')) {
+                if (hasRejectionKeywords) isReplaceRejected = true;
+                else isReplacePending = true;
+            } else if (assetStatus.includes('replacement reject') || assetStatus.includes('replace decline')) {
+                isReplaceRejected = true;
+            }
         }
 
-        // 5. Resolving Conflicts: Final Admin action strictly overrides a stuck "Pending" state
-        if (isReturnApproved || isReturnRejected) {
-            isReturnPending = false;
+        if (!isReturnRejected && !isReturnPending && !isReturnApproved && !isReplacePending && !isReplaceRejected) {
+            if (inspStatus.includes('reject') || inspStatus.includes('fail') || inspStatus.includes('action required') || liveInspStatus.includes('reject') || liveInspStatus.includes('fail') || liveInspStatus.includes('re-inspection')) {
+                isInspectionRejected = true;
+            }
         }
 
         return {
@@ -221,16 +183,34 @@ export default function StaffAssetsPage() {
           live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
           live_inspection_notes: latestInsp?.notes || null,
           live_inspection_photos: latestInsp?.photos || null,
-          live_admin_remarks: asset.admin_remarks || latestInsp?.admin_remarks || null,
+          live_admin_remarks: asset.admin_remarks || latestReturnInsp?.admin_remarks || latestInsp?.admin_remarks || null,
           nextDue,
           isOverdue,
           isReturnPending,
           isReturnRejected,
-          isReturnApproved
+          isReturnApproved,
+          isReplacePending,
+          isReplaceRejected,
+          isInspectionRejected
         };
       });
 
-      setAssignedAssets(compiledAssets);
+      const displayAssets = [];
+      for (const asset of compiledAssets) {
+        if (asset.isReturnApproved) {
+          if (asset.status !== 'In Stock' || asset.assigned_to !== null) {
+              supabase.from('assets').update({ 
+                status: 'In Stock', 
+                assigned_to: null,
+                inspection_status: null 
+              }).eq('id', asset.id).then();
+          }
+        } else {
+          displayAssets.push(asset);
+        }
+      }
+
+      setAssignedAssets(displayAssets);
     } catch (err) {
       console.error("Error fetching assets:", err);
     } finally {
@@ -238,7 +218,6 @@ export default function StaffAssetsPage() {
     }
   };
 
-  // 🌟 Auto-Removal Realtime Sync
   useEffect(() => {
     if (!currentUser?.id) return;
     const realtimeChannel = supabase.channel('staff_assets_realtime')
@@ -248,7 +227,6 @@ export default function StaffAssetsPage() {
             setAssignedAssets(current => current.filter(a => a.id !== payload.old.id));
             triggerDesktopAlert('Asset Removed', `Admin has processed and detached an asset from your profile.`);
           } else {
-            // Soft refresh to fetch full inspection context
             fetchMyAssets();
           }
         } else if (payload.eventType === 'DELETE') {
@@ -258,7 +236,6 @@ export default function StaffAssetsPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, [currentUser]);
 
-  // 🌟 Realtime Photo Sync (Listens for mobile uploads)
   useEffect(() => {
     if (!qrSessionId) return;
     const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
@@ -270,7 +247,6 @@ export default function StaffAssetsPage() {
     return () => { supabase.removeChannel(photoChannel); };
   }, [qrSessionId]);
 
-  // 📸 Helper: Handle File Uploads (Multiple)
   const uploadMultiplePhotos = async (files: File[]) => {
     const uploadedUrls: string[] = [];
     for (const file of files) {
@@ -288,7 +264,6 @@ export default function StaffAssetsPage() {
   };
 
   const handleGenerateQR = (asset: any, isReturn: boolean) => {
-    // Validate form inputs before generating QR
     if (isReturn && !returnNotes.trim()) return alert("Please provide a return reason.");
     if (!isReturn && !replaceReason.trim()) return alert("Please provide a replacement reason.");
 
@@ -296,8 +271,7 @@ export default function StaffAssetsPage() {
     const sessionId = crypto.randomUUID();
     setQrSessionId(sessionId);
     
-    // Desktop fallback link / mobile link for verification
-    const uploadLink = `${window.location.origin}/mobile-verify?session=${sessionId}&req=${requiredPhotos}`;
+    const uploadLink = `${window.location.origin}/mobile-verify?session=${sessionId}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&emp=${encodeURIComponent(currentUser.emp_id)}`;
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
   };
 
@@ -336,9 +310,9 @@ export default function StaffAssetsPage() {
         photos: allPhotos.length > 0 ? allPhotos : null
       });
 
-      await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr }).eq('id', selectedReturnAsset.id);
+      await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr, admin_remarks: null }).eq('id', selectedReturnAsset.id);
 
-      fetchMyAssets(); // Refresh from DB
+      fetchMyAssets(); 
       resetModals();
       triggerDesktopAlert('Return Sent', `Return request for ${selectedReturnAsset.asset_tag} sent to Admin.`);
     } catch (err: any) { alert(err.message); } finally { setIsSubmittingReturn(false); }
@@ -366,33 +340,16 @@ export default function StaffAssetsPage() {
         status: 'Pending Approval'
       });
 
-      await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', selectedReplaceAsset.id);
+      await supabase.from('assets').update({ status: 'Replacement Requested', admin_remarks: null }).eq('id', selectedReplaceAsset.id);
 
-      fetchMyAssets(); // Refresh from DB
+      fetchMyAssets(); 
       resetModals();
       triggerDesktopAlert('Replacement Sent', `Replacement request for ${selectedReplaceAsset.asset_tag} sent to Admin.`);
     } catch (err: any) { alert(err.message); } finally { setIsSubmittingReplace(false); }
   };
 
-  const handleSignAgreement = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signatureName.trim()) return alert("Please type your name to sign.");
-    setIsSigning(true);
-    try {
-      const now = new Date().toISOString();
-      const { error: assetError } = await supabase.from('assets').update({ inspection_status: 'Approved', last_inspection_date: now, status: 'Assigned' }).eq('id', signModalAsset.id);
-      if (assetError) throw assetError;
-      const signatureNote = `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`;
-      await supabase.from('inspections').insert({ asset_id: signModalAsset.id, inspected_by: currentUser.id || currentUser.emp_id, user_email: currentUser.email, condition: 'Pristine / Flawless', status: 'Approved', notes: signatureNote });
-      
-      fetchMyAssets(); // Refresh from DB
-      setSignModalAsset(null); setSignatureName('');
-    } catch (err: any) { alert(err.message); } finally { setIsSigning(false); }
-  };
-
   if (loading) return <div className="min-h-[70vh] flex flex-col items-center justify-center"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /></div>;
 
-  // Active Asset Context for Modals
   const activeAsset = selectedReturnAsset || selectedReplaceAsset;
   const isLaptopObj = (activeAsset?.category || '').toLowerCase().includes('laptop');
   const REQUIRED_PHOTOS = isLaptopObj ? 5 : 2;
@@ -413,7 +370,7 @@ export default function StaffAssetsPage() {
 
         {assignedAssets.length === 0 ? (
           <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/20">
-            <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
+            <h3 className="text-lg font-bold text-slate-700">No active assets linked to your account.</h3>
           </div>
         ) : (
           <div className="space-y-6">
@@ -426,11 +383,7 @@ export default function StaffAssetsPage() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
                     
-                    {asset.isReturnApproved ? (
-                      <span className="px-4 py-2 bg-emerald-100 text-emerald-700 text-xs font-black uppercase tracking-widest rounded-lg border border-emerald-200 shadow-sm">
-                        Return Approved - Awaiting Unassignment
-                      </span>
-                    ) : asset.isReturnRejected ? (
+                    {asset.isReturnRejected ? (
                       <span className="px-4 py-2 bg-rose-100 text-rose-700 text-xs font-black uppercase tracking-widest rounded-lg border border-rose-200 shadow-sm animate-pulse">
                         Return Request Declined
                       </span>
@@ -438,7 +391,11 @@ export default function StaffAssetsPage() {
                       <span className="px-4 py-2 bg-orange-100 text-orange-700 text-xs font-black uppercase tracking-widest rounded-lg border border-orange-200 shadow-sm">
                         Return Request Sent to Admin - Pending Approval
                       </span>
-                    ) : isReplacePending ? (
+                    ) : asset.isReplaceRejected ? (
+                      <span className="px-4 py-2 bg-rose-100 text-rose-700 text-xs font-black uppercase tracking-widest rounded-lg border border-rose-200 shadow-sm animate-pulse">
+                        Replacement Request Declined
+                      </span>
+                    ) : asset.isReplacePending ? (
                       <span className="px-4 py-2 bg-purple-100 text-purple-700 text-xs font-black uppercase tracking-widest rounded-lg border border-purple-200 shadow-sm">
                         Replacement Request Sent - Pending Approval
                       </span>
@@ -451,19 +408,25 @@ export default function StaffAssetsPage() {
 
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-4">
                     <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span><span className="font-bold text-sm text-slate-900">{asset.asset_tag || 'N/A'}</span></div>
+                    
                     <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span><span className="font-bold text-sm text-slate-900">{asset.serial_number || 'N/A'}</span></div>
-                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span><span className="font-bold text-sm text-slate-900">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'N/A'}</span></div>
-                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span><span className="font-bold text-sm text-slate-900">{asset.status || 'Assigned'}</span></div>
+                    
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Audit Due</span><span className={`font-bold text-sm ${asset.isOverdue ? 'text-rose-600 animate-pulse' : 'text-slate-900'}`}>{asset.nextDue ? formatDate(asset.nextDue) : 'N/A'}</span></div>
+                    
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Signed On</span><span className="font-bold text-sm text-slate-900">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending'}</span></div>
+
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span><span className="font-bold text-sm text-slate-900">
+                      {asset.isReturnRejected ? 'Declined' : asset.isReturnPending ? 'Pending Return' : asset.status || 'Assigned'}
+                    </span></div>
+
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Agreement</span>
+                      <button onClick={() => setViewAgreementAsset(asset)} className="text-xs font-black uppercase tracking-widest text-purple-600 hover:text-purple-700 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"><FileSignature size={14}/> View</button>
+                    </div>
                   </div>
 
-                  {/* 🌟 REJECTION / APPROVAL REASON NOTIFICATION */}
-                  { (asset.isReturnRejected || asset.isReturnApproved) && (
-                    <div className={`p-4 mt-6 mb-2 rounded-2xl border text-xs font-bold flex gap-3 ${
-                      asset.isReturnApproved
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                        : 'bg-rose-50 border-rose-200 text-rose-700'
-                    }`}>
-                      {asset.isReturnApproved ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                  { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
+                    <div className={`p-4 mt-6 mb-2 rounded-2xl border text-xs font-bold flex gap-3 bg-rose-50 border-rose-200 text-rose-700`}>
+                      <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                       <div>
                         <span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
                         {extractAdminReason(asset.live_admin_remarks, asset.notes)}
@@ -472,44 +435,69 @@ export default function StaffAssetsPage() {
                   )}
 
                   <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-white/40 mt-4">
-                    {asset.isReturnApproved ? (
-                      <button disabled className="px-6 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed border border-emerald-200 shadow-sm">
-                        Return Approved
-                      </button>
-                    ) : asset.isReturnPending || isReplacePending ? (
+                    
+                    {asset.isReturnPending ? (
                       <button disabled className="px-6 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed">
                         Waiting on Admin
                       </button>
+                    ) : asset.isReturnRejected ? (
+                      <button 
+                        onClick={async () => { 
+                          await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
+                          fetchMyAssets();
+                          resetModals(); 
+                          setSelectedReturnAsset(asset); 
+                          setReturnModalOpen(true); 
+                        }} 
+                        className={`px-6 py-2.5 rounded-2xl border text-xs font-bold bg-white/40 cursor-pointer transition-all hover:shadow-md border-rose-200 text-rose-600 hover:bg-rose-50 hover:shadow-rose-100`}
+                      >
+                        Return Asset (Retry)
+                      </button>
                     ) : (
-                      <>
-                        <button 
-                          onClick={async () => { 
-                            if (asset.isReturnRejected) {
-                              // Reset the status allowing retry
-                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
-                              fetchMyAssets();
-                            }
-                            resetModals(); 
-                            setSelectedReturnAsset(asset); 
-                            setReturnModalOpen(true); 
-                          }} 
-                          className={`px-6 py-2.5 rounded-2xl border text-xs font-bold bg-white/40 cursor-pointer transition-all hover:shadow-md ${
-                            asset.isReturnRejected 
-                            ? 'border-rose-200 text-rose-600 hover:bg-rose-50 hover:shadow-rose-100' 
+                      <button 
+                        disabled={asset.isReplacePending || asset.isReplaceRejected}
+                        onClick={() => { resetModals(); setSelectedReturnAsset(asset); setReturnModalOpen(true); }} 
+                        className={`px-6 py-2.5 rounded-2xl border text-xs font-bold bg-white/40 cursor-pointer transition-all hover:shadow-md ${
+                          (asset.isReplacePending || asset.isReplaceRejected)
+                            ? 'border-slate-200 text-slate-400 cursor-not-allowed'
                             : 'border-orange-200 text-orange-600 hover:bg-orange-50 hover:shadow-orange-100'
-                          }`}
-                        >
-                          {asset.isReturnRejected ? 'Return Asset (Retry)' : 'Return Asset'}
-                        </button>
-                        
-                        <button 
-                          onClick={() => { resetModals(); setSelectedReplaceAsset(asset); setReplaceModalOpen(true); }} 
-                          className="px-6 py-2.5 rounded-2xl border border-purple-200 text-purple-600 hover:bg-purple-50 hover:shadow-purple-100 hover:shadow-md text-xs font-bold bg-white/40 cursor-pointer transition-all"
-                        >
-                          Replace Asset
-                        </button>
-                      </>
+                        }`}
+                      >
+                        Return Asset
+                      </button>
                     )}
+                    
+                    {asset.isReplacePending ? (
+                      <button disabled className="px-6 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed">
+                        Waiting on Admin
+                      </button>
+                    ) : asset.isReplaceRejected ? (
+                      <button 
+                        onClick={async () => {
+                          await supabase.from('assets').update({ status: 'Assigned', admin_remarks: null }).eq('id', asset.id);
+                          fetchMyAssets();
+                          resetModals(); 
+                          setSelectedReplaceAsset(asset); 
+                          setReplaceModalOpen(true); 
+                        }} 
+                        className="px-6 py-2.5 rounded-2xl border border-purple-200 text-purple-600 hover:bg-purple-50 hover:shadow-purple-100 hover:shadow-md text-xs font-bold bg-white/40 cursor-pointer transition-all"
+                      >
+                        Replace Asset (Retry)
+                      </button>
+                    ) : (
+                      <button 
+                        disabled={asset.isReturnPending || asset.isReturnRejected}
+                        onClick={() => { resetModals(); setSelectedReplaceAsset(asset); setReplaceModalOpen(true); }} 
+                        className={`px-6 py-2.5 rounded-2xl border text-xs font-bold bg-white/40 cursor-pointer transition-all hover:shadow-md ${
+                          (asset.isReturnPending || asset.isReturnRejected)
+                            ? 'border-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'border-purple-200 text-purple-600 hover:bg-purple-50 hover:shadow-purple-100'
+                        }`}
+                      >
+                        Replace Asset
+                      </button>
+                    )}
+
                   </div>
                 </div>
               );
@@ -518,13 +506,71 @@ export default function StaffAssetsPage() {
         )}
       </div>
 
-      {/* 🌟 UNIFIED MODAL UI (Return & Replace) EXACT MATCH TO SCREENSHOT */}
+      {/* 🌟 VIEW AGREEMENT MODAL */}
+      {mounted && viewAgreementAsset && createPortal(
+        <div className="fixed inset-0 z-99999 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-100/50 p-6 flex justify-between items-center border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center">
+                  <FileSignature size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Handover Agreement</h3>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">IT Asset Liability Document</p>
+                </div>
+              </div>
+              <button onClick={() => setViewAgreementAsset(null)} className="p-2 hover:bg-slate-200 rounded-full cursor-pointer"><X size={18}/></button>
+            </div>
+            
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-slate-500 uppercase tracking-widest">Asset</span>
+                  <span className="font-black text-slate-900">{viewAgreementAsset.name || viewAgreementAsset.category}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-slate-500 uppercase tracking-widest">Tag ID</span>
+                  <span className="font-black text-slate-900">{viewAgreementAsset.asset_tag}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-slate-500 uppercase tracking-widest">S/N</span>
+                  <span className="font-black text-slate-900">{viewAgreementAsset.serial_number || 'N/A'}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-600 leading-relaxed text-justify">
+                  By accepting this device, the assignee acknowledges receipt of the hardware in good working condition. The assignee agrees to adhere to the company's Acceptable Use Policy and accepts full responsibility for the care, maintenance, and safe return of the equipment upon request or termination of employment.
+                </p>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  <span className="text-xs font-black uppercase tracking-widest text-emerald-800">Digitally Signed</span>
+                </div>
+                <p className="text-[11px] font-bold text-emerald-700/80 uppercase tracking-widest">Signed By: <span className="text-emerald-900">{currentUser?.name} ({currentUser?.emp_code})</span></p>
+                <p className="text-[11px] font-bold text-emerald-700/80 uppercase tracking-widest mt-1">Signed On: <span className="text-emerald-900">{viewAgreementAsset.live_inspection_date ? new Date(viewAgreementAsset.live_inspection_date).toLocaleString('en-IN') : 'Pending Signature'}</span></p>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-slate-50 border-t border-slate-200">
+              <button onClick={() => setViewAgreementAsset(null)} className="w-full py-3.5 bg-slate-900 text-white font-black uppercase tracking-widest text-[11px] rounded-2xl cursor-pointer hover:bg-slate-800 transition-colors">
+                Close Document
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body // 🌟 FIX APPLIED HERE
+      )}
+
+      {/* 🌟 RETURN / REPLACE MODALS */}
       {mounted && (returnModalOpen || replaceModalOpen) && activeAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-9999 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-99998 flex items-center justify-center p-4">
           
           <div className="bg-[#e9e9ec] rounded-4xl w-full max-w-105 shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300">
             
-            {/* Header */}
             <div className="p-6 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
@@ -542,7 +588,6 @@ export default function StaffAssetsPage() {
               <button onClick={resetModals} className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
             </div>
 
-            {/* STEP 1: FORM VIEW (Matches Screenshot) */}
             {!qrUrl ? (
               <div className="px-6 pb-6 space-y-5">
                 <div>
@@ -607,7 +652,6 @@ export default function StaffAssetsPage() {
               </div>
             ) : (
               
-              /* STEP 2: QR CODE UPLOAD VIEW */
               <form onSubmit={returnModalOpen ? handleReturnSubmit : handleReplaceSubmit} className="px-6 pb-6 space-y-6 flex flex-col animate-in slide-in-from-right-4">
                 
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
