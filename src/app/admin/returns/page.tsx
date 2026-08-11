@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, LogOut, CheckCircle2, XCircle, Clock, 
   Laptop, User, Search, RefreshCw, X, ShieldAlert,
-  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon, Loader2
+  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon, Loader2, Archive
 } from 'lucide-react';
 
 // Helper to format fallback names
@@ -193,7 +193,7 @@ function AdminReturnsContent() {
 
         if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
             resolvedEmpCode = item.user_id ? String(item.user_id).substring(0,6).toUpperCase() : 
-                             (item.inspected_by ? String(item.inspected_by).substring(0,6).toUpperCase() : 'UNKNOWN');
+                              (item.inspected_by ? String(item.inspected_by).substring(0,6).toUpperCase() : 'UNKNOWN');
         }
 
         return { 
@@ -204,14 +204,33 @@ function AdminReturnsContent() {
         };
       });
 
-      mergedData.sort((a, b) => {
-        const aPending = (a.status || '').toLowerCase().includes('pending') ? -1 : 1;
-        const bPending = (b.status || '').toLowerCase().includes('pending') ? -1 : 1;
-        if (aPending !== bPending) return aPending - bPending;
+      // 🌟 HISTORICAL ARCHIVING ENGINE (Groups by asset, marks older dupes as historical logs)
+      const assetGroups: Record<string, any[]> = {};
+      mergedData.forEach((item: any) => {
+        const aId = item.asset_id || item.assets?.id || `unknown-${Math.random()}`;
+        if (!assetGroups[aId]) assetGroups[aId] = [];
+        assetGroups[aId].push(item);
+      });
+
+      const finalReturns: any[] = [];
+      Object.values(assetGroups).forEach(group => {
+        // Sort group by created_at DESC to find the absolute latest request
+        group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        group.forEach((item, index) => {
+          item.isLatest = index === 0; // Only the absolute newest entry is active
+          finalReturns.push(item);
+        });
+      });
+
+      // Sort full list: Active/Pending first, then by date descending
+      finalReturns.sort((a, b) => {
+        const aActive = (a.isLatest && (a.status || '').toLowerCase().includes('pending')) ? -1 : 1;
+        const bActive = (b.isLatest && (b.status || '').toLowerCase().includes('pending')) ? -1 : 1;
+        if (aActive !== bActive) return aActive - bActive;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
-      setReturnRequests(mergedData);
+      setReturnRequests(finalReturns);
     } catch (err: any) {
       alert("Failed to fetch return requests: " + err.message);
     } finally {
@@ -219,7 +238,7 @@ function AdminReturnsContent() {
     }
   };
 
-  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER (With Schema Auto-Correction)
+  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER
   const executeReturnAction = async (e: React.FormEvent) => {
     e.preventDefault();
     const { recordId, assetId, action, staffId, item } = actionModal;
@@ -234,7 +253,6 @@ function AdminReturnsContent() {
       const statusStr = action === 'Approved' ? 'Return Approved' : 'Return Rejected';
       const finalRemarks = adminRemarks || (action === 'Approved' ? 'Verified and Approved.' : 'Declined.');
 
-      // Safely embedded text string for permanent DB storage regardless of schema limitations
       const historicalBakedNotes = `${item.notes || ''}\n[Historical User: ${item.resolvedName} | ID: ${item.resolvedEmpCode}]`;
 
       // 1. Prepare Base Payload for Inspections
@@ -250,7 +268,7 @@ function AdminReturnsContent() {
          payloadToUse = { ...payloadToUse, asset_id: assetId, user_id: staffId, condition: 'Unknown (Legacy)', notes: historicalBakedNotes };
       }
 
-      // 2. Auto-Healing Schema Engine (Attempts to insert/update, strips missing columns on failure)
+      // 2. Auto-Healing Schema Engine
       let dbSuccess = false;
       for (let i = 0; i < 5; i++) {
          const { error: dbErr } = item.isSynthetic 
@@ -258,16 +276,15 @@ function AdminReturnsContent() {
             : await supabase.from('inspections').update(payloadToUse).eq('id', recordId);
          
          if (dbErr) {
-            // Find which column is causing the error and remove it from the payload
             const match = dbErr.message.match(/Could not find the '([^']+)' column/i);
             if (match && match[1]) {
                 delete payloadToUse[match[1]];
-                continue; // Retry without the missing column
+                continue; 
             }
             throw new Error(`Log Update Failed: ${dbErr.message}`);
          }
          dbSuccess = true;
-         break; // Break loop on success
+         break;
       }
       
       if (!dbSuccess) throw new Error("Failed to process inspection log due to database schema conflict.");
@@ -277,7 +294,7 @@ function AdminReturnsContent() {
       if (action === 'Approved') {
         const combinedNotes = `[RETURNED] Staff: ${item.resolvedName} (${item.resolvedEmpCode}) | Reason: ${cleanStaffNotes} | Admin Validation: ${finalRemarks} (${adminName})`;
         assetPayload = { 
-          status: 'In Stock (Unassigned)', 
+          status: 'In Stock', 
           assigned_to: null, 
           inspection_status: 'Approved',
           notes: combinedNotes 
@@ -293,7 +310,7 @@ function AdminReturnsContent() {
       const { error: assetErr } = await supabase.from('assets').update(assetPayload).eq('id', assetId);
       if (assetErr) throw new Error(`Asset Update Failed: ${assetErr.message}`);
 
-      // 4. Process Notifications Safely
+      // 4. Process Notifications
       if (staffId && String(staffId).toUpperCase().includes('ADMIN') === false) {
         await supabase.from('notifications').insert([{
           target_user: staffId,
@@ -329,7 +346,7 @@ function AdminReturnsContent() {
     return assetName.includes(query) || assetTag.includes(query) || userName.includes(query) || empCode.includes(query);
   });
 
-  const pendingCount = returnRequests.filter(r => (r.status || '').toLowerCase().includes('pending')).length;
+  const pendingCount = returnRequests.filter(r => r.isLatest && (r.status || '').toLowerCase().includes('pending')).length;
 
   const theme = {
     bg: 'bg-transparent',
@@ -418,20 +435,28 @@ function AdminReturnsContent() {
           <div className="space-y-6">
             {filteredList.map((item, index) => {
               const uniqueKey = item.id ? `return-${item.id}-${index}` : `return-fallback-${index}`;
-              const isPending = (item.status || '').toLowerCase().includes('pending');
+              const isHistorical = !item.isLatest; // True if this is an older duplicate entry
+              const isPending = !isHistorical && (item.status || '').toLowerCase().includes('pending');
               const asset = item.assets || {};
-
               const photosList = Array.isArray(item.photos) ? item.photos : item.photo_url ? [item.photo_url] : [];
 
               return (
                 <div key={uniqueKey} className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} transition-all hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${isPending ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' : ''}`}>
                   
                   <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
+                    
+                    {/* 🌟 HISTORICAL BADGE */}
+                    {isHistorical && (
+                      <span className={`inline-flex w-max items-center gap-1.5 px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' : 'bg-slate-200 text-slate-600 border border-slate-300'}`}>
+                        <Archive size={12} /> Historical Log
+                      </span>
+                    )}
+
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${theme.glassInner} ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}><User size={20} /></div>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${theme.glassInner} ${isHistorical ? 'text-slate-400' : isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}><User size={20} /></div>
                       <div className="overflow-hidden">
                         
-                        <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`}>{item.resolvedName}</h3>
+                        <h3 className={`text-lg font-bold leading-tight truncate ${isHistorical ? theme.textSub : theme.textMain}`}>{item.resolvedName}</h3>
                         <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] border mt-1 inline-block ${isDarkMode ? 'bg-black/50 text-zinc-300 border-white/20' : 'bg-white/60 text-slate-700 border-white/80'}`}>
                           ID: {item.resolvedEmpCode}
                         </span>
@@ -445,26 +470,26 @@ function AdminReturnsContent() {
                           <AlertTriangle size={12} /> Legacy Submission (Missing Photos)
                         </div>
                       )}
-                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
-                        <Laptop size={14} className="text-orange-500 shrink-0" />
+                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isHistorical ? theme.textSub : theme.textMain}`}>
+                        <Laptop size={14} className={`${isHistorical ? 'text-slate-400' : 'text-orange-500'} shrink-0`} />
                         <span className="truncate text-left font-bold">{asset.name || asset.asset_name || 'Hardware Asset'}</span>
                       </div>
                       <div className={`flex justify-between items-center text-[11px] border-t pt-2.5 mt-2.5 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
                         <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>S/N:</span>
-                        <span className={`font-mono font-bold ${theme.textMain}`}>{asset.serial_number || 'N/A'}</span>
+                        <span className={`font-mono font-bold ${isHistorical ? theme.textSub : theme.textMain}`}>{asset.serial_number || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between items-center text-[11px]">
                         <span className={`font-bold uppercase tracking-widest ${theme.textSub}`}>TAG:</span>
-                        <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{asset.asset_tag || 'N/A'}</span>
+                        <span className={`font-mono font-bold ${isHistorical ? 'text-slate-400' : 'text-purple-600 dark:text-purple-400'}`}>{asset.asset_tag || 'N/A'}</span>
                       </div>
                     </div>
                     
                     <div className="flex items-center justify-between text-[12px]">
                       <div className={`flex items-center gap-2 ${theme.textSub}`}>
-                        <Clock size={14} className={isDarkMode ? "text-purple-400" : "text-purple-600"} /> 
+                        <Clock size={14} className={isHistorical ? "text-slate-400" : isDarkMode ? "text-purple-400" : "text-purple-600"} /> 
                         <span className="text-[10px] font-bold uppercase tracking-widest">Submitted Date</span>
                       </div>
-                      <span className={`font-bold ${theme.textMain}`}>{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
+                      <span className={`font-bold ${isHistorical ? theme.textSub : theme.textMain}`}>{new Date(item.created_at).toLocaleDateString('en-IN')}</span>
                     </div>
                   </div>
 
@@ -477,21 +502,21 @@ function AdminReturnsContent() {
                           : item.status.includes('Approved') 
                             ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600'
                             : isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-600'
-                      }`}>
+                      } ${isHistorical ? 'opacity-50' : ''}`}>
                         {item.status}
                       </span>
                     </div>
 
                     <div className="space-y-2">
                       <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Employee Reason for Return</span>
-                      <div className={`p-4 rounded-2xl text-xs font-semibold italic leading-relaxed ${theme.glassInner}`}>
+                      <div className={`p-4 rounded-2xl text-xs font-semibold italic leading-relaxed ${theme.glassInner} ${isHistorical ? 'opacity-60' : ''}`}>
                         "{item.notes ? item.notes.replace('[RETURN REQUEST]', '').trim() : 'No reason provided.'}"
                       </div>
                     </div>
 
                     {/* 📸 PHOTOS SECTION */}
                     {photosList.length > 0 && (
-                      <div className="space-y-2">
+                      <div className={`space-y-2 ${isHistorical ? 'opacity-60' : ''}`}>
                         <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}>
                           <ImageIcon size={12} /> Uploaded Photos
                         </span>
@@ -510,7 +535,7 @@ function AdminReturnsContent() {
 
                     {/* 👤 ADMIN APPROVAL TRACKING SECTION */}
                     {!isPending && (
-                      <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
+                      <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner} ${isHistorical ? 'opacity-70' : ''}`}>
                         <div className="flex justify-between items-center mb-1.5 border-b border-white/10 pb-2">
                           <span className={`font-bold uppercase text-[9px] tracking-wider ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Admin Remarks</span>
                           
