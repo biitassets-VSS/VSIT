@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, LogOut, CheckCircle2, XCircle, Clock, 
   Laptop, User, Search, RefreshCw, X, ShieldAlert,
-  AlertTriangle, FilterX, ExternalLink, Send
+  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon
 } from 'lucide-react';
 
 function AdminReturnsContent() {
@@ -16,8 +16,9 @@ function AdminReturnsContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [currentAdmin, setCurrentAdmin] = useState<any>(null);
 
-  // 🌟 THEME SYNC
+  // 🌟 INITIALIZATION & THEME SYNC
   useEffect(() => {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -28,6 +29,16 @@ function AdminReturnsContent() {
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     
+    // Fetch Current Logged-in Admin Profile
+    const fetchAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        setCurrentAdmin(profile || { name: user.email });
+      }
+    };
+    
+    fetchAdmin();
     fetchReturns();
     return () => observer.disconnect();
   }, []);
@@ -35,15 +46,43 @@ function AdminReturnsContent() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      // 🌟 STRICT FILTER: Only fetch records that are explicitly Returns!
+      // 1. Fetch Return records
       const { data: returnsData, error } = await supabase
         .from('inspections')
         .select('*, assets(*)')
-        .or('notes.ilike.%[RETURN REQUEST]%,status.ilike.%Return%')
+        .or('notes.ilike.%return%,status.ilike.%return%')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReturnRequests(returnsData || []);
+
+      if (!returnsData || returnsData.length === 0) {
+        setReturnRequests([]);
+        return;
+      }
+
+      // 2. Extract user_ids from the return requests to get the Original Staff Member
+      const userIds = [...new Set(returnsData.map(r => r.user_id).filter(Boolean))];
+
+      // 3. Fetch staff profiles (Change 'profiles' to your employee table name if different)
+      const { data: profilesData, error: profileError } = await supabase
+        .from('profiles') 
+        .select('*')
+        .in('id', userIds);
+
+      const profilesMap: Record<string, any> = {};
+      if (profilesData && !profileError) {
+        profilesData.forEach(profile => {
+          profilesMap[profile.id] = profile; 
+        });
+      }
+
+      // 4. Merge data: This ensures the history always shows who requested the return!
+      const mergedData = returnsData.map(item => ({
+        ...item,
+        profiles: item.user_id ? (profilesMap[item.user_id] || null) : null
+      }));
+
+      setReturnRequests(mergedData);
     } catch (err: any) {
       alert("Failed to fetch return requests: " + err.message);
     } finally {
@@ -54,18 +93,20 @@ function AdminReturnsContent() {
   const processReturn = async (recordId: string, assetId: string, action: 'Approved' | 'Rejected', staffId: string) => {
     let remarks = prompt(`Provide remarks for marking this return as ${action}:`);
     if (remarks === null) return; // User cancelled
-
     if (!confirm(`Are you sure you want to ${action} this return request?`)) return;
 
     setUpdatingId(recordId);
     try {
-      // 1. Update the inspection log
+      const adminName = currentAdmin?.name || currentAdmin?.full_name || currentAdmin?.email || 'Admin';
+
+      // 1. Update the inspection log (Add admin_name to your database table if it isn't there!)
       await supabase.from('inspections').update({ 
         status: action === 'Approved' ? 'Return Approved' : 'Return Rejected', 
-        admin_remarks: remarks 
+        admin_remarks: remarks,
+        admin_name: adminName // Tracks WHICH admin approved it
       }).eq('id', recordId);
 
-      // 2. Update the actual asset inventory
+      // 2. Update the actual asset inventory (Detaches from Staff)
       if (action === 'Approved') {
         await supabase.from('assets').update({ 
           status: 'In Stock (Unassigned)', 
@@ -84,7 +125,7 @@ function AdminReturnsContent() {
         await supabase.from('notifications').insert([{
           target_user: staffId,
           title: action === 'Approved' ? '✔ Return Approved' : `⚠ Return Rejected`,
-          message: action === 'Approved' ? `Your hardware return was approved. The device has been securely detached from your profile.` : `Return denied: ${remarks}`,
+          message: action === 'Approved' ? `Your hardware return was approved by ${adminName}. The device has been securely detached from your profile.` : `Return denied by ${adminName}: ${remarks}`,
           is_read: false,
           type: action === 'Approved' ? 'success' : 'error'
         }]);
@@ -103,8 +144,12 @@ function AdminReturnsContent() {
     const query = searchQuery.toLowerCase();
     const assetName = (item.assets?.name || item.assets?.asset_name || '').toLowerCase();
     const assetTag = (item.assets?.asset_tag || '').toLowerCase();
-    const userName = (item.user_name || item.user_email || '').toLowerCase();
-    return assetName.includes(query) || assetTag.includes(query) || userName.includes(query);
+    
+    const profile = item.profiles || {};
+    const userName = (profile.name || profile.full_name || item.user_name || item.user_email || '').toLowerCase();
+    const empCode = (profile.emp_code || profile.employee_code || '').toLowerCase();
+
+    return assetName.includes(query) || assetTag.includes(query) || userName.includes(query) || empCode.includes(query);
   });
 
   const pendingCount = returnRequests.filter(r => (r.status || '').toLowerCase().includes('pending')).length;
@@ -130,7 +175,6 @@ function AdminReturnsContent() {
 
   return (
     <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden font-sans antialiased pb-12 transition-colors duration-1000`}>
-      {/* 🌟 GLOBAL BACKGROUND ORBS */}
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
@@ -200,6 +244,14 @@ function AdminReturnsContent() {
               const isPending = (item.status || '').toLowerCase().includes('pending');
               const asset = item.assets || {};
 
+              // Extract real name and employee code for rendering (Persistent Historical Record)
+              const profile = item.profiles || {};
+              const displayName = profile.name || profile.full_name || item.user_name || item.user_email || 'Staff Member';
+              const empCode = profile.emp_code || profile.employee_code || (item.user_id ? String(item.user_id).substring(0,6).toUpperCase() : 'UNKNOWN');
+
+              // Handle Photos (if stored as array 'photos' or single string 'photo_url')
+              const photosList = Array.isArray(item.photos) ? item.photos : item.photo_url ? [item.photo_url] : [];
+
               return (
                 <div key={item.id} className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} transition-all hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${isPending ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' : ''}`}>
                   
@@ -207,10 +259,12 @@ function AdminReturnsContent() {
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${theme.glassInner} ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}><User size={20} /></div>
                       <div className="overflow-hidden">
-                        <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`}>{item.user_name || item.user_email || 'Staff Member'}</h3>
+                        
+                        <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`}>{displayName}</h3>
                         <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] border mt-1 inline-block ${isDarkMode ? 'bg-black/50 text-zinc-300 border-white/20' : 'bg-white/60 text-slate-700 border-white/80'}`}>
-                          ID: {item.user_id ? String(item.user_id).substring(0,6).toUpperCase() : 'UNKNOWN'}
+                          ID: {empCode}
                         </span>
+
                       </div>
                     </div>
 
@@ -259,10 +313,38 @@ function AdminReturnsContent() {
                       </div>
                     </div>
 
+                    {/* 📸 PHOTOS SECTION */}
+                    {photosList.length > 0 && (
+                      <div className="space-y-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}>
+                          <ImageIcon size={12} /> Uploaded Photos
+                        </span>
+                        <div className={`p-4 rounded-2xl flex flex-wrap gap-3 ${theme.glassInner}`}>
+                          {photosList.map((url: string, idx: number) => (
+                            <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block relative group">
+                              <img src={url} alt="Return Attachment" className="w-20 h-20 object-cover rounded-xl border-2 border-transparent transition-all group-hover:border-orange-500 group-hover:scale-105" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                                <ExternalLink size={16} className="text-white" />
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 👤 ADMIN APPROVAL TRACKING SECTION */}
                     {item.admin_remarks && (
                       <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
-                        <span className={`font-bold uppercase text-[9px] tracking-wider block mb-1.5 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Admin Remarks:</span>
-                        <p className={theme.textMain}>"{item.admin_remarks}"</p>
+                        <div className="flex justify-between items-center mb-1.5 border-b border-white/10 pb-2">
+                          <span className={`font-bold uppercase text-[9px] tracking-wider ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Admin Remarks</span>
+                          {/* Shows which admin approved it */}
+                          {item.admin_name && (
+                            <span className={`font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 rounded-md ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
+                              Processed By: {item.admin_name}
+                            </span>
+                          )}
+                        </div>
+                        <p className={`mt-2 ${theme.textMain}`}>"{item.admin_remarks}"</p>
                       </div>
                     )}
 

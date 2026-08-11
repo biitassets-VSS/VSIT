@@ -6,10 +6,9 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, Keyboard, Mouse, Headphones, Monitor, Smartphone, Cpu, HardDrive, Package, 
   Loader2, ShieldCheck, AlertTriangle, FileSignature, CheckCircle2, 
-  PenTool, X, AlertCircle, Check, Eye, Camera, Send
+  PenTool, X, AlertCircle, Eye, Camera, Send, LogOut, Image as ImageIcon, RefreshCcw, QrCode, ChevronLeft
 } from 'lucide-react';
 
-// 🌟 BULLETPROOF DYNAMIC DUE DATE ENGINE
 function getNextDueDate(category: string, lastDateString: string | null, createdAtString: string | null) {
   const isLaptop = (category || '').toLowerCase().includes('laptop');
   const intervalMonths = isLaptop ? 1 : 3;
@@ -26,11 +25,7 @@ function getNextDueDate(category: string, lastDateString: string | null, created
   };
 
   const baseDate = lastDateString ? new Date(lastDateString) : (createdAtString ? new Date(createdAtString) : new Date());
-
-  if (!lastDateString) {
-    return getLastSaturday(baseDate);
-  }
-
+  if (!lastDateString) return getLastSaturday(baseDate);
   const targetMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + intervalMonths, 1);
   return getLastSaturday(targetMonthDate);
 }
@@ -39,31 +34,10 @@ const formatDate = (date: Date) => {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
 };
 
-// 🌟 DYNAMIC ASSET ICON HELPER
-const getAssetIcon = (category: string) => {
-  const cat = (category || '').toLowerCase();
-  if (cat.includes('laptop') || cat.includes('macbook')) return Laptop;
-  if (cat.includes('keyboard')) return Keyboard;
-  if (cat.includes('mouse')) return Mouse;
-  if (cat.includes('headphone') || cat.includes('headset') || cat.includes('earphone')) return Headphones;
-  if (cat.includes('monitor') || cat.includes('display') || cat.includes('screen')) return Monitor;
-  if (cat.includes('phone') || cat.includes('mobile')) return Smartphone;
-  if (cat.includes('desktop') || cat.includes('cpu')) return Cpu;
-  if (cat.includes('drive') || cat.includes('storage')) return HardDrive;
-  return Package; 
-};
-
-// 🌟 DESKTOP NOTIFICATION TRIGGER
 const triggerDesktopAlert = (title: string, body: string) => {
   try { const audio = new Audio('/alert.mp3'); audio.play().catch(() => {}); } catch (err) {}
-  if ('Notification' in window) {
-    if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/logo.png' });
-    } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission().then(perm => {
-        if (perm === 'granted') new Notification(title, { body, icon: '/logo.png' });
-      });
-    }
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/logo.png' });
   }
 };
 
@@ -78,16 +52,24 @@ export default function StaffAssetsPage() {
   const [signatureName, setSignatureName] = useState('');
   const [isSigning, setIsSigning] = useState(false);
 
+  // 🌟 Unified QR & Photo Sync State
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
+  const [localPhotos, setLocalPhotos] = useState<File[]>([]);
+  
   // Return Modal State
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [selectedReturnAsset, setSelectedReturnAsset] = useState<any>(null);
   const [returnNotes, setReturnNotes] = useState('');
+  const [returnCondition, setReturnCondition] = useState('Pristine / Flawless');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
-  // 🌟 Replacement Modal State
+  // Replace Modal State
   const [replaceModalOpen, setReplaceModalOpen] = useState(false);
   const [selectedReplaceAsset, setSelectedReplaceAsset] = useState<any>(null);
   const [replaceReason, setReplaceReason] = useState('');
+  const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
   const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
   useEffect(() => {
@@ -98,52 +80,25 @@ export default function StaffAssetsPage() {
   const fetchMyAssets = async () => {
     setLoading(true);
     try {
-      const isGuest = localStorage.getItem('isGuestSession') === 'true';
-      let user: any = {};
-
-      if (isGuest) {
-        user = { id: 'guest-mock-uuid', email: 'guest@vsit.com', emp_id: 'DEMO-001', name: 'Demo Guest' };
-        setCurrentUser(user);
-        
-        setAssignedAssets([
-          { 
-            id: 'demo-1', name: 'Precision 5560', asset_tag: 'VSS-LAP-6570', 
-            serial_number: '5C9X9G3-CN-0K00F5-DES00074F-FQEF-A04', category: 'Laptop', live_inspection_status: 'Approved', status: 'Assigned',
-            live_inspection_date: new Date().toISOString(), live_inspection_notes: 'Digitally Signed Handover Agreement by Demo Guest', live_inspection_photos: null, created_at: new Date().toISOString()
-          },
-          { 
-            id: 'demo-2', name: 'LOGI Pebble Keys 2 380s', asset_tag: 'VSS-WKM-5335', 
-            serial_number: 'YR0091-M350S', category: 'Wireless Keyboard kit', live_inspection_status: 'Pending', status: 'Pending Handover',
-            live_inspection_date: null, live_inspection_notes: null, live_inspection_photos: null, created_at: new Date().toISOString()
-          }
-        ]);
-        setLoading(false);
-        return;
-      }
-
       const sessionStr = localStorage.getItem('vsit_staff_session') || localStorage.getItem('user');
-      if (!sessionStr) {
-        window.location.replace('/');
-        return;
-      }
+      if (!sessionStr) { window.location.replace('/'); return; }
 
-      try { user = JSON.parse(sessionStr); } 
-      catch (e) { user = { email: sessionStr }; }
-
+      let user: any = {};
+      try { user = JSON.parse(sessionStr); } catch (e) { user = { email: sessionStr }; }
+      
       const cleanEmail = user.email?.toLowerCase().trim();
       const { data: profile } = await supabase.from('profiles').select('*').ilike('email', cleanEmail).maybeSingle();
       
       const empId = profile?.emp_code || profile?.emp_id || 'STAFF';
       const userId = profile?.id || user.id;
       const userName = profile?.full_name || profile?.name || cleanEmail.split('@')[0];
-
       setCurrentUser({ id: userId, email: cleanEmail, emp_id: empId, name: userName });
 
       const { data: assetsRes, error } = await supabase
         .from('assets')
         .select('*')
         .or(`assigned_to.eq.${userId},assigned_to.ilike.${cleanEmail},assigned_to.eq.${empId}`);
-
+      
       if (error) throw error;
       
       const { data: inspectionsRes } = await supabase
@@ -163,7 +118,6 @@ export default function StaffAssetsPage() {
       });
 
       setAssignedAssets(compiledAssets);
-
     } catch (err) {
       console.error("Error fetching assets:", err);
     } finally {
@@ -171,107 +125,79 @@ export default function StaffAssetsPage() {
     }
   };
 
-  // 🌟 REAL-TIME SUPABASE LISTENER FOR DESKTOP ALERTS
+  // 🌟 Auto-Removal Realtime Sync
   useEffect(() => {
-    if (!currentUser?.id || currentUser.id === 'guest-mock-uuid') return;
-
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
-    const realtimeChannel = supabase
-      .channel('staff_assets_realtime')
-      .on(
-        'postgres_changes', 
-        { event: '*', schema: 'public', table: 'assets', filter: `assigned_to=eq.${currentUser.id}` }, 
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            setAssignedAssets((current) => current.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a));
-            
-            // Notify if Admin changed the status
-            if (payload.old.status !== payload.new.status) {
-              triggerDesktopAlert('IT Asset Update', `Your hardware (${payload.new.asset_tag}) status is now: ${payload.new.status}`);
-            }
-          } 
-          else if (payload.eventType === 'DELETE') {
-            setAssignedAssets((current) => current.filter(a => a.id !== payload.old.id));
-            triggerDesktopAlert('Asset Removed', `IT Admin has removed an asset from your assigned inventory.`);
-          } 
-          else if (payload.eventType === 'INSERT') {
-            setAssignedAssets((current) => [...current, payload.new]);
-            triggerDesktopAlert('New Asset Assigned', `IT Admin has linked a new device (${payload.new.asset_tag}) to your profile.`);
+    if (!currentUser?.id) return;
+    const realtimeChannel = supabase.channel('staff_assets_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets', filter: `assigned_to=eq.${currentUser.id}` }, (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          if (payload.new.assigned_to === null) {
+            setAssignedAssets(current => current.filter(a => a.id !== payload.old.id));
+            triggerDesktopAlert('Asset Removed', `Admin has processed and detached an asset from your profile.`);
+          } else {
+            setAssignedAssets(current => current.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a));
           }
+        } else if (payload.eventType === 'DELETE') {
+          setAssignedAssets(current => current.filter(a => a.id !== payload.old.id));
         }
-      )
-      .subscribe();
-
+      }).subscribe();
     return () => { supabase.removeChannel(realtimeChannel); };
   }, [currentUser]);
 
-  // 🌟 SIGN AGREEMENT HANDLER
-  const handleSignAgreement = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signatureName.trim()) return alert("Please type your name to sign.");
-    setIsSigning(true);
+  // 🌟 Realtime Photo Sync (Listens for mobile uploads)
+  useEffect(() => {
+    if (!qrSessionId) return;
+    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
+      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
+        if (payload.payload?.url) {
+          setRemotePhotos(prev => [...prev, payload.payload.url]);
+        }
+      }).subscribe();
+    return () => { supabase.removeChannel(photoChannel); };
+  }, [qrSessionId]);
 
-    try {
-      const now = new Date().toISOString();
-
-      if (currentUser.id === 'guest-mock-uuid') {
-        setTimeout(() => {
-          setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned', live_inspection_notes: `Digitally Signed Handover Agreement by ${signatureName}` } : a));
-          setSignModalAsset(null);
-          setIsSigning(false);
-          setSignatureName('');
-        }, 800);
-        return;
-      }
-
-      const { error: assetError } = await supabase
-        .from('assets')
-        .update({ 
-          inspection_status: 'Approved',
-          last_inspection_date: now,
-          status: 'Assigned'
-        })
-        .eq('id', signModalAsset.id);
-
-      if (assetError) throw assetError;
-
-      const signatureNote = `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`;
-
-      await supabase.from('inspections').insert({
-        asset_id: signModalAsset.id,
-        inspected_by: currentUser.id || currentUser.emp_id,
-        user_email: currentUser.email,
-        condition: 'Pristine / Flawless',
-        status: 'Approved',
-        notes: signatureNote
-      });
-
-      await supabase.from('notifications').insert({
-        title: 'Agreement Signed',
-        message: `${currentUser.name} has electronically signed the Handover Agreement for ${signModalAsset.name || signModalAsset.category} (${signModalAsset.asset_tag}).`,
-        target_role: 'admin',
-        is_read: false
-      });
-
-      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned', live_inspection_notes: signatureNote } : a));
-      setSignModalAsset(null);
-      setSignatureName('');
-
-    } catch (err: any) {
-      alert(`Error signing agreement: ${err.message}`);
-    } finally {
-      setIsSigning(false);
+  // 📸 Helper: Handle File Uploads (Multiple)
+  const uploadMultiplePhotos = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const { error } = await supabase.storage.from('attachments').upload(`asset-attachments/${fileName}`, file);
+        if (!error) {
+          const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
+          uploadedUrls.push(data.publicUrl);
+        }
+      } catch (error) { console.error("Upload failed", error); }
     }
+    return uploadedUrls;
   };
 
-  // 🌟 SMART RETURN HANDLERS
-  const openReturnModal = (asset: any) => {
-    setSelectedReturnAsset(asset);
+  const handleGenerateQR = (asset: any, isReturn: boolean) => {
+    // Validate form inputs before generating QR
+    if (isReturn && !returnNotes.trim()) return alert("Please provide a return reason.");
+    if (!isReturn && !replaceReason.trim()) return alert("Please provide a replacement reason.");
+
+    const requiredPhotos = (asset?.category || '').toLowerCase().includes('laptop') ? 5 : 2;
+    const sessionId = crypto.randomUUID();
+    setQrSessionId(sessionId);
+    
+    // Desktop fallback link / mobile link for verification
+    const uploadLink = `${window.location.origin}/mobile-verify?session=${sessionId}&req=${requiredPhotos}`;
+    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
+  };
+
+  const resetModals = () => {
+    setReturnModalOpen(false);
+    setReplaceModalOpen(false);
+    setSelectedReturnAsset(null);
+    setSelectedReplaceAsset(null);
+    setQrUrl(null);
+    setQrSessionId(null);
+    setRemotePhotos([]);
+    setLocalPhotos([]);
     setReturnNotes('');
-    setReturnModalOpen(true);
+    setReplaceReason('');
   };
 
   const handleReturnSubmit = async (e: React.FormEvent) => {
@@ -280,42 +206,28 @@ export default function StaffAssetsPage() {
     setIsSubmittingReturn(true);
 
     try {
-      const { error } = await supabase
-        .from('assets')
-        .update({ 
-          status: 'Return Pending', 
-          notes: returnNotes 
-        })
-        .eq('id', selectedReturnAsset.id);
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
+      const returnNoteStr = `[RETURN REQUEST] Condition: ${returnCondition} - ${returnNotes}`;
 
-      if (error) throw error;
+      await supabase.from('inspections').insert({
+        asset_id: selectedReturnAsset.id,
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        user_email: currentUser.email,
+        emp_code: currentUser.emp_id,
+        status: 'Return Pending Approval',
+        condition: returnCondition,
+        notes: returnNoteStr,
+        photos: allPhotos.length > 0 ? allPhotos : null
+      });
 
-      setAssignedAssets((prev) => prev.map(a => a.id === selectedReturnAsset.id ? { ...a, status: 'Return Pending' } : a));
-      setReturnModalOpen(false);
-      triggerDesktopAlert('Return Submitted', `Your return request for ${selectedReturnAsset.asset_tag} has been sent to IT.`);
+      await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr }).eq('id', selectedReturnAsset.id);
 
-    } catch (err: any) {
-      alert(`Failed to submit return request: ${err.message}`);
-    } finally {
-      setIsSubmittingReturn(false);
-    }
-  };
-
-  const handleResetAndReturn = async (asset: any) => {
-    try {
-      await supabase.from('assets').update({ status: 'Assigned' }).eq('id', asset.id);
-      setAssignedAssets((prev) => prev.map(a => a.id === asset.id ? { ...a, status: 'Assigned' } : a));
-      openReturnModal(asset);
-    } catch (error) {
-      console.error("Failed to reset asset status", error);
-    }
-  };
-
-  // 🌟 SMART REPLACE HANDLERS
-  const openReplaceModal = (asset: any) => {
-    setSelectedReplaceAsset(asset);
-    setReplaceReason('');
-    setReplaceModalOpen(true);
+      setAssignedAssets(prev => prev.map(a => a.id === selectedReturnAsset.id ? { ...a, status: 'Return Pending Approval' } : a));
+      resetModals();
+      triggerDesktopAlert('Return Sent', `Return request for ${selectedReturnAsset.asset_tag} sent to Admin.`);
+    } catch (err: any) { alert(err.message); } finally { setIsSubmittingReturn(false); }
   };
 
   const handleReplaceSubmit = async (e: React.FormEvent) => {
@@ -324,245 +236,117 @@ export default function StaffAssetsPage() {
     setIsSubmittingReplace(true);
 
     try {
-      const cleanEmail = currentUser.email.toLowerCase().trim();
-      const finalEmp = currentUser.emp_id || 'STAFF';
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
 
-      // 1. Log a Ticket for the Admin Helpdesk
-      const { error: ticketError } = await supabase.from('tickets').insert({ 
-        title: `Replacement Request: ${selectedReplaceAsset.name}`, 
-        category: 'Asset Replacement', 
-        description: `Tag ID: ${selectedReplaceAsset.asset_tag} | S/N: ${selectedReplaceAsset.serial_number}\n\nReason: ${replaceReason}`, 
-        status: 'Pending', 
-        created_by: cleanEmail, 
-        emp_code: finalEmp, 
-        staff_name: currentUser.name 
+      await supabase.from('replacements').insert({
+        old_asset_id: selectedReplaceAsset.id,
+        asset_tag: selectedReplaceAsset.asset_tag,
+        serial_number: selectedReplaceAsset.serial_number,
+        user_id: currentUser.id,
+        staff_name: currentUser.name,
+        emp_code: currentUser.emp_id,
+        condition: replaceCondition,
+        reason: replaceReason,
+        photos: allPhotos.length > 0 ? allPhotos : null,
+        status: 'Pending Approval'
       });
-      if (ticketError) throw ticketError;
 
-      // 2. Update the Asset Status
-      const { error: assetError } = await supabase
-        .from('assets')
-        .update({ status: 'Replacement Requested' })
-        .eq('id', selectedReplaceAsset.id);
-      if (assetError) throw assetError;
+      await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', selectedReplaceAsset.id);
 
-      // 3. Update the UI
-      setAssignedAssets((prev) => prev.map(a => a.id === selectedReplaceAsset.id ? { ...a, status: 'Replacement Requested' } : a));
-      setReplaceModalOpen(false);
-      triggerDesktopAlert('Replacement Submitted', `Your replacement request for ${selectedReplaceAsset.asset_tag} has been sent to IT.`);
-
-    } catch (err: any) {
-      alert(`Failed to submit replacement request: ${err.message}`);
-    } finally {
-      setIsSubmittingReplace(false);
-    }
+      setAssignedAssets(prev => prev.map(a => a.id === selectedReplaceAsset.id ? { ...a, status: 'Replacement Requested' } : a));
+      resetModals();
+      triggerDesktopAlert('Replacement Sent', `Replacement request for ${selectedReplaceAsset.asset_tag} sent to Admin.`);
+    } catch (err: any) { alert(err.message); } finally { setIsSubmittingReplace(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Syncing Inventory...</p>
-      </div>
-    );
-  }
+  const handleSignAgreement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signatureName.trim()) return alert("Please type your name to sign.");
+    setIsSigning(true);
+    try {
+      const now = new Date().toISOString();
+      const { error: assetError } = await supabase.from('assets').update({ inspection_status: 'Approved', last_inspection_date: now, status: 'Assigned' }).eq('id', signModalAsset.id);
+      if (assetError) throw assetError;
+      const signatureNote = `Digitally Signed Handover Agreement by ${signatureName} on ${new Date().toLocaleString()}`;
+      await supabase.from('inspections').insert({ asset_id: signModalAsset.id, inspected_by: currentUser.id || currentUser.emp_id, user_email: currentUser.email, condition: 'Pristine / Flawless', status: 'Approved', notes: signatureNote });
+      setAssignedAssets(prev => prev.map(a => a.id === signModalAsset.id ? { ...a, live_inspection_status: 'Approved', live_inspection_date: now, status: 'Assigned', live_inspection_notes: signatureNote } : a));
+      setSignModalAsset(null); setSignatureName('');
+    } catch (err: any) { alert(err.message); } finally { setIsSigning(false); }
+  };
 
-  const pendingAssets = assignedAssets.filter(a => 
-    !a.live_inspection_date || 
-    ['pending', 'not approved', 're-inspection', 'rejected'].includes((a.live_inspection_status || '').toLowerCase()) || 
-    (a.status || '').toLowerCase() === 'pending handover'
-  );
+  if (loading) return <div className="min-h-[70vh] flex flex-col items-center justify-center"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /></div>;
+
+  // Active Asset Context for Modals
+  const activeAsset = selectedReturnAsset || selectedReplaceAsset;
+  const isLaptop = (activeAsset?.category || '').toLowerCase().includes('laptop');
+  const REQUIRED_PHOTOS = isLaptop ? 5 : 2;
+  const currentPhotoCount = remotePhotos.length + localPhotos.length;
+  const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none relative z-10 font-sans">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen">
         
-        {/* 🚨 PENDING E-SIGN ALERTS */}
-        {pendingAssets.length > 0 && (
-          <div className="bg-white/30 backdrop-blur-xl border border-rose-100/50 rounded-4xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5"><FileSignature size={120} /></div>
-            <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-rose-500 text-white rounded-2xl shadow-md shrink-0 animate-pulse">
-                  <AlertTriangle size={24} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-rose-900">Action Required: Sign Handover Agreement</h3>
-                  <p className="text-sm font-medium text-rose-700 mt-1 max-w-lg">
-                    You have {pendingAssets.length} new asset(s) assigned to you. You must electronically sign the IT asset handover policy to finalize the assignment.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3 relative z-10">
-              {pendingAssets.map(asset => {
-                const AlertIcon = getAssetIcon(asset.category);
-                return (
-                  <div key={`alert-${asset.id}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white/50 backdrop-blur-md rounded-2xl border border-rose-100/50 shadow-sm gap-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-3">
-                      <AlertIcon size={20} className="text-rose-500 shrink-0" />
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{asset.name || asset.category || 'Hardware Unit'}</p>
-                        <p className="text-xs font-mono text-slate-500 mt-0.5">S/N: {asset.serial_number || 'N/A'}</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setSignModalAsset(asset)}
-                      className="w-full sm:w-auto px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-colors shrink-0 cursor-pointer"
-                    >
-                      <PenTool size={14} /> Review & Sign
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* 🌟 MY HARDWARE UNITS HEADER */}
-        <div className="flex items-center justify-between mb-4 px-2 sm:px-4">
+        <div className="flex items-center justify-between mb-4 px-2">
           <div className="flex items-center gap-3">
             <Laptop size={20} className="text-purple-600" />
-            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-widest uppercase">My Hardware Units</h2>
+            <h2 className="text-lg font-black text-slate-900 tracking-widest uppercase">My Hardware Units</h2>
           </div>
           <span className="text-sm font-black text-slate-500">{assignedAssets.length} Total</span>
         </div>
 
         {assignedAssets.length === 0 ? (
-          <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/20 backdrop-blur-md flex flex-col items-center">
-            <Package size={48} className="text-slate-300 mb-4" />
+          <div className="py-20 text-center border-2 border-dashed border-slate-200/60 rounded-4xl bg-white/20">
             <h3 className="text-lg font-bold text-slate-700">No Hardware Assigned</h3>
-            <p className="text-sm text-slate-500 mt-1 max-w-sm">You currently have no hardware assets linked to your employee ID.</p>
           </div>
         ) : (
           <div className="space-y-6">
             {assignedAssets.map(asset => {
-              const statusStr = (asset.live_inspection_status || '').toLowerCase();
-              const isPending = !asset.live_inspection_date || ['pending', 'not approved', 're-inspection'].includes(statusStr) || (asset.status || '').toLowerCase() === 'pending handover';
-              const isDueDatePassed = getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at) < new Date();
-              
-              // Smart Return & Replace Status Variables
               const currentStatus = (asset.status || 'Assigned').toLowerCase();
-              const isReturnPending = currentStatus === 'return pending' || currentStatus === 'return requested';
-              const isReplacePending = currentStatus === 'replacement requested';
-              const isReturnRejected = currentStatus === 'return rejected' || currentStatus === 'rejected';
+              const isReturnPending = currentStatus.includes('return pending');
+              const isReplacePending = currentStatus.includes('replacement requested');
 
               return (
-                <div 
-                  key={asset.id} 
-                  className="group bg-white/20 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white/40 shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-all duration-300 hover:border-purple-300/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] relative overflow-hidden"
-                >
+                <div key={asset.id} className="bg-white/20 backdrop-blur-2xl rounded-4xl p-6 sm:p-8 border border-white/40 shadow-sm relative overflow-hidden">
                   
-                  {/* Glowing Status Blob behind card */}
-                  <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 group-hover:opacity-20 pointer-events-none ${isReturnRejected ? 'bg-rose-500' : (isReturnPending || isReplacePending) ? 'bg-orange-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-
-                  {/* Card Header & Status */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                     <h3 className="text-xl font-black text-slate-900 tracking-tight">{asset.name || asset.category}</h3>
                     
-                    {isReturnRejected ? (
-                      <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30 shrink-0 backdrop-blur-md shadow-sm">
-                        Request Rejected
-                      </span>
-                    ) : isReturnPending ? (
-                      <span className="px-3 py-1.5 bg-orange-500/10 text-orange-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-500/30 shrink-0 backdrop-blur-md shadow-sm">
-                        Return Pending
+                    {isReturnPending ? (
+                      <span className="px-4 py-2 bg-orange-100 text-orange-700 text-xs font-black uppercase tracking-widest rounded-lg border border-orange-200 shadow-sm">
+                        Return Request Sent to Admin - Pending Approval
                       </span>
                     ) : isReplacePending ? (
-                      <span className="px-3 py-1.5 bg-purple-500/10 text-purple-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-purple-500/30 shrink-0 backdrop-blur-md shadow-sm">
-                        Replacement Pending
-                      </span>
-                    ) : isPending ? (
-                      <span className="px-3 py-1.5 bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-500/30 shrink-0 backdrop-blur-md shadow-sm">
-                        Signature Required
+                      <span className="px-4 py-2 bg-purple-100 text-purple-700 text-xs font-black uppercase tracking-widest rounded-lg border border-purple-200 shadow-sm">
+                        Replacement Request Sent - Pending Approval
                       </span>
                     ) : (
-                      <span className="px-3 py-1.5 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-500/30 shrink-0 backdrop-blur-md shadow-sm">
-                        Approved
+                      <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-emerald-200">
+                        Assigned & Active
                       </span>
                     )}
                   </div>
 
-                  {/* Grid Specs */}
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span>
-                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{asset.asset_tag || 'N/A'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span>
-                      <span className="font-bold text-sm text-slate-900 wrap-break-word block">{asset.serial_number || 'N/A'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span>
-                      <span className="font-bold text-sm text-slate-900 block">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'Pending'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Next Due</span>
-                      <span className={`font-bold text-sm block ${isDueDatePassed ? 'text-rose-600' : 'text-slate-900'}`}>{formatDate(getNextDueDate(asset.category, asset.live_inspection_date, asset.created_at))}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Category</span>
-                      <span className="font-bold text-sm text-slate-900 block">{asset.category || 'N/A'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span>
-                      <span className="font-bold text-sm text-slate-900 block">{isPending ? 'Action Needed' : 'Assigned'}</span>
-                    </div>
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Tag ID</span><span className="font-bold text-sm text-slate-900">{asset.asset_tag || 'N/A'}</span></div>
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Serial S/N</span><span className="font-bold text-sm text-slate-900">{asset.serial_number || 'N/A'}</span></div>
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Updated</span><span className="font-bold text-sm text-slate-900">{asset.live_inspection_date ? formatDate(new Date(asset.live_inspection_date)) : 'N/A'}</span></div>
+                    <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Status</span><span className="font-bold text-sm text-slate-900">{asset.status || 'Assigned'}</span></div>
                   </div>
 
-                  {/* 🌟 ACTION BUTTONS WITH SMART RETURN & REPLACE LOGIC */}
                   <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-white/40">
-                    {isPending ? (
-                      <button onClick={() => setSignModalAsset(asset)} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-rose-200 flex items-center gap-2 cursor-pointer">
-                        <PenTool size={16} /> Sign Handover Form
+                    {(isReturnPending || isReplacePending) ? (
+                      <button disabled className="px-6 py-2.5 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed">
+                        Waiting on Admin
                       </button>
                     ) : (
                       <>
-                        {/* 🌟 DYNAMIC RETURN/REPLACE BUTTON LOGIC */}
-                        {(isReturnPending || isReplacePending) ? (
-                          <div className="flex flex-col items-center gap-1.5">
-                            <button disabled className="px-6 py-2.5 bg-slate-50/50 border border-slate-200/50 text-slate-400 rounded-xl text-xs font-bold uppercase tracking-widest cursor-not-allowed shadow-inner transition-all">
-                              Pending Admin
-                            </button>
-                            <span className={`text-[9px] font-black uppercase tracking-widest text-center leading-tight drop-shadow-sm animate-pulse ${isReplacePending ? 'text-purple-500' : 'text-orange-500'}`}>
-                              Already Submitted<br/>Wait for Response
-                            </span>
-                          </div>
-                        ) : isReturnRejected ? (
-                          <div className="flex flex-col items-center gap-1.5">
-                            <button 
-                              onClick={() => handleResetAndReturn(asset)} 
-                              className="px-6 py-2.5 bg-white border border-rose-500 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-                            >
-                              <AlertCircle size={14} /> Request Rejected (Retry)
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <button 
-                              onClick={() => openReturnModal(asset)} 
-                              className="px-6 py-2.5 rounded-2xl border border-orange-200/60 text-orange-600 hover:bg-orange-50/50 hover:border-orange-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer"
-                            >
-                              Return
-                            </button>
-                            <button 
-                              onClick={() => openReplaceModal(asset)} 
-                              className="px-6 py-2.5 rounded-2xl border border-purple-200/60 text-purple-600 hover:bg-purple-50/50 hover:border-purple-300 text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer"
-                            >
-                              Replace
-                            </button>
-                          </>
-                        )}
-
-                        <button onClick={() => setSignModalAsset(asset)} className="px-5 py-2.5 rounded-2xl border border-blue-200/60 text-blue-600 hover:bg-blue-50/50 hover:border-blue-300 text-xs font-bold flex items-center gap-2 transition-all shadow-sm bg-white/40 backdrop-blur-md cursor-pointer">
-                          <Eye size={16} /> View Agreement
-                        </button>
+                        <button onClick={() => { resetModals(); setSelectedReturnAsset(asset); setReturnModalOpen(true); }} className="px-6 py-2.5 rounded-2xl border border-orange-200 text-orange-600 hover:bg-orange-50 text-xs font-bold bg-white/40 cursor-pointer">Return Asset</button>
+                        <button onClick={() => { resetModals(); setSelectedReplaceAsset(asset); setReplaceModalOpen(true); }} className="px-6 py-2.5 rounded-2xl border border-purple-200 text-purple-600 hover:bg-purple-50 text-xs font-bold bg-white/40 cursor-pointer">Replace Asset</button>
                       </>
                     )}
                   </div>
-
                 </div>
               );
             })}
@@ -570,239 +354,140 @@ export default function StaffAssetsPage() {
         )}
       </div>
 
-      {/* 📝 DIGITAL E-SIGN / REVIEW MODAL */}
-      {mounted && signModalAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200 z-9999">
-          <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col max-h-[90vh] border border-white/60">
+      {/* 🌟 UNIFIED MODAL UI (Return & Replace) EXACT MATCH TO SCREENSHOT */}
+      {mounted && (returnModalOpen || replaceModalOpen) && activeAsset && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-9999 flex items-center justify-center p-4">
+          
+          <div className="bg-[#e9e9ec] rounded-4xl w-full max-w-105 shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300">
             
-            <div className="p-6 bg-white/50 backdrop-blur-md border-b border-white/60 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm">
-                  <FileSignature size={20} />
+            {/* Header */}
+            <div className="p-6 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                  {returnModalOpen ? <LogOut className="text-[#ff7300]" size={20} /> : <RefreshCcw className="text-purple-600" size={20} />}
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Asset Handover Agreement</h3>
-                  <p className="text-xs font-semibold text-slate-500">Virtual Staffing Solutions IT Policy</p>
+                  <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                    {returnModalOpen ? 'Asset Return Request' : 'Asset Replace Request'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    {returnModalOpen ? 'Initiate IT Handover' : 'Initiate Hardware Swap'}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setSignModalAsset(null)} className="p-2 rounded-full hover:bg-white/60 text-slate-500 transition-colors cursor-pointer"><X size={20}/></button>
+              <button onClick={resetModals} className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
             </div>
 
-            <div className="p-6 sm:p-8 overflow-y-auto space-y-6 text-sm text-slate-700 font-medium custom-scrollbar">
-              
-              {/* Conditional Attention Box based on Status */}
-              {(!signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover') ? (
-                <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex gap-3">
-                  <AlertCircle className="text-rose-600 shrink-0" size={20} />
-                  <div>
-                    <h4 className="text-rose-700 font-black text-xs uppercase tracking-widest mb-1">Attention Required</h4>
-                    <p className="text-xs font-semibold text-rose-800 leading-relaxed">
-                      Please review this agreement carefully. Match the current condition and health of the asset against the attached photos and read the notes carefully. If everything is in order, then sign. Otherwise, DO NOT sign and raise a ticket to the admin immediately.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex gap-3">
-                  <CheckCircle2 className="text-emerald-600 shrink-0" size={20} />
-                  <div>
-                    <h4 className="text-emerald-700 font-black text-xs uppercase tracking-widest mb-1">Digitally Signed & Verified</h4>
-                    <p className="text-xs font-semibold text-emerald-800 leading-relaxed">
-                      This handover agreement has been legally signed and securely logged. You are currently accountable for this assigned asset.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Specs Grid */}
-              <div className="p-5 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 grid grid-cols-2 sm:grid-cols-4 gap-4 shadow-sm">
-                <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
-                  <Laptop size={16} className="text-purple-500 shrink-0" />
-                  <div>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Asset Name</span>
-                    <span className="font-bold text-slate-900 line-clamp-1">{signModalAsset.name || signModalAsset.category}</span>
-                  </div>
-                </div>
-                <div className="col-span-2 sm:col-span-1 min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</span> <span className="font-mono font-bold text-slate-900 wrap-break-word block">{signModalAsset.serial_number}</span></div>
-                <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Tag</span> <span className="font-mono font-bold text-slate-900 wrap-break-word block">{signModalAsset.asset_tag}</span></div>
-                <div className="min-w-0"><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Assignment Date</span> <span className="font-bold text-slate-900 block">{signModalAsset.live_inspection_date ? formatDate(new Date(signModalAsset.live_inspection_date)) : formatDate(new Date())}</span></div>
-              </div>
-
-              {/* Evidence Section */}
-              <div className="p-5 border border-white/60 rounded-2xl space-y-4 bg-white/30 backdrop-blur-md shadow-sm">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 border-b border-white/50 pb-2">Latest Inspection & Condition Evidence</h4>
+            {/* STEP 1: FORM VIEW (Matches Screenshot) */}
+            {!qrUrl ? (
+              <div className="px-6 pb-6 space-y-5">
                 <div>
-                  <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Inspector Notes:</span>
-                  <div className="font-mono text-xs bg-white/50 p-3 rounded-xl border border-white/60 whitespace-pre-wrap wrap-break-word shadow-inner">
-                    {signModalAsset.live_inspection_notes || 'No specific notes provided during the last audit.'}
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">Select Assigned Asset</label>
+                  <div className="w-full px-4 py-3.5 bg-white rounded-2xl text-sm font-semibold text-slate-800 shadow-sm opacity-90 cursor-not-allowed flex justify-between items-center">
+                    <span className="truncate">{activeAsset.name} ({activeAsset.asset_tag})</span>
+                    <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 bg-white rounded-2xl p-4 shadow-sm gap-4">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tag ID</p>
+                    <p className="text-sm font-black text-slate-900">{activeAsset.asset_tag}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Serial Number</p>
+                    <p className="text-sm font-black text-slate-900 truncate">{activeAsset.serial_number}</p>
+                  </div>
+                </div>
+
                 <div>
-                  <span className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Asset Photos:</span>
-                  {signModalAsset.live_inspection_photos ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <p className="text-xs text-purple-600 font-bold col-span-4 flex items-center gap-1.5 bg-purple-500/10 px-3 py-2 rounded-lg border border-purple-500/20 w-fit">
-                        <ShieldCheck size={14}/> Photos exist but are securely encrypted.
-                      </p>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">Current Asset Condition</label>
+                  <div className="relative">
+                    <select 
+                      value={returnModalOpen ? returnCondition : replaceCondition} 
+                      onChange={(e) => returnModalOpen ? setReturnCondition(e.target.value) : setReplaceCondition(e.target.value)} 
+                      className="w-full px-4 py-3.5 bg-white rounded-2xl text-sm font-semibold text-slate-800 shadow-sm outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-[#ff7300]/20"
+                    >
+                      <option value={returnModalOpen ? "Pristine / Flawless" : "Minor Wear"}>{returnModalOpen ? "Pristine / Flawless" : "Minor Hardware Issue"}</option>
+                      <option value="Minor Wear">Minor Wear (Scratches/Dents)</option>
+                      <option value="Damaged">Damaged / Broken Part</option>
+                      <option value="Not Working">Not Working / Won't Power On</option>
+                    </select>
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
                     </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">No inspection photos available on record.</p>
-                  )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="prose prose-sm prose-slate max-w-none">
-                <p>I, <strong>{currentUser?.name}</strong> (Emp ID: {currentUser?.emp_id}), acknowledge the receipt of the IT asset detailed above, provided by Virtual Staffing Solutions for official use.</p>
-                <ul className="space-y-2 mt-4 text-xs font-semibold text-slate-600 leading-relaxed">
-                  <li><strong>1. Care & Maintenance:</strong> I agree to handle the equipment with care, protecting it from damage, loss, or theft.</li>
-                  <li><strong>2. Official Use Only:</strong> I understand this equipment is strictly for professional duties and complies with company IT security policies.</li>
-                  <li><strong className="text-slate-800">3. Mandatory Audits:</strong> Laptop Inspections are required every month before the last Saturday. All other assets require inspection every 3 months.</li>
-                  <li><strong className="text-slate-800">4. Verification:</strong> You can verify assets in your dashboard and scan the asset TAG ID QR code we paste on the bottom of your assets.</li>
-                  <li><strong className="text-slate-800">5. Discrepancies:</strong> If any asset serial number does not match with the physical asset's serial number, you must inform the IT Admin user immediately.</li>
-                  <li><strong>6. Return Policy & Liability:</strong> I agree to return this asset in good working condition upon separation from the company. Gross negligence may result in disciplinary action or financial liability.</li>
-                </ul>
-              </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">
+                    {returnModalOpen ? 'Return Reason & Notes' : 'Replace Reason & Notes'}
+                  </label>
+                  <textarea 
+                    required 
+                    value={returnModalOpen ? returnNotes : replaceReason} 
+                    onChange={(e) => returnModalOpen ? setReturnNotes(e.target.value) : setReplaceReason(e.target.value)} 
+                    placeholder={`Provide reason for ${returnModalOpen ? 'returning' : 'this request'}...`}
+                    className="w-full px-5 py-4 bg-white/70 rounded-2xl text-sm font-semibold text-slate-700 outline-none resize-none h-24 shadow-inner placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#ff7300]/20 border border-transparent" 
+                  />
+                </div>
 
-              {(!signModalAsset.live_inspection_date || ['pending', 'not approved', 're-inspection', 'rejected'].includes((signModalAsset.live_inspection_status || '').toLowerCase()) || (signModalAsset.status || '').toLowerCase() === 'pending handover') ? (
-                <form onSubmit={handleSignAgreement} className="pt-6 border-t border-white/50 space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Electronic Signature</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="Type your full legal name to sign..."
-                      value={signatureName}
-                      onChange={(e) => setSignatureName(e.target.value)}
-                      className="w-full p-4 bg-white/60 border border-white/60 rounded-2xl font-bold text-slate-900 outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-slate-400 shadow-inner"
-                    />
-                    <p className="text-[10px] font-semibold text-slate-400 mt-2 flex items-center gap-1.5">
-                      <ShieldCheck size={12} /> Typing your name acts as a legally binding digital signature.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                    <button type="button" onClick={() => setSignModalAsset(null)} className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-white/60 transition-colors cursor-pointer border border-transparent hover:border-white/60 shadow-sm">Cancel</button>
-                    <button type="submit" disabled={isSigning || !signatureName.trim()} className="w-full sm:flex-1 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-purple-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer">
-                      {isSigning ? <Loader2 size={16} className="animate-spin" /> : <PenTool size={16} />} 
-                      {isSigning ? 'Processing...' : 'I Agree & Accept Asset'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="pt-4 border-t border-white/50">
-                  <div className="mt-2 inline-flex items-center gap-2 bg-white/50 px-4 py-2 rounded-xl border border-emerald-500/20 shadow-sm">
-                    <ShieldCheck size={16} className="text-emerald-600"/>
-                    <span className="text-xs font-bold text-emerald-900 uppercase tracking-widest">
-                      Confirmed on: {formatDate(new Date(signModalAsset.live_inspection_date || new Date()))}
-                    </span>
-                  </div>
-                  <button onClick={() => setSignModalAsset(null)} className="w-full mt-6 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer shadow-lg shadow-slate-900/20">
-                    Close Document
+                <div className="flex gap-4 pt-2">
+                  <button type="button" onClick={resetModals} className="flex-1 py-4 bg-white rounded-full text-[11px] font-black text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={() => handleGenerateQR(activeAsset, returnModalOpen)} className={`flex-1 py-4 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md transition-all cursor-pointer ${returnModalOpen ? 'bg-[#ff7300] hover:bg-[#e66a00]' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                    Generate QR
                   </button>
                 </div>
-              )}
-
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* 🌟 RETURN REQUEST MODAL */}
-      {mounted && returnModalOpen && selectedReturnAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 border border-white/60">
-            
-            <div className="p-6 border-b border-white/60 flex justify-between items-center bg-white/50 backdrop-blur-md">
-              <h3 className="text-lg font-black text-slate-900">Return Asset</h3>
-              <button onClick={() => setReturnModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 rounded-full transition-colors cursor-pointer">
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleReturnSubmit} className="p-6 space-y-6">
+              </div>
+            ) : (
               
-              <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl shadow-sm">
-                <p className="text-xs font-bold text-orange-800 uppercase tracking-widest mb-1">Asset</p>
-                <p className="text-sm font-black text-orange-900">{selectedReturnAsset.name} ({selectedReturnAsset.asset_tag})</p>
-              </div>
+              /* STEP 2: QR CODE UPLOAD VIEW */
+              <form onSubmit={returnModalOpen ? handleReturnSubmit : handleReplaceSubmit} className="px-6 pb-6 space-y-6 flex flex-col animate-in slide-in-from-right-4">
+                
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+                    {isLaptop ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
+                  </p>
+                  
+                  <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-4">
+                    <img src={qrUrl} alt="Upload QR Code" className="w-40 h-40 object-contain" />
+                  </div>
+                  
+                  <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-500 ${returnModalOpen ? 'bg-[#ff7300]' : 'bg-purple-500'}`} 
+                      style={{ width: `${Math.min((currentPhotoCount / REQUIRED_PHOTOS) * 100, 100)}%` }} 
+                    />
+                  </div>
+                  
+                  <p className={`text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
+                    {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${REQUIRED_PHOTOS - currentPhotoCount} more photo(s)...`}
+                  </p>
 
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Reason / Condition Notes *</label>
-                <textarea 
-                  required
-                  value={returnNotes}
-                  onChange={(e) => setReturnNotes(e.target.value)}
-                  placeholder="Why are you returning this? Note any physical damages..."
-                  className="w-full px-4 py-3 bg-white/60 border border-white/80 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none resize-none h-24 transition-all shadow-inner"
-                />
-              </div>
+                  <div className="mt-4 pt-4 border-t border-slate-100 w-full">
+                    <label className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer uppercase tracking-widest transition-colors">
+                      Or upload directly from computer
+                      <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
+                        if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
+                      }} />
+                    </label>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Upload Photo Verification</label>
-                <label className="flex flex-col items-center justify-center w-full py-6 border-2 border-dashed border-slate-300 rounded-xl bg-white/60 hover:bg-orange-50 hover:border-orange-300 transition-colors cursor-pointer group shadow-sm">
-                  <Camera className="text-slate-400 group-hover:text-orange-500 mb-2 transition-colors" size={24} />
-                  <span className="text-xs font-bold text-slate-500 group-hover:text-orange-600">Click to capture condition photo</span>
-                  <input type="file" accept="image/*" className="hidden" />
-                </label>
-              </div>
+                <div className="flex gap-4">
+                  <button type="button" onClick={() => setQrUrl(null)} className="w-14 h-13 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
+                    <ChevronLeft size={20} strokeWidth={2.5} />
+                  </button>
+                  <button type="submit" disabled={!hasEnoughPhotos || isSubmittingReturn || isSubmittingReplace} className={`flex-1 h-13 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer ${returnModalOpen ? 'bg-[#ff7300]' : 'bg-purple-600'}`}>
+                    {(isSubmittingReturn || isSubmittingReplace) ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            )}
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setReturnModalOpen(false)} className="flex-1 py-3 rounded-xl border border-white/80 bg-white/50 text-xs font-bold text-slate-600 hover:bg-white transition-all cursor-pointer shadow-sm">
-                  Cancel
-                </button>
-                <button type="submit" disabled={isSubmittingReturn} className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer">
-                  {isSubmittingReturn ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  Submit Return
-                </button>
-              </div>
-
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* 🌟 REPLACE REQUEST MODAL */}
-      {mounted && replaceModalOpen && selectedReplaceAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-9999 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white/80 backdrop-blur-3xl rounded-4xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 border border-white/60">
-            
-            <div className="p-6 border-b border-white/60 flex justify-between items-center bg-white/50 backdrop-blur-md">
-              <h3 className="text-lg font-black text-slate-900">Replace Asset</h3>
-              <button onClick={() => setReplaceModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 rounded-full transition-colors cursor-pointer">
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleReplaceSubmit} className="p-6 space-y-6">
-              
-              <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl shadow-sm">
-                <p className="text-xs font-bold text-purple-800 uppercase tracking-widest mb-1">Asset</p>
-                <p className="text-sm font-black text-purple-900">{selectedReplaceAsset.name} ({selectedReplaceAsset.asset_tag})</p>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Reason for Replacement *</label>
-                <textarea 
-                  required
-                  value={replaceReason}
-                  onChange={(e) => setReplaceReason(e.target.value)}
-                  placeholder="Is it broken? Upgrading? Explain the issue..."
-                  className="w-full px-4 py-3 bg-white/60 border border-white/80 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none resize-none h-24 transition-all shadow-inner"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setReplaceModalOpen(false)} className="flex-1 py-3 rounded-xl border border-white/80 bg-white/50 text-xs font-bold text-slate-600 hover:bg-white transition-all cursor-pointer shadow-sm">
-                  Cancel
-                </button>
-                <button type="submit" disabled={isSubmittingReplace} className="flex-1 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(168,85,247,0.3)] flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer">
-                  {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  Submit Request
-                </button>
-              </div>
-
-            </form>
           </div>
         </div>,
         document.body

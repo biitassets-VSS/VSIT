@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
-  AlertCircle, Clock, X, CheckCircle, CheckCircle2, AlertTriangle, 
+  AlertCircle, Clock, X, CheckCircle2, AlertTriangle, 
   Loader2, Lock, Monitor, LogOut, Star, Camera, ArrowRight,
-  ChevronDown, PackageOpen, ImagePlus, UploadCloud, Sun, Moon 
+  ChevronDown, PackageOpen, ImagePlus, UploadCloud, ChevronLeft, QrCode, RefreshCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -70,10 +71,55 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
+// 🌟 CUSTOM LIQUID GLASS DROPDOWN COMPONENT (Replaces Native <select>)
+function GlassDropdown({ value, onChange, options, isDarkMode, theme }: any) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative w-full">
+      {/* Click Away Overlay */}
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+      
+      {/* Dropdown Trigger */}
+      <div 
+        onClick={() => setOpen(!open)}
+        className={`relative z-40 w-full px-4 sm:px-5 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all cursor-pointer rounded-2xl flex items-center justify-between select-none ${theme.glassInnerCard}`}
+      >
+        <span className={`truncate ${theme.textMain}`}>{value}</span>
+        <ChevronDown size={18} className={`transition-transform duration-300 ${open ? 'rotate-180' : ''} ${theme.textSub}`} />
+      </div>
+
+      {/* Dropdown Options (True Blur) */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className={`absolute z-60 w-full mt-2 rounded-2xl overflow-hidden shadow-2xl border ${isDarkMode ? 'bg-zinc-800/50 backdrop-blur-2xl border-white/10' : 'bg-white/50 backdrop-blur-2xl border-white/60 shadow-[0_16px_40px_rgba(0,0,0,0.1)]'}`}
+          >
+            {options.map((opt: string) => (
+              <div
+                key={opt}
+                onClick={() => { onChange(opt); setOpen(false); }}
+                className={`px-5 py-3.5 text-sm font-semibold cursor-pointer transition-colors ${isDarkMode ? 'text-zinc-200 hover:bg-white/10' : 'text-slate-800 hover:bg-white/60'}`}
+              >
+                {opt}
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function StaffDashboardPage() {
   const router = useRouter(); 
   
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   const [isAuthorized, setIsAuthorized] = useState(false); 
@@ -84,17 +130,32 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
-  const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
-    isOpen: false,
-    type: '',
-  });
+  // Tickets & Inspections Modal
+  const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({ isOpen: false, type: '' });
 
-  const [showReplaceModal, setShowReplaceModal] = useState(false);
-  const [replaceAssetId, setReplaceAssetId] = useState('');
+  // 🌟 Unified QR & Photo Sync State
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
+  const [localPhotos, setLocalPhotos] = useState<File[]>([]);
+  
+  // Return Modal State
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [selectedReturnAsset, setSelectedReturnAsset] = useState<any>(null);
+  const [returnNotes, setReturnNotes] = useState('');
+  const [returnCondition, setReturnCondition] = useState('Pristine / Flawless');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
+  // Replace Modal State
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [selectedReplaceAsset, setSelectedReplaceAsset] = useState<any>(null);
   const [replaceReason, setReplaceReason] = useState('');
+  const [replaceCondition, setReplaceCondition] = useState('Minor Hardware Issue');
   const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
+  // 🌟 THEME SYNC
   useEffect(() => {
+    setMounted(true);
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
@@ -105,18 +166,6 @@ export default function StaffDashboardPage() {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
-
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    if (newTheme) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('vsit_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('vsit_theme', 'light');
-    }
-  };
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
@@ -222,6 +271,18 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
+  // 🌟 Realtime Photo Sync for QR
+  useEffect(() => {
+    if (!qrSessionId) return;
+    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
+      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
+        if (payload.payload?.url) {
+          setRemotePhotos(prev => [...prev, payload.payload.url]);
+        }
+      }).subscribe();
+    return () => { supabase.removeChannel(photoChannel); };
+  }, [qrSessionId]);
+
   const handleRateTicket = async (ticketId: string, rating: number) => {
     try {
       await supabase.from('tickets').update({ rating }).eq('id', ticketId);
@@ -230,61 +291,110 @@ export default function StaffDashboardPage() {
     } catch (e) { console.error(e); }
   };
 
-  const handleReplacementSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!replaceAssetId || !replaceReason.trim()) return;
-
-    const asset = assignedAssets.find(a => String(a.id) === replaceAssetId);
-    if (!asset) return;
-
-    const confirmed = window.confirm(
-      `RECONFIRM REPLACEMENT:\n\nAre you sure you want to request a replacement for:\nAsset: ${asset.name || asset.asset_name}\nTag ID: ${asset.asset_tag}\nSerial: ${asset.serial_number || 'N/A'}\n\nThis will immediately alert IT logistics to prepare a replacement.`
-    );
-
-    if (!confirmed) return;
-
-    setIsSubmittingReplace(true);
-    try {
-      const description = `Tag ID: ${asset.asset_tag} | S/N: ${asset.serial_number || 'N/A'}\n\nReason: ${replaceReason}`;
-      const title = `Replacement Request: ${asset.name || asset.asset_name || asset.category}`;
-
-      const cleanEmail = currentUser.email.toLowerCase().trim();
-      const finalEmp = currentUser.emp_id || 'STAFF';
-      let humanName = currentUser.name || cleanEmail.split('@')[0];
-      humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
-      humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
-
-      const { error } = await supabase.from('tickets').insert([{
-        title,
-        description,
-        category: 'Asset Replacement',
-        priority: 'High',
-        status: 'Pending',
-        created_by: cleanEmail,
-        emp_code: finalEmp,
-        staff_name: humanName,
-        created_at: new Date().toISOString(),
-      }]);
-
-      if (error) throw error;
-      
-      await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', asset.id);
-
-      setShowReplaceModal(false);
-      setReplaceReason('');
-      setReplaceAssetId('');
-      
-      loadRealDatabase(false);
-
-      toast.success("Replacement request submitted successfully.");
-    } catch (error) {
-      console.error("Error submitting request:", error);
-      toast.error("Failed to submit request. Please try again.");
-    } finally {
-      setIsSubmittingReplace(false);
+  // 🌟 Upload Helper
+  const uploadMultiplePhotos = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const { error } = await supabase.storage.from('attachments').upload(`asset-attachments/${fileName}`, file);
+        if (!error) {
+          const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
+          uploadedUrls.push(data.publicUrl);
+        }
+      } catch (error) { console.error("Upload failed", error); }
     }
+    return uploadedUrls;
   };
-  
+
+  // 🌟 QR Handlers
+  const handleGenerateQR = (asset: any, isReturn: boolean) => {
+    if (isReturn && !returnNotes.trim()) return toast.error("Please provide a return reason.");
+    if (!isReturn && !replaceReason.trim()) return toast.error("Please provide a replacement reason.");
+
+    const requiredPhotos = (asset?.category || '').toLowerCase().includes('laptop') ? 5 : 2;
+    const sessionId = crypto.randomUUID();
+    setQrSessionId(sessionId);
+    
+    const uploadLink = `${window.location.origin}/mobile-verify?session=${sessionId}&req=${requiredPhotos}`;
+    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
+  };
+
+  const resetModals = () => {
+    setReturnModalOpen(false);
+    setReplaceModalOpen(false);
+    setSelectedReturnAsset(null);
+    setSelectedReplaceAsset(null);
+    setQrUrl(null);
+    setQrSessionId(null);
+    setRemotePhotos([]);
+    setLocalPhotos([]);
+    setReturnNotes('');
+    setReplaceReason('');
+  };
+
+  // 🌟 Unified Submit Handlers
+  const handleReturnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReturnAsset) return;
+    setIsSubmittingReturn(true);
+
+    try {
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
+      const returnNoteStr = `[RETURN REQUEST] Condition: ${returnCondition} - ${returnNotes}`;
+
+      await supabase.from('inspections').insert({
+        asset_id: selectedReturnAsset.id,
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        user_email: currentUser.email,
+        emp_code: currentUser.emp_id,
+        status: 'Return Pending Approval',
+        condition: returnCondition,
+        notes: returnNoteStr,
+        photos: allPhotos.length > 0 ? allPhotos : null
+      });
+
+      await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr }).eq('id', selectedReturnAsset.id);
+
+      loadRealDatabase(false);
+      resetModals();
+      toast.success("Return request sent to Admin.");
+    } catch (err: any) { toast.error(err.message); } finally { setIsSubmittingReturn(false); }
+  };
+
+  const handleReplaceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReplaceAsset) return;
+    setIsSubmittingReplace(true);
+
+    try {
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
+
+      await supabase.from('replacements').insert({
+        old_asset_id: selectedReplaceAsset.id,
+        asset_tag: selectedReplaceAsset.asset_tag,
+        serial_number: selectedReplaceAsset.serial_number,
+        user_id: currentUser.id,
+        staff_name: currentUser.name,
+        emp_code: currentUser.emp_id,
+        condition: replaceCondition,
+        reason: replaceReason,
+        photos: allPhotos.length > 0 ? allPhotos : null,
+        status: 'Pending Approval'
+      });
+
+      await supabase.from('assets').update({ status: 'Replacement Requested' }).eq('id', selectedReplaceAsset.id);
+
+      loadRealDatabase(false);
+      resetModals();
+      toast.success("Replacement request sent to Admin.");
+    } catch (err: any) { toast.error(err.message); } finally { setIsSubmittingReplace(false); }
+  };
+
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s === 'open' || s === 'pending') return 'bg-orange-500/15 backdrop-blur-md text-orange-600 font-extrabold border border-orange-400/40 shadow-sm';
@@ -298,18 +408,18 @@ export default function StaffDashboardPage() {
     const auditWindow = getAuditWindowInfo(asset.category);
     
     if (asset.status?.toLowerCase().includes('return') || status.includes('return pending')) {
-      return { disabled: true, text: "Return Pending", classes: "bg-slate-500/10 backdrop-blur-md text-slate-500 font-bold cursor-not-allowed border border-slate-400/30 shadow-sm" };
+      return { disabled: true, text: "Return Pending", classes: "bg-slate-500/10 text-slate-500 border border-slate-400/30 cursor-not-allowed" };
     }
 
     if (status.includes('reject') || status.includes('fail')) {
-      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500/90 backdrop-blur-md hover:bg-rose-600 text-white font-bold cursor-pointer shadow-lg hover:shadow-rose-500/50 animate-pulse border-none" };
+      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500/90 hover:bg-rose-600 text-white shadow-[0_4px_15px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
     if (status.includes('re-inspection') || status.includes('action required')) {
-      return { disabled: false, text: "Start Inspection", classes: "bg-amber-500/90 backdrop-blur-md hover:bg-amber-600 text-white font-bold cursor-pointer shadow-lg hover:shadow-amber-500/50 animate-pulse border-none" };
+      return { disabled: false, text: "Start Inspection", classes: "bg-amber-500/90 hover:bg-amber-600 text-white shadow-[0_4px_15px_rgba(245,158,11,0.4)] animate-pulse border-transparent" };
     }
 
     if (asset.isOverdue) {
-      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500/90 backdrop-blur-md hover:bg-rose-600 text-white font-bold cursor-pointer shadow-lg hover:shadow-rose-500/50 animate-pulse border-none" };
+      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500/90 hover:bg-rose-600 text-white shadow-[0_4px_15px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
     const hasAudited = allInspections.some(insp => {
@@ -322,11 +432,11 @@ export default function StaffDashboardPage() {
               (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
     });
 
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-500/15 backdrop-blur-md text-emerald-600 border border-emerald-400/40 font-bold cursor-not-allowed shadow-sm" };
+    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-500/15 text-emerald-600 border border-emerald-400/40 cursor-not-allowed" };
     
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-500/10 backdrop-blur-md text-slate-500 font-bold border border-slate-400/30 shadow-sm cursor-not-allowed" };
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-500/10 text-slate-500 border border-slate-400/30 cursor-not-allowed" };
     
-    return { disabled: false, text: "Audit Device", classes: "bg-linear-to-r from-orange-500 to-purple-600 shadow-lg hover:shadow-orange-500/50 font-bold text-white cursor-pointer border-transparent" };
+    return { disabled: false, text: "Audit Device", classes: "bg-linear-to-r from-orange-500 to-purple-600 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] border-transparent" };
   };
 
   const requiresGlobalReinspection = assignedAssets.some(a => {
@@ -336,37 +446,29 @@ export default function StaffDashboardPage() {
   });
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
-  // 🎨 PURE MAC OS 2026 TRANSPARENT LIQUID GLASS THEME (CLEAN EDGES, NO PURPLE LINES)
+  // 🎨 STRICT TAILWIND V4 - HIGH-END LIQUID GLASS REFLECTIONS
   const theme = {
-    bg: 'bg-transparent', 
+    bg: 'bg-transparent',
     
-    // Core structure panels (Clean, static glass. NO colored hover lines or neon dropshadows)
     glassCard: isDarkMode 
-      ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-500' 
-      : 'bg-white/40 backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/60 shadow-[0_12px_40px_rgba(31,38,135,0.04),inset_0_1px_2px_rgba(255,255,255,0.7)] transition-all duration-500', 
+      ? 'bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.08)] transition-all duration-500 rounded-[2rem]' 
+      : 'bg-white/40 backdrop-blur-3xl backdrop-saturate-150 border border-white/60 shadow-[0_12px_40px_rgba(31,38,135,0.06),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all duration-500 rounded-[2rem]', 
     
     glassPanel: isDarkMode
-      ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all duration-500'
-      : 'bg-white/40 backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/60 shadow-[0_12px_40px_rgba(31,38,135,0.04),inset_0_1px_2px_rgba(255,255,255,0.7)] transition-all duration-500',
+      ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-purple-500/40 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] transition-all duration-500 rounded-[2rem]'
+      : 'bg-white/30 backdrop-blur-3xl backdrop-saturate-150 border border-white/50 shadow-[0_12px_40px_rgba(31,38,135,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:border-purple-400/80 hover:shadow-[0_0_35px_rgba(168,85,247,0.15)] transition-all duration-500 rounded-[2rem]',
       
-    // Action Buttons (Header, Modals)
     glassButton: isDarkMode
-      ? 'bg-zinc-800/50 backdrop-blur-xl border border-white/10 hover:border-white/30 hover:shadow-[0_4px_20px_rgba(255,255,255,0.1)] transition-all text-white'
-      : 'bg-white/60 backdrop-blur-2xl border border-white/90 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-white hover:shadow-[0_4px_20px_rgba(255,255,255,0.6)] transition-all text-slate-800',
+      ? 'bg-zinc-800/40 backdrop-blur-2xl border border-white/10 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all text-white'
+      : 'bg-white/50 backdrop-blur-2xl border border-white/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all text-slate-800',
     
-    // Internal Cards / Thumbnails (Clean glass pop on hover)
     glassItem: isDarkMode
-      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-white/20 hover:bg-black/30 transition-all duration-300'
-      : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_20px_rgba(31,38,135,0.05),inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-white/80 hover:bg-white/60 transition-all duration-300',
+      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-purple-500/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.25)] transition-all duration-300 rounded-[1.5rem]'
+      : 'bg-white/50 backdrop-blur-2xl border border-white/80 shadow-[0_8px_20px_rgba(31,38,135,0.03),inset_0_1px_1px_rgba(255,255,255,1)] hover:border-purple-400/80 hover:shadow-[0_0_25px_rgba(168,85,247,0.25)] transition-all duration-300 rounded-[1.5rem]',
       
-    // Small Data Containers
-    glassInner: isDarkMode
-      ? 'bg-black/40 backdrop-blur-md border border-white/10 shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] transition-colors'
-      : 'bg-white/50 backdrop-blur-xl border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.04)] transition-colors',
-    
     glassInnerCard: isDarkMode 
-      ? 'bg-black/40 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all' 
-      : 'bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9),0_2px_8px_rgba(0,0,0,0.02)] transition-all',
+      ? 'bg-black/30 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all rounded-[1.25rem]' 
+      : 'bg-white/60 backdrop-blur-2xl border border-white/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all rounded-[1.25rem]',
       
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
@@ -377,11 +479,17 @@ export default function StaffDashboardPage() {
   if (loading) return null; 
   if (!isAuthorized) return null; 
 
+  const activeAsset = selectedReturnAsset || selectedReplaceAsset;
+  const isLaptop = (activeAsset?.category || '').toLowerCase().includes('laptop');
+  const REQUIRED_PHOTOS = isLaptop ? 5 : 2;
+  const currentPhotoCount = remotePhotos.length + localPhotos.length;
+  const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
+
   return (
     <div className={`flex-1 flex flex-col w-full h-full p-4 lg:p-6 gap-5 overflow-hidden lg:min-h-0 z-10 font-sans ${theme.bg} transition-colors duration-1000`}>
       
-      {/* 🌟 HEADER WITH SYNC BUTTON */}
-      <div className={`${theme.glassCard} rounded-4xl p-5 md:px-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 transition-all`}>
+      {/* 🌟 HEADER */}
+      <div className={`${theme.glassCard} p-5 md:px-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 transition-all`}>
         <div>
           <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${theme.text}`}>Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
           <div className={`flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm font-semibold ${theme.subText}`}>
@@ -393,7 +501,7 @@ export default function StaffDashboardPage() {
           <button 
             onClick={() => loadRealDatabase(true)} 
             disabled={isRefreshing}
-            className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 active:scale-95 ${theme.glassButton}`}
+            className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-[0_4px_15px_rgba(249,115,22,0.4),inset_0_1px_1px_rgba(255,255,255,0.4)] disabled:opacity-50 active:scale-95 ${isDarkMode ? 'bg-white/10 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-white/20' : 'bg-linear-to-r from-orange-500 to-purple-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.5)] text-white border-transparent'}`}
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Sync Feeds
           </button>
@@ -402,8 +510,6 @@ export default function StaffDashboardPage() {
 
       {/* 🌟 ACTION THUMBNAILS & STATS */}
       <div className="flex flex-col xl:flex-row gap-5 shrink-0">
-        
-        {/* Quick Actions */}
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600', type: 'TICKET', isActionDisabled: false, path: null },
@@ -415,10 +521,10 @@ export default function StaffDashboardPage() {
               key={item.name} 
               onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
               disabled={item.isActionDisabled}
-              className={`relative ${theme.glassItem} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-50 cursor-not-allowed hover:translate-y-0' : 'hover:-translate-y-1'}`}
+              className={`relative ${theme.glassItem} min-h-24 p-4 flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-50 cursor-not-allowed hover:shadow-[0_8px_20px_rgba(31,38,135,0.03),inset_0_1px_1px_rgba(255,255,255,0.7)] hover:border-white/50 hover:translate-y-0' : 'hover:-translate-y-1'}`}
             >
               <div className="flex items-start justify-between w-full">
-                <div className={`p-3 rounded-2xl transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110'} ${theme.glassInnerCard} ${item.color}`}>
+                <div className={`p-3 transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110'} ${theme.glassInnerCard} ${item.color}`}>
                   {item.isActionDisabled ? <Lock size={18} /> : <item.icon size={18} strokeWidth={2.5} />}
                 </div>
                 {!item.isActionDisabled && (
@@ -428,18 +534,17 @@ export default function StaffDashboardPage() {
                 )}
               </div>
               <div className="text-left w-full mt-2">
-                <h3 className={`font-bold text-[13px] tracking-tight leading-tight transition-colors ${item.isActionDisabled ? theme.subText : theme.text}`}>{item.name}</h3>
+                <h3 className={`font-bold text-[13px] tracking-tight leading-tight transition-colors ${item.isActionDisabled ? theme.subText : `${theme.text} group-hover:text-purple-600`}`}>{item.name}</h3>
                 <p className={`text-[10px] font-bold mt-0.5 leading-snug line-clamp-1 ${theme.subText}`}>{item.desc}</p>
               </div>
             </button>
           ))}
         </div>
 
-        {/* Key Stats */}
         <div className="xl:w-1/3 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-white/50 dark:border-white/10">
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 group`}>
+          <div className={`${theme.glassCard} min-h-24 p-4 flex flex-col justify-between hover:border-purple-400 hover:shadow-[0_0_25px_rgba(168,85,247,0.3)] transition-all duration-300 group`}>
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl text-purple-600 shadow-sm group-hover:scale-110 transition-transform ${theme.glassInnerCard}`}><Laptop size={18} strokeWidth={2.5} /></div>
+              <div className={`p-3 text-purple-600 shadow-sm group-hover:scale-110 transition-transform ${theme.glassInnerCard}`}><Laptop size={18} strokeWidth={2.5} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Assigned</span>
             </div>
             <div>
@@ -448,9 +553,9 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 group`}>
+          <div className={`${theme.glassCard} min-h-24 p-4 flex flex-col justify-between hover:border-amber-400 hover:shadow-[0_0_25px_rgba(245,158,11,0.3)] transition-all duration-300 group`}>
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl text-amber-600 shadow-sm group-hover:scale-110 transition-transform ${theme.glassInnerCard}`}><AlertCircle size={18} strokeWidth={2.5} /></div>
+              <div className={`p-3 text-amber-600 shadow-sm group-hover:scale-110 transition-transform ${theme.glassInnerCard}`}><AlertCircle size={18} strokeWidth={2.5} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Action Req.</span>
             </div>
             <div>
@@ -459,9 +564,9 @@ export default function StaffDashboardPage() {
             </div>
           </div>
 
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 group`}>
+          <div className={`${theme.glassCard} min-h-24 p-4 flex flex-col justify-between hover:border-orange-400 hover:shadow-[0_0_25px_rgba(249,115,22,0.3)] transition-all duration-300 group`}>
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl text-orange-600 shadow-sm group-hover:scale-110 transition-transform ${theme.glassInnerCard}`}><Ticket size={18} strokeWidth={2.5} /></div>
+              <div className={`p-3 text-orange-600 shadow-sm group-hover:scale-110 transition-transform ${theme.glassInnerCard}`}><Ticket size={18} strokeWidth={2.5} /></div>
               <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Open Tix</span>
             </div>
             <div>
@@ -472,13 +577,13 @@ export default function StaffDashboardPage() {
         </div>
       </div>
 
-      {/* 🟢 MAIN SPLIT VIEW (Hardware Units vs Tickets) */}
+      {/* 🟢 MAIN SPLIT VIEW */}
       <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 pt-1">
         
         {/* LEFT: MY HARDWARE UNITS */}
         <div className="w-full lg:w-2/3 flex flex-col lg:min-h-0">
-          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0`}>
-            <div className={`flex items-center justify-between border-b pb-4 mb-4 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+          <div className={`${theme.glassPanel} p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 group/panel`}>
+            <div className={`flex items-center justify-between border-b pb-4 mb-4 transition-colors duration-500 ${isDarkMode ? 'border-white/10 group-hover/panel:border-purple-500/50' : 'border-white/40 group-hover/panel:border-purple-400/80'}`}>
               <div className={`flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider ${theme.text}`}>
                 <Laptop className="text-purple-500 shrink-0" size={18}/> My Hardware Units
               </div>
@@ -499,28 +604,26 @@ export default function StaffDashboardPage() {
                   
                   const isReturnPending = currentStatus.includes('return') || inspStatus.includes('return pending');
                   const isReturnRejected = currentStatus.includes('reject') || inspStatus.includes('reject');
+                  const isReplacePending = currentStatus.includes('replacement requested');
 
                   return (
-                    <div key={asset.id} className={`${theme.glassItem} p-5 rounded-4xl`}>
+                    <div key={asset.id} className={`${theme.glassItem} p-5`}>
                       
                       <div className="flex justify-between items-start gap-3">
                         <h4 className={`font-extrabold text-base tracking-tight leading-tight ${theme.text}`}>
                           {asset.name || asset.asset_name || asset.model || 'Generic Device'}
                         </h4>
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 shadow-sm ${
-                          isReturnRejected ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
-                          isReturnPending ? 'bg-orange-500/10 text-orange-600 border-orange-500/30' :
-                          isRejected ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
-                          isReInspect ? 'bg-amber-500/10 text-amber-600 border-amber-500/30 animate-pulse' :
-                          asset.isOverdue ? 'bg-rose-500/10 text-rose-600 border-rose-500/30 animate-pulse' :
-                          (asset.computed_status || '').toLowerCase() === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' :
-                          'bg-slate-500/10 text-slate-600 border-slate-500/30'
-                        }`}>
-                          {isReturnRejected ? 'Return Rejected' : isReturnPending ? 'Pending Return' : isRejected ? 'Rejected' : isReInspect ? 'Re-Inspection' : asset.isOverdue ? 'Overdue' : (asset.computed_status || 'Pending')}
-                        </span>
+                        
+                        {isReturnRejected ? <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30">Return Rejected</span>
+                        : isReturnPending ? <span className="px-3 py-1.5 bg-orange-500/10 text-orange-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-500/30">Pending Return</span>
+                        : isReplacePending ? <span className="px-3 py-1.5 bg-purple-500/10 text-purple-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-purple-500/30">Pending Replace</span>
+                        : isRejected ? <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30">Rejected</span>
+                        : isReInspect ? <span className="px-3 py-1.5 bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-500/30 animate-pulse">Re-Inspection</span>
+                        : asset.isOverdue ? <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30 animate-pulse">Overdue</span>
+                        : <span className="px-3 py-1.5 bg-slate-500/10 text-slate-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-slate-500/30">{asset.computed_status || 'Assigned'}</span>}
                       </div>
 
-                      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-3xl mt-4 ${theme.glassInnerCard}`}>
+                      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 mt-4 ${theme.glassInnerCard}`}>
                         <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Tag ID</span><span className={`font-mono text-xs font-bold wrap-break-word ${theme.text}`}>{asset.asset_tag || 'N/A'}</span></div>
                         <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Category</span><span className={`text-xs font-bold wrap-break-word ${theme.text}`}>{asset.category || 'N/A'}</span></div>
                         <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Updated</span><span className={`text-xs font-bold ${theme.text}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span></div>
@@ -530,65 +633,51 @@ export default function StaffDashboardPage() {
                       { (isRejected || isReInspect) && asset.live_admin_remarks && (
                         <div className={`p-4 mt-4 rounded-2xl border text-xs font-bold flex gap-3 ${isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-700'}`}>
                           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                          <div>
-                            <span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Request Reason:</span>
-                            {asset.live_admin_remarks}
-                          </div>
+                          <div><span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Request Reason:</span>{asset.live_admin_remarks}</div>
                         </div>
                       )}
 
                       <div className="flex flex-wrap items-center gap-3 pt-4 justify-end">
                         
-                        {isReturnPending && !isReturnRejected ? (
+                        {(isReturnPending || isReplacePending) && !isReturnRejected ? (
                           <div className="flex flex-col items-center gap-1">
-                            <button disabled className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-not-allowed opacity-60 ${theme.glassButton}`}>
-                              Pending Admin
-                            </button>
-                            <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center leading-tight animate-pulse mt-1">
-                              Already Submitted<br/>Wait for Response
-                            </span>
+                            <button disabled className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-not-allowed opacity-60 ${theme.glassButton}`}>Pending Admin</button>
+                            <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center leading-tight animate-pulse mt-1">Wait for Response</span>
                           </div>
                         ) : isReturnRejected ? (
                           <button 
                             onClick={async () => {
                               await supabase.from('assets').update({ status: 'Assigned', inspection_status: null }).eq('id', asset.id);
                               loadRealDatabase();
-                              setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
+                              resetModals(); setSelectedReturnAsset(asset); setReturnModalOpen(true);
                             }}
-                            className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all flex items-center gap-2 cursor-pointer ${theme.glassButton} text-rose-600!`}
+                            className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-pointer flex items-center gap-2 ${theme.glassButton} border-rose-400/50! text-rose-600! hover:bg-rose-500/10!`}
                           >
                             <AlertTriangle size={14} /> Rejected (Retry)
                           </button>
                         ) : (
-                          <button 
-                            onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                            className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-pointer ${theme.glassButton} text-orange-600!`}
-                          >
-                            Return
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => { resetModals(); setSelectedReturnAsset(asset); setReturnModalOpen(true); }}
+                              className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-pointer ${theme.glassButton} border-orange-400/50! text-orange-600! hover:bg-orange-500/10!`}
+                            >
+                              Return
+                            </button>
+                            <button 
+                              onClick={() => { resetModals(); setSelectedReplaceAsset(asset); setReplaceModalOpen(true); }}
+                              className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-pointer ${theme.glassButton} border-purple-400/50! text-purple-600! hover:bg-purple-500/10!`}
+                            >
+                              Replace
+                            </button>
+                          </>
                         )}
-
-                        <button 
-                          disabled={isReturnPending && !isReturnRejected}
-                          onClick={() => {
-                            setReplaceAssetId(asset.id);
-                            setShowReplaceModal(true);
-                          }}
-                          className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all ${
-                            (isReturnPending && !isReturnRejected)
-                              ? 'opacity-60 cursor-not-allowed ' + theme.glassButton
-                              : `${theme.glassButton} text-purple-600! cursor-pointer`
-                          }`}
-                        >
-                          Replace
-                        </button>
 
                         <button 
                           disabled={btnState.disabled}
                           onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
                           className={`px-6 py-2.5 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-2 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)] ${btnState.classes}`}
                         >
-                          {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={15} />}
+                          {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle2 size={15} />}
                           {btnState.disabled && btnState.text.includes('Opens') && <Lock size={15} />}
                           <span>{btnState.text}</span>
                         </button>
@@ -603,8 +692,8 @@ export default function StaffDashboardPage() {
 
         {/* RIGHT: MY SERVICE TICKETS */}
         <div className="w-full lg:w-1/3 flex flex-col lg:min-h-0 pb-4 lg:pb-0">
-          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0`}>
-            <div className={`flex items-center justify-between border-b pb-4 mb-4 transition-colors duration-500 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+          <div className={`${theme.glassPanel} p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 group/panel`}>
+            <div className={`flex items-center justify-between border-b pb-4 mb-4 transition-colors duration-500 ${isDarkMode ? 'border-white/10 group-hover/panel:border-orange-500/30' : 'border-white/40 group-hover/panel:border-orange-400/80'}`}>
               <div className={`flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider ${theme.text}`}><Ticket className="text-orange-500 shrink-0" size={18}/> My Tickets</div>
               <span className={`text-xs font-bold ${theme.subText}`}>{myTickets.length} Raised</span>
             </div>
@@ -616,7 +705,7 @@ export default function StaffDashboardPage() {
                 myTickets.map(tix => {
                   const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
                   return (
-                    <div key={tix.id} className={`p-5 rounded-3xl transition-colors space-y-4 ${theme.glassItem}`}>
+                    <div key={tix.id} className={`p-5 space-y-4 ${theme.glassItem}`}>
                       <div className="flex items-start justify-between gap-3">
                         <span className={`font-extrabold text-sm leading-snug wrap-break-word ${theme.text}`}>{tix.title || tix.subject}</span>
                         <span className={`px-3 py-1 rounded-lg text-[9px] font-black tracking-widest uppercase border shrink-0 shadow-sm ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
@@ -625,7 +714,7 @@ export default function StaffDashboardPage() {
                       <p className={`text-xs font-semibold line-clamp-3 wrap-break-word ${theme.subText}`}>{tix.description || tix.note}</p>
 
                       {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
-                        <div className={`p-4 rounded-2xl border text-xs ${theme.glassInner}`}>
+                        <div className={`p-4 border text-xs ${theme.glassInnerCard}`}>
                           <strong className={`block mb-1.5 ${theme.text}`}>Admin Response:</strong>
                           <span className="font-medium text-slate-800 dark:text-slate-300 wrap-break-word">{tix.admin_remarks || tix.admin_notes || tix.resolution_notes}</span>
                         </div>
@@ -638,27 +727,16 @@ export default function StaffDashboardPage() {
                                 <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
                               </div>
                           )}
-
                           <div className="flex items-center gap-1 mt-1">
                             <span className={`text-[9px] font-bold uppercase tracking-widest mr-2 ${theme.subText}`}>Rate Support:</span>
                             {[1, 2, 3, 4, 5].map(star => (
-                              <button
-                                key={star}
-                                disabled={!!tix.rating}
-                                onClick={() => handleRateTicket(tix.id, star)}
-                                className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-125 hover:drop-shadow-lg'}`}
-                              >
+                              <button key={star} disabled={!!tix.rating} onClick={() => handleRateTicket(tix.id, star)} className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-125 hover:drop-shadow-lg'}`}>
                                 <Star size={16} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-white drop-shadow-md dark:text-zinc-600"} />
                               </button>
                             ))}
                           </div>
                         </div>
                       )}
-
-                      <div className={`flex items-center justify-between text-[10px] uppercase tracking-widest pt-3 font-bold border-t ${isDarkMode ? 'border-white/10 text-zinc-500' : 'border-white/30 text-slate-500'}`}>
-                        <span className="wrap-break-word">Category: <strong className={theme.text}>{tix.category || 'General'}</strong></span>
-                        <span className="shrink-0">{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
-                      </div>
                     </div>
                   );
                 })
@@ -668,8 +746,143 @@ export default function StaffDashboardPage() {
         </div>
 
       </div>
-      
-      {/* 🌟 UPGRADED COMPACT PURE LIQUID GLASS DATABASE MODAL */}
+
+      {/* 🌟 UNIFIED MODAL UI FOR RETURN & REPLACE (With QR Camera Handover) */}
+      {mounted && (returnModalOpen || replaceModalOpen) && activeAsset && createPortal(
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-9999 flex items-center justify-center p-4">
+          
+          <div className="bg-[#e9e9ec] rounded-4xl w-full max-w-105 shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300">
+            
+            {/* Header */}
+            <div className="p-6 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                  {returnModalOpen ? <LogOut className="text-[#ff7300]" size={20} /> : <RefreshCcw className="text-purple-600" size={20} />}
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                    {returnModalOpen ? 'Asset Return Request' : 'Asset Replace Request'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    {returnModalOpen ? 'Initiate IT Handover' : 'Initiate Hardware Swap'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={resetModals} className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
+            </div>
+
+            {/* STEP 1: FORM VIEW */}
+            {!qrUrl ? (
+              <div className="px-6 pb-6 space-y-5">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">Select Assigned Asset</label>
+                  <div className="w-full px-4 py-3.5 bg-white rounded-2xl text-sm font-semibold text-slate-800 shadow-sm opacity-90 cursor-not-allowed flex justify-between items-center">
+                    <span className="truncate">{activeAsset.name} ({activeAsset.asset_tag})</span>
+                    <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 bg-white rounded-2xl p-4 shadow-sm gap-4">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tag ID</p>
+                    <p className="text-sm font-black text-slate-900">{activeAsset.asset_tag}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Serial Number</p>
+                    <p className="text-sm font-black text-slate-900 truncate">{activeAsset.serial_number}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">Current Asset Condition</label>
+                  <GlassDropdown 
+                    value={returnModalOpen ? returnCondition : replaceCondition}
+                    onChange={(val: string) => returnModalOpen ? setReturnCondition(val) : setReplaceCondition(val)}
+                    options={
+                      returnModalOpen 
+                        ? ["Pristine / Flawless", "Minor Wear", "Damaged", "Not Working"]
+                        : ["Minor Hardware Issue", "Damaged / Broken Part", "Not Working / Won't Power On", "Performance Issues"]
+                    }
+                    isDarkMode={isDarkMode}
+                    theme={theme}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">
+                    {returnModalOpen ? 'Return Reason & Notes' : 'Replace Reason & Notes'}
+                  </label>
+                  <textarea 
+                    required 
+                    value={returnModalOpen ? returnNotes : replaceReason} 
+                    onChange={(e) => returnModalOpen ? setReturnNotes(e.target.value) : setReplaceReason(e.target.value)} 
+                    placeholder={`Provide reason for ${returnModalOpen ? 'returning' : 'this request'}...`}
+                    className={`w-full px-5 py-4 bg-white/70 rounded-2xl text-sm font-semibold text-slate-700 outline-none resize-none h-24 shadow-inner placeholder:text-slate-400 focus:bg-white focus:ring-2 border border-transparent ${returnModalOpen ? 'focus:ring-[#ff7300]/20' : 'focus:ring-purple-500/20'}`} 
+                  />
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <button type="button" onClick={resetModals} className="flex-1 py-4 bg-white rounded-full text-[11px] font-black text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={() => handleGenerateQR(activeAsset, returnModalOpen)} className={`flex-1 py-4 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md transition-all cursor-pointer ${returnModalOpen ? 'bg-[#ff7300] hover:bg-[#e66a00]' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                    Generate QR
+                  </button>
+                </div>
+              </div>
+            ) : (
+              
+              /* STEP 2: QR CODE UPLOAD VIEW */
+              <form onSubmit={returnModalOpen ? handleReturnSubmit : handleReplaceSubmit} className="px-6 pb-6 space-y-6 flex flex-col animate-in slide-in-from-right-4">
+                
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+                    {isLaptop ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
+                  </p>
+                  
+                  <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-4">
+                    <img src={qrUrl} alt="Upload QR Code" className="w-40 h-40 object-contain" />
+                  </div>
+                  
+                  <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-500 ${returnModalOpen ? 'bg-[#ff7300]' : 'bg-purple-500'}`} 
+                      style={{ width: `${Math.min((currentPhotoCount / REQUIRED_PHOTOS) * 100, 100)}%` }} 
+                    />
+                  </div>
+                  
+                  <p className={`text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
+                    {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${REQUIRED_PHOTOS - currentPhotoCount > 0 ? REQUIRED_PHOTOS - currentPhotoCount : 0} more photo(s)...`}
+                  </p>
+
+                  <div className="mt-4 pt-4 border-t border-slate-100 w-full">
+                    <label className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer uppercase tracking-widest transition-colors">
+                      Or upload directly from computer
+                      <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
+                        if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
+                      }} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button type="button" onClick={() => setQrUrl(null)} className="w-14 h-13 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
+                    <ChevronLeft size={20} strokeWidth={2.5} />
+                  </button>
+                  <button type="submit" disabled={!hasEnoughPhotos || isSubmittingReturn || isSubmittingReplace} className={`flex-1 h-13 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer ${returnModalOpen ? 'bg-[#ff7300]' : 'bg-purple-600'}`}>
+                    {(isSubmittingReturn || isSubmittingReplace) ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 🌟 ORIGINAL TICKET & INSPECTION MODAL (Now fully updated with GlassDropdowns) */}
       <AnimatePresence>
         {modal.isOpen && (
           <LiveDatabaseModal 
@@ -685,150 +898,20 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* 🌟 COMPACT PURE LIQUID GLASS REPLACEMENT MODAL FOR STAFF DASHBOARD */}
-      <AnimatePresence>
-        {showReplaceModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
-            
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowReplaceModal(false)}
-              className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`}
-            />
-            
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
-              animate={{ scale: 1, opacity: 1, y: 0 }} 
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden ${theme.glassCard}`}
-            >
-              <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-3xl flex items-center justify-center ${
-                    isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-inner text-purple-500'
-                  }`}>
-                     <PackageOpen size={24} strokeWidth={2} />
-                  </div>
-                  <h2 className={`text-[14px] sm:text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>
-                    Assets Replacement
-                  </h2>
-                </div>
-                <button 
-                  onClick={() => setShowReplaceModal(false)}
-                  className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}
-                >
-                  <X size={18} strokeWidth={2.5} />
-                </button>
-              </div>
-
-              <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
-
-              <form id="replacementForm" onSubmit={handleReplacementSubmit} className="px-6 py-4 sm:px-8 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-3 sm:gap-4 custom-scrollbar">
-                
-                <div className="flex flex-col gap-1.5 sm:gap-2">
-                  <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                    Select Assigned Asset
-                  </label>
-                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                    <select
-                      value={replaceAssetId}
-                      onChange={(e) => setReplaceAssetId(e.target.value)}
-                      required
-                      className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
-                    >
-                      <option value="" disabled className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Choose Hardware...</option>
-                      {assignedAssets.map(asset => (
-                        <option key={asset.id} value={asset.id} className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">
-                          {asset.name || asset.asset_name} ({asset.asset_tag})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {replaceAssetId && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0, marginTop: -5 }} 
-                      animate={{ opacity: 1, height: 'auto', marginTop: 0 }} 
-                      exit={{ opacity: 0, height: 0, marginTop: -5 }}
-                      className="overflow-hidden"
-                    >
-                      <div className={`px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 ${theme.glassInnerCard}`}>
-                        <div className="flex-1 space-y-1">
-                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
-                          <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
-                            {assignedAssets.find(a => String(a.id) === replaceAssetId)?.asset_tag}
-                          </span>
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
-                          <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
-                            {assignedAssets.find(a => String(a.id) === replaceAssetId)?.serial_number || 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <div className="flex flex-col gap-1.5 sm:gap-2">
-                  <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                    Detailed Explanation
-                  </label>
-                  <textarea
-                    value={replaceReason}
-                    onChange={(e) => setReplaceReason(e.target.value)}
-                    required
-                    placeholder="Describe what happened..."
-                    className={`w-full px-4 sm:px-5 py-3 sm:py-4 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none min-h-17.5 sm:min-h-20 resize-none ${theme.glassInnerCard} ${
-                      isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'
-                    }`}
-                  />
-                </div>
-
-              </form>
-
-              <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
-
-              <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowReplaceModal(false)}
-                  className={`flex-1 py-3.5 rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="replacementForm"
-                  disabled={isSubmittingReplace || !replaceAssetId || !replaceReason.trim()}
-                  className="flex-1 py-3.5 bg-linear-to-r from-purple-500 to-purple-600 text-white rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all shadow-[0_4px_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 border-0"
-                >
-                  {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Transmit'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
-// 🌟 UPGRADED COMPACT PURE LIQUID GLASS MODAL (Reused for Ticket, Return, Inspect, Request)
+// 🌟 ORIGINAL LIVE DATABASE MODAL FOR INSPECTION & TICKETS (Unaffected by new QR Modals)
 function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setAssignedAssets, onClose, theme }: any) {
   const needsLock = type === 'INSPECTION';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
   const [lockError, setLockError] = useState(false);
 
-  const [selectedReturnId, setSelectedReturnId] = useState(asset?.id || (assignedAssets?.[0]?.id || ''));
-
   const [formTitle, setFormTitle] = useState('');
   const [formText, setFormText] = useState('');
-  const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
+  const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop / PC' : 'Hardware');
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
   const [screenshot, setScreenshot] = useState<File | null>(null); 
   
@@ -853,34 +936,6 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
 
   const handleLivePostgresSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-
-    if (type === 'RETURN') {
-      const targetAsset = assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId));
-      if (!targetAsset) return;
-
-      const confirmed = window.confirm(
-        `WARNING: VERIFY SERIAL NUMBER\n\nAre you sure your physical asset's Serial Number matches this serial number?\n\nAsset: ${targetAsset.name || targetAsset.asset_name}\nTag ID: ${targetAsset.asset_tag}\nSerial Number: ${targetAsset.serial_number || 'N/A'}\n\nClick OK if it matches exactly.`
-      );
-
-      if (!confirmed) {
-        toast.error("Return aborted. Serial numbers must match.");
-        return; 
-      }
-
-      try {
-        await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', targetAsset.id);
-        if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map((a: any) => a.id === targetAsset.id ? { ...a, status: 'Pending Return' } : a));
-        
-        const baseUrl = window.location.origin;
-        const cat = targetAsset.category;
-        const finalNotes = `[RETURN REQUEST] ${formText}`;
-        const url = `${baseUrl}/mobile-audit?assetId=${targetAsset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
-        setQrUrl(url); setShowQR(true);
-      } catch(e) {
-        toast.error("Error submitting return request.");
-      }
-      return;
-    }
 
     if (type === 'INSPECTION') {
       generateMobileHandoff(); return;
@@ -926,21 +981,18 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
   };
 
   const getHeaderIcon = () => {
-    if (type === 'RETURN') return <LogOut size={24} strokeWidth={2} />;
     if (type === 'REQUEST') return <PlusCircle size={24} strokeWidth={2} />;
     if (type === 'INSPECTION') return <ClipboardCheck size={24} strokeWidth={2} />;
     return <Ticket size={24} strokeWidth={2} />;
   };
 
   const getHeaderColors = () => {
-    if (type === 'RETURN') return isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-white/80 border border-white text-orange-500 shadow-inner';
-    if (type === 'REQUEST') return isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/80 border border-white text-emerald-500 shadow-inner';
-    if (type === 'INSPECTION') return isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-white/80 border border-white text-amber-500 shadow-inner';
-    return isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner';
+    if (type === 'REQUEST') return isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/80 border border-white text-emerald-500 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (type === 'INSPECTION') return isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-white/80 border border-white text-amber-500 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    return isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]';
   };
 
   const getTitle = () => {
-    if (type === 'RETURN') return 'Asset Return Request';
     if (type === 'REQUEST') return 'Request New Gear';
     if (type === 'INSPECTION') return 'Device Compliance Audit';
     return 'Raise Support Ticket';
@@ -958,7 +1010,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
         initial={{ scale: 0.95, opacity: 0, y: 20 }} 
         animate={{ scale: 1, opacity: 1, y: 0 }} 
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
-        className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden ${theme.glassCard}`}
+        className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] flex flex-col overflow-hidden ${theme.glassCard}`}
       >
         <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -967,8 +1019,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
             </div>
             <div>
               <h2 className={`text-[14px] sm:text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>{getTitle()}</h2>
-              {type !== 'RETURN' && <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 ${theme.subText}`}>{type === 'INSPECTION' ? 'Visual verification' : 'Portal Submission'}</p>}
-              {type === 'RETURN' && <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 ${theme.subText}`}>Initiate IT Handover</p>}
+              <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 ${theme.subText}`}>{type === 'INSPECTION' ? 'Visual verification' : 'Portal Submission'}</p>
             </div>
           </div>
           <button onClick={onClose} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}>
@@ -993,7 +1044,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
               <div className={`p-4 sm:p-5 rounded-4xl inline-block shadow-[0_16px_40px_rgba(0,0,0,0.1)] mx-auto border ${isDarkMode ? 'bg-white/90 border-white/20' : 'bg-white border-white'}`}>
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
               </div>
-              <div className={`p-4 sm:p-5 rounded-[1.25rem] text-left transition-all ${theme.glassInnerCard}`}>
+              <div className={`p-4 sm:p-5 text-left transition-all ${theme.glassInnerCard}`}>
                 <h5 className={`text-[10px] sm:text-[11px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-500'}`}><Camera size={16}/> Photo Requirements</h5>
                 <ul className={`text-[11px] sm:text-xs font-bold space-y-2 ml-1 ${theme.textMain}`}>
                   {(asset?.category || '').toLowerCase().includes('laptop') ? (
@@ -1008,7 +1059,7 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
             <form id="genericModalForm" onSubmit={handleLivePostgresSubmit} className="space-y-3 sm:space-y-4">
               
               {needsLock && (
-                <div className={`p-4 sm:p-5 rounded-3xl space-y-3 transition-all ${theme.glassInnerCard}`}>
+                <div className={`p-4 sm:p-5 space-y-3 transition-all ${theme.glassInnerCard}`}>
                   <p className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-rose-400' : 'text-rose-500'}`}>🔒 Security Verification Required</p>
                   <div className="flex gap-2 sm:gap-3">
                     <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className={`flex-1 px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[13px] font-bold outline-none transition-all ${isDarkMode ? 'bg-zinc-900/60 text-white placeholder-zinc-500 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]' : 'bg-white/40 text-[#0f172a] placeholder-[#818b9c] shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border border-white/60'}`}/>
@@ -1016,58 +1067,6 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
                   </div>
                   {lockError && <p className="text-[10px] sm:text-[11px] text-rose-500 font-bold px-1">Incorrect device code.</p>}
                 </div>
-              )}
-
-              {type === 'RETURN' && (
-                <>
-                  <div className="flex flex-col gap-1.5 sm:gap-2">
-                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                      Select Assigned Asset
-                    </label>
-                    <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                      <select
-                        value={selectedReturnId}
-                        onChange={(e) => setSelectedReturnId(e.target.value)}
-                        required
-                        className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
-                      >
-                        <option value="" disabled className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Choose Hardware...</option>
-                        {assignedAssets?.map((a: any) => (
-                          <option key={a.id} value={a.id} className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">
-                            {a.name || a.asset_name} ({a.asset_tag})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
-                    </div>
-                  </div>
-
-                  <AnimatePresence>
-                    {selectedReturnId && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0, marginTop: -5 }} 
-                        animate={{ opacity: 1, height: 'auto', marginTop: 0 }} 
-                        exit={{ opacity: 0, height: 0, marginTop: -5 }}
-                        className="overflow-hidden"
-                      >
-                        <div className={`px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 ${theme.glassInnerCard}`}>
-                          <div className="flex-1 space-y-1">
-                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
-                            <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
-                              {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.asset_tag}
-                            </span>
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
-                            <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
-                              {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.serial_number || 'N/A'}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </>
               )}
 
               {type === 'TICKET' && (
@@ -1079,14 +1078,13 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
                   
                   <div className="flex flex-col gap-1.5 sm:gap-2">
                     <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</label>
-                    <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
-                        <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Hardware</option>
-                        <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Software</option>
-                        <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Network</option>
-                      </select>
-                      <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
-                    </div>
+                    <GlassDropdown 
+                      value={formCategory}
+                      onChange={(val: string) => setFormCategory(val)}
+                      options={["Hardware", "Software", "Network"]}
+                      isDarkMode={isDarkMode}
+                      theme={theme}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5 sm:gap-2">
@@ -1107,39 +1105,34 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
               {type === 'REQUEST' && (
                 <div className="flex flex-col gap-1.5 sm:gap-2">
                   <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Equipment Category</label>
-                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Laptop / PC</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Monitor</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Keyboard / Mouse</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Headset / Audio</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Other Accessory</option>
-                    </select>
-                    <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
-                  </div>
+                  <GlassDropdown 
+                    value={formCategory}
+                    onChange={(val: string) => setFormCategory(val)}
+                    options={["Laptop / PC", "Monitor", "Keyboard / Mouse", "Headset / Audio", "Other Accessory"]}
+                    isDarkMode={isDarkMode}
+                    theme={theme}
+                  />
                 </div>
               )}
 
-              {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
+              {type === 'INSPECTION' && isUnlocked && (
                 <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300">
                   <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Current Asset Condition</label>
-                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                    <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Pristine / Flawless</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Good / Minor Scratches</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Poor / Damaged (Requires Fix)</option>
-                      <option className="bg-white text-slate-900 font-bold dark:bg-zinc-900 dark:text-zinc-100">Non-Functional / Dead</option>
-                    </select>
-                    <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
-                  </div>
+                  <GlassDropdown 
+                    value={formCondition}
+                    onChange={(val: string) => setFormCondition(val)}
+                    options={["Pristine / Flawless", "Good / Minor Scratches", "Poor / Damaged (Requires Fix)", "Non-Functional / Dead"]}
+                    isDarkMode={isDarkMode}
+                    theme={theme}
+                  />
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5 sm:gap-2">
                 <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                  {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : type === 'REQUEST' ? 'Business Justification' : 'Detailed Explanation'}
+                  {type === 'INSPECTION' ? 'Audit Notes' : type === 'REQUEST' ? 'Business Justification' : 'Detailed Explanation'}
                 </label>
-                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none resize-none min-h-17.5 sm:min-h-20 ${theme.glassInnerCard} ${isDarkMode ? 'placeholder-zinc-500 text-white shadow-inner' : 'placeholder-[#818b9c] text-[#0f172a] shadow-inner border border-white/60'}`}/>
+                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : "Describe what happened..."} className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none resize-none min-h-17.5 sm:min-h-20 ${theme.glassInnerCard} ${isDarkMode ? 'placeholder-zinc-500 text-white shadow-inner' : 'placeholder-[#818b9c] text-[#0f172a] shadow-inner border border-white/60'}`}/>
               </div>
             </form>
           )}
@@ -1164,14 +1157,12 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
                     form="genericModalForm"
                     disabled={isTransmitting || (needsLock && !isUnlocked)} 
                     className={`flex-1 py-3.5 text-white rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 border-0 ${
-                      type === 'RETURN' 
-                        ? 'bg-linear-to-r from-orange-400 to-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]' 
-                        : type === 'REQUEST'
-                        ? 'bg-linear-to-r from-emerald-400 to-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)]'
-                        : 'bg-linear-to-r from-purple-500 to-purple-600 shadow-[0_4px_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]'
+                      type === 'REQUEST'
+                      ? 'bg-linear-to-r from-emerald-400 to-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)]'
+                      : 'bg-linear-to-r from-purple-500 to-purple-600 shadow-[0_4px_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]'
                     }`}
                   >
-                    {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : (type === 'INSPECTION' || type === 'RETURN' ? 'Generate QR' : 'Transmit')}
+                    {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : (type === 'INSPECTION' ? 'Generate QR' : 'Transmit')}
                   </button>
                 </>
               )}
