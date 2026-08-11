@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Ticket, Plus, X, Clock, CheckCircle2, 
-  MessageSquare, Laptop, AlertCircle, Send, Star, Loader2, Timer, ShieldCheck
+  MessageSquare, Laptop, AlertCircle, Send, Star, Loader2, Timer, ShieldCheck,
+  ChevronDown, UploadCloud, ImagePlus
 } from 'lucide-react';
 
 // 🌟 TIME CALCULATION ENGINE
@@ -51,7 +52,7 @@ const calculateWaitingTime = (raisedAt: string) => {
   return parts.join(' ');
 };
 
-// 🌟 TICKET RATING COMPONENT (For Modal)
+// 🌟 TICKET RATING COMPONENT
 function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRatingSubmitted: (rating: number, feedback: string) => void }) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -152,22 +153,32 @@ function TicketRatingForm({ ticket, onRatingSubmitted }: { ticket: any, onRating
 export default function StaffTicketsPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [tickets, setTickets] = useState<any[]>([]);
-  const [myAssignedAssets, setMyAssignedAssets] = useState<any[]>([]);
-  
   const [activeTab, setActiveTab] = useState<'All' | 'Open' | 'Closed'>('All');
   
   // Modal State
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [viewTicket, setViewTicket] = useState<any>(null);
 
-  // Form State
-  const [formData, setFormData] = useState({ assetId: '', issue: '' });
+  // 🌟 NEW DASHBOARD TICKET FORM STATE
+  const [formTitle, setFormTitle] = useState('');
+  const [formCategory, setFormCategory] = useState('Hardware');
+  const [formText, setFormText] = useState('');
+  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [isTransmitting, setIsTransmitting] = useState(false);
+  const [successDone, setSuccessDone] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
+    };
+    syncTheme();
     fetchData();
   }, []);
 
@@ -184,16 +195,15 @@ export default function StaffTicketsPage() {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
       if (isGuest) {
         setCurrentUser({ id: 'guest-mock-uuid', email: 'guest@vsit.com', name: 'Demo Guest' });
-        setMyAssignedAssets([{ id: 'demo-asset-1', name: 'Demo MacBook Pro 16"', asset_tag: 'MAC-9999' }]);
         setTickets([
           {
-            id: 'demo-tkt-1', token: 'TKT-8492', assetName: 'Demo MacBook Pro 16"', tagId: 'MAC-9999', 
-            issue: 'Battery is swelling.', status: 'Closed', rating: 5,
-            raisedAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(), closedAt: new Date().toISOString(), adminNotes: 'Battery replaced successfully.'
+            id: 'demo-tkt-1', token: 'TKT-8492', assetName: 'MacBook Pro Display Issues', tagId: 'N/A', 
+            issue: 'Screen is flickering randomly', status: 'Closed', rating: 5,
+            raisedAt: new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString(), closedAt: new Date().toISOString(), adminNotes: 'Display replaced.'
           },
           {
-            id: 'demo-tkt-2', token: 'TKT-3321', assetName: 'Dell Monitor', tagId: 'MON-1234', 
-            issue: 'Screen flickering intermittently.', status: 'Open', rating: 0,
+            id: 'demo-tkt-2', token: 'TKT-3321', assetName: 'Need New Mouse', tagId: 'N/A', 
+            issue: 'Mouse scroll wheel is broken.', status: 'Open', rating: 0,
             raisedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), closedAt: null, adminNotes: null
           }
         ]);
@@ -212,11 +222,6 @@ export default function StaffTicketsPage() {
       const userId = profile?.id || user.id;
       setCurrentUser({ ...user, id: userId, email: cleanEmail, emp_code: profile?.emp_code || 'STAFF', name: profile?.full_name || cleanEmail.split('@')[0] });
 
-      // Fetch Assets
-      const { data: assets } = await supabase.from('assets').select('*').or(`assigned_to.eq.${userId},assigned_to.ilike.${cleanEmail}`);
-      if (assets) setMyAssignedAssets(assets);
-
-      // Fetch Tickets
       const { data: tkts } = await supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false });
       
       if (tkts) {
@@ -247,32 +252,43 @@ export default function StaffTicketsPage() {
     }
   };
 
+  const resetForm = () => {
+    setFormTitle('');
+    setFormCategory('Hardware');
+    setFormText('');
+    setScreenshot(null);
+    setIsTransmitting(false);
+    setSuccessDone(false);
+  };
+
   const handleRaiseTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsTransmitting(true);
     
-    const selectedAsset = myAssignedAssets.find(a => a.id === formData.assetId);
-    const assetName = selectedAsset ? (selectedAsset.name || selectedAsset.category) : 'General Issue';
-    const tagId = selectedAsset ? selectedAsset.asset_tag : 'N/A';
-
     if (currentUser.id === 'guest-mock-uuid') {
-      const newTkt = { id: `demo-${Date.now()}`, token: `TKT-${Math.floor(Math.random() * 9000) + 1000}`, assetName, tagId, issue: formData.issue, status: 'Open', raisedAt: new Date().toISOString(), rating: 0 };
-      setTickets([newTkt, ...tickets]);
-      setIsRaiseModalOpen(false);
-      setFormData({ assetId: '', issue: '' });
+      setTimeout(() => {
+        const newTkt = { 
+          id: `demo-${Date.now()}`, token: `TKT-${Math.floor(Math.random() * 9000) + 1000}`, 
+          assetName: formTitle, tagId: 'N/A', issue: formText, status: 'Open', 
+          raisedAt: new Date().toISOString(), rating: 0 
+        };
+        setTickets([newTkt, ...tickets]);
+        setSuccessDone(true);
+        setTimeout(() => { setIsRaiseModalOpen(false); resetForm(); }, 1200);
+      }, 800);
       return;
     }
 
     try {
       const newTicket = {
-        title: `Issue with ${assetName}`,
-        category: 'Hardware',
-        description: formData.issue,
+        title: formTitle,
+        category: formCategory,
+        description: formText,
         status: 'Open',
         created_by: currentUser.email,
         emp_code: currentUser.emp_code,
         staff_name: currentUser.name,
-        asset_id: selectedAsset?.id || null,
-        asset_tag: tagId
+        asset_tag: 'N/A' 
       };
 
       const { data, error } = await supabase.from('tickets').insert(newTicket).select().single();
@@ -280,15 +296,16 @@ export default function StaffTicketsPage() {
 
       if (data) {
         const compiled = {
-          ...data, token: data.id.substring(0, 8).toUpperCase(), assetName: data.title, tagId: data.asset_tag, issue: data.description, status: 'Open', raisedAt: data.created_at, rating: 0
+          ...data, token: data.id.substring(0, 8).toUpperCase(), assetName: data.title, tagId: data.asset_tag || 'N/A', issue: data.description, status: 'Open', raisedAt: data.created_at, rating: 0
         };
         setTickets([compiled, ...tickets]);
       }
       
-      setIsRaiseModalOpen(false);
-      setFormData({ assetId: '', issue: '' });
+      setSuccessDone(true);
+      setTimeout(() => { setIsRaiseModalOpen(false); resetForm(); }, 1200);
     } catch (e) {
       alert("Failed to raise ticket.");
+      setIsTransmitting(false);
     }
   };
 
@@ -304,9 +321,22 @@ export default function StaffTicketsPage() {
 
   const filteredTickets = tickets.filter(t => activeTab === 'All' ? true : t.status === activeTab);
 
+  const theme = {
+    glassCard: isDarkMode 
+      ? 'bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]' 
+      : 'bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_12px_32px_rgba(230,210,200,0.35)]',
+    glassButton: isDarkMode
+      ? 'bg-zinc-800/50 backdrop-blur-xl border border-white/10 hover:border-[#a855f7] text-white'
+      : 'bg-white/60 backdrop-blur-2xl border border-white/90 hover:border-[#b388ff] text-slate-900',
+    glassInnerCard: isDarkMode 
+      ? 'bg-black/40 backdrop-blur-xl border border-white/10 text-white' 
+      : 'bg-white/60 backdrop-blur-2xl border border-white/80 text-slate-900',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
+  };
+
   return (
     <>
-      {/* 🌟 SCROLL FIX & SPACING */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-32 space-y-8 animate-in fade-in duration-500 w-full min-h-screen select-none">
         
         {/* 🌟 PREMIUM GLASS HEADER */}
@@ -439,56 +469,99 @@ export default function StaffTicketsPage() {
         )}
       </div>
 
-      {/* 🌟 MODALS (Wrapped in Portals to fix Z-Index & Sidebar issues) */}
-      
-      {/* RAISE TICKET MODAL */}
+      {/* 🌟 NEW DASHBOARD SYNCED RAISE TICKET MODAL */}
       {mounted && isRaiseModalOpen && createPortal(
-        <div className="fixed inset-0 z-99999 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white/95 backdrop-blur-2xl rounded-4xl w-full max-w-lg shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col my-8 border border-white/60 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
+          <div className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`} onClick={() => { setIsRaiseModalOpen(false); resetForm(); }} />
+          
+          <div className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
             
-            <div className="px-6 py-5 border-b border-slate-200/60 flex justify-between items-center bg-white/50 sticky top-0 z-10">
-              <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest flex items-center gap-2.5">
-                <Ticket className="text-purple-600" size={20} /> Raise Ticket
-              </h2>
-              <button onClick={() => setIsRaiseModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200/50 rounded-full transition-colors cursor-pointer"><X size={20}/></button>
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-3xl flex items-center justify-center ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner'}`}>
+                   <Ticket size={24} strokeWidth={2} />
+                </div>
+                <div>
+                  <h2 className={`text-[14px] sm:text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>Raise Support Ticket</h2>
+                  <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 ${theme.textSub}`}>Portal Submission</p>
+                </div>
+              </div>
+              <button onClick={() => { setIsRaiseModalOpen(false); resetForm(); }} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}>
+                <X size={18} strokeWidth={2.5} />
+              </button>
             </div>
 
-            <form onSubmit={handleRaiseTicket} className="p-6 sm:p-8 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5"><Laptop size={14} className="text-purple-500"/> Which Asset has an issue?</label>
-                <select 
-                  required 
-                  value={formData.assetId} 
-                  onChange={(e) => setFormData({...formData, assetId: e.target.value})}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/60 backdrop-blur-md focus:bg-white focus:ring-4 focus:ring-purple-500/10 focus:border-purple-400 outline-none font-bold text-sm text-slate-900 transition-all shadow-inner"
-                >
-                  <option value="" disabled>Select an assigned asset...</option>
-                  {myAssignedAssets.map(asset => (
-                    <option key={asset.id} value={asset.id}>{asset.name || asset.category} ({asset.asset_tag || 'N/A'})</option>
-                  ))}
-                </select>
-              </div>
+            <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5"><MessageSquare size={14} className="text-purple-500"/> Describe the problem</label>
-                <textarea 
-                  required 
-                  value={formData.issue}
-                  onChange={(e) => setFormData({...formData, issue: e.target.value})}
-                  placeholder="e.g. The screen flickers every 10 minutes..." 
-                  rows={4} 
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-white/60 backdrop-blur-md focus:bg-white focus:ring-4 focus:ring-purple-500/10 focus:border-purple-400 outline-none resize-none font-medium text-sm text-slate-900 transition-all shadow-inner placeholder:text-slate-400"
-                ></textarea>
-              </div>
+            <div className="px-6 py-4 sm:px-8 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-3 sm:gap-4 custom-scrollbar">
+              {successDone ? (
+                <div className="py-10 text-center space-y-4">
+                  <CheckCircle2 size={72} className="text-emerald-500 mx-auto animate-bounce"/>
+                  <h4 className={`text-xl sm:text-2xl font-black ${theme.textMain}`}>Database Updated!</h4>
+                </div>
+              ) : (
+                <form id="ticketModalForm" onSubmit={handleRaiseTicket} className="space-y-3 sm:space-y-4">
+                  
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Issue Subject</label>
+                    <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl outline-none text-[12px] sm:text-[14px] font-semibold transition-all ${theme.glassInnerCard} ${isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'}`}/>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</label>
+                    <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
+                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
+                        <option className={isDarkMode ? 'text-black' : ''}>Hardware</option>
+                        <option className={isDarkMode ? 'text-black' : ''}>Software</option>
+                        <option className={isDarkMode ? 'text-black' : ''}>Network</option>
+                      </select>
+                      <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
+                    </div>
+                  </div>
 
-              <div className="pt-4 flex flex-col sm:flex-row gap-3">
-                <button type="button" onClick={() => setIsRaiseModalOpen(false)} className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer">Cancel</button>
-                <button type="submit" className="w-full sm:flex-1 py-3.5 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest bg-purple-600 text-white hover:bg-purple-700 rounded-2xl shadow-lg shadow-purple-600/20 transition-all cursor-pointer">
-                  <Send size={16} /> Submit Ticket
-                </button>
-              </div>
-            </form>
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Attach Screenshot (Optional)</label>
+                    <label className={`w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer ${theme.glassInnerCard} ${isDarkMode ? 'border-zinc-700 hover:border-purple-500' : 'border-white/80 hover:border-purple-400 hover:shadow-lg hover:shadow-purple-400/20'}`}>
+                       <input type="file" className="hidden" accept="image/*" onChange={(e) => setScreenshot(e.target.files?.[0] || null)} />
+                       <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-zinc-800' : 'bg-white/80 shadow-sm border border-white'}`}>
+                         {screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className={theme.textSub} />}
+                       </div>
+                       <span className={`text-[11px] sm:text-[12px] font-bold text-center ${screenshot ? 'text-purple-500' : theme.textMain}`}>
+                         {screenshot ? screenshot.name : "Click to upload"}
+                       </span>
+                    </label>
+                  </div>
 
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                      Detailed Explanation
+                    </label>
+                    <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder="Describe what happened..." className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none resize-none min-h-17.5 sm:min-h-20 ${theme.glassInnerCard} ${isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'}`}/>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {!successDone && (
+              <>
+                <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
+
+                <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10">
+                  <button onClick={() => { setIsRaiseModalOpen(false); resetForm(); }} className={`flex-1 py-3.5 rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    form="ticketModalForm"
+                    disabled={isTransmitting} 
+                    className={`flex-1 py-3.5 text-white rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 bg-linear-to-r from-purple-500 to-purple-600 shadow-lg hover:shadow-purple-500/50`}
+                  >
+                    {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : 'Transmit'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body
