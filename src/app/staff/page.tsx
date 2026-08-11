@@ -71,16 +71,13 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
-// 🌟 CUSTOM LIQUID GLASS DROPDOWN COMPONENT (Replaces Native <select>)
+// 🌟 CUSTOM LIQUID GLASS DROPDOWN COMPONENT
 function GlassDropdown({ value, onChange, options, isDarkMode, theme }: any) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="relative w-full">
-      {/* Click Away Overlay */}
       {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
-      
-      {/* Dropdown Trigger */}
       <div 
         onClick={() => setOpen(!open)}
         className={`relative z-40 w-full px-4 sm:px-5 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all cursor-pointer rounded-2xl flex items-center justify-between select-none ${theme.glassInnerCard}`}
@@ -88,8 +85,6 @@ function GlassDropdown({ value, onChange, options, isDarkMode, theme }: any) {
         <span className={`truncate ${theme.textMain}`}>{value}</span>
         <ChevronDown size={18} className={`transition-transform duration-300 ${open ? 'rotate-180' : ''} ${theme.textSub}`} />
       </div>
-
-      {/* Dropdown Options (True Blur) */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -117,7 +112,6 @@ function GlassDropdown({ value, onChange, options, isDarkMode, theme }: any) {
 
 export default function StaffDashboardPage() {
   const router = useRouter(); 
-  
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -130,30 +124,25 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
-  // Tickets & Inspections Modal
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({ isOpen: false, type: '' });
 
-  // 🌟 Unified QR & Photo Sync State
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
   const [localPhotos, setLocalPhotos] = useState<File[]>([]);
   
-  // Return Modal State
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [selectedReturnAsset, setSelectedReturnAsset] = useState<any>(null);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnCondition, setReturnCondition] = useState('Pristine / Flawless');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
-  // Replace Modal State
   const [replaceModalOpen, setReplaceModalOpen] = useState(false);
   const [selectedReplaceAsset, setSelectedReplaceAsset] = useState<any>(null);
   const [replaceReason, setReplaceReason] = useState('');
-  const [replaceCondition, setReplaceCondition] = useState('Minor Hardware Issue');
+  const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
   const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
-  // 🌟 THEME SYNC
   useEffect(() => {
     setMounted(true);
     const syncTheme = () => {
@@ -172,6 +161,13 @@ export default function StaffDashboardPage() {
     let s = raw.split('@')[0].split('.')[0];            
     s = s.replace(/[_-]/g, ' ');  
     return s.charAt(0).toUpperCase() + s.slice(1); 
+  };
+
+  const triggerDesktopAlert = (title: string, body: string) => {
+    try { const audio = new Audio('/alert.mp3'); audio.play().catch(() => {}); } catch (err) {}
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/logo.png' });
+    }
   };
 
   const loadRealDatabase = async (showSpin = false) => {
@@ -209,17 +205,45 @@ export default function StaffDashboardPage() {
       setCurrentUser(user);
       setIsAuthorized(true); 
 
+      // 🌟 FETCH FIX: Pull unread notifications on load in case the user missed the live alert
+      const { data: unreadNotifs } = await supabase.from('notifications')
+        .select('*')
+        .or(`target_user.eq.${user.id},target_user.ilike.${cleanEmail},target_user.eq.${user.emp_id}`)
+        .eq('is_read', false);
+        
+      if (unreadNotifs && unreadNotifs.length > 0) {
+        unreadNotifs.forEach(n => {
+          triggerDesktopAlert(n.title || 'Alert', n.message);
+          toast(n.message, { icon: n.type === 'success' ? '✅' : '⚠️', duration: 8000 });
+        });
+        await supabase.from('notifications').update({ is_read: true }).in('id', unreadNotifs.map(n => n.id));
+      }
+
+      // Fetch assets, inspections, and tickets
       const [assetsRes, inspRes, ticketsRes] = await Promise.all([
-        supabase.from('assets').select('*').eq('assigned_to', user.id),
-        supabase.from('inspections').select('*').eq('inspected_by', user.id).order('created_at', { ascending: false }),
+        supabase.from('assets').select('*').or(`assigned_to.eq.${user.id},assigned_to.ilike.${cleanEmail},assigned_to.eq.${user.emp_id}`),
+        supabase.from('inspections').select('*').or(`inspected_by.eq.${user.id},user_id.eq.${user.id},user_email.ilike.${cleanEmail},emp_code.eq.${user.emp_id}`).order('created_at', { ascending: false }),
         supabase.from('tickets').select('*').ilike('created_by', cleanEmail).order('created_at', { ascending: false })
       ]);
 
       if (inspRes.data) setAllInspections(inspRes.data);
 
       const compiledAssets = (assetsRes.data || []).map(asset => {
-        const latestInsp = (inspRes.data || []).find(i => i.asset_id === asset.id);
+        const assetInsps = (inspRes.data || []).filter(i => i.asset_id === asset.id);
+        const latestInsp = assetInsps[0]; // Already ordered by created_at desc
         
+        // 🌟 AGGRESSIVE REJECTION OVERRIDE: If the asset table says it's rejected, force it, ignoring old logs.
+        const assetStatus = (asset.status || '').toLowerCase();
+        const assetNotes = (asset.notes || '').toLowerCase();
+        const assetInspStatus = (asset.inspection_status || '').toLowerCase();
+        
+        const isExplicitlyRejected = assetStatus.includes('reject') || assetInspStatus.includes('reject') || assetNotes.includes('[return declined]');
+        
+        let finalInspStatus = latestInsp?.status || asset.inspection_status || 'Pending';
+        if (isExplicitlyRejected) {
+            finalInspStatus = 'Return Rejected';
+        }
+
         let nextDue = null;
         if (asset.next_inspection_date) {
            nextDue = new Date(asset.next_inspection_date);
@@ -233,7 +257,7 @@ export default function StaffDashboardPage() {
 
         return {
           ...asset,
-          live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
+          live_inspection_status: finalInspStatus,
           live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
           live_admin_remarks: latestInsp?.admin_remarks || null,
           nextDue,
@@ -263,15 +287,25 @@ export default function StaffDashboardPage() {
     loadRealDatabase();
 
     const realtimeChannel = supabase.channel('staff-dashboard-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(false); })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, () => { loadRealDatabase(false); })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(false); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => loadRealDatabase(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => loadRealDatabase(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadRealDatabase(false))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+         // 🌟 CASE INSENSITIVE REALTIME FIX
+         const target = String(payload.new.target_user).toLowerCase().trim();
+         const isMe = target === String(currentUser?.id).toLowerCase().trim() || 
+                      target === String(currentUser?.emp_id).toLowerCase().trim() || 
+                      target === String(currentUser?.email).toLowerCase().trim();
+         if (isMe) {
+             triggerDesktopAlert(payload.new.title, payload.new.message);
+             toast(payload.new.message, { icon: payload.new.type === 'success' ? '✅' : '⚠️', duration: 8000 });
+         }
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(realtimeChannel); };
-  }, []);
+  }, [currentUser]);
 
-  // 🌟 Realtime Photo Sync for QR
   useEffect(() => {
     if (!qrSessionId) return;
     const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
@@ -291,7 +325,6 @@ export default function StaffDashboardPage() {
     } catch (e) { console.error(e); }
   };
 
-  // 🌟 Upload Helper
   const uploadMultiplePhotos = async (files: File[]) => {
     const uploadedUrls: string[] = [];
     for (const file of files) {
@@ -308,7 +341,6 @@ export default function StaffDashboardPage() {
     return uploadedUrls;
   };
 
-  // 🌟 QR Handlers
   const handleGenerateQR = (asset: any, isReturn: boolean) => {
     if (isReturn && !returnNotes.trim()) return toast.error("Please provide a return reason.");
     if (!isReturn && !replaceReason.trim()) return toast.error("Please provide a replacement reason.");
@@ -334,7 +366,6 @@ export default function StaffDashboardPage() {
     setReplaceReason('');
   };
 
-  // 🌟 Unified Submit Handlers
   const handleReturnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReturnAsset) return;
@@ -348,6 +379,7 @@ export default function StaffDashboardPage() {
       await supabase.from('inspections').insert({
         asset_id: selectedReturnAsset.id,
         user_id: currentUser.id,
+        inspected_by: currentUser.id, 
         user_name: currentUser.name,
         user_email: currentUser.email,
         emp_code: currentUser.emp_id,
@@ -357,7 +389,7 @@ export default function StaffDashboardPage() {
         photos: allPhotos.length > 0 ? allPhotos : null
       });
 
-      await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr }).eq('id', selectedReturnAsset.id);
+      await supabase.from('assets').update({ status: 'Return Pending Approval', inspection_status: 'Return Pending Approval', notes: returnNoteStr }).eq('id', selectedReturnAsset.id);
 
       loadRealDatabase(false);
       resetModals();
@@ -403,18 +435,20 @@ export default function StaffDashboardPage() {
     return 'bg-slate-500/15 backdrop-blur-md text-slate-600 font-extrabold border border-slate-400/40 shadow-sm';
   };
 
+  // 🌟 AUDIT BUTTON STATE ENGINE (Strict Rejection Awareness)
   const getAssetAuditState = (asset: any) => {
-    const status = (asset.live_inspection_status || '').toLowerCase();
-    const auditWindow = getAuditWindowInfo(asset.category);
+    const assetStatus = (asset.status || '').toLowerCase();
+    const inspStatus = (asset.live_inspection_status || '').toLowerCase();
     
-    if (asset.status?.toLowerCase().includes('return') || status.includes('return pending')) {
+    if (inspStatus.includes('reject') || inspStatus.includes('fail')) {
+      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500/90 hover:bg-rose-600 text-white shadow-[0_4px_15px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
+    }
+
+    if (assetStatus.includes('return') || inspStatus.includes('return pending') || assetStatus.includes('pending return')) {
       return { disabled: true, text: "Return Pending", classes: "bg-slate-500/10 text-slate-500 border border-slate-400/30 cursor-not-allowed" };
     }
 
-    if (status.includes('reject') || status.includes('fail')) {
-      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500/90 hover:bg-rose-600 text-white shadow-[0_4px_15px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
-    }
-    if (status.includes('re-inspection') || status.includes('action required')) {
+    if (inspStatus.includes('re-inspection') || inspStatus.includes('action required')) {
       return { disabled: false, text: "Start Inspection", classes: "bg-amber-500/90 hover:bg-amber-600 text-white shadow-[0_4px_15px_rgba(245,158,11,0.4)] animate-pulse border-transparent" };
     }
 
@@ -422,6 +456,7 @@ export default function StaffDashboardPage() {
       return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500/90 hover:bg-rose-600 text-white shadow-[0_4px_15px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
+    const auditWindow = getAuditWindowInfo(asset.category);
     const hasAudited = allInspections.some(insp => {
        const d = new Date(insp.created_at);
        return insp.asset_id === asset.id && 
@@ -433,7 +468,6 @@ export default function StaffDashboardPage() {
     });
 
     if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-500/15 text-emerald-600 border border-emerald-400/40 cursor-not-allowed" };
-    
     if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-500/10 text-slate-500 border border-slate-400/30 cursor-not-allowed" };
     
     return { disabled: false, text: "Audit Device", classes: "bg-linear-to-r from-orange-500 to-purple-600 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] border-transparent" };
@@ -446,30 +480,23 @@ export default function StaffDashboardPage() {
   });
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
 
-  // 🎨 STRICT TAILWIND V4 - HIGH-END LIQUID GLASS REFLECTIONS
   const theme = {
     bg: 'bg-transparent',
-    
     glassCard: isDarkMode 
       ? 'bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.08)] transition-all duration-500 rounded-[2rem]' 
       : 'bg-white/40 backdrop-blur-3xl backdrop-saturate-150 border border-white/60 shadow-[0_12px_40px_rgba(31,38,135,0.06),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all duration-500 rounded-[2rem]', 
-    
     glassPanel: isDarkMode
       ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-purple-500/40 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] transition-all duration-500 rounded-[2rem]'
       : 'bg-white/30 backdrop-blur-3xl backdrop-saturate-150 border border-white/50 shadow-[0_12px_40px_rgba(31,38,135,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:border-purple-400/80 hover:shadow-[0_0_35px_rgba(168,85,247,0.15)] transition-all duration-500 rounded-[2rem]',
-      
     glassButton: isDarkMode
       ? 'bg-zinc-800/40 backdrop-blur-2xl border border-white/10 hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all text-white'
       : 'bg-white/50 backdrop-blur-2xl border border-white/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] hover:border-purple-400/80 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all text-slate-800',
-    
     glassItem: isDarkMode
       ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-purple-500/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.25)] transition-all duration-300 rounded-[1.5rem]'
       : 'bg-white/50 backdrop-blur-2xl border border-white/80 shadow-[0_8px_20px_rgba(31,38,135,0.03),inset_0_1px_1px_rgba(255,255,255,1)] hover:border-purple-400/80 hover:shadow-[0_0_25px_rgba(168,85,247,0.25)] transition-all duration-300 rounded-[1.5rem]',
-      
     glassInnerCard: isDarkMode 
       ? 'bg-black/30 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all rounded-[1.25rem]' 
       : 'bg-white/60 backdrop-blur-2xl border border-white/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all rounded-[1.25rem]',
-      
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
@@ -596,15 +623,17 @@ export default function StaffDashboardPage() {
               ) : (
                 assignedAssets.map(asset => {
                   const btnState = getAssetAuditState(asset);
-                  const isReInspect = (asset.computed_status || '').toLowerCase().includes('re-inspection');
-                  const isRejected = (asset.computed_status || '').toLowerCase().includes('reject');
                   
-                  const currentStatus = (asset.status || '').toLowerCase();
+                  // 🌟 BULLETPROOF STATUS MATCHING
                   const inspStatus = (asset.live_inspection_status || '').toLowerCase();
                   
-                  const isReturnPending = currentStatus.includes('return') || inspStatus.includes('return pending');
-                  const isReturnRejected = currentStatus.includes('reject') || inspStatus.includes('reject');
-                  const isReplacePending = currentStatus.includes('replacement requested');
+                  // Because of the compiledAssets override, if it was rejected, live_inspection_status is "Return Rejected"
+                  const isRejected = inspStatus.includes('reject') || inspStatus.includes('decline');
+                  const isReInspect = inspStatus.includes('re-inspection');
+                  
+                  const isReturnPending = !isRejected && inspStatus.includes('return pending');
+                  const isReplacePending = !isRejected && inspStatus.includes('replace');
+                  const isReturnRejected = isRejected;
 
                   return (
                     <div key={asset.id} className={`${theme.glassItem} p-5`}>
@@ -617,7 +646,6 @@ export default function StaffDashboardPage() {
                         {isReturnRejected ? <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30">Return Rejected</span>
                         : isReturnPending ? <span className="px-3 py-1.5 bg-orange-500/10 text-orange-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-500/30">Pending Return</span>
                         : isReplacePending ? <span className="px-3 py-1.5 bg-purple-500/10 text-purple-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-purple-500/30">Pending Replace</span>
-                        : isRejected ? <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30">Rejected</span>
                         : isReInspect ? <span className="px-3 py-1.5 bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-500/30 animate-pulse">Re-Inspection</span>
                         : asset.isOverdue ? <span className="px-3 py-1.5 bg-rose-500/10 text-rose-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-rose-500/30 animate-pulse">Overdue</span>
                         : <span className="px-3 py-1.5 bg-slate-500/10 text-slate-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-slate-500/30">{asset.computed_status || 'Assigned'}</span>}
@@ -630,16 +658,19 @@ export default function StaffDashboardPage() {
                         <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Next Due</span><span className={`text-xs font-bold ${asset.isOverdue ? 'text-rose-500 animate-pulse' : theme.text}`}>{asset.nextDue ? asset.nextDue.toLocaleDateString('en-IN') : 'N/A'}</span></div>
                       </div>
                       
-                      { (isRejected || isReInspect) && asset.live_admin_remarks && (
+                      { (isRejected || isReInspect || isReturnRejected) && (asset.live_admin_remarks || asset.notes?.includes('[RETURN DECLINED]')) && (
                         <div className={`p-4 mt-4 rounded-2xl border text-xs font-bold flex gap-3 ${isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-700'}`}>
                           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                          <div><span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Request Reason:</span>{asset.live_admin_remarks}</div>
+                          <div>
+                             <span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Request Reason:</span>
+                             {asset.live_admin_remarks || (asset.notes && asset.notes.split('[RETURN DECLINED] Reason: ')[1]) || 'No reason provided.'}
+                          </div>
                         </div>
                       )}
 
                       <div className="flex flex-wrap items-center gap-3 pt-4 justify-end">
                         
-                        {(isReturnPending || isReplacePending) && !isReturnRejected ? (
+                        {(isReturnPending || isReplacePending) ? (
                           <div className="flex flex-col items-center gap-1">
                             <button disabled className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-not-allowed opacity-60 ${theme.glassButton}`}>Pending Admin</button>
                             <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center leading-tight animate-pulse mt-1">Wait for Response</span>
@@ -647,8 +678,9 @@ export default function StaffDashboardPage() {
                         ) : isReturnRejected ? (
                           <button 
                             onClick={async () => {
-                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null }).eq('id', asset.id);
-                              loadRealDatabase();
+                              // Reset the asset status so they can try again
+                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, notes: '' }).eq('id', asset.id);
+                              loadRealDatabase(false);
                               resetModals(); setSelectedReturnAsset(asset); setReturnModalOpen(true);
                             }}
                             className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all cursor-pointer flex items-center gap-2 ${theme.glassButton} border-rose-400/50! text-rose-600! hover:bg-rose-500/10!`}
@@ -747,7 +779,7 @@ export default function StaffDashboardPage() {
 
       </div>
 
-      {/* 🌟 UNIFIED MODAL UI FOR RETURN & REPLACE (With QR Camera Handover) */}
+      {/* 🌟 UNIFIED MODAL UI FOR RETURN & REPLACE */}
       {mounted && (returnModalOpen || replaceModalOpen) && activeAsset && createPortal(
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-9999 flex items-center justify-center p-4">
           
@@ -882,7 +914,7 @@ export default function StaffDashboardPage() {
         document.body
       )}
 
-      {/* 🌟 ORIGINAL TICKET & INSPECTION MODAL (Now fully updated with GlassDropdowns) */}
+      {/* 🌟 ORIGINAL TICKET & INSPECTION MODAL */}
       <AnimatePresence>
         {modal.isOpen && (
           <LiveDatabaseModal 
@@ -902,7 +934,6 @@ export default function StaffDashboardPage() {
   );
 }
 
-// 🌟 ORIGINAL LIVE DATABASE MODAL FOR INSPECTION & TICKETS (Unaffected by new QR Modals)
 function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setAssignedAssets, onClose, theme }: any) {
   const needsLock = type === 'INSPECTION';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);

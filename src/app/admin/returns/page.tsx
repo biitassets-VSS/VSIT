@@ -6,8 +6,14 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, LogOut, CheckCircle2, XCircle, Clock, 
   Laptop, User, Search, RefreshCw, X, ShieldAlert,
-  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon
+  AlertTriangle, FilterX, ExternalLink, Send, Image as ImageIcon, Loader2
 } from 'lucide-react';
+
+// Helper to format fallback names
+const formatEmailAsName = (email: string) => {
+  if (!email) return null;
+  return email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
 
 function AdminReturnsContent() {
   const router = useRouter();
@@ -17,6 +23,18 @@ function AdminReturnsContent() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState<any>(null);
+
+  // 🌟 Custom Modal State
+  const [actionModal, setActionModal] = useState<{
+    isOpen: boolean;
+    action: 'Approved' | 'Declined' | null;
+    recordId: string;
+    assetId: string;
+    staffId: string;
+    item: any;
+  }>({ isOpen: false, action: null, recordId: '', assetId: '', staffId: '', item: null });
+  const [adminRemarks, setAdminRemarks] = useState('');
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // 🌟 INITIALIZATION & THEME SYNC
   useEffect(() => {
@@ -29,7 +47,6 @@ function AdminReturnsContent() {
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     
-    // Fetch Current Logged-in Admin Profile
     const fetchAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -46,7 +63,6 @@ function AdminReturnsContent() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Return records
       const { data: returnsData, error } = await supabase
         .from('inspections')
         .select('*, assets(*)')
@@ -54,33 +70,146 @@ function AdminReturnsContent() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      const validReturns = returnsData || [];
 
-      if (!returnsData || returnsData.length === 0) {
+      const { data: assetReturns } = await supabase
+        .from('assets')
+        .select('*')
+        .ilike('status', '%return%');
+
+      const orphanedAssets = (assetReturns || []).filter(asset => {
+         return !validReturns.some(r => r.asset_id === asset.id && (r.status || '').toLowerCase().includes('pending'));
+      });
+
+      const syntheticReturns = orphanedAssets.map(asset => ({
+         id: `synthetic-${asset.id}`,
+         asset_id: asset.id,
+         user_id: asset.assigned_to,
+         status: asset.status,
+         notes: asset.notes || '[RETURN REQUEST] (Legacy Submission via Old App)',
+         created_at: asset.updated_at || asset.last_inspection_date || new Date().toISOString(),
+         assets: asset,
+         isSynthetic: true 
+      }));
+
+      const allReturns = [...validReturns, ...syntheticReturns];
+
+      if (allReturns.length === 0) {
         setReturnRequests([]);
         return;
       }
 
-      // 2. Extract user_ids from the return requests to get the Original Staff Member
-      const userIds = [...new Set(returnsData.map(r => r.user_id).filter(Boolean))];
-
-      // 3. Fetch staff profiles (Change 'profiles' to your employee table name if different)
-      const { data: profilesData, error: profileError } = await supabase
-        .from('profiles') 
+      const assetIds = [...new Set(allReturns.map(r => r.asset_id).filter(Boolean))];
+      const { data: allAssetInspections } = await supabase
+        .from('inspections')
         .select('*')
-        .in('id', userIds);
+        .in('asset_id', assetIds)
+        .order('created_at', { ascending: false });
 
-      const profilesMap: Record<string, any> = {};
-      if (profilesData && !profileError) {
-        profilesData.forEach(profile => {
-          profilesMap[profile.id] = profile; 
-        });
+      const rawIdentifiers = [
+        ...allReturns.map(r => r.user_id),
+        ...allReturns.map(r => r.inspected_by),
+        ...allReturns.map(r => r.assets?.assigned_to)
+      ].filter(Boolean);
+      
+      const userEmails = [
+        ...allReturns.map(r => r.user_email),
+        ...rawIdentifiers.filter(id => String(id).includes('@'))
+      ].filter(Boolean);
+
+      const validUUIDs = rawIdentifiers.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id)));
+      const empCodes = rawIdentifiers.filter(id => String(id).toUpperCase().startsWith('EMP'));
+
+      const safeQuery = async (queryPromise: any) => {
+        try {
+          const { data, error } = await queryPromise;
+          return { data: error ? [] : (data || []) };
+        } catch (e) { return { data: [] }; }
+      };
+
+      const profilePromises = [];
+      if (validUUIDs.length > 0) profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('id', validUUIDs)));
+      if (userEmails.length > 0) profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('email', userEmails)));
+      if (empCodes.length > 0) {
+        profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('emp_code', empCodes)));
+        profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('emp_id', empCodes)));
       }
+      
+      const profilesResults = await Promise.all(profilePromises);
+      const allProfiles = profilesResults.flatMap((res: any) => res?.data || []);
+      
+      const profilesMap: Record<string, any> = {};
+      allProfiles.forEach((p: any) => {
+        if (p.id) profilesMap[p.id] = p;
+        if (p.email) profilesMap[p.email.toLowerCase()] = p;
+        if (p.emp_code) profilesMap[p.emp_code.toUpperCase()] = p;
+        if (p.employee_code) profilesMap[p.employee_code.toUpperCase()] = p;
+        if (p.emp_id) profilesMap[p.emp_id.toUpperCase()] = p;
+      });
 
-      // 4. Merge data: This ensures the history always shows who requested the return!
-      const mergedData = returnsData.map(item => ({
-        ...item,
-        profiles: item.user_id ? (profilesMap[item.user_id] || null) : null
-      }));
+      const mergedData = allReturns.map((item: any) => {
+        const key1 = item.user_id;
+        const key2 = item.inspected_by;
+        const key3 = item.user_email?.toLowerCase();
+        const key4 = item.assets?.assigned_to;
+        
+        const profile = profilesMap[key1] || profilesMap[key3] || profilesMap[key2] || profilesMap[key4] || profilesMap[String(key4).toLowerCase()] || null;
+        
+        let resolvedName = item.user_name || profile?.name || profile?.full_name || formatEmailAsName(item.user_email);
+        let resolvedEmpCode = item.emp_code || profile?.emp_code || profile?.employee_code || profile?.emp_id;
+
+        if (!resolvedEmpCode && item.inspected_by && String(item.inspected_by).toUpperCase().startsWith('EMP')) {
+           resolvedEmpCode = String(item.inspected_by).toUpperCase();
+        }
+
+        if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+            const assetHistory = allAssetInspections?.filter((insp: any) => insp.asset_id === item.asset_id) || [];
+            
+            for (const hist of assetHistory) {
+                if (!resolvedName || resolvedName === 'Staff Member') {
+                    if (hist.user_name) resolvedName = hist.user_name;
+                    else if (hist.user_email) resolvedName = formatEmailAsName(hist.user_email);
+                    else if (hist.notes && hist.notes.includes('Digitally Signed')) {
+                        const match = hist.notes.match(/by\s+(.*?)\s+on/i);
+                        if (match && match[1]) resolvedName = match[1];
+                    }
+                }
+                
+                if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+                    if (hist.emp_code) resolvedEmpCode = hist.emp_code;
+                    else if (hist.inspected_by && String(hist.inspected_by).toUpperCase().startsWith('EMP')) {
+                        resolvedEmpCode = String(hist.inspected_by).toUpperCase();
+                    }
+                }
+
+                if (resolvedName !== 'Staff Member' && resolvedEmpCode !== 'UNKNOWN') break;
+            }
+        }
+
+        if (!resolvedName || resolvedName === 'Staff Member') {
+            if (String(item.user_id).includes('@')) resolvedName = formatEmailAsName(String(item.user_id));
+            if (String(item.assets?.assigned_to).includes('@')) resolvedName = formatEmailAsName(String(item.assets?.assigned_to));
+        }
+
+        if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+            resolvedEmpCode = item.user_id ? String(item.user_id).substring(0,6).toUpperCase() : 
+                             (item.inspected_by ? String(item.inspected_by).substring(0,6).toUpperCase() : 'UNKNOWN');
+        }
+
+        return { 
+          ...item, 
+          profiles: profile,
+          resolvedName: resolvedName || 'Staff Member',
+          resolvedEmpCode: resolvedEmpCode
+        };
+      });
+
+      mergedData.sort((a, b) => {
+        const aPending = (a.status || '').toLowerCase().includes('pending') ? -1 : 1;
+        const bPending = (b.status || '').toLowerCase().includes('pending') ? -1 : 1;
+        if (aPending !== bPending) return aPending - bPending;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
 
       setReturnRequests(mergedData);
     } catch (err: any) {
@@ -90,53 +219,103 @@ function AdminReturnsContent() {
     }
   };
 
-  const processReturn = async (recordId: string, assetId: string, action: 'Approved' | 'Rejected', staffId: string) => {
-    let remarks = prompt(`Provide remarks for marking this return as ${action}:`);
-    if (remarks === null) return; // User cancelled
-    if (!confirm(`Are you sure you want to ${action} this return request?`)) return;
+  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER (With Schema Auto-Correction)
+  const executeReturnAction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { recordId, assetId, action, staffId, item } = actionModal;
+    if (!action || !assetId) return;
 
-    setUpdatingId(recordId);
+    setIsProcessingAction(true);
+    setUpdatingId(recordId || assetId); 
+
     try {
-      const adminName = currentAdmin?.name || currentAdmin?.full_name || currentAdmin?.email || 'Admin';
+      const adminName = currentAdmin?.name || currentAdmin?.full_name || currentAdmin?.email || 'IT Admin';
+      const cleanStaffNotes = (item.notes || '').replace('[RETURN REQUEST]', '').trim();
+      const statusStr = action === 'Approved' ? 'Return Approved' : 'Return Rejected';
+      const finalRemarks = adminRemarks || (action === 'Approved' ? 'Verified and Approved.' : 'Declined.');
 
-      // 1. Update the inspection log (Add admin_name to your database table if it isn't there!)
-      await supabase.from('inspections').update({ 
-        status: action === 'Approved' ? 'Return Approved' : 'Return Rejected', 
-        admin_remarks: remarks,
-        admin_name: adminName // Tracks WHICH admin approved it
-      }).eq('id', recordId);
+      // Safely embedded text string for permanent DB storage regardless of schema limitations
+      const historicalBakedNotes = `${item.notes || ''}\n[Historical User: ${item.resolvedName} | ID: ${item.resolvedEmpCode}]`;
 
-      // 2. Update the actual asset inventory (Detaches from Staff)
-      if (action === 'Approved') {
-        await supabase.from('assets').update({ 
-          status: 'In Stock (Unassigned)', 
-          assigned_to: null, // Wipe the owner since it's returned
-          inspection_status: 'Approved' // Clean state for the next user
-        }).eq('id', assetId);
-      } else {
-        await supabase.from('assets').update({ 
-          status: 'Assigned', // Give it back to them
-          inspection_status: 'Return Rejected'
-        }).eq('id', assetId);
+      // 1. Prepare Base Payload for Inspections
+      let payloadToUse: any = {
+         status: statusStr,
+         admin_remarks: `${finalRemarks} (Processed by: ${adminName})`,
+         admin_name: adminName,
+         user_name: item.resolvedName !== 'Staff Member' ? item.resolvedName : null,
+         emp_code: item.resolvedEmpCode !== 'UNKNOWN' ? item.resolvedEmpCode : null
+      };
+
+      if (item.isSynthetic) {
+         payloadToUse = { ...payloadToUse, asset_id: assetId, user_id: staffId, condition: 'Unknown (Legacy)', notes: historicalBakedNotes };
       }
 
-      // 3. Notify the Staff Member
-      if (staffId && !staffId.includes('ADMIN')) {
+      // 2. Auto-Healing Schema Engine (Attempts to insert/update, strips missing columns on failure)
+      let dbSuccess = false;
+      for (let i = 0; i < 5; i++) {
+         const { error: dbErr } = item.isSynthetic 
+            ? await supabase.from('inspections').insert(payloadToUse)
+            : await supabase.from('inspections').update(payloadToUse).eq('id', recordId);
+         
+         if (dbErr) {
+            // Find which column is causing the error and remove it from the payload
+            const match = dbErr.message.match(/Could not find the '([^']+)' column/i);
+            if (match && match[1]) {
+                delete payloadToUse[match[1]];
+                continue; // Retry without the missing column
+            }
+            throw new Error(`Log Update Failed: ${dbErr.message}`);
+         }
+         dbSuccess = true;
+         break; // Break loop on success
+      }
+      
+      if (!dbSuccess) throw new Error("Failed to process inspection log due to database schema conflict.");
+
+      // 3. Process Asset Inventory Table (Permanent Tracking Update)
+      let assetPayload: any = {};
+      if (action === 'Approved') {
+        const combinedNotes = `[RETURNED] Staff: ${item.resolvedName} (${item.resolvedEmpCode}) | Reason: ${cleanStaffNotes} | Admin Validation: ${finalRemarks} (${adminName})`;
+        assetPayload = { 
+          status: 'In Stock (Unassigned)', 
+          assigned_to: null, 
+          inspection_status: 'Approved',
+          notes: combinedNotes 
+        };
+      } else {
+        assetPayload = { 
+          status: 'Assigned', 
+          inspection_status: 'Return Rejected',
+          notes: `[RETURN DECLINED] Reason: ${finalRemarks} (${adminName})`
+        };
+      }
+
+      const { error: assetErr } = await supabase.from('assets').update(assetPayload).eq('id', assetId);
+      if (assetErr) throw new Error(`Asset Update Failed: ${assetErr.message}`);
+
+      // 4. Process Notifications Safely
+      if (staffId && String(staffId).toUpperCase().includes('ADMIN') === false) {
         await supabase.from('notifications').insert([{
           target_user: staffId,
-          title: action === 'Approved' ? '✔ Return Approved' : `⚠ Return Rejected`,
-          message: action === 'Approved' ? `Your hardware return was approved by ${adminName}. The device has been securely detached from your profile.` : `Return denied by ${adminName}: ${remarks}`,
+          title: action === 'Approved' ? '✔ Return Approved' : `⚠ Return Request Declined`,
+          message: action === 'Approved' 
+            ? `Your hardware return was verified and approved by ${adminName}. The device has been securely detached from your profile.` 
+            : `Your return request was declined by ${adminName} due to: "${finalRemarks}". Please re-submit the request with proper photos/notes.`,
           is_read: false,
           type: action === 'Approved' ? 'success' : 'error'
         }]);
       }
 
-      fetchReturns(); // Reload UI
-      alert(`Return request successfully ${action.toLowerCase()}.`);
+      // Close modal and sync UI
+      setActionModal({ isOpen: false, action: null, recordId: '', assetId: '', staffId: '', item: null });
+      fetchReturns(); 
+      
     } catch (err: any) {
-      alert(`Error processing return: ${err.message}`);
+      console.error(err);
+      alert(`Critical Error: ${err.message}. Please check your database schema.`);
     } finally {
       setUpdatingId(null);
+      setIsProcessingAction(false);
     }
   };
 
@@ -144,17 +323,14 @@ function AdminReturnsContent() {
     const query = searchQuery.toLowerCase();
     const assetName = (item.assets?.name || item.assets?.asset_name || '').toLowerCase();
     const assetTag = (item.assets?.asset_tag || '').toLowerCase();
-    
-    const profile = item.profiles || {};
-    const userName = (profile.name || profile.full_name || item.user_name || item.user_email || '').toLowerCase();
-    const empCode = (profile.emp_code || profile.employee_code || '').toLowerCase();
+    const userName = (item.resolvedName || '').toLowerCase();
+    const empCode = (item.resolvedEmpCode || '').toLowerCase();
 
     return assetName.includes(query) || assetTag.includes(query) || userName.includes(query) || empCode.includes(query);
   });
 
   const pendingCount = returnRequests.filter(r => (r.status || '').toLowerCase().includes('pending')).length;
 
-  // 🎨 PURE MAC OS 2026 FROSTED GLASS THEME
   const theme = {
     bg: 'bg-transparent',
     glassCard: isDarkMode 
@@ -240,35 +416,35 @@ function AdminReturnsContent() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredList.map((item) => {
+            {filteredList.map((item, index) => {
+              const uniqueKey = item.id ? `return-${item.id}-${index}` : `return-fallback-${index}`;
               const isPending = (item.status || '').toLowerCase().includes('pending');
               const asset = item.assets || {};
 
-              // Extract real name and employee code for rendering (Persistent Historical Record)
-              const profile = item.profiles || {};
-              const displayName = profile.name || profile.full_name || item.user_name || item.user_email || 'Staff Member';
-              const empCode = profile.emp_code || profile.employee_code || (item.user_id ? String(item.user_id).substring(0,6).toUpperCase() : 'UNKNOWN');
-
-              // Handle Photos (if stored as array 'photos' or single string 'photo_url')
               const photosList = Array.isArray(item.photos) ? item.photos : item.photo_url ? [item.photo_url] : [];
 
               return (
-                <div key={item.id} className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} transition-all hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${isPending ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' : ''}`}>
+                <div key={uniqueKey} className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} transition-all hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${isPending ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' : ''}`}>
                   
                   <div className={`w-full xl:w-1/3 flex flex-col gap-6 shrink-0 border-b xl:border-b-0 xl:border-r pb-6 xl:pb-0 xl:pr-8 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-sm ${theme.glassInner} ${isDarkMode ? 'text-orange-400' : 'text-orange-500'}`}><User size={20} /></div>
                       <div className="overflow-hidden">
                         
-                        <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`}>{displayName}</h3>
+                        <h3 className={`text-lg font-bold leading-tight truncate ${theme.textMain}`}>{item.resolvedName}</h3>
                         <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-md shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] border mt-1 inline-block ${isDarkMode ? 'bg-black/50 text-zinc-300 border-white/20' : 'bg-white/60 text-slate-700 border-white/80'}`}>
-                          ID: {empCode}
+                          ID: {item.resolvedEmpCode}
                         </span>
 
                       </div>
                     </div>
 
                     <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
+                      {item.isSynthetic && (
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-500 mb-2 border-b border-amber-500/20 pb-2">
+                          <AlertTriangle size={12} /> Legacy Submission (Missing Photos)
+                        </div>
+                      )}
                       <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${theme.textMain}`}>
                         <Laptop size={14} className="text-orange-500 shrink-0" />
                         <span className="truncate text-left font-bold">{asset.name || asset.asset_name || 'Hardware Asset'}</span>
@@ -321,7 +497,7 @@ function AdminReturnsContent() {
                         </span>
                         <div className={`p-4 rounded-2xl flex flex-wrap gap-3 ${theme.glassInner}`}>
                           {photosList.map((url: string, idx: number) => (
-                            <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block relative group">
+                            <a key={`photo-${item.id || index}-${idx}`} href={url} target="_blank" rel="noopener noreferrer" className="block relative group">
                               <img src={url} alt="Return Attachment" className="w-20 h-20 object-cover rounded-xl border-2 border-transparent transition-all group-hover:border-orange-500 group-hover:scale-105" />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
                                 <ExternalLink size={16} className="text-white" />
@@ -333,28 +509,26 @@ function AdminReturnsContent() {
                     )}
 
                     {/* 👤 ADMIN APPROVAL TRACKING SECTION */}
-                    {item.admin_remarks && (
+                    {!isPending && (
                       <div className={`p-4 rounded-2xl text-xs font-semibold ${theme.glassInner}`}>
                         <div className="flex justify-between items-center mb-1.5 border-b border-white/10 pb-2">
                           <span className={`font-bold uppercase text-[9px] tracking-wider ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>Admin Remarks</span>
-                          {/* Shows which admin approved it */}
-                          {item.admin_name && (
-                            <span className={`font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 rounded-md ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
-                              Processed By: {item.admin_name}
-                            </span>
-                          )}
+                          
+                          <span className={`font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 rounded-md ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
+                            Processed By: {item.admin_name || 'IT Admin'}
+                          </span>
                         </div>
-                        <p className={`mt-2 ${theme.textMain}`}>"{item.admin_remarks}"</p>
+                        <p className={`mt-2 ${theme.textMain}`}>"{item.admin_remarks || 'Processed without specific remarks.'}"</p>
                       </div>
                     )}
 
                     {isPending && (
                       <div className={`pt-4 border-t mt-auto grid grid-cols-1 sm:grid-cols-2 gap-3 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
-                        <button disabled={updatingId === item.id} onClick={() => processReturn(item.id, asset.id, 'Approved', item.user_id)} className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
+                        <button disabled={updatingId === item.id || updatingId === asset.id} onClick={() => { setActionModal({ isOpen: true, action: 'Approved', recordId: item.id, assetId: asset.id, staffId: item.user_id || asset.assigned_to, item }); setAdminRemarks(''); }} className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
                           <CheckCircle2 size={16} /> Approve & Move to Stock
                         </button>
-                        <button disabled={updatingId === item.id} onClick={() => processReturn(item.id, asset.id, 'Rejected', item.user_id)} className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
-                          <XCircle size={16} /> Reject Return
+                        <button disabled={updatingId === item.id || updatingId === asset.id} onClick={() => { setActionModal({ isOpen: true, action: 'Declined', recordId: item.id, assetId: asset.id, staffId: item.user_id || asset.assigned_to, item }); setAdminRemarks(''); }} className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
+                          <XCircle size={16} /> Decline / Re-Request
                         </button>
                       </div>
                     )}
@@ -366,6 +540,47 @@ function AdminReturnsContent() {
           </div>
         )}
       </div>
+
+      {/* 🌟 ACTION MODAL FOR APPROVE/DECLINE */}
+      {actionModal.isOpen && (
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl flex flex-col gap-4 border ${isDarkMode ? 'bg-zinc-900 border-white/10 text-white' : 'bg-white border-white/60 text-slate-900'}`}>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${actionModal.action === 'Approved' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                  {actionModal.action === 'Approved' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+                </div>
+                <h3 className="font-black tracking-widest uppercase text-sm">
+                  {actionModal.action === 'Approved' ? 'Approve Return' : 'Decline Return'}
+                </h3>
+              </div>
+              <button onClick={() => setActionModal({ ...actionModal, isOpen: false })} className="p-2 hover:bg-slate-500/10 rounded-full cursor-pointer"><X size={18}/></button>
+            </div>
+            
+            <form onSubmit={executeReturnAction} className="flex flex-col gap-4 mt-2">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                  {actionModal.action === 'Declined' ? 'Reason for Declining (Required)' : 'Admin Remarks (Optional)'}
+                </label>
+                <textarea 
+                  required={actionModal.action === 'Declined'}
+                  value={adminRemarks}
+                  onChange={e => setAdminRemarks(e.target.value)}
+                  placeholder={actionModal.action === 'Declined' ? "Explain why this is being declined..." : "Any final notes before approving..."}
+                  className={`w-full p-4 rounded-2xl resize-none h-28 outline-none border transition-all text-sm font-semibold ${isDarkMode ? 'bg-black/50 border-white/10 focus:border-purple-500/50 text-white' : 'bg-slate-50 border-slate-200 focus:border-purple-500/50 text-slate-800'}`}
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button type="button" onClick={() => setActionModal({ ...actionModal, isOpen: false })} className="flex-1 py-3.5 font-black uppercase tracking-widest text-[11px] rounded-2xl bg-slate-500/10 hover:bg-slate-500/20 cursor-pointer">Cancel</button>
+                 <button type="submit" disabled={isProcessingAction} className={`flex-1 py-3.5 font-black uppercase tracking-widest text-[11px] rounded-2xl text-white flex justify-center items-center gap-2 cursor-pointer transition-all shadow-md hover:scale-[1.02] active:scale-95 disabled:opacity-50 ${actionModal.action === 'Approved' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-500 hover:bg-rose-600'}`}>
+                   {isProcessingAction ? <Loader2 size={16} className="animate-spin" /> : 'Confirm'}
+                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
