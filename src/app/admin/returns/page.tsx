@@ -28,11 +28,11 @@ function AdminReturnsContent() {
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
     action: 'Approved' | 'Declined' | null;
-    recordId: string;
     assetId: string;
     staffId: string;
     item: any;
-  }>({ isOpen: false, action: null, recordId: '', assetId: '', staffId: '', item: null });
+  }>({ isOpen: false, action: null, assetId: '', staffId: '', item: null });
+  
   const [adminRemarks, setAdminRemarks] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
@@ -238,14 +238,14 @@ function AdminReturnsContent() {
     }
   };
 
-  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER
+  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER (With ID bypass fallback)
   const executeReturnAction = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { recordId, assetId, action, staffId, item } = actionModal;
+    const { assetId, action, staffId, item } = actionModal;
     if (!action || !assetId) return;
 
     setIsProcessingAction(true);
-    setUpdatingId(recordId || assetId); 
+    setUpdatingId(assetId); 
 
     try {
       const adminName = currentAdmin?.name || currentAdmin?.full_name || currentAdmin?.email || 'IT Admin';
@@ -268,12 +268,22 @@ function AdminReturnsContent() {
          payloadToUse = { ...payloadToUse, asset_id: assetId, user_id: staffId, condition: 'Unknown (Legacy)', notes: historicalBakedNotes };
       }
 
-      // 2. Auto-Healing Schema Engine
+      // 2. Auto-Healing Schema Engine (Bypasses missing ID column by updating via asset_id and date)
       let dbSuccess = false;
       for (let i = 0; i < 5; i++) {
-         const { error: dbErr } = item.isSynthetic 
-            ? await supabase.from('inspections').insert(payloadToUse)
-            : await supabase.from('inspections').update(payloadToUse).eq('id', recordId);
+         let dbErr;
+         
+         if (item.isSynthetic) {
+             const res = await supabase.from('inspections').insert(payloadToUse);
+             dbErr = res.error;
+         } else {
+             // MATCH BY ASSET ID AND CREATED DATE TO BYPASS MISSING 'ID' COLUMN
+             const res = await supabase.from('inspections')
+                .update(payloadToUse)
+                .eq('asset_id', assetId)
+                .eq('created_at', item.created_at);
+             dbErr = res.error;
+         }
          
          if (dbErr) {
             const match = dbErr.message.match(/Could not find the '([^']+)' column/i);
@@ -324,7 +334,7 @@ function AdminReturnsContent() {
       }
 
       // Close modal and sync UI
-      setActionModal({ isOpen: false, action: null, recordId: '', assetId: '', staffId: '', item: null });
+      setActionModal({ isOpen: false, action: null, assetId: '', staffId: '', item: null });
       fetchReturns(); 
       
     } catch (err: any) {
@@ -549,10 +559,10 @@ function AdminReturnsContent() {
 
                     {isPending && (
                       <div className={`pt-4 border-t mt-auto grid grid-cols-1 sm:grid-cols-2 gap-3 ${isDarkMode ? 'border-white/10' : 'border-white/50'}`}>
-                        <button disabled={updatingId === item.id || updatingId === asset.id} onClick={() => { setActionModal({ isOpen: true, action: 'Approved', recordId: item.id, assetId: asset.id, staffId: item.user_id || asset.assigned_to, item }); setAdminRemarks(''); }} className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
+                        <button disabled={updatingId === asset.id} onClick={() => { setActionModal({ isOpen: true, action: 'Approved', assetId: asset.id, staffId: item.user_id || asset.assigned_to, item }); setAdminRemarks(''); }} className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(16,185,129,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
                           <CheckCircle2 size={16} /> Approve & Move to Stock
                         </button>
-                        <button disabled={updatingId === item.id || updatingId === asset.id} onClick={() => { setActionModal({ isOpen: true, action: 'Declined', recordId: item.id, assetId: asset.id, staffId: item.user_id || asset.assigned_to, item }); setAdminRemarks(''); }} className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
+                        <button disabled={updatingId === asset.id} onClick={() => { setActionModal({ isOpen: true, action: 'Declined', assetId: asset.id, staffId: item.user_id || asset.assigned_to, item }); setAdminRemarks(''); }} className="flex items-center justify-center gap-2 py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-[0_4px_15px_rgba(244,63,94,0.3)] cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
                           <XCircle size={16} /> Decline / Re-Request
                         </button>
                       </div>
