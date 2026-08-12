@@ -7,7 +7,7 @@ import {
   Laptop, ClipboardCheck, Ticket, PlusCircle, RefreshCw, 
   AlertCircle, Clock, X, CheckCircle2, AlertTriangle, 
   Loader2, CheckCircle, Lock, Monitor, LogOut, Star, Camera, ArrowRight,
-  ChevronDown, PackageOpen, ImagePlus, UploadCloud 
+  ChevronDown, PackageOpen, ImagePlus, UploadCloud, FileSignature, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -69,6 +69,20 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
+const extractAdminReason = (remarks: string, notes: string) => {
+  if (remarks && remarks.trim() !== '') return remarks;
+  const lowerNotes = (notes || '').toLowerCase();
+  if (lowerNotes.includes('declin') || lowerNotes.includes('reject')) {
+    const parts = notes.split(/reason:/i);
+    return parts.length > 1 ? parts[1].trim() : notes;
+  }
+  if (lowerNotes.includes('approv')) {
+     const parts = notes.split(/reason:|remarks:/i);
+     return parts.length > 1 ? parts[1].trim() : "Return has been processed and approved.";
+  }
+  return 'No administrative remarks provided.';
+};
+
 export default function StaffDashboardPage() {
   const router = useRouter(); 
   
@@ -83,6 +97,7 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
+  // 🌟 Dashboard Unified Modal State
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
     type: '',
@@ -92,6 +107,9 @@ export default function StaffDashboardPage() {
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
   const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
+
+  const [handoverAsset, setHandoverAsset] = useState<any>(null);
+  const [isSigning, setIsSigning] = useState(false);
 
   useEffect(() => {
     const syncTheme = () => {
@@ -161,7 +179,6 @@ export default function StaffDashboardPage() {
       
       setAllInspections(inspResData);
 
-      // 🌟 STRICT SEPARATED ASSET STATUS ENGINE
       const compiledAssets = (assetsRes.data || []).map(asset => {
         const assetInspections = inspResData.filter(i => i.asset_id === asset.id);
         const latestInsp = assetInspections[0]; 
@@ -191,15 +208,12 @@ export default function StaffDashboardPage() {
         let isReturnApproved = false;
         let isReturnRejected = false;
         let isReturnPending = false;
-        
         let isReplacePending = false;
         let isReplaceRejected = false;
-        
         let isInspectionRejected = false;
 
         const hasRejectionKeywords = ['reject', 'declin', 'missing', 'upload', 'resend', 'again'].some(kw => allAdminRemarks.includes(kw));
 
-        // 1. RETURNS LOGIC
         if (assetStatus.includes('return approved') || assetStatus === 'in stock' || assetStatus === 'unassigned' || liveInspStatus.includes('return approved')) {
             isReturnApproved = true;
         } else if (
@@ -214,7 +228,6 @@ export default function StaffDashboardPage() {
             isReturnPending = true;
         }
 
-        // 2. REPLACEMENTS LOGIC
         if (!isReturnPending && !isReturnRejected && !isReturnApproved) {
             if (assetStatus.includes('replacement request') || assetStatus.includes('replace pending')) {
                 if (hasRejectionKeywords) isReplaceRejected = true;
@@ -224,7 +237,6 @@ export default function StaffDashboardPage() {
             }
         }
 
-        // 3. PURE INSPECTIONS LOGIC
         if (!isReturnRejected && !isReturnPending && !isReturnApproved && !isReplacePending && !isReplaceRejected) {
             if (inspStatus.includes('reject') || inspStatus.includes('fail') || inspStatus.includes('action required') || liveInspStatus.includes('reject') || liveInspStatus.includes('fail') || liveInspStatus.includes('re-inspection')) {
                 isInspectionRejected = true;
@@ -247,7 +259,6 @@ export default function StaffDashboardPage() {
         };
       });
 
-      // 🌟 AUTO-RETURN TO STOCK AUTOMATION
       const displayAssets = [];
       for (const asset of compiledAssets) {
         if (asset.isReturnApproved) {
@@ -351,42 +362,76 @@ export default function StaffDashboardPage() {
       setIsSubmittingReplace(false);
     }
   };
+
+  const handleDigitalSign = async () => {
+    if (!handoverAsset) return;
+    setIsSigning(true);
+
+    try {
+      const timestamp = new Date().toLocaleString('en-IN');
+      const staffName = currentUser.full_name || currentUser.name;
+      const empCode = currentUser.emp_code || currentUser.emp_id;
+      const officialNote = `Digitally Signed Handover Agreement by ${staffName} on ${timestamp}`;
+
+      await supabase
+        .from('assets')
+        .update({ 
+          status: 'Assigned', 
+          inspection_status: 'Approved',
+          last_inspection_date: new Date().toISOString()
+        })
+        .eq('id', handoverAsset.id);
+
+      await supabase
+        .from('inspections')
+        .insert({
+          asset_id: handoverAsset.id,
+          inspected_by: currentUser.id,
+          status: 'Approved',
+          notes: officialNote
+        });
+
+      await supabase
+        .from('notifications')
+        .insert({
+          target_user: 'ADMIN_SYSTEM',
+          title: '📝 Agreement Signed',
+          message: `${staffName} (${empCode}) has digitally signed the handover agreement for ${handoverAsset.name || handoverAsset.asset_name} (${handoverAsset.asset_tag}).`,
+          type: 'success',
+          is_read: false
+        });
+
+      toast.success("Handover Agreement Successfully Signed!");
+      setHandoverAsset(null);
+      loadRealDatabase(false); 
+    } catch (error: any) {
+      toast.error(`Error signing agreement: ${error.message}`);
+    } finally {
+      setIsSigning(false);
+    }
+  };
   
   const getStatusBadge = (status: string) => {
     const s = (status || '').toLowerCase().trim();
-    if (s === 'open' || s === 'pending') return 'bg-orange-500/15 backdrop-blur-md text-orange-600 font-extrabold border border-orange-400/40 shadow-sm';
-    if (s === 'in progress') return 'bg-purple-500/15 backdrop-blur-md text-purple-600 font-extrabold border border-purple-400/40 shadow-sm';
-    if (s === 'resolved' || s === 'closed') return 'bg-emerald-500/15 backdrop-blur-md text-emerald-600 font-extrabold border border-emerald-400/40 shadow-sm';
-    return 'bg-slate-500/15 backdrop-blur-md text-slate-600 font-extrabold border border-slate-400/40 shadow-sm';
-  };
-
-  const extractAdminReason = (remarks: string, notes: string) => {
-    if (remarks && remarks.trim() !== '') return remarks;
-    const lowerNotes = (notes || '').toLowerCase();
-    if (lowerNotes.includes('declin') || lowerNotes.includes('reject')) {
-      const parts = notes.split(/reason:/i);
-      return parts.length > 1 ? parts[1].trim() : notes;
-    }
-    if (lowerNotes.includes('approv')) {
-       const parts = notes.split(/reason:|remarks:/i);
-       return parts.length > 1 ? parts[1].trim() : "Return has been processed and approved.";
-    }
-    return 'No administrative remarks provided.';
+    if (s === 'open' || s === 'pending') return 'bg-orange-100/80 text-orange-600 font-bold border border-orange-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (s === 'in progress') return 'bg-purple-100/80 text-purple-600 font-bold border border-purple-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (s === 'resolved' || s === 'closed') return 'bg-emerald-100/80 text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    return 'bg-slate-100/80 text-slate-600 font-bold border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
   };
 
   const getAssetAuditState = (asset: any) => {
     const auditWindow = getAuditWindowInfo(asset.category);
     
     if (asset.isReturnPending || asset.isReplacePending) {
-      return { disabled: true, text: "Locked", classes: "bg-slate-500/10 backdrop-blur-md text-slate-500 font-bold cursor-not-allowed border border-slate-400/30 shadow-sm" };
+      return { disabled: true, text: "Locked", classes: "bg-white/30 backdrop-blur-md text-slate-400 font-bold border border-white/40 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
     }
 
     if (asset.isInspectionRejected) {
-      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500/90 backdrop-blur-md hover:bg-rose-600 text-white font-bold cursor-pointer hover:shadow-[0_0_25px_rgba(244,63,94,0.6)] animate-pulse border-none" };
+      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
     if (asset.isOverdue) {
-      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500/90 backdrop-blur-md hover:bg-rose-600 text-white font-bold cursor-pointer hover:shadow-[0_0_25px_rgba(244,63,94,0.6)] animate-pulse border-none" };
+      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
     const hasAudited = allInspections.some(insp => {
@@ -399,136 +444,154 @@ export default function StaffDashboardPage() {
               (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
     });
 
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-500/15 backdrop-blur-md text-emerald-600 border border-emerald-400/40 font-bold cursor-not-allowed shadow-sm" };
+    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-md text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-slate-500/10 backdrop-blur-md text-slate-500 font-bold border border-slate-400/30 shadow-sm cursor-not-allowed" };
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-white/40 backdrop-blur-md text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
-    return { disabled: false, text: "Audit Device", classes: "bg-linear-to-r from-orange-500 to-purple-600 shadow-lg hover:shadow-orange-500/50 font-bold text-white cursor-pointer border-transparent" };
+    return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
   };
 
   const requiresGlobalReinspection = assignedAssets.some(a => a.isInspectionRejected || a.isOverdue);
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
+  const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
 
+  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME (PURE LIGHT)
   const theme = {
-    glassCard: isDarkMode 
-      ? 'bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.1),0_8px_32px_rgba(0,0,0,0.5)] hover:border-purple-500/80 hover:shadow-[0_0_35px_rgba(168,85,247,0.45)] transition-all duration-500' 
-      : 'bg-white/40 backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/60 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.9),0_12px_32px_rgba(230,210,200,0.35)] hover:border-[#b388ff] hover:shadow-[0_0_35px_rgba(179,136,255,0.5)] transition-all duration-500', 
-    
-    glassPanel: isDarkMode
-      ? 'bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.1),0_8px_32px_rgba(0,0,0,0.5)] hover:border-[#a855f7] hover:shadow-[0_0_30px_rgba(168,85,247,0.5),inset_0_0_20px_rgba(168,85,247,0.3)] transition-all duration-500'
-      : 'bg-white/40 backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/60 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.9),0_12px_32px_rgba(230,210,200,0.35)] hover:border-[#b388ff] hover:shadow-[0_0_35px_rgba(179,136,255,0.6),inset_0_0_25px_rgba(179,136,255,0.3)] transition-all duration-500',
-      
-    glassButton: isDarkMode
-      ? 'bg-zinc-800/50 backdrop-blur-xl border border-white/10 hover:border-[#a855f7] hover:shadow-[0_0_25px_rgba(168,85,247,0.5),inset_0_0_10px_rgba(168,85,247,0.2)] transition-all text-white'
-      : 'bg-white/60 backdrop-blur-2xl border border-white/90 hover:border-[#b388ff] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_25px_rgba(179,136,255,0.45),inset_0_0_10px_rgba(179,136,255,0.2)] transition-all text-[#0f172a]',
-    
-    glassItem: isDarkMode
-      ? 'bg-black/30 backdrop-blur-xl border border-white/10 hover:border-[#a855f7]/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.4),inset_0_0_15px_rgba(168,85,247,0.2)] transition-all duration-300'
-      : 'bg-white/50 backdrop-blur-2xl border border-white/70 shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)] hover:border-[#b388ff] hover:shadow-[0_0_30px_rgba(179,136,255,0.5),inset_0_0_15px_rgba(179,136,255,0.2)] transition-all duration-300',
-      
-    glassInner: isDarkMode
-      ? 'bg-black/40 backdrop-blur-md border border-white/10 hover:border-[#a855f7]/50 transition-colors'
-      : 'bg-white/50 backdrop-blur-xl border border-white/80 shadow-[inset_0_1px_2px_rgba(255,255,255,0.7)] hover:border-[#b388ff]/50 transition-colors',
-    
-    glassInnerCard: isDarkMode 
-      ? 'bg-black/40 backdrop-blur-xl border border-white/10 hover:border-[#a855f7]/60 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all' 
-      : 'bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9),0_2px_8px_rgba(0,0,0,0.02)] hover:border-[#b388ff]/60 hover:shadow-[0_0_15px_rgba(179,136,255,0.2)] transition-all',
-      
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
-    text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    subText: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
+    glassCard: 'bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60', 
+    glassPanel: 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.7)]',
+    glassItem: 'bg-white/30 backdrop-blur-xl border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-500',
+    glassButton: 'bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 hover:bg-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all cursor-pointer',
+    glassInner: 'bg-white/20 backdrop-blur-lg border border-white/40 shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]',
+    textMain: 'text-slate-900',
+    textSub: 'text-slate-500',
   };
 
   if (loading) return null; 
   if (!isAuthorized) return null; 
 
   return (
-    <div className={`flex-1 flex flex-col w-full h-full p-4 lg:p-6 gap-5 overflow-hidden lg:min-h-0 z-10 font-sans ${isDarkMode ? 'bg-[#101216]' : 'bg-linear-to-br from-[#fef6f0] via-[#fcefe6] to-[#f7e4d8]'} transition-colors duration-1000`}>
+    <div className="flex-1 flex flex-col w-full h-full p-4 lg:p-6 gap-5 overflow-hidden lg:min-h-0 z-10 font-sans bg-transparent transition-colors duration-1000">
       
+      {/* 🌟 WELCOME BANNER */}
       <div className={`${theme.glassCard} rounded-4xl p-5 md:px-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 transition-all`}>
         <div>
-          <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${theme.text}`}>Welcome back, {formatDisplayName(currentUser.name)} 👋</h1>
-          <div className={`flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm font-semibold ${theme.subText}`}>
-            <span className="text-white font-extrabold uppercase tracking-wider px-3 py-1 bg-purple-500/80 backdrop-blur-md rounded-md shadow-sm border border-purple-400/50">ID: {currentUser.emp_id}</span>
-            <span className="font-bold">{currentUser.email}</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            Welcome back, {formatDisplayName(currentUser.name)} 👋
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-600">
+            <span className="px-3 py-1 bg-white/40 backdrop-blur-xl border border-white/80 rounded-lg text-[10px] sm:text-xs font-bold tracking-widest text-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)]">
+              ID: {currentUser.emp_id}
+            </span>
+            <span className="font-bold text-slate-600">{currentUser.email}</span>
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button 
             onClick={() => loadRealDatabase(true)} 
             disabled={isRefreshing}
-            className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 active:scale-95 ${isDarkMode ? 'bg-white/10 text-white hover:bg-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] border border-white/20' : 'bg-linear-to-r from-orange-500 to-purple-600 hover:shadow-orange-500/50 text-white border-transparent'}`}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-orange-400 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Sync Feeds
           </button>
         </div>
       </div>
 
+      {/* 🌟 PENDING HANDOVER ALERT BANNER */}
+      <AnimatePresence>
+        {pendingHandovers.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`${theme.glassCard} bg-orange-50/50 border-orange-200/50 rounded-4xl p-5 shadow-[0_8px_30px_rgba(249,115,22,0.1)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden`}
+          >
+            <div className="absolute top-[-50%] left-[-10%] w-64 h-64 bg-orange-400/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="p-3 bg-white/80 backdrop-blur-md border border-orange-100 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] text-orange-600 rounded-2xl shrink-0">
+                <FileSignature size={24} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                  Action Required <span className="px-2 py-0.5 bg-orange-500 text-white rounded-md text-[10px] animate-pulse shadow-sm">1 Pending</span>
+                </h3>
+                <p className="text-xs font-semibold text-slate-600 mt-1">
+                  You have new hardware assigned to you. Please review and sign the Handover Agreement.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setHandoverAsset(pendingHandovers[0])}
+              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer hover:scale-105 hover:shadow-[0_0_30px_rgba(249,115,22,0.5)] active:scale-95 whitespace-nowrap border border-orange-400 shrink-0 relative z-10"
+            >
+              Review & Sign
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col xl:flex-row gap-5 shrink-0">
-        
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600 bg-white/60 backdrop-blur-md border border-white/80 shadow-sm', type: 'TICKET', isActionDisabled: false, path: null },
-            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 bg-rose-500/15 backdrop-blur-md border border-rose-400/40 shadow-sm animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600 bg-white/60 backdrop-blur-md border border-white/80 shadow-sm' : 'text-slate-500 bg-slate-500/10 border border-slate-400/20 shadow-sm'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
-            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600 bg-white/60 backdrop-blur-md border border-white/80 shadow-sm', type: 'REQUEST', isActionDisabled: false, path: null },
-            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600 bg-white/60 backdrop-blur-md border border-white/80 shadow-sm', type: 'ROUTE', isActionDisabled: false, path: '/staff/dashboard/remote' },
+            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600', type: 'TICKET', isActionDisabled: false, path: null },
+            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600' : 'text-slate-400'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
+            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600', type: 'REQUEST', isActionDisabled: false, path: null },
+            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600', type: 'ROUTE', isActionDisabled: false, path: '/staff/dashboard/remote' },
           ].map((item) => (
             <button 
               key={item.name} 
               onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
               disabled={item.isActionDisabled}
-              className={`relative ${theme.glassItem} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-1'}`}
+              className={`relative ${theme.glassItem} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(0,0,0,0.06)]'}`}
             >
               <div className="flex items-start justify-between w-full">
-                <div className={`p-3 rounded-2xl transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110'} ${item.color}`}>
+                <div className={`p-3 rounded-2xl bg-white/40 border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110 group-hover:bg-white/60'} ${item.color}`}>
                   {item.isActionDisabled ? <Lock size={18} /> : <item.icon size={18} strokeWidth={2.5} />}
                 </div>
                 {!item.isActionDisabled && (
-                  <div className={`p-1.5 rounded-full transition-all duration-300 ${isDarkMode ? 'bg-white/5 text-zinc-500 group-hover:bg-white/10 group-hover:text-zinc-200' : 'bg-white/50 border border-white/60 text-slate-500 group-hover:bg-purple-500/10 group-hover:text-purple-600 group-hover:border-purple-300'}`}>
+                  <div className="p-1.5 rounded-full bg-white/40 border border-white/60 text-slate-400 group-hover:bg-white/80 group-hover:text-purple-600 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]">
                     <ArrowRight size={14} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 )}
               </div>
               <div className="text-left w-full mt-2">
-                <h3 className={`font-bold text-[13px] tracking-tight leading-tight transition-colors ${item.isActionDisabled ? theme.subText : `${theme.text} group-hover:text-purple-600`}`}>{item.name}</h3>
-                <p className={`text-[10px] font-bold mt-0.5 leading-snug line-clamp-1 ${theme.subText}`}>{item.desc}</p>
+                <h3 className={`font-bold text-[13px] tracking-tight leading-tight transition-colors ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-purple-600'}`}>{item.name}</h3>
+                <p className="text-[10px] font-bold mt-0.5 leading-snug line-clamp-1 text-slate-500">{item.desc}</p>
               </div>
             </button>
           ))}
         </div>
 
-        <div className="xl:w-1/3 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-white/50 dark:border-white/10">
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between`}>
+        <div className="xl:w-1/3 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-white/50">
+          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
-              <div className="p-3 rounded-2xl bg-white/60 backdrop-blur-md border border-white/80 text-purple-600 shadow-sm"><Laptop size={18} strokeWidth={2.5} /></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Assigned</span>
+              <div className="p-3 rounded-2xl bg-white/60 border border-white/80 text-purple-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Laptop size={18} strokeWidth={2.5} /></div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Assigned</span>
             </div>
             <div>
-              <h2 className={`text-3xl font-black leading-none mb-1 ${theme.text}`}>{stats.totalAssets}</h2>
-              <p className={`text-[10px] font-bold ${theme.subText}`}>Hardware Units</p>
+              <h2 className="text-3xl font-black leading-none mb-1 text-slate-900">{stats.totalAssets}</h2>
+              <p className="text-[10px] font-bold text-slate-500">Hardware Units</p>
             </div>
           </div>
           
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between`}>
+          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
-              <div className="p-3 rounded-2xl bg-white/60 backdrop-blur-md border border-white/80 text-amber-600 shadow-sm"><AlertCircle size={18} strokeWidth={2.5} /></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Action Req.</span>
+              <div className="p-3 rounded-2xl bg-white/60 border border-white/80 text-amber-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><AlertCircle size={18} strokeWidth={2.5} /></div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Action Req.</span>
             </div>
             <div>
-              <h2 className="text-3xl font-black text-amber-600 dark:text-amber-500 leading-none mb-1">{stats.needsInspection}</h2>
-              <p className={`text-[10px] font-bold ${theme.subText}`}>Pending Tasks</p>
+              <h2 className="text-3xl font-black text-amber-600 leading-none mb-1">{stats.needsInspection}</h2>
+              <p className="text-[10px] font-bold text-slate-500">Pending Tasks</p>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between`}>
+          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
-              <div className="p-3 rounded-2xl bg-white/60 backdrop-blur-md border border-white/80 text-orange-600 shadow-sm"><Ticket size={18} strokeWidth={2.5} /></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${theme.subText}`}>Open Tix</span>
+              <div className="p-3 rounded-2xl bg-white/60 border border-white/80 text-orange-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Ticket size={18} strokeWidth={2.5} /></div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Open Tix</span>
             </div>
             <div>
-              <h2 className="text-3xl font-black text-orange-600 dark:text-orange-500 leading-none mb-1">{stats.openTickets}</h2>
-              <p className={`text-[10px] font-bold ${theme.subText}`}>Active Tickets</p>
+              <h2 className="text-3xl font-black text-orange-600 leading-none mb-1">{stats.openTickets}</h2>
+              <p className="text-[10px] font-bold text-slate-500">Active Tickets</p>
             </div>
           </div>
         </div>
@@ -536,37 +599,37 @@ export default function StaffDashboardPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 pt-1">
         
+        {/* MY HARDWARE LIST */}
         <div className="w-full lg:w-2/3 flex flex-col lg:min-h-0">
-          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 group/panel`}>
-            <div className={`flex items-center justify-between border-b pb-4 mb-4 transition-colors duration-500 ${isDarkMode ? 'border-white/10 group-hover/panel:border-purple-500/50' : 'border-white/40 group-hover/panel:border-purple-400/80'}`}>
-              <div className={`flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider ${theme.text}`}>
+          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0`}>
+            <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40">
+              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-900">
                 <Laptop className="text-purple-500 shrink-0" size={18}/> My Hardware Units
               </div>
-              <span className={`text-xs font-bold ${theme.subText}`}>{assignedAssets.length} Total</span>
+              <span className="text-xs font-bold text-slate-500">{assignedAssets.length} Total</span>
             </div>
             
             <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
               {assignedAssets.length === 0 ? (
-                <div className={`py-10 text-center font-bold text-xs ${theme.subText}`}>No active assets linked to your account.</div>
+                <div className="py-10 text-center font-medium text-xs text-slate-500">No active assets linked to your account.</div>
               ) : (
                 assignedAssets.map(asset => {
                   const btnState = getAssetAuditState(asset);
 
                   return (
-                    <div key={asset.id} className={`${theme.glassItem} p-5 rounded-3xl`}>
-                      
-                      <div className="flex justify-between items-start gap-3">
-                        <h4 className={`font-extrabold text-base tracking-tight leading-tight ${theme.text}`}>
+                    <div key={asset.id} className={`${theme.glassItem} p-5 sm:p-6 rounded-3xl hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:border-orange-300`}>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+                        <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate">
                           {asset.name || asset.asset_name || asset.model || 'Generic Device'}
                         </h4>
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border shrink-0 shadow-sm ${
-                          asset.isReturnRejected ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
-                          asset.isReturnPending ? 'bg-orange-500/10 text-orange-600 border-orange-500/30' :
-                          asset.isReplaceRejected ? 'bg-rose-500/10 text-rose-600 border-rose-500/30' :
-                          asset.isReplacePending ? 'bg-purple-500/10 text-purple-600 border-purple-500/30' :
-                          asset.isInspectionRejected ? 'bg-amber-500/10 text-amber-600 border-amber-500/30 animate-pulse' :
-                          asset.isOverdue ? 'bg-rose-500/10 text-rose-600 border-rose-500/30 animate-pulse' :
-                          'bg-slate-500/10 text-slate-600 border-slate-500/30'
+                        <span className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                          asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                          asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                          asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                          asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
+                          asset.isInspectionRejected ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
+                          asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
+                          'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}>
                           {
                             asset.isReturnRejected ? 'Return Declined' : 
@@ -574,100 +637,95 @@ export default function StaffDashboardPage() {
                             asset.isReplaceRejected ? 'Replacement Declined' : 
                             asset.isReplacePending ? 'Replacement Pending' : 
                             asset.isInspectionRejected ? 'Re-Inspection Req' : 
-                            asset.isOverdue ? 'Overdue' : 'Assigned'
+                            asset.isOverdue ? 'Overdue' : 'Assigned & Active'
                           }
                         </span>
                       </div>
 
-                      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl mt-4 ${theme.glassInner}`}>
-                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Tag ID</span><span className={`font-mono text-xs font-bold wrap-break-word ${theme.text}`}>{asset.asset_tag || 'N/A'}</span></div>
-                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Category</span><span className={`text-xs font-bold wrap-break-word ${theme.text}`}>{asset.category || 'N/A'}</span></div>
-                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Updated</span><span className={`text-xs font-bold ${theme.text}`}>{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span></div>
-                        <div><span className={`text-[9px] font-bold uppercase tracking-widest block mb-1 ${theme.subText}`}>Next Due</span><span className={`text-xs font-bold ${asset.isOverdue ? 'text-rose-500 animate-pulse' : theme.text}`}>{asset.nextDue ? asset.nextDue.toLocaleDateString('en-IN') : 'N/A'}</span></div>
+                      {/* 🌟 INNER GLASS GRID */}
+                      <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-2xl ${theme.glassInner}`}>
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span>
+                          <span className="font-mono text-xs font-medium text-slate-800 truncate block">{asset.asset_tag || 'N/A'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Category</span>
+                          <span className="text-xs font-medium text-slate-800 truncate block">{asset.category || 'N/A'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Updated</span>
+                          <span className="text-xs font-medium text-slate-800 block">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Next Due</span>
+                          <span className={`text-xs font-medium block ${asset.isOverdue ? 'text-rose-600 animate-pulse' : 'text-slate-800'}`}>{asset.nextDue ? asset.nextDue.toLocaleDateString('en-IN') : 'N/A'}</span>
+                        </div>
                       </div>
                       
                       { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
-                        <div className={`p-4 mt-4 rounded-2xl border text-xs font-bold flex gap-3 ${
-                           (isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-700')
-                        }`}>
+                        <div className="p-4 mt-4 rounded-2xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-xs font-medium flex gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)]">
                           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                           <div>
-                            <span className="block text-[10px] uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
                             {extractAdminReason(asset.live_admin_remarks, asset.notes)}
                           </div>
                         </div>
                       )}
 
-                      <div className="flex flex-wrap items-center gap-3 pt-4 justify-end">
-                        
-                        {/* RETURN BUTTON */}
+                      <div className="flex flex-wrap items-center justify-end gap-3 pt-5 mt-4 border-t border-white/40">
                         {asset.isReturnPending ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <button disabled className="px-5 py-2.5 font-bold text-xs rounded-2xl transition-all border shadow-sm bg-white/10 backdrop-blur-md border-white/20 text-slate-400 cursor-not-allowed opacity-60">
-                              Pending Admin
-                            </button>
-                            <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest text-center leading-tight animate-pulse mt-1">
-                              Wait for Response
-                            </span>
-                          </div>
+                          <button disabled className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${theme.glassButton} opacity-60 cursor-not-allowed`}>
+                            Waiting on Admin
+                          </button>
                         ) : asset.isReturnRejected ? (
                           <button 
-                            onClick={async () => {
+                            onClick={async () => { 
                               await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
                               loadRealDatabase(false);
                               setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
-                            }}
-                            className="px-5 py-2.5 font-bold text-xs rounded-2xl transition-all border shadow-sm bg-white/40 backdrop-blur-md border-rose-300 text-rose-600 hover:bg-rose-500/10 hover:border-rose-400 cursor-pointer flex items-center gap-2 hover:shadow-2xl hover:shadow-rose-500/40"
+                            }} 
+                            className="px-5 py-2.5 rounded-2xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:shadow-[0_0_20px_rgba(244,63,94,0.4)]"
                           >
-                            <AlertTriangle size={14} /> Rejected (Retry)
+                            Return (Retry)
                           </button>
                         ) : (
                           <button 
                             disabled={asset.isReplacePending || asset.isReplaceRejected}
-                            onClick={() => setModal({ isOpen: true, type: 'RETURN', targetAsset: asset })}
-                            className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all border shadow-sm ${
-                                (asset.isReplacePending || asset.isReplaceRejected)
-                                  ? 'bg-white/10 backdrop-blur-md border-white/20 text-slate-400 cursor-not-allowed opacity-60'
-                                  : 'bg-white/40 backdrop-blur-md border-orange-300 text-orange-600 hover:bg-orange-500/10 hover:border-orange-400 cursor-pointer hover:shadow-2xl hover:shadow-orange-500/40'
+                            onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
+                            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                              (asset.isReplacePending || asset.isReplaceRejected)
+                                ? 'bg-white/30 border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
+                                : 'bg-orange-50 border border-orange-200 text-orange-600 hover:bg-orange-100/80 hover:border-orange-300 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
                             }`}
                           >
                             Return
                           </button>
                         )}
-
-                        {/* REPLACE BUTTON */}
+                        
                         {asset.isReplacePending ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <button disabled className="px-5 py-2.5 font-bold text-xs rounded-2xl transition-all border shadow-sm bg-white/10 backdrop-blur-md border-white/20 text-slate-400 cursor-not-allowed opacity-60">
-                              Pending Admin
-                            </button>
-                            <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest text-center leading-tight animate-pulse mt-1">
-                              Wait for Response
-                            </span>
-                          </div>
+                          <button disabled className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${theme.glassButton} opacity-60 cursor-not-allowed`}>
+                            Waiting on Admin
+                          </button>
                         ) : asset.isReplaceRejected ? (
                           <button 
                             onClick={async () => {
-                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
+                              await supabase.from('assets').update({ status: 'Assigned', admin_remarks: null }).eq('id', asset.id);
                               loadRealDatabase(false);
-                              setReplaceAssetId(asset.id);
-                              setShowReplaceModal(true);
-                            }}
-                            className="px-5 py-2.5 font-bold text-xs rounded-2xl transition-all border shadow-sm bg-white/40 backdrop-blur-md border-purple-300 text-purple-600 hover:bg-purple-500/10 hover:border-purple-400 cursor-pointer flex items-center gap-2 hover:shadow-2xl hover:shadow-purple-500/40"
+                              setReplaceAssetId(asset.id); 
+                              setShowReplaceModal(true); 
+                            }} 
+                            className="px-5 py-2.5 rounded-2xl border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 cursor-pointer transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]"
                           >
-                            <AlertTriangle size={14} /> Re-Replace
+                            Replace (Retry)
                           </button>
                         ) : (
                           <button 
                             disabled={asset.isReturnPending || asset.isReturnRejected}
-                            onClick={() => {
-                              setReplaceAssetId(asset.id);
-                              setShowReplaceModal(true);
-                            }}
-                            className={`px-5 py-2.5 font-bold text-xs rounded-2xl transition-all border shadow-sm ${
+                            onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
+                            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
                               (asset.isReturnPending || asset.isReturnRejected)
-                                ? 'bg-white/10 backdrop-blur-md border-white/20 text-slate-400 cursor-not-allowed opacity-60'
-                                : 'bg-white/40 backdrop-blur-md border-purple-300 text-purple-600 hover:bg-purple-500/10 hover:border-purple-400 cursor-pointer hover:shadow-2xl hover:shadow-purple-500/40'
+                                ? 'bg-white/30 border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
+                                : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100/80 hover:border-purple-300 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
                             }`}
                           >
                             Replace
@@ -677,7 +735,7 @@ export default function StaffDashboardPage() {
                         <button 
                           disabled={btnState.disabled}
                           onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                          className={`px-6 py-2.5 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm ${btnState.classes}`}
+                          className={`px-6 py-2.5 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.4)] ${btnState.classes}`}
                         >
                           {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={15} />}
                           {btnState.disabled && btnState.text.includes('Opens') && <Lock size={15} />}
@@ -692,45 +750,45 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
+        {/* MY TICKETS */}
         <div className="w-full lg:w-1/3 flex flex-col lg:min-h-0 pb-4 lg:pb-0">
           <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 group/panel`}>
-            <div className={`flex items-center justify-between border-b pb-4 mb-4 transition-colors duration-500 ${isDarkMode ? 'border-white/10 group-hover/panel:border-purple-500/30' : 'border-white/40 group-hover/panel:border-purple-400/80'}`}>
-              <div className={`flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider ${theme.text}`}><Ticket className="text-purple-500 shrink-0" size={18}/> My Tickets</div>
-              <span className={`text-xs font-bold ${theme.subText}`}>{myTickets.length} Raised</span>
+            <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40 group-hover/panel:border-purple-300 transition-colors duration-500">
+              <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-purple-500 shrink-0" size={18}/> My Tickets</div>
+              <span className="text-xs font-bold text-slate-500">{myTickets.length} Raised</span>
             </div>
             
             <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
               {myTickets.length === 0 ? (
-                <div className={`py-10 text-center font-bold text-xs ${theme.subText}`}>No service requests submitted yet.</div>
+                <div className="py-10 text-center font-medium text-xs text-slate-500">No service requests submitted yet.</div>
               ) : (
                 myTickets.map(tix => {
                   const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
                   return (
-                    <div key={tix.id} className={`p-5 rounded-3xl transition-colors space-y-4 ${theme.glassItem}`}>
+                    <div key={tix.id} className={`p-5 rounded-3xl transition-all duration-300 space-y-4 ${theme.glassItem} hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(168,85,247,0.2)] hover:border-purple-300`}>
                       <div className="flex items-start justify-between gap-3">
-                        <span className={`font-extrabold text-sm leading-snug wrap-break-word ${theme.text}`}>{tix.title || tix.subject}</span>
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black tracking-widest uppercase border shrink-0 shadow-sm ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
+                        <span className="font-semibold text-sm leading-snug wrap-break-word text-slate-800">{tix.title || tix.subject}</span>
+                        <span className={`px-3 py-1 rounded-xl text-[9px] font-bold tracking-widest uppercase border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)] ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
                       </div>
                       
-                      <p className={`text-xs font-semibold line-clamp-3 wrap-break-word ${theme.subText}`}>{tix.description || tix.note}</p>
+                      <p className="text-xs font-medium line-clamp-3 wrap-break-word text-slate-600">{tix.description || tix.note}</p>
 
                       {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
-                        <div className={`p-4 rounded-2xl border text-xs ${theme.glassInner}`}>
-                          <strong className={`block mb-1.5 ${theme.text}`}>Admin Response:</strong>
-                          <span className="font-medium text-slate-800 dark:text-slate-300 wrap-break-word">{tix.admin_remarks || tix.admin_notes || tix.resolution_notes}</span>
+                        <div className="p-4 rounded-2xl border border-purple-500/10 bg-purple-500/5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]">
+                          <strong className="block mb-1.5 text-[10px] uppercase tracking-widest font-bold text-purple-600">Admin Response:</strong>
+                          <span className="font-medium text-slate-700 text-xs wrap-break-word">{tix.admin_remarks || tix.admin_notes || tix.resolution_notes}</span>
                         </div>
                       )}
 
                       {isResolved && (
-                        <div className={`flex flex-col gap-2 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/30'}`}>
+                        <div className="flex flex-col gap-2 pt-4 mt-2 border-t border-white/40">
                           {tix.updated_at && (
-                              <div className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.subText}`}>
+                              <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-slate-500">
                                 <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
                               </div>
                           )}
-
                           <div className="flex items-center gap-1 mt-1">
-                            <span className={`text-[9px] font-bold uppercase tracking-widest mr-2 ${theme.subText}`}>Rate Support:</span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest mr-2 text-slate-500">Rate Support:</span>
                             {[1, 2, 3, 4, 5].map(star => (
                               <button
                                 key={star}
@@ -738,15 +796,15 @@ export default function StaffDashboardPage() {
                                 onClick={() => handleRateTicket(tix.id, star)}
                                 className={`transition-all ${tix.rating ? 'cursor-default' : 'cursor-pointer hover:scale-125 hover:drop-shadow-lg'}`}
                               >
-                                <Star size={16} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-white drop-shadow-md dark:text-zinc-600"} />
+                                <Star size={16} className={star <= (tix.rating || 0) ? "fill-amber-400 text-amber-400" : "text-white/60 drop-shadow-sm"} />
                               </button>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      <div className={`flex items-center justify-between text-[10px] uppercase tracking-widest pt-3 font-bold border-t ${isDarkMode ? 'border-white/10 text-zinc-500' : 'border-white/30 text-slate-500'}`}>
-                        <span className="wrap-break-word">Category: <strong className={theme.text}>{tix.category || 'General'}</strong></span>
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest pt-4 font-bold border-t border-white/40 text-slate-500">
+                        <span className="wrap-break-word">Category: <strong className="text-slate-800">{tix.category || 'General'}</strong></span>
                         <span className="shrink-0">{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
                       </div>
                     </div>
@@ -756,9 +814,8 @@ export default function StaffDashboardPage() {
             </div>
           </div>
         </div>
-
       </div>
-      
+
       <AnimatePresence>
         {modal.isOpen && (
           <LiveDatabaseModal 
@@ -777,82 +834,65 @@ export default function StaffDashboardPage() {
       <AnimatePresence>
         {showReplaceModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
-            
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowReplaceModal(false)}
-              className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`}
+              className="absolute inset-0 bg-slate-900/20 backdrop-blur-md"
             />
-            
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 20 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden ${theme.glassCard}`}
+              className={`relative w-full max-w-2xl max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden bg-white/80 backdrop-blur-3xl border border-white shadow-[0_32px_80px_rgba(0,0,0,0.15)]`}
             >
-              <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
+              <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0 border-b border-slate-200/60">
                 <div className="flex items-center gap-3 sm:gap-4">
-                  <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-3xl flex items-center justify-center ${
-                    isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-inner text-purple-500'
-                  }`}>
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-3xl flex items-center justify-center bg-white border border-white text-purple-500 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]">
                      <PackageOpen size={24} strokeWidth={2} />
                   </div>
-                  <h2 className={`text-[14px] sm:text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>
+                  <h2 className="text-[14px] sm:text-[16px] font-bold uppercase tracking-widest text-slate-900">
                     Assets Replacement
                   </h2>
                 </div>
-                <button 
-                  onClick={() => setShowReplaceModal(false)}
-                  className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}
-                >
+                <button onClick={() => setShowReplaceModal(false)} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}>
                   <X size={18} strokeWidth={2.5} />
                 </button>
               </div>
 
-              <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
-
               <form id="replacementForm" onSubmit={handleReplacementSubmit} className="px-6 py-4 sm:px-8 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-3 sm:gap-4 custom-scrollbar">
-                
                 <div className="flex flex-col gap-1.5 sm:gap-2">
-                  <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                    Select Assigned Asset
-                  </label>
-                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
+                  <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Select Assigned Asset</label>
+                  <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
                     <select
                       value={replaceAssetId}
                       onChange={(e) => setReplaceAssetId(e.target.value)}
                       required
-                      className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
+                      className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"
                     >
-                      <option value="" disabled className={isDarkMode ? 'text-black' : ''}>Choose Hardware...</option>
+                      <option value="" disabled>Choose Hardware...</option>
                       {assignedAssets.map(asset => (
-                        <option key={asset.id} value={asset.id} className={isDarkMode ? 'text-black' : ''}>
+                        <option key={asset.id} value={asset.id}>
                           {asset.name || asset.asset_name} ({asset.asset_tag})
                         </option>
                       ))}
                     </select>
-                    <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
+                    <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
                   </div>
                 </div>
 
                 <AnimatePresence>
                   {replaceAssetId && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0, marginTop: -5 }} 
-                      animate={{ opacity: 1, height: 'auto', marginTop: 0 }} 
-                      exit={{ opacity: 0, height: 0, marginTop: -5 }}
-                      className="overflow-hidden"
-                    >
-                      <div className={`px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 ${theme.glassInnerCard}`}>
+                    <motion.div initial={{ opacity: 0, height: 0, marginTop: -5 }} animate={{ opacity: 1, height: 'auto', marginTop: 0 }} exit={{ opacity: 0, height: 0, marginTop: -5 }} className="overflow-hidden">
+                      <div className="px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]">
                         <div className="flex-1 space-y-1">
-                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
-                          <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
+                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Tag ID</span>
+                          <span className="text-[11px] sm:text-[13px] font-semibold wrap-break-word text-slate-900">
                             {assignedAssets.find(a => String(a.id) === replaceAssetId)?.asset_tag}
                           </span>
                         </div>
                         <div className="flex-1 space-y-1">
-                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
-                          <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
+                          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Serial Number</span>
+                          <span className="text-[11px] sm:text-[13px] font-semibold wrap-break-word text-slate-900">
                             {assignedAssets.find(a => String(a.id) === replaceAssetId)?.serial_number || 'N/A'}
                           </span>
                         </div>
@@ -862,38 +902,20 @@ export default function StaffDashboardPage() {
                 </AnimatePresence>
 
                 <div className="flex flex-col gap-1.5 sm:gap-2">
-                  <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                    Detailed Explanation
-                  </label>
+                  <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Detailed Explanation</label>
                   <textarea
                     value={replaceReason}
                     onChange={(e) => setReplaceReason(e.target.value)}
                     required
                     placeholder="Describe what happened..."
-                    className={`w-full px-4 sm:px-5 py-3 sm:py-4 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none min-h-17.5 sm:min-h-20 resize-none ${theme.glassInnerCard} ${
-                      isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'
-                    }`}
+                    className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none min-h-20 resize-none bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-slate-400 text-slate-900 focus:bg-white/60 focus:border-purple-300 focus:ring-2 focus:ring-purple-500/20"
                   />
                 </div>
-
               </form>
 
-              <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
-
-              <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowReplaceModal(false)}
-                  className={`flex-1 py-3.5 rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="replacementForm"
-                  disabled={isSubmittingReplace || !replaceAssetId || !replaceReason.trim()}
-                  className="flex-1 py-3.5 bg-linear-to-r from-purple-500 to-purple-600 text-white rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-purple-500/50 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
-                >
+              <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 border-t border-slate-200/60">
+                <button type="button" onClick={() => setShowReplaceModal(false)} className={`flex-1 py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>Cancel</button>
+                <button type="submit" form="replacementForm" disabled={isSubmittingReplace || !replaceAssetId || !replaceReason.trim()} className="flex-1 py-3.5 bg-purple-500 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all shadow-[0_4px_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_20px_rgba(168,85,247,0.6)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 border border-purple-400">
                   {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Transmit'}
                 </button>
               </div>
@@ -1020,10 +1042,10 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
   };
 
   const getHeaderColors = () => {
-    if (type === 'RETURN') return isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-white/80 border border-white text-orange-500 shadow-inner';
-    if (type === 'REQUEST') return isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/80 border border-white text-emerald-500 shadow-inner';
-    if (type === 'INSPECTION') return isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-white/80 border border-white text-amber-500 shadow-inner';
-    return isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner';
+    if (type === 'RETURN') return 'bg-white border border-slate-200 text-orange-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (type === 'REQUEST') return 'bg-white border border-slate-200 text-emerald-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (type === 'INSPECTION') return 'bg-white border border-slate-200 text-amber-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    return 'bg-white border border-slate-200 text-purple-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
   };
 
   const getTitle = () => {
@@ -1038,24 +1060,24 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
       <motion.div 
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
-        className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`}
+        className="absolute inset-0 bg-slate-900/20 backdrop-blur-md"
       />
       
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 20 }} 
         animate={{ scale: 1, opacity: 1, y: 0 }} 
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
-        className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden ${theme.glassCard}`}
+        className="relative w-full max-w-2xl max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden bg-white/80 backdrop-blur-3xl border border-white shadow-[0_32px_80px_rgba(0,0,0,0.15)]"
       >
-        <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
+        <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0 border-b border-slate-200/60">
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-3xl flex items-center justify-center ${getHeaderColors()}`}>
+            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-3xl flex items-center justify-center ${getHeaderColors()}`}>
                {getHeaderIcon()}
             </div>
             <div>
-              <h2 className={`text-[14px] sm:text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>{getTitle()}</h2>
-              {type !== 'RETURN' && <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 ${theme.subText}`}>{type === 'INSPECTION' ? 'Visual verification' : 'Portal Submission'}</p>}
-              {type === 'RETURN' && <p className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 ${theme.subText}`}>Initiate IT Handover</p>}
+              <h2 className="text-[14px] sm:text-[16px] font-bold uppercase tracking-widest text-slate-900">{getTitle()}</h2>
+              {type !== 'RETURN' && <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 text-slate-500">{type === 'INSPECTION' ? 'Visual verification' : 'Portal Submission'}</p>}
+              {type === 'RETURN' && <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 text-slate-500">Initiate IT Handover</p>}
             </div>
           </div>
           <button onClick={onClose} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}>
@@ -1063,26 +1085,24 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
           </button>
         </div>
 
-        <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
-
         <div className="px-6 py-4 sm:px-8 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-3 sm:gap-4 custom-scrollbar">
           {successDone ? (
             <div className="py-10 text-center space-y-4">
               <CheckCircle2 size={72} className="text-emerald-500 mx-auto animate-bounce"/>
-              <h4 className={`text-xl sm:text-2xl font-black ${theme.textMain}`}>Database Updated!</h4>
+              <h4 className="text-xl sm:text-2xl font-bold text-slate-900">Database Updated!</h4>
             </div>
           ) : showQR ? (
             <div className="py-4 text-center space-y-5 animate-in zoom-in-95 duration-300">
               <div>
-                <h4 className={`text-base sm:text-lg font-black uppercase tracking-widest ${theme.textMain}`}>Mobile Device Handoff</h4>
-                <p className={`text-[11px] sm:text-xs font-bold mt-1.5 ${theme.subText}`}>Scan this code with your phone camera to take certified watermark photos of the asset.</p>
+                <h4 className="text-base sm:text-lg font-bold uppercase tracking-widest text-slate-900">Mobile Device Handoff</h4>
+                <p className="text-[11px] sm:text-xs font-medium mt-1.5 text-slate-500">Scan this code with your phone camera to take certified watermark photos of the asset.</p>
               </div>
-              <div className={`p-4 sm:p-5 rounded-4xl inline-block shadow-2xl mx-auto border ${isDarkMode ? 'bg-white/90 border-white/20' : 'bg-white border-white'}`}>
+              <div className="p-4 sm:p-5 rounded-4xl inline-block shadow-2xl mx-auto border bg-white border-slate-200">
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
               </div>
-              <div className={`p-4 sm:p-5 rounded-[1.25rem] text-left transition-all ${theme.glassInnerCard}`}>
-                <h5 className={`text-[10px] sm:text-[11px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-500'}`}><Camera size={16}/> Photo Requirements</h5>
-                <ul className={`text-[11px] sm:text-xs font-bold space-y-2 ml-1 ${theme.textMain}`}>
+              <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
+                <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
+                <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
                   {(asset?.category || '').toLowerCase().includes('laptop') ? (
                     <><li>✅ Screen & Keypad view</li><li>✅ Top and Bottom (with Tag)</li><li>✅ Left and Right Side Ports</li></>
                   ) : (
@@ -1095,11 +1115,11 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
             <form id="genericModalForm" onSubmit={handleLivePostgresSubmit} className="space-y-3 sm:space-y-4">
               
               {needsLock && (
-                <div className={`p-4 sm:p-5 rounded-3xl space-y-3 transition-all ${theme.glassInnerCard}`}>
-                  <p className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-rose-400' : 'text-rose-500'}`}>🔒 Security Verification Required</p>
+                <div className="p-4 sm:p-5 rounded-3xl space-y-3 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)]">
+                  <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-rose-600">🔒 Security Verification Required</p>
                   <div className="flex gap-2 sm:gap-3">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className={`flex-1 px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[13px] font-bold outline-none transition-all ${isDarkMode ? 'bg-zinc-900/60 text-white placeholder-zinc-500' : 'bg-white/40 text-[#0f172a] placeholder-[#818b9c]'}`}/>
-                    {!isUnlocked && <button type="button" onClick={handleAttemptUnlock} className="px-5 sm:px-6 bg-linear-to-r from-rose-500 to-rose-600 hover:opacity-90 text-white font-black uppercase tracking-widest text-[10px] sm:text-[11px] rounded-2xl cursor-pointer transition-all shadow-lg hover:shadow-rose-500/50 border-0">Verify</button>}
+                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className="flex-1 px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[13px] font-semibold outline-none transition-all bg-white/60 border border-slate-200 text-[#0f172a] placeholder-[#818b9c] focus:ring-2 focus:ring-orange-500/20"/>
+                    {!isUnlocked && <button type="button" onClick={handleAttemptUnlock} className="px-5 sm:px-6 bg-rose-500 hover:bg-rose-600 text-white font-bold uppercase tracking-widest text-[10px] sm:text-[11px] rounded-2xl cursor-pointer transition-all shadow-[0_4px_15px_rgba(244,63,94,0.4)] border border-rose-400">Verify</button>}
                   </div>
                   {lockError && <p className="text-[10px] sm:text-[11px] text-rose-500 font-bold px-1">Incorrect device code.</p>}
                 </div>
@@ -1108,24 +1128,24 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
               {type === 'RETURN' && (
                 <>
                   <div className="flex flex-col gap-1.5 sm:gap-2">
-                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">
                       Select Assigned Asset
                     </label>
-                    <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
+                    <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]">
                       <select
                         value={selectedReturnId}
                         onChange={(e) => setSelectedReturnId(e.target.value)}
                         required
-                        className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
+                        className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"
                       >
-                        <option value="" disabled className={isDarkMode ? 'text-black' : ''}>Choose Hardware...</option>
+                        <option value="" disabled>Choose Hardware...</option>
                         {assignedAssets?.map((a: any) => (
-                          <option key={a.id} value={a.id} className={isDarkMode ? 'text-black' : ''}>
+                          <option key={a.id} value={a.id}>
                             {a.name || a.asset_name} ({a.asset_tag})
                           </option>
                         ))}
                       </select>
-                      <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
+                      <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
                     </div>
                   </div>
 
@@ -1137,16 +1157,16 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
                         exit={{ opacity: 0, height: 0, marginTop: -5 }}
                         className="overflow-hidden"
                       >
-                        <div className={`px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 ${theme.glassInnerCard}`}>
+                        <div className="px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 bg-white/40 backdrop-blur-xl border border-white/60 shadow-sm">
                           <div className="flex-1 space-y-1">
-                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
-                            <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
+                            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Tag ID</span>
+                            <span className="text-[11px] sm:text-[13px] font-semibold wrap-break-word text-slate-900">
                               {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.asset_tag}
                             </span>
                           </div>
                           <div className="flex-1 space-y-1">
-                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
-                            <span className={`text-[11px] sm:text-[13px] font-bold wrap-break-word ${theme.textMain}`}>
+                            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Serial Number</span>
+                            <span className="text-[11px] sm:text-[13px] font-semibold wrap-break-word text-slate-900">
                               {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.serial_number || 'N/A'}
                             </span>
                           </div>
@@ -1160,30 +1180,30 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
               {type === 'TICKET' && (
                 <>
                   <div className="flex flex-col gap-1.5 sm:gap-2">
-                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Issue Subject</label>
-                    <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl outline-none text-[12px] sm:text-[14px] font-semibold transition-all ${theme.glassInnerCard} ${isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'}`}/>
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Issue Subject</label>
+                    <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className="w-full px-4 sm:px-5 py-3.5 rounded-2xl outline-none text-[12px] sm:text-[14px] font-semibold transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"/>
                   </div>
                   
                   <div className="flex flex-col gap-1.5 sm:gap-2">
-                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</label>
-                    <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
-                        <option className={isDarkMode ? 'text-black' : ''}>Hardware</option>
-                        <option className={isDarkMode ? 'text-black' : ''}>Software</option>
-                        <option className={isDarkMode ? 'text-black' : ''}>Network</option>
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Category</label>
+                    <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                        <option>Hardware</option>
+                        <option>Software</option>
+                        <option>Network</option>
                       </select>
-                      <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
+                      <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-1.5 sm:gap-2">
-                    <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Attach Screenshot (Optional)</label>
-                    <label className={`w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer ${theme.glassInnerCard} ${isDarkMode ? 'border-zinc-700 hover:border-purple-500' : 'border-white/80 hover:border-purple-400 hover:shadow-lg hover:shadow-purple-400/20'}`}>
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Attach Screenshot (Optional)</label>
+                    <label className="w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer bg-white/40 backdrop-blur-xl border-white/80 hover:border-purple-400 hover:bg-white/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]">
                        <input type="file" className="hidden" accept="image/*" onChange={(e) => setScreenshot(e.target.files?.[0] || null)} />
-                       <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-zinc-800' : 'bg-white/80 shadow-sm border border-white'}`}>
-                         {screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className={theme.textSub} />}
+                       <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white shadow-sm border border-slate-100">
+                         {screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className="text-slate-400" />}
                        </div>
-                       <span className={`text-[11px] sm:text-[12px] font-bold text-center ${screenshot ? 'text-purple-500' : theme.textMain}`}>
+                       <span className={`text-[11px] sm:text-[12px] font-semibold text-center ${screenshot ? 'text-purple-600' : 'text-slate-900'}`}>
                          {screenshot ? screenshot.name : "Click to upload"}
                        </span>
                     </label>
@@ -1193,77 +1213,73 @@ function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setA
 
               {type === 'REQUEST' && (
                 <div className="flex flex-col gap-1.5 sm:gap-2">
-                  <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Equipment Category</label>
-                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
-                      <option className={isDarkMode ? 'text-black' : ''}>Laptop / PC</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Monitor</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Keyboard / Mouse</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Headset / Audio</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Other Accessory</option>
+                  <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Equipment Category</label>
+                  <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-emerald-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                      <option>Laptop / PC</option>
+                      <option>Monitor</option>
+                      <option>Keyboard / Mouse</option>
+                      <option>Headset / Audio</option>
+                      <option>Other Accessory</option>
                     </select>
-                    <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
+                    <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
                   </div>
                 </div>
               )}
 
               {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
                 <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300">
-                  <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>Current Asset Condition</label>
-                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all ${theme.glassInnerCard}`}>
-                    <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className={`w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}>
-                      <option className={isDarkMode ? 'text-black' : ''}>Pristine / Flawless</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Good / Minor Scratches</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Poor / Damaged (Requires Fix)</option>
-                      <option className={isDarkMode ? 'text-black' : ''}>Non-Functional / Dead</option>
+                  <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Current Asset Condition</label>
+                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] ${type === 'RETURN' ? 'hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]' : 'hover:border-amber-300 hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]'}`}>
+                    <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                      <option>Pristine / Flawless</option>
+                      <option>Good / Minor Scratches</option>
+                      <option>Poor / Damaged (Requires Fix)</option>
+                      <option>Non-Functional / Dead</option>
                     </select>
-                    <ChevronDown size={18} className={`absolute right-4 pointer-events-none ${theme.textSub}`} />
+                    <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
                   </div>
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5 sm:gap-2">
-                <label className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">
                   {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : type === 'REQUEST' ? 'Business Justification' : 'Detailed Explanation'}
                 </label>
-                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none resize-none min-h-17.5 sm:min-h-20 ${theme.glassInnerCard} ${isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'}`}/>
+                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none resize-none min-h-20 bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 ${type === 'RETURN' ? 'focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300' : type === 'REQUEST' ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300' : 'focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300'}`}/>
               </div>
             </form>
           )}
         </div>
 
         {!successDone && (
-          <>
-            <div className={`h-px w-full shrink-0 ${isDarkMode ? 'bg-white/10' : 'bg-white/40'}`} />
-
-            <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10">
-              {showQR ? (
-                <button onClick={onClose} className={`w-full py-3.5 rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
-                  Close Portal
+          <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60">
+            {showQR ? (
+              <button onClick={onClose} className={`w-full py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+                Close Portal
+              </button>
+            ) : (
+              <>
+                <button onClick={onClose} className={`flex-1 py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+                  Cancel
                 </button>
-              ) : (
-                <>
-                  <button onClick={onClose} className={`flex-1 py-3.5 rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    form="genericModalForm"
-                    disabled={isTransmitting || (needsLock && !isUnlocked)} 
-                    className={`flex-1 py-3.5 text-white rounded-3xl text-[11px] sm:text-[12px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
-                      type === 'RETURN' 
-                        ? 'bg-linear-to-r from-orange-400 to-orange-500 shadow-lg hover:shadow-orange-500/50' 
-                        : type === 'REQUEST'
-                        ? 'bg-linear-to-r from-emerald-400 to-emerald-500 shadow-lg hover:shadow-emerald-500/50'
-                        : 'bg-linear-to-r from-purple-500 to-purple-600 shadow-lg hover:shadow-purple-500/50'
-                    }`}
-                  >
-                    {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : (type === 'INSPECTION' || type === 'RETURN' ? 'Generate QR' : 'Transmit')}
-                  </button>
-                </>
-              )}
-            </div>
-          </>
+                <button 
+                  type="submit"
+                  form="genericModalForm"
+                  disabled={isTransmitting || (needsLock && !isUnlocked)} 
+                  className={`flex-1 py-3.5 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
+                    type === 'RETURN' 
+                      ? 'bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]' 
+                      : type === 'REQUEST'
+                      ? 'bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.4)] border border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)]'
+                      : 'bg-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.4)] border border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.5)]'
+                  }`}
+                >
+                  {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : (type === 'INSPECTION' || type === 'RETURN' ? 'Generate QR' : 'Transmit')}
+                </button>
+              </>
+            )}
+          </div>
         )}
       </motion.div>
     </div>

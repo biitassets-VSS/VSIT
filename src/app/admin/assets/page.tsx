@@ -428,7 +428,26 @@ function AssetRegistryContent() {
       }
       if (error) throw error;
       
-      await supabase.from('inspections').insert({ asset_id: newAssetId, inspected_by: newAssetAssignee || null, status: newAssetAssignee ? 'Pending Handover' : 'Stock Intake', notes: `Asset initially registered.` });
+      // 🌟 BUG FIX: Generate inspection record & notification for correct assignment flow
+      await supabase.from('inspections').insert({ 
+        asset_id: newAssetId, 
+        inspected_by: newAssetAssignee || null, 
+        status: newAssetAssignee ? 'Pending Handover' : 'Stock Intake', 
+        notes: `Asset initially registered and verified.` 
+      });
+
+      if (newAssetAssignee) {
+        try {
+          await supabase.from('notifications').insert([{
+            target_user: newAssetAssignee,
+            title: '🔔 New Asset Assigned',
+            message: `You have been assigned a new hardware asset: ${newAssetName} (${finalTag.toUpperCase()}). Please complete the handover visual verification.`,
+            is_read: false,
+            type: 'info'
+          }]);
+        } catch (notifErr) { console.error('Notification failed:', notifErr); }
+      }
+
       setIsAddModalOpen(false); 
       fetchRegistryData();
     } catch (err: any) { alert(`Error: ${err.message}`); } finally { setIsSaving(false); }
@@ -441,15 +460,24 @@ function AssetRegistryContent() {
       const { data: duplicateCheck } = await supabase.from('assets').select('id, serial_number').eq('serial_number', serialUpper).neq('id', viewAssetModal.id).maybeSingle();
       if (duplicateCheck) { alert(`Error: Serial Number in use.`); setIsUpdating(false); return; }
 
+      const isNewAssignee = editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee;
+      
       let resolvedStatus = editForm.status;
-      if (editForm.assignee && viewAssetModal.assigned_to !== editForm.assignee) resolvedStatus = 'Pending Handover';
-      else if (!editForm.assignee && viewAssetModal.assigned_to) resolvedStatus = 'In Stock (Unassigned)';
+      let resolvedInspectionStatus = editForm.inspection_status || 'Approved';
+
+      // Force Pending Handover state when assigning to a new staff member
+      if (isNewAssignee) {
+        resolvedStatus = 'Pending Handover';
+        resolvedInspectionStatus = 'Pending Handover';
+      } else if (!editForm.assignee && viewAssetModal.assigned_to) {
+        resolvedStatus = 'In Stock (Unassigned)';
+      }
 
       const updatePayload: any = {
         category: editForm.category, serial_number: serialUpper, asset_tag: editForm.asset_tag.toUpperCase(),
         name: editForm.name, brand: editForm.brand, price: editForm.price ? parseFloat(editForm.price) : null,
         vendor: editForm.vendor, purchase_date: editForm.purchase_date || null, warranty_expiry: editForm.warranty_expiry || null, 
-        asset_condition: editForm.condition, status: resolvedStatus, inspection_status: editForm.inspection_status || 'Approved',
+        asset_condition: editForm.condition, status: resolvedStatus, inspection_status: resolvedInspectionStatus,
         assigned_to: editForm.assignee || null, system_specs: editForm.system_specs || ''
       };
 
@@ -457,6 +485,34 @@ function AssetRegistryContent() {
       if (error && (error.message.includes('system_specs') || error.message.includes('column'))) {
         delete updatePayload.system_specs;
         await supabase.from('assets').update(updatePayload).eq('id', viewAssetModal.id);
+      }
+
+      // 🌟 BUG FIX: Create corresponding Inspection Record & Push Notification
+      if (isNewAssignee) {
+        await supabase.from('inspections').insert({
+          asset_id: viewAssetModal.id,
+          inspected_by: editForm.assignee,
+          status: 'Pending Handover',
+          notes: 'Asset assigned to a new staff holder by Admin. Awaiting custodian verification and sign-off.'
+        });
+
+        try {
+          await supabase.from('notifications').insert([{
+            target_user: editForm.assignee,
+            title: '🔔 New Asset Assigned',
+            message: `You have been assigned a new asset: ${editForm.name} (${editForm.asset_tag}). Please open your staff dashboard to complete the handover agreement.`,
+            is_read: false,
+            type: 'info'
+          }]);
+        } catch (e) { console.error('Notification failed:', e); }
+
+      } else if (!editForm.assignee && viewAssetModal.assigned_to) {
+        // Log the return to stock if unassigned
+        await supabase.from('inspections').insert({
+            asset_id: viewAssetModal.id,
+            status: 'Stock Intake',
+            notes: 'Asset forcefully unassigned and returned to inventory by Admin.'
+        });
       }
 
       setIsEditingAsset(false); 
@@ -1827,7 +1883,7 @@ function AssetRegistryContent() {
                 <div className="relative z-30 space-y-2">
                   <div className="flex flex-wrap justify-between items-center gap-2">
                     <label className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>
-                      Hardware Specifications
+                      System Hardware Specifications
                     </label>
                     
                     <button 

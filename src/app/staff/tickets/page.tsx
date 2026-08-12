@@ -466,7 +466,7 @@ export default function StaffTicketsPage() {
 
       {/* 🌟 NEW DASHBOARD SYNCED RAISE TICKET MODAL */}
       {mounted && isRaiseModalOpen && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
+        <div className="fixed inset-0 z-99999 flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
           <div className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`} onClick={() => { setIsRaiseModalOpen(false); resetForm(); }} />
           
           <div className={`relative w-full max-w-120 max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
@@ -474,7 +474,7 @@ export default function StaffTicketsPage() {
             {/* Header */}
             <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner'}`}>
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-3xl flex items-center justify-center ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 border border-white text-purple-500 shadow-inner'}`}>
                    <Ticket size={24} strokeWidth={2} />
                 </div>
                 <div>

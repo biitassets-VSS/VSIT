@@ -8,6 +8,8 @@ import {
   Loader2, ShieldCheck, AlertTriangle, FileSignature, CheckCircle2, 
   PenTool, X, AlertCircle, Eye, Camera, Send, LogOut, Image as ImageIcon, RefreshCcw, QrCode, ChevronLeft
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 const calculateNextDueDate = (baseDateStr: string | null, cat: string) => {
   if (!baseDateStr) return null;
@@ -506,68 +508,78 @@ export default function StaffAssetsPage() {
         )}
       </div>
 
-      {/* 🌟 VIEW AGREEMENT MODAL */}
+      {/* 🌟 VIEW AGREEMENT MODAL (Matches Staff Dashboard Perfect Light Glass) */}
       {mounted && viewAgreementAsset && createPortal(
-        <div className="fixed inset-0 z-99999 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-slate-100/50 p-6 flex justify-between items-center border-b border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center">
-                  <FileSignature size={20} />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">Handover Agreement</h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">IT Asset Liability Document</p>
-                </div>
-              </div>
-              <button onClick={() => setViewAgreementAsset(null)} className="p-2 hover:bg-slate-200 rounded-full cursor-pointer"><X size={18}/></button>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setViewAgreementAsset(null)}></div>
+          <div className="relative w-full max-w-2xl bg-white/90 backdrop-blur-2xl rounded-4xl p-6 md:p-8 shadow-2xl border border-white z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             
-            <div className="p-6 sm:p-8 space-y-6">
-              <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
-                <div className="flex justify-between text-xs">
-                  <span className="font-bold text-slate-500 uppercase tracking-widest">Asset</span>
-                  <span className="font-black text-slate-900">{viewAgreementAsset.name || viewAgreementAsset.category}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="font-bold text-slate-500 uppercase tracking-widest">Tag ID</span>
-                  <span className="font-black text-slate-900">{viewAgreementAsset.asset_tag}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="font-bold text-slate-500 uppercase tracking-widest">S/N</span>
-                  <span className="font-black text-slate-900">{viewAgreementAsset.serial_number || 'N/A'}</span>
+            <div className="flex justify-between items-start border-b border-slate-200 pb-4 shrink-0">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Hardware Handover Agreement</h2>
+                <p className="text-xs font-bold text-slate-500 mt-1">Official digital copy of your signed liability document.</p>
+              </div>
+              <button onClick={() => setViewAgreementAsset(null)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors cursor-pointer shadow-sm border border-slate-200">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar py-6 space-y-6 pr-2">
+              
+              <div className="bg-slate-50 border border-slate-200 p-5 rounded-3xl flex items-start gap-4 shadow-inner">
+                <div className="p-3 bg-white border border-slate-200 text-orange-500 rounded-2xl shadow-sm shrink-0"><Laptop size={24}/></div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">{viewAgreementAsset.name || viewAgreementAsset.asset_name || viewAgreementAsset.category}</h4>
+                  <p className="text-xs font-mono font-bold text-purple-600 mt-1">TAG: {viewAgreementAsset.asset_tag} | S/N: {viewAgreementAsset.serial_number || 'N/A'}</p>
+                  <p className="text-[11px] font-semibold text-slate-500 mt-2">{viewAgreementAsset.system_specs || 'Standard Business Configuration'}</p>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <p className="text-xs font-semibold text-slate-600 leading-relaxed text-justify">
-                  By accepting this device, the assignee acknowledges receipt of the hardware in good working condition. The assignee agrees to adhere to the company's Acceptable Use Policy and accepts full responsibility for the care, maintenance, and safe return of the equipment upon request or termination of employment.
+              <div className="space-y-4 text-xs font-medium text-slate-700 leading-relaxed bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                <p>I, <strong className="text-slate-900">{currentUser?.name} ({currentUser?.emp_id})</strong>, acknowledge receipt of the IT asset listed above in good working condition. I agree to the following terms:</p>
+                <ul className="list-disc pl-5 space-y-2 text-slate-600">
+                  <li><strong className="text-slate-900">Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
+                  <li><strong className="text-slate-900">Acceptable Use:</strong> The asset is to be used strictly for official company business. Unauthorized software installation or tampering with security settings is strictly prohibited.</li>
+                  <li><strong className="text-slate-900">Return Policy:</strong> I agree to return the equipment in its original condition (fair wear and tear excepted) upon termination of employment or immediately upon request by the IT Department.</li>
+                  <li><strong className="text-slate-900">Damage/Loss:</strong> I will immediately report any damage, loss, or theft of the asset to the IT Department. I understand that I may be held financially liable for damages caused by negligence.</li>
+                </ul>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl flex flex-col gap-2 shadow-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 size={18} className="text-emerald-600" />
+                  <span className="text-xs font-black uppercase tracking-widest text-emerald-800">Digitally Signed & Verified</span>
+                </div>
+                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-widest">
+                  Custodian: <span className="text-emerald-900">{currentUser?.name} ({currentUser?.emp_id})</span>
+                </p>
+                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-widest">
+                  Timestamp: <span className="text-emerald-900">{viewAgreementAsset.live_inspection_date ? new Date(viewAgreementAsset.live_inspection_date).toLocaleString('en-IN') : 'Pending Signature'}</span>
+                </p>
+                <p className="text-[9px] font-bold text-emerald-600/80 uppercase tracking-widest mt-2 border-t border-emerald-200/50 pt-2">
+                  This constitutes a legally binding electronic signature under company policy.
                 </p>
               </div>
 
-              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl mt-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle2 size={16} className="text-emerald-600" />
-                  <span className="text-xs font-black uppercase tracking-widest text-emerald-800">Digitally Signed</span>
-                </div>
-                <p className="text-[11px] font-bold text-emerald-700/80 uppercase tracking-widest">Signed By: <span className="text-emerald-900">{currentUser?.name} ({currentUser?.emp_code})</span></p>
-                <p className="text-[11px] font-bold text-emerald-700/80 uppercase tracking-widest mt-1">Signed On: <span className="text-emerald-900">{viewAgreementAsset.live_inspection_date ? new Date(viewAgreementAsset.live_inspection_date).toLocaleString('en-IN') : 'Pending Signature'}</span></p>
-              </div>
             </div>
-            
-            <div className="p-6 bg-slate-50 border-t border-slate-200">
-              <button onClick={() => setViewAgreementAsset(null)} className="w-full py-3.5 bg-slate-900 text-white font-black uppercase tracking-widest text-[11px] rounded-2xl cursor-pointer hover:bg-slate-800 transition-colors">
+
+            <div className="pt-5 border-t border-slate-200 flex justify-end shrink-0">
+              <button 
+                onClick={() => setViewAgreementAsset(null)}
+                className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-slate-200 shadow-sm"
+              >
                 Close Document
               </button>
             </div>
+
           </div>
         </div>,
-        document.body // 🌟 FIX APPLIED HERE
+        document.body
       )}
 
       {/* 🌟 RETURN / REPLACE MODALS */}
       {mounted && (returnModalOpen || replaceModalOpen) && activeAsset && createPortal(
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-99998 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           
           <div className="bg-[#e9e9ec] rounded-4xl w-full max-w-105 shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300">
             
