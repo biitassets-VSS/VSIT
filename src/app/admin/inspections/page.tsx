@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
@@ -25,6 +25,11 @@ function getCategoryIcon(category: string, size = 18) {
   if (cat.includes('headphone')) return <Headphones size={size} />;
   if (cat.includes('cleaning')) return <Sparkles size={size} />;
   return <Package size={size} />;
+}
+
+function safeString(val: any) {
+  if (val === null || val === undefined) return '';
+  return String(val);
 }
 
 function safeDate(dateStr: any) {
@@ -126,13 +131,11 @@ function AdminInspectionReviewContent() {
       const { data: historyData } = await supabase.from('inspections').select('*').eq('asset_id', assetId).order('created_at', { ascending: false });
       
       const compiled = (historyData || []).map(log => {
-         const staff = staffList.find(s => s.id === log.inspected_by || s.email === log.user_email);
+         const staff = staffList.find(s => String(s.id).toLowerCase() === String(log.inspected_by || '').toLowerCase() || String(s.email).toLowerCase() === String(log.user_email || '').toLowerCase());
          
-         // Securely lock the historical user's name and EMP code for this specific log with null safety
          let sName = log.user_name || log.staff_name || log.full_name || (staff ? (staff.full_name || staff.name) : 'Unknown Staff');
          let sCode = log.emp_code || log.employee_code || (staff ? (staff.emp_code || staff.email) : 'N/A');
 
-         // Detect System/Admin actions
          const statusLow = String(log.status || '').toLowerCase();
          if (statusLow === 'stock intake' || statusLow === 'assigned' || String(log.notes || '').toLowerCase().includes('asset configuration')) {
              sName = 'Administrator / System';
@@ -146,7 +149,11 @@ function AdminInspectionReviewContent() {
          };
       });
       setAssetHistory(compiled);
-    } catch (e) {} finally { setIsLoadingHistory(false); }
+    } catch (e) {
+      console.error(e);
+    } finally { 
+      setIsLoadingHistory(false); 
+    }
   };
 
   const fetchVerificationLedger = async (showLoader = true) => {
@@ -164,26 +171,37 @@ function AdminInspectionReviewContent() {
       setStaffList(profilesData);
 
       const masterLedger: any[] = [];
-      const activeAssetIds = new Set<string>();
       const now = new Date();
       now.setHours(0,0,0,0);
 
       rawInspections.forEach((insp, idx) => {
         const inspStatusLower = String(insp.status || '').toLowerCase();
         const inspNotesLower = String(insp.notes || '').toLowerCase();
-        const inspRemarksLower = String(insp.admin_remarks || '').toLowerCase();
 
         // Strict Lifecycle Filter: Returns/Replacements go to their own modules
         if (
-          inspStatusLower.includes('return') || inspNotesLower.includes('return') || inspRemarksLower.includes('return') ||
-          inspStatusLower.includes('replace') || inspNotesLower.includes('replace') || inspRemarksLower.includes('replace')
+          inspStatusLower.includes('return') || inspNotesLower.includes('return') ||
+          inspStatusLower.includes('replace') || inspNotesLower.includes('replace')
         ) {
           return; 
         }
 
-        const matchedAsset = assetsData.find(a => String(a.id) === String(insp.asset_id)) || {};
-        
-        // --- 1. RESOLVE HISTORICAL SUBMITTER ---
+        const inspAssetIdStr = String(insp.asset_id || '').toLowerCase().trim();
+        const inspTagStr = String(insp.asset_tag || '').toLowerCase().trim();
+        const inspSerialStr = String(insp.serial_number || '').toLowerCase().trim();
+
+        // Cross-match asset across ID, Asset Tag, and Serial Number
+        const matchedAsset = assetsData.find(a => {
+          const aId = String(a.id || '').toLowerCase().trim();
+          const aTag = String(a.asset_tag || '').toLowerCase().trim();
+          const aSerial = String(a.serial_number || a.serial || '').toLowerCase().trim();
+
+          if (inspAssetIdStr && (aId === inspAssetIdStr || aTag === inspAssetIdStr || aSerial === inspAssetIdStr)) return true;
+          if (inspTagStr && aTag === inspTagStr) return true;
+          if (inspSerialStr && aSerial === inspSerialStr) return true;
+          return false;
+        }) || {};
+
         const ib = String(insp.inspected_by || '').toLowerCase().trim();
         const ue = String(insp.user_email || '').toLowerCase().trim();
         const uid = String(insp.user_id || '').toLowerCase().trim();
@@ -195,40 +213,64 @@ function AdminInspectionReviewContent() {
           if (match) extractedName = match[1].trim();
         }
 
-        const matchedProfile = profilesData.find(p => {
-          const pId = String(p.id || '').toLowerCase().trim();
-          const pEmail = String(p.email || '').toLowerCase().trim();
-          const pEmp1 = String(p.emp_code || '').toLowerCase().trim();
-          const pEmp2 = String(p.employee_code || '').toLowerCase().trim();
-          const pEmp3 = String(p.emp_id || '').toLowerCase().trim();
-          const pName1 = String(p.full_name || '').toLowerCase().trim();
-          const pName2 = String(p.name || '').toLowerCase().trim();
-          
-          if (uid && pId && uid === pId) return true;
-          if (ib && (ib === pId || ib === pEmp1 || ib === pEmp2 || ib === pEmp3 || ib === pEmail)) return true;
-          if (ue && pEmail && ue === pEmail) return true;
-          if (rawEmp && (rawEmp === pEmp1 || rawEmp === pEmp2 || rawEmp === pEmp3)) return true;
-          if (extractedName && (pName1 === extractedName.toLowerCase() || pName2 === extractedName.toLowerCase())) return true;
-          return false;
-        });
+        // 🌟 STRICT TIERED MATCHING (Fix for the Lakhwinder Identity Collision)
+        let matchedProfile = null;
 
-        // --- 2. RESOLVE CURRENT ASSET HOLDER ---
+        // Tier 1: Absolute Hard ID Matches
+        if (uid || ib) {
+          matchedProfile = profilesData.find(p => {
+            const pId = String(p.id).toLowerCase().trim();
+            return (uid && pId === uid) || (ib && pId === ib);
+          });
+        }
+
+        // Tier 2: Email Match
+        if (!matchedProfile && ue) {
+          matchedProfile = profilesData.find(p => String(p.email).toLowerCase().trim() === ue);
+        }
+
+        // Tier 3: EMP Code Match
+        if (!matchedProfile && rawEmp) {
+          matchedProfile = profilesData.find(p => {
+            const e1 = String(p.emp_code).toLowerCase().trim();
+            const e2 = String(p.employee_code).toLowerCase().trim();
+            const e3 = String(p.emp_id).toLowerCase().trim();
+            return rawEmp === e1 || rawEmp === e2 || rawEmp === e3;
+          });
+        }
+
+        // Tier 4: Assigned To Match + Extracted Name Cross-Check
+        if (!matchedProfile && extractedName) {
+          const assigneeProfile = profilesData.find(p => String(p.id).toLowerCase() === String(matchedAsset.assigned_to).toLowerCase());
+          if (assigneeProfile) {
+            const n1 = String(assigneeProfile.full_name).toLowerCase().trim();
+            const n2 = String(assigneeProfile.name).toLowerCase().trim();
+            const en = extractedName.toLowerCase().trim();
+            if (n1 === en || n2 === en || n1.includes(en) || en.includes(n1)) {
+              matchedProfile = assigneeProfile;
+            }
+          }
+        }
+
+        // Tier 5: Pure Name Fallback (Risky, but last resort)
+        if (!matchedProfile && extractedName) {
+          matchedProfile = profilesData.find(p => {
+            const n1 = String(p.full_name).toLowerCase().trim();
+            const n2 = String(p.name).toLowerCase().trim();
+            const en = extractedName.toLowerCase().trim();
+            return n1 === en || n2 === en;
+          });
+        }
+
+        // Tier 6: Absolute Assignee Fallback
+        if (!matchedProfile && matchedAsset.assigned_to && !inspStatusLower.includes('stock intake')) {
+          matchedProfile = profilesData.find(p => String(p.id).toLowerCase() === String(matchedAsset.assigned_to).toLowerCase());
+        }
+
         const currentAssigneeRaw = String(matchedAsset.assigned_to || '').toLowerCase().trim();
-        const currentAssigneeProfile = profilesData.find(p => {
-          const pId = String(p.id || '').toLowerCase().trim();
-          const pEmail = String(p.email || '').toLowerCase().trim();
-          const pEmp1 = String(p.emp_code || '').toLowerCase().trim();
-          const pName1 = String(p.full_name || '').toLowerCase().trim();
-          
-          return currentAssigneeRaw && (
-              currentAssigneeRaw === pId || 
-              currentAssigneeRaw === pEmail || 
-              currentAssigneeRaw === pEmp1 ||
-              currentAssigneeRaw === pName1
-          );
-        });
+        const currentAssigneeProfile = profilesData.find(p => String(p.id).toLowerCase().trim() === currentAssigneeRaw);
 
-        const itemIdentifier = insp.id || `insp-${insp.asset_id}-${idx}-${Date.now()}`;
+        const itemIdentifier = insp.id || `insp-${matchedAsset.id || idx}-${Date.now()}`;
         
         const isProfileAdmin = matchedProfile && (
           String(matchedProfile.role || '').toLowerCase() === 'admin' || 
@@ -255,33 +297,36 @@ function AdminInspectionReviewContent() {
         
         if (isAdminAction && filterTab !== 'All Logs' && filterTab !== 'Admin Edits') return;
 
-        const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isAdminAction;
-        if (!isHistorical) activeAssetIds.add(String(matchedAsset.id));
-
-        // 🌟 Ensure Historical Authenticity 
         let historicalName = matchedProfile?.full_name || matchedProfile?.name || extractedName;
         let historicalEmpCode = matchedProfile?.emp_code || matchedProfile?.emp_id || insp.emp_code || insp.employee_code;
         
         if (!historicalEmpCode && ib) {
           const upperIb = ib.toUpperCase();
-          if (upperIb.startsWith('EMP')) {
-             historicalEmpCode = upperIb; 
-          } else if (upperIb.includes('@')) {
-             historicalEmpCode = 'EMAIL-LOG';
-          } else {
-             historicalEmpCode = `ID-${upperIb.substring(0, 8)}`;
-          }
+          if (upperIb.startsWith('EMP')) historicalEmpCode = upperIb; 
+          else if (upperIb.includes('@')) historicalEmpCode = 'EMAIL-LOG';
+          else historicalEmpCode = `ID-${upperIb.substring(0, 8)}`;
         }
 
         let isDeletedUser = false;
-        let normalizedStatus = insp.status === 'Pending Review' || !insp.status ? 'Pending' : insp.status;
+        
+        // Comprehensive Pending Normalization
+        const isPendingStatus = 
+          !insp.status || 
+          inspStatusLower.includes('pending') || 
+          inspStatusLower.includes('review') || 
+          inspStatusLower.includes('awaiting') || 
+          inspStatusLower.includes('submit');
 
+        let normalizedStatus = insp.status;
         if (isAdminAction) {
           historicalName = 'Administrator / System';
           historicalEmpCode = 'ADMIN RECORD';
           isDeletedUser = false;
-          if (normalizedStatus === 'Pending' || !insp.status) normalizedStatus = 'Admin Update';
+          normalizedStatus = insp.status || 'Admin Update';
         } else {
+          if (isPendingStatus) {
+            normalizedStatus = 'Pending';
+          }
           if (!historicalName) {
             isDeletedUser = true;
             historicalName = ue ? ue.split('@')[0] : 'Unknown Staff Member';
@@ -295,29 +340,33 @@ function AdminInspectionReviewContent() {
         let currCode = currentAssigneeProfile?.emp_code || currentAssigneeProfile?.emp_id || 'N/A';
 
         if (String(matchedAsset.assigned_to || '').toLowerCase().includes('admin')) {
-            currName = 'IT Administrator';
-            currCode = 'ADMIN';
+          currName = 'IT Administrator';
+          currCode = 'ADMIN';
         }
 
-        const nextDue = getNextDueDate(insp.created_at, matchedAsset.category || 'Laptop');
+        const baseDate = insp.created_at || matchedAsset.last_inspection_date || matchedAsset.created_at;
+        const nextDue = getNextDueDate(baseDate, matchedAsset.category || insp.category || 'Laptop');
         let daysUntilDue = 999;
         if (nextDue) {
-            const diffTime = nextDue.getTime() - now.getTime();
-            daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const diffTime = nextDue.getTime() - now.getTime();
+          daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         }
+
+        const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isAdminAction;
 
         masterLedger.push({
           ...insp,
           id: itemIdentifier,
+          asset_id: matchedAsset.id || insp.asset_id,
           is_synthetic: false,
           is_submission: !isAdminAction,
           is_admin_action: isAdminAction,
           staff_id: matchedProfile?.id || insp.inspected_by || 'UnknownID', 
           
-          asset_name: matchedAsset.name || matchedAsset.asset_name || 'Unmapped Device',
-          category: matchedAsset.category || 'Laptop', 
-          serial_number: matchedAsset.serial_number || matchedAsset.serial || 'S/N UNKNOWN',
-          asset_tag: matchedAsset.asset_tag || 'NO-TAG',
+          asset_name: matchedAsset.name || matchedAsset.asset_name || insp.asset_name || 'Unmapped Device',
+          category: matchedAsset.category || insp.category || 'Laptop', 
+          serial_number: matchedAsset.serial_number || matchedAsset.serial || insp.serial_number || 'S/N UNKNOWN',
+          asset_tag: matchedAsset.asset_tag || insp.asset_tag || 'NO-TAG',
           
           current_assignee_name: currName,
           current_assignee_code: currCode,
@@ -331,11 +380,18 @@ function AdminInspectionReviewContent() {
           next_due: nextDue,
           days_until_due: daysUntilDue,
           is_due_soon: daysUntilDue <= 5 && daysUntilDue >= 0 && !isHistorical,
-          full_asset_object: matchedAsset
+          full_asset_object: matchedAsset.id ? matchedAsset : {
+            id: insp.asset_id,
+            name: insp.asset_name,
+            asset_tag: insp.asset_tag,
+            serial_number: insp.serial_number,
+            category: insp.category,
+            status: insp.status
+          }
         });
       });
 
-      // 🌟 SYNTHETIC CARDS FOR OVERDUE / MISSING ACTION
+      // Synthetic Overdue Cards (ONLY generated if NO pending review exists for the asset)
       assetsData.forEach(asset => {
         if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
         if (String(asset.status || '').toLowerCase().includes('return')) return;
@@ -353,27 +409,40 @@ function AdminInspectionReviewContent() {
         
         if (isStaffAdmin || isAssignedToAdminText) return; 
 
-        const activeLogExists = masterLedger.find(i => String(i.asset_id) === String(asset.id) && !i.is_historical && i.is_submission && (i.status.includes('Pending') || i.status.includes('Action')));
-        if (activeLogExists) return;
+        const assetLogs = masterLedger.filter(i => 
+          String(i.asset_id) === String(asset.id) || 
+          String(i.asset_tag).toLowerCase() === String(asset.asset_tag).toLowerCase() ||
+          (i.serial_number && String(i.serial_number).toLowerCase() === String(asset.serial_number || asset.serial).toLowerCase())
+        );
+        
+        // Check if there is ANY pending inspection submission awaiting review
+        const activePendingLog = assetLogs.find(i => {
+          const st = String(i.status || '').toLowerCase();
+          return !i.is_admin_action && i.is_submission && (st.includes('pending') || st.includes('review') || st.includes('awaiting') || st.includes('submit'));
+        });
+
+        // Suppress synthetic overdue cards if a real submission is pending review or recently completed!
+        if (activePendingLog) return;
+
+        const latestInspectionLog = assetLogs.find(i => i.is_submission && (i.status === 'Approved' || i.status === 'Pass' || i.status === 'Pending'));
+        const lastInspectionDate = latestInspectionLog?.created_at || asset.last_inspection_date || asset.created_at;
 
         let nextDue = null;
         if (asset.next_inspection_date) {
           nextDue = new Date(asset.next_inspection_date);
-        } else if (asset.last_inspection_date) {
-          nextDue = getNextDueDate(asset.last_inspection_date, asset.category);
         } else {
-          nextDue = getNextDueDate(asset.created_at, asset.category);
+          nextDue = getNextDueDate(lastInspectionDate, asset.category || 'Laptop');
         }
 
         const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < now.getTime()) : false;
         let daysUntilDue = 999;
         if (nextDue) {
-            const diffTime = nextDue.getTime() - now.getTime();
-            daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const diffTime = nextDue.getTime() - now.getTime();
+          daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         }
 
-        const s = String(asset.inspection_status || '').toLowerCase();
-        const needsAction = s.includes('action required') || s.includes('re-inspection');
+        const inspStatusStr = String(asset.inspection_status || asset.status || '').toLowerCase();
+        const needsAction = inspStatusStr.includes('action required') || inspStatusStr.includes('re-inspection');
         const isDueSoon = daysUntilDue <= 5 && daysUntilDue >= 0;
 
         if (isOverdue || needsAction || isDueSoon) {
@@ -413,7 +482,6 @@ function AdminInspectionReviewContent() {
         }
       });
 
-      // IDENTIFY 'isLatest' LOG PER ASSET
       const assetGroups: Record<string, any[]> = {};
       masterLedger.forEach(item => {
         const aId = item.asset_id || `unknown-${Math.random()}`;
@@ -430,7 +498,6 @@ function AdminInspectionReviewContent() {
         });
       });
 
-      // Sort final output so Actionable items are at the top
       finalLedger.sort((a, b) => {
         const aActive = (a.isLatest && (String(a.status).includes('Pending') || String(a.status).includes('Action') || String(a.status).includes('Overdue'))) ? -1 : 1;
         const bActive = (b.isLatest && (String(b.status).includes('Pending') || String(b.status).includes('Action') || String(b.status).includes('Overdue'))) ? -1 : 1;
@@ -553,19 +620,25 @@ function AdminInspectionReviewContent() {
     const isReInspect = s === 're-inspection' && !isAdminLog;
     const isOverdue = s === 'overdue' && !isAdminLog;
     const isDueSoon = s === 'due soon' && !isAdminLog;
-    const isPending = (s.includes('pending') || s === 'awaiting staff action') && !isAdminLog;
+    const isPending = (s.includes('pending') || s.includes('review') || s.includes('awaiting') || s.includes('submit') || s === 'awaiting staff action') && !isAdminLog;
 
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = 
+    const query = searchQuery.toLowerCase().trim();
+    const cleanQuery = query.replace(/[^a-z0-9]/g, '');
+
+    const matchesSearch = !query || 
       String(item.historical_staff_name || '').toLowerCase().includes(query) ||
       String(item.historical_emp_code || '').toLowerCase().includes(query) ||
       String(item.current_assignee_name || '').toLowerCase().includes(query) ||
       String(item.asset_name || '').toLowerCase().includes(query) ||
-      String(item.asset_tag || '').toLowerCase().includes(query);
+      String(item.asset_tag || '').toLowerCase().includes(query) ||
+      String(item.serial_number || '').toLowerCase().includes(query) ||
+      (cleanQuery !== '' && (
+        String(item.asset_tag || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanQuery) ||
+        String(item.serial_number || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanQuery)
+      ));
 
     if (!matchesSearch) return false;
 
-    // 🌟 ENFORCE NO DUPLICATES UNLESS EXPLICITLY VIEWING TIMELINE
     if (!assetFilter && !item.isLatest) return false;
 
     if (filterTab === 'All Logs') return item.isLatest; 
@@ -585,7 +658,7 @@ function AdminInspectionReviewContent() {
     return inspections.filter(item => {
       const s = String(item.status || '').toLowerCase().trim();
       const isAdminLog = item.is_admin_action === true;
-      if (type === 'Pending') return (s.includes('pending') || s === 'awaiting staff action') && !isAdminLog && item.isLatest;
+      if (type === 'Pending') return (s.includes('pending') || s.includes('review') || s.includes('awaiting') || s.includes('submit') || s === 'awaiting staff action') && !isAdminLog && item.isLatest;
       if (type === 'Overdue/Soon') return (s === 'overdue' || s === 'due soon') && !isAdminLog && item.isLatest;
       if (type === 'Approved') return (s === 'approved' || s === 'pass') && !isAdminLog && item.isLatest;
       if (type === 'Re-Inspection') return s === 're-inspection' && !isAdminLog && item.isLatest;
@@ -691,7 +764,7 @@ function AdminInspectionReviewContent() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none p-4 sm:p-6 space-y-5 pb-6">
+            <div className="flex-1 overflow-y-auto scrollbar-none p-4 sm:p-6 space-y-5 pb-6">
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className={`p-4 sm:p-5 ${theme.glassInner} rounded-3xl`}><p className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-orange-500`}>{assetDetailModal.category || 'Hardware'}</p></div>
@@ -785,7 +858,7 @@ function AdminInspectionReviewContent() {
                           </div>
 
                           {photosArray.length > 0 && (
-                            <div className="flex gap-2 mt-4 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none pb-1">
+                            <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-none pb-1">
                               {photosArray.map((url, i) => (
                                 <button
                                   key={`hist-photo-${i}`}
@@ -859,7 +932,7 @@ function AdminInspectionReviewContent() {
         )}
 
         {/* 🌟 LIQUID PILL TABS */}
-        <div className={`w-full flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none p-1.5 rounded-full shadow-sm ${theme.glassPill}`}>
+        <div className={`w-full flex items-center gap-1.5 overflow-x-auto scrollbar-none p-1.5 rounded-full shadow-sm bg-slate-200/50 border border-slate-300`}>
           {TABS.map(tab => {
             const isActive = filterTab === tab.id;
             return (
@@ -867,7 +940,7 @@ function AdminInspectionReviewContent() {
                 key={tab.id}
                 onClick={() => setFilterTab(tab.id)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer border shrink-0 ${
-                  isActive ? tab.activeClass : `text-slate-500 hover:${isDarkMode ? 'bg-white/10' : 'bg-white/50'} border-transparent`
+                  isActive ? tab.activeClass : 'bg-slate-100/50 text-slate-600 hover:bg-white hover:text-slate-900 border-transparent'
                 }`}
               >
                 <tab.icon size={15} className={isActive ? (tab.id === 'All Logs' ? 'text-slate-800' : '') : tab.iconColor} />
@@ -1042,7 +1115,7 @@ function AdminInspectionReviewContent() {
                             <ShieldAlert size={14} /> No photos attached
                           </div>
                         ) : (
-                          <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none pb-2 pt-1">
+                          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-2 pt-1">
                             {photosArray.map((url: string, i: number) => (
                               <button
                                 key={i}
@@ -1051,7 +1124,7 @@ function AdminInspectionReviewContent() {
                                 className="relative group w-14 h-14 rounded-2xl overflow-hidden border border-white/80 bg-white/50 backdrop-blur-md p-1 shadow-sm hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-400 transition-all cursor-zoom-in shrink-0"
                               >
                                 <img src={url} alt={`Photo ${i+1}`} className="w-full h-full object-cover rounded-xl transition-transform duration-300 group-hover:scale-110" />
-                                <div className="absolute inset-1 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-orange-600 rounded-xl">
+                                <div className="absolute inset-1 bg-white/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-orange-600 transition-opacity">
                                   <ZoomIn size={14} />
                                 </div>
                               </button>
