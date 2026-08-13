@@ -27,6 +27,11 @@ function getCategoryIcon(category: string, size = 18) {
   return <Package size={size} />;
 }
 
+function safeString(val: any) {
+  if (val === null || val === undefined) return '';
+  return String(val);
+}
+
 function safeDate(dateStr: any) {
   if (!dateStr) return 'N/A';
   const d = new Date(dateStr);
@@ -288,6 +293,32 @@ function AdminInspectionReviewContent() {
           }
           if (!historicalEmpCode) {
             historicalEmpCode = 'OLD-RECORD';
+          }
+
+          let isOldUser = false;
+          if (currentAssigneeRaw && currentAssigneeRaw !== 'null' && currentAssigneeRaw !== 'undefined') {
+            let isSamePerson = false;
+            
+            if (currentAssigneeProfile && matchedProfile && currentAssigneeProfile.id === matchedProfile.id) {
+              isSamePerson = true;
+            } else {
+              const caStr = currentAssigneeRaw;
+              if (caStr === String(matchedProfile?.id || '').toLowerCase()) isSamePerson = true;
+              if (caStr === String(matchedProfile?.email || '').toLowerCase()) isSamePerson = true;
+              if (caStr === String(matchedProfile?.emp_code || '').toLowerCase()) isSamePerson = true;
+              if (caStr === String(insp.user_id || '').toLowerCase()) isSamePerson = true;
+              if (caStr === String(insp.inspected_by || '').toLowerCase()) isSamePerson = true;
+              if (caStr === String(insp.user_email || '').toLowerCase()) isSamePerson = true;
+              if (caStr === String(historicalName || '').toLowerCase()) isSamePerson = true;
+            }
+
+            if (!isSamePerson) {
+              isOldUser = true;
+            }
+          }
+
+          if (isOldUser && !isAdminAction) {
+            historicalName = `${historicalName} (Old User)`;
           }
         }
 
@@ -565,6 +596,7 @@ function AdminInspectionReviewContent() {
 
     if (!matchesSearch) return false;
 
+    // 🌟 ENFORCE NO DUPLICATES UNLESS EXPLICITLY VIEWING TIMELINE
     if (!assetFilter && !item.isLatest) return false;
 
     if (filterTab === 'All Logs') return item.isLatest; 
@@ -592,6 +624,15 @@ function AdminInspectionReviewContent() {
       if (type === 'Admin Edits') return isAdminLog;
       return item.isLatest; 
     }).length;
+  };
+
+  const getStockStatusBadge = (status: string) => {
+    const s = safeString(status);
+    if (s.includes('Assigned')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('Repair')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-sm animate-pulse';
+    if (s.includes('Demo')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-400 shadow-sm';
+    if (s.includes('Pending')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
 
   const getInspectionStatusColor = (status: string) => {
@@ -706,6 +747,22 @@ function AdminInspectionReviewContent() {
                 <div className={`p-4 sm:p-5 ${theme.glassInner} rounded-3xl`}><p className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-sm font-bold mt-1 truncate ${theme.textMain}`} title={assetDetailModal.name}>{assetDetailModal.name}</p></div>
               </div>
 
+              <div className={`p-4 sm:p-5 flex items-center justify-between ${theme.glassInner} rounded-3xl`}>
+                <div>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Current Employee Holder:</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${theme.glassCard} text-orange-500`}><User size={18}/></div>
+                    <span className={`text-base font-bold ${theme.textMain}`}>{assetDetailModal.current_assignee_name || 'In Stock / Unassigned'}</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end">
+                   <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
+                   <span className={`font-mono font-bold px-3 py-1.5 rounded-xl text-[11px] border shadow-xs ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shrink-0`}>
+                     {assetDetailModal.current_assignee_code || 'N/A'}
+                   </span>
+                </div>
+              </div>
+
               {/* HISTORICAL TIMELINE FOR THIS ASSET */}
               <div className={`p-5 ${theme.glassInner} rounded-3xl`}>
                 <div className="flex items-center justify-between mb-4 border-b border-slate-200/50 pb-3">
@@ -731,14 +788,16 @@ function AdminInspectionReviewContent() {
                         }
                       } catch(e){}
 
-                      const isAppr = log.status === 'Approved';
-                      const isRe = log.status === 'Re-Inspection';
-                      const isRej = log.status === 'Rejected';
+                      const statusLower = String(log.status || '').toLowerCase();
+                      const isAppr = statusLower.includes('approved') || statusLower.includes('pass');
+                      const isRe = statusLower.includes('re-inspection');
+                      const isRej = statusLower.includes('rejected') || statusLower.includes('fail');
+                      
                       let badge = 'bg-slate-100 text-slate-600 border-slate-200';
                       if (isAppr) badge = 'bg-emerald-100 text-emerald-700 border-emerald-200';
                       if (isRe) badge = 'bg-orange-100 text-orange-700 border-orange-200';
                       if (isRej) badge = 'bg-rose-100 text-rose-700 border-rose-200';
-                      if (log.status === 'Stock Intake' || log.status === 'Assigned') badge = 'bg-purple-100 text-purple-700 border-purple-200';
+                      if (statusLower === 'stock intake' || statusLower === 'assigned') badge = 'bg-purple-100 text-purple-700 border-purple-200';
 
                       return (
                         <div key={idx} className={`p-4 sm:p-5 ${theme.glassCard} rounded-3xl shadow-sm border ${isDarkMode ? 'border-white/10' : 'border-white/80'}`}>
@@ -876,7 +935,7 @@ function AdminInspectionReviewContent() {
         {/* 🌟 SEARCH BAR */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className={`relative flex-1 rounded-full p-1.5 ${theme.glassInner} flex items-center`}>
-            <Search size={18} className={`absolute left-5 top-1/2 -translate-y-1/2 text-slate-400`} />
+            <Search size={18} className={`absolute left-5 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
             <input 
               type="text" 
               placeholder="Search staff name, asset tag, or serial S/N..." 
@@ -939,26 +998,26 @@ function AdminInspectionReviewContent() {
                       )}
 
                       {/* Header: Historical Submitter */}
-                      <div className={`flex justify-between items-start gap-2 mb-5 ${!insp.isLatest ? 'opacity-60' : ''}`}>
+                      <div className={`flex justify-between items-start gap-2 mb-4 ${!insp.isLatest ? 'opacity-60' : ''}`}>
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-white shadow-sm border border-slate-100 text-slate-600`}>
                             {insp.is_admin_action ? <Settings2 size={16} className="text-purple-500"/> : String(insp.historical_staff_name || 'U').charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-bold leading-tight text-slate-900 wrap-break-word">{insp.historical_staff_name}</h3>
+                            <h3 className="text-sm font-bold leading-tight text-slate-900 wrap-break-word">{insp.historical_staff_name || 'Unknown Staff'}</h3>
                             <p className="text-[10px] font-semibold flex items-center gap-1 mt-0.5 text-slate-500">
                               <span className="font-mono text-purple-600">{insp.historical_emp_code}</span>
                             </p>
                           </div>
                         </div>
                         
-                        <span className={`px-2.5 py-1 rounded-md border text-[9px] font-black uppercase tracking-widest shrink-0 shadow-sm ${statusBadgeStyle}`}>
+                        <span className={`px-2.5 py-1 rounded-md border text-[9px] font-bold uppercase tracking-widest shrink-0 shadow-sm ${statusBadgeStyle}`}>
                           {isPending ? 'Pending Review' : insp.status}
                         </span>
                       </div>
 
-                      {/* Compact Asset Metadata Grid with Full History Trigger */}
-                      <div className={`p-1 rounded-3xl mb-5 space-y-3 ${theme.glassInner} ${!insp.isLatest ? 'opacity-60' : ''}`}>
+                      {/* Compact Asset Metadata Grid with Same-Page Popup Trigger */}
+                      <div className={`p-1 rounded-3xl mb-4 bg-slate-50/80 border border-slate-100 ${!insp.isLatest ? 'opacity-60' : ''}`}>
                         <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-slate-200/60">
                           <div className="flex items-center gap-2 shrink-0">
                             <Laptop size={14} className="text-orange-500" />
