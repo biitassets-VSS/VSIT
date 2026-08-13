@@ -88,7 +88,6 @@ export default function StaffDashboardPage() {
   const router = useRouter(); 
   
   const [loading, setLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   const [isAuthorized, setIsAuthorized] = useState(false); 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -98,39 +97,28 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
-  // 🌟 Dashboard Unified Modal State
+  // Dashboard Unified Modal State
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
     type: '',
   });
 
-  // 🌟 Replacement Flow State
+  // Replacement Flow State
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
   const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
   const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
-  // 🌟 QR and Photo State
+  // QR and Photo State
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
   const [localPhotos, setLocalPhotos] = useState<File[]>([]);
 
+  // Handover Agreement State
   const [handoverAsset, setHandoverAsset] = useState<any>(null);
   const [isSigning, setIsSigning] = useState(false);
-
-  useEffect(() => {
-    const syncTheme = () => {
-      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
-      setIsDarkMode(isDark);
-      if (isDark) document.documentElement.classList.add('dark');
-    };
-    syncTheme();
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
 
   const formatDisplayName = (raw: string) => {
     if (!raw) return 'Staff Member';
@@ -309,7 +297,6 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
-  // 🌟 Listen to QR Image Uploads
   useEffect(() => {
     if (!qrSessionId) return;
     const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
@@ -503,7 +490,7 @@ export default function StaffDashboardPage() {
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
   const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
 
-  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME (PURE LIGHT)
+  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME (RESTORED TO PURE LIGHT)
   const theme = {
     glassCard: 'bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60', 
     glassPanel: 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.7)]',
@@ -876,7 +863,6 @@ export default function StaffDashboardPage() {
             type={modal.type} 
             asset={modal.targetAsset} 
             user={currentUser} 
-            isDarkMode={isDarkMode}
             assignedAssets={assignedAssets}
             setAssignedAssets={setAssignedAssets} 
             onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(false); }} 
@@ -885,7 +871,7 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* 🌟 NEW REPLACEMENT MODAL (Exactly matching assets/page.tsx) */}
+      {/* 🌟 NEW REPLACEMENT MODAL */}
       <AnimatePresence>
         {showReplaceModal && activeAsset && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1014,7 +1000,7 @@ export default function StaffDashboardPage() {
                     <button type="button" onClick={() => setQrUrl(null)} className="w-14 h-13 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
                       <ChevronLeft size={20} strokeWidth={2.5} />
                     </button>
-                    <button type="submit" disabled={!hasEnoughPhotos || isSubmittingReplace} className={`flex-1 h-13 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer bg-purple-600`}>
+                    <button type="submit" disabled={!hasEnoughPhotos || isSubmittingReplace} className={`flex-1 h-13 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer bg-purple-600 hover:bg-purple-700`}>
                       {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
                     </button>
                   </div>
@@ -1025,11 +1011,141 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
+      {/* 🌟 HANDOVER AGREEMENT MODAL */}
+      <AnimatePresence>
+        {handoverAsset && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className={`w-full max-w-2xl shadow-2xl overflow-hidden font-sans flex flex-col relative transition-all duration-300 rounded-4xl bg-[#e9e9ec] border border-white`}
+            >
+               <div className="p-6 flex justify-between items-center shrink-0">
+                 <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                      <FileSignature className="text-orange-500" size={20} strokeWidth={2.5} />
+                   </div>
+                   <div>
+                     <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                       Handover Agreement
+                     </h3>
+                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                       Review & Digitally Sign
+                     </p>
+                   </div>
+                 </div>
+                 <button onClick={() => !isSigning && setHandoverAsset(null)} className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
+               </div>
+
+               <div className="px-6 pb-6 overflow-y-auto flex-1 flex flex-col gap-5 custom-scrollbar">
+                  <div className="bg-orange-50/50 border border-orange-100 p-4 rounded-2xl">
+                     <p className="text-xs font-semibold text-slate-700">
+                       You are acknowledging receipt of the following IT asset in good working condition.
+                     </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 p-4 rounded-3xl bg-white shadow-sm border border-slate-100">
+                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Asset Name</span><span className="font-bold text-slate-900 text-sm">{handoverAsset.name || handoverAsset.asset_name}</span></div>
+                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Category</span><span className="font-bold text-slate-900 text-sm">{handoverAsset.category}</span></div>
+                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span><span className="font-mono font-bold text-purple-600 text-sm">{handoverAsset.asset_tag}</span></div>
+                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Serial S/N</span><span className="font-mono font-bold text-slate-900 text-sm truncate block">{handoverAsset.serial_number || 'N/A'}</span></div>
+                  </div>
+
+                  <div className="space-y-3 bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Terms & Conditions</h4>
+                    <ul className="text-xs font-medium text-slate-600 space-y-2 list-disc pl-4">
+                      <li><strong className="text-slate-900">Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
+                      <li><strong className="text-slate-900">Acceptable Use:</strong> The asset is strictly for official business. Unauthorized software or tampering is prohibited.</li>
+                      <li><strong className="text-slate-900">Return Policy:</strong> I agree to return the equipment in its original condition upon termination or request.</li>
+                      <li><strong className="text-slate-900">Damage/Loss:</strong> I will immediately report damage/loss and may be held financially liable for negligence.</li>
+                    </ul>
+                  </div>
+
+                  {/* 🌟 ULTRA-PREMIUM SCALLOPED SILVER METALLIC HOLOGRAM (STAFF SIGNATURE) */}
+                  <div className="flex flex-col items-center mt-6">
+                    <div className="relative w-32.5 h-32.5 mb-4">
+                      <svg viewBox="0 0 1000 1000" width="130" height="130" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <radialGradient id="g1-staff-sign" cx="50%" cy="50%" r="70%">
+                            <stop offset="0%" stopColor="#ffffff"/>
+                            <stop offset="35%" stopColor="#e8f5ff"/>
+                            <stop offset="65%" stopColor="#f8e6f6"/>
+                            <stop offset="100%" stopColor="#e6e6e6"/>
+                          </radialGradient>
+                          <linearGradient id="glassTopStaffSign" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9"/>
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0"/>
+                          </linearGradient>
+                          <linearGradient id="glassBotStaffSign" x1="0%" y1="100%" x2="0%" y2="0%">
+                            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9"/>
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0"/>
+                          </linearGradient>
+                          <path id="topArcStaffSign" d="M 100 500 A 400 400 0 1 1 900 500"/>
+                          <path id="botArcStaffSign" d="M 900 500 A 400 400 0 1 1 100 500"/>
+                        </defs>
+                        <g>
+                          <circle cx="500" cy="500" r="450" fill="none" stroke="#d7dbe0" strokeWidth="60" strokeDasharray="0 50" strokeLinecap="round"/>
+                          <circle cx="500" cy="500" r="450" fill="url(#g1-staff-sign)"/>
+                          
+                          <g stroke="#ffffff" strokeWidth="4" opacity="0.8" fill="none">
+                            <circle cx="500" cy="500" r="320" />
+                            <circle cx="500" cy="500" r="180" />
+                            <path d="M 180,500 L 820,500 M 500,180 L 500,820 M 273,273 L 727,727 M 273,727 L 727,273" />
+                          </g>
+
+                          <circle cx="500" cy="500" r="350" fill="none" stroke="#d7dbe0" strokeWidth="40" opacity="0.5"/>
+
+                          <text fontFamily="Arial, Helvetica, sans-serif" fontSize="48" fontWeight="900" fill="#334155" letterSpacing="8">
+                            <textPath href="#topArcStaffSign" startOffset="50%" textAnchor="middle">DIGITALLY SIGNED</textPath>
+                          </text>
+                          <text fontFamily="Arial, Helvetica, sans-serif" fontSize="48" fontWeight="900" fill="#334155" letterSpacing="8">
+                            <textPath href="#botArcStaffSign" startOffset="50%" textAnchor="middle">VERIFIED AUTHENTIC</textPath>
+                          </text>
+
+                          <path d="M 220,320 Q 500,120 780,320 Q 500,220 220,320 Z" fill="url(#glassTopStaffSign)"/>
+                          <path d="M 220,680 Q 500,880 780,680 Q 500,780 220,680 Z" fill="url(#glassBotStaffSign)"/>
+
+                          <text x="500" y="440" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontSize="120" fontWeight="900" fill="#1e293b">DIGITAL</text>
+                          <text x="500" y="510" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontSize="60" fontWeight="900" fill="#1e293b" letterSpacing="4">AUTHENTICITY</text>
+                          
+                          <line x1="220" y1="540" x2="780" y2="540" stroke="#1e293b" strokeWidth="12"/>
+
+                          <text x="500" y="610" textAnchor="middle" fontFamily="Courier New, monospace" fontSize="42" fontWeight="900" fill="#334155">EMP: {currentUser.emp_id}</text>
+                          <text x="500" y="670" textAnchor="middle" fontFamily="Courier New, monospace" fontSize="38" fontWeight="900" fill="#64748b">ID: AUTH-{handoverAsset.id.slice(0,8).toUpperCase()}</text>
+                        </g>
+                      </svg>
+                    </div>
+                    <div className="w-48 border-b-2 border-slate-300"></div>
+                    <p className="mt-2 text-base font-black text-slate-900">{formatDisplayName(currentUser.name)}</p>
+                    <p className="text-[11px] font-bold text-purple-600 uppercase tracking-widest">Authorized Custodian</p>
+                  </div>
+
+               </div>
+
+               <div className="px-6 py-4 sm:px-6 sm:py-5 flex gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60 bg-white/50">
+                  <button onClick={() => !isSigning && setHandoverAsset(null)} className="flex-1 py-3.5 rounded-full text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 bg-white border border-slate-200 text-slate-700 shadow-sm">
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleDigitalSign}
+                    disabled={isSigning} 
+                    className="flex-2 py-3.5 text-white rounded-full text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]"
+                  >
+                    {isSigning ? <Loader2 size={16} className="animate-spin" /> : <FileSignature size={16} />}
+                    {isSigning ? 'Signing...' : 'Agree & Digitally Sign'}
+                  </button>
+               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
 
-function LiveDatabaseModal({ type, asset, user, isDarkMode, assignedAssets, setAssignedAssets, onClose, theme }: any) {
+function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAssets, onClose, theme }: any) {
   const needsLock = type === 'INSPECTION';
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
