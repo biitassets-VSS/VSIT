@@ -300,7 +300,7 @@ export default function StaffAssetsPage() {
       const allPhotos = [...remotePhotos, ...newUrls];
       const returnNoteStr = `[RETURN REQUEST] Condition: ${returnCondition} - ${returnNotes}`;
 
-      await supabase.from('inspections').insert({
+      const { error: insertError } = await supabase.from('inspections').insert({
         asset_id: selectedReturnAsset.id,
         user_id: currentUser.id,
         user_name: currentUser.name,
@@ -311,13 +311,25 @@ export default function StaffAssetsPage() {
         notes: returnNoteStr,
         photos: allPhotos.length > 0 ? allPhotos : null
       });
+      // Explicitly throw the error so the catch block handles it
+      if (insertError) throw insertError;
 
-      await supabase.from('assets').update({ status: 'Return Pending Approval', notes: returnNoteStr, admin_remarks: null }).eq('id', selectedReturnAsset.id);
+      const { error: updateError } = await supabase.from('assets').update({ 
+        status: 'Return Pending Approval', 
+        notes: returnNoteStr, 
+        admin_remarks: null 
+      }).eq('id', selectedReturnAsset.id);
+      if (updateError) throw updateError;
 
       fetchMyAssets(); 
       resetModals();
       triggerDesktopAlert('Return Sent', `Return request for ${selectedReturnAsset.asset_tag} sent to Admin.`);
-    } catch (err: any) { alert(err.message); } finally { setIsSubmittingReturn(false); }
+    } catch (err: any) { 
+      console.error("Return Submit Error:", err);
+      alert(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
+    } finally { 
+      setIsSubmittingReturn(false); 
+    }
   };
 
   const handleReplaceSubmit = async (e: React.FormEvent) => {
@@ -329,25 +341,38 @@ export default function StaffAssetsPage() {
       const newUrls = await uploadMultiplePhotos(localPhotos);
       const allPhotos = [...remotePhotos, ...newUrls];
 
-      await supabase.from('replacements').insert({
+      const { error: insertError } = await supabase.from('replacements').insert({
         old_asset_id: selectedReplaceAsset.id,
         asset_tag: selectedReplaceAsset.asset_tag,
         serial_number: selectedReplaceAsset.serial_number,
         user_id: currentUser.id,
         staff_name: currentUser.name,
+        user_email: currentUser.email, 
         emp_code: currentUser.emp_id,
         condition: replaceCondition,
         reason: replaceReason,
         photos: allPhotos.length > 0 ? allPhotos : null,
         status: 'Pending Approval'
       });
+      // Explicitly throw the error so the catch block handles it
+      if (insertError) throw insertError;
 
-      await supabase.from('assets').update({ status: 'Replacement Requested', admin_remarks: null }).eq('id', selectedReplaceAsset.id);
+      const { error: updateError } = await supabase.from('assets').update({ 
+        status: 'Replacement Requested', 
+        admin_remarks: null 
+      }).eq('id', selectedReplaceAsset.id);
+      if (updateError) throw updateError;
 
       fetchMyAssets(); 
       resetModals();
       triggerDesktopAlert('Replacement Sent', `Replacement request for ${selectedReplaceAsset.asset_tag} sent to Admin.`);
-    } catch (err: any) { alert(err.message); } finally { setIsSubmittingReplace(false); }
+    } catch (err: any) { 
+      console.error("Replace Submit Error:", err);
+      // This alert will now explicitly tell you if a column is missing or RLS is blocking the query
+      alert(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
+    } finally { 
+      setIsSubmittingReplace(false); 
+    }
   };
 
   if (loading) return <div className="min-h-[70vh] flex flex-col items-center justify-center"><Loader2 className="w-8 h-8 text-purple-600 animate-spin" /></div>;
