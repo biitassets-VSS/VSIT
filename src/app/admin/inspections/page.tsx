@@ -27,11 +27,6 @@ function getCategoryIcon(category: string, size = 18) {
   return <Package size={size} />;
 }
 
-function safeString(val: any) {
-  if (val === null || val === undefined) return '';
-  return String(val);
-}
-
 function safeDate(dateStr: any) {
   if (!dateStr) return 'N/A';
   const d = new Date(dateStr);
@@ -293,32 +288,6 @@ function AdminInspectionReviewContent() {
           }
           if (!historicalEmpCode) {
             historicalEmpCode = 'OLD-RECORD';
-          }
-
-          let isOldUser = false;
-          if (currentAssigneeRaw && currentAssigneeRaw !== 'null' && currentAssigneeRaw !== 'undefined') {
-            let isSamePerson = false;
-            
-            if (currentAssigneeProfile && matchedProfile && currentAssigneeProfile.id === matchedProfile.id) {
-              isSamePerson = true;
-            } else {
-              const caStr = currentAssigneeRaw;
-              if (caStr === String(matchedProfile?.id || '').toLowerCase()) isSamePerson = true;
-              if (caStr === String(matchedProfile?.email || '').toLowerCase()) isSamePerson = true;
-              if (caStr === String(matchedProfile?.emp_code || '').toLowerCase()) isSamePerson = true;
-              if (caStr === String(insp.user_id || '').toLowerCase()) isSamePerson = true;
-              if (caStr === String(insp.inspected_by || '').toLowerCase()) isSamePerson = true;
-              if (caStr === String(insp.user_email || '').toLowerCase()) isSamePerson = true;
-              if (caStr === String(historicalName || '').toLowerCase()) isSamePerson = true;
-            }
-
-            if (!isSamePerson) {
-              isOldUser = true;
-            }
-          }
-
-          if (isOldUser && !isAdminAction) {
-            historicalName = `${historicalName} (Old User)`;
           }
         }
 
@@ -626,23 +595,6 @@ function AdminInspectionReviewContent() {
     }).length;
   };
 
-  const getStockStatusBadge = (status: string) => {
-    const s = safeString(status);
-    if (s.includes('Assigned')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
-    if (s.includes('Repair')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-sm animate-pulse';
-    if (s.includes('Demo')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-400 shadow-sm';
-    if (s.includes('Pending')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
-    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
-  };
-
-  const getInspectionStatusColor = (status: string) => {
-    const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
-    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
-    if (s.includes('rejected')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
-    return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
-  };
-
   const theme = {
     bg: 'bg-transparent font-sans',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
@@ -739,7 +691,7 @@ function AdminInspectionReviewContent() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 pb-6">
+            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none p-4 sm:p-6 space-y-5 pb-6">
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className={`p-4 sm:p-5 ${theme.glassInner} rounded-3xl`}><p className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-orange-500`}>{assetDetailModal.category || 'Hardware'}</p></div>
@@ -833,7 +785,7 @@ function AdminInspectionReviewContent() {
                           </div>
 
                           {photosArray.length > 0 && (
-                            <div className="flex gap-2 mt-4 overflow-x-auto custom-scrollbar pb-1">
+                            <div className="flex gap-2 mt-4 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none pb-1">
                               {photosArray.map((url, i) => (
                                 <button
                                   key={`hist-photo-${i}`}
@@ -907,7 +859,7 @@ function AdminInspectionReviewContent() {
         )}
 
         {/* 🌟 LIQUID PILL TABS */}
-        <div className={`w-full flex items-center gap-1.5 overflow-x-auto custom-scrollbar p-1.5 rounded-full shadow-sm bg-slate-200/50 border border-slate-300`}>
+        <div className={`w-full flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none p-1.5 rounded-full shadow-sm ${theme.glassPill}`}>
           {TABS.map(tab => {
             const isActive = filterTab === tab.id;
             return (
@@ -915,7 +867,7 @@ function AdminInspectionReviewContent() {
                 key={tab.id}
                 onClick={() => setFilterTab(tab.id)}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer border shrink-0 ${
-                  isActive ? tab.activeClass : 'bg-slate-100/50 text-slate-600 hover:bg-white hover:text-slate-900 border-transparent'
+                  isActive ? tab.activeClass : `text-slate-500 hover:${isDarkMode ? 'bg-white/10' : 'bg-white/50'} border-transparent`
                 }`}
               >
                 <tab.icon size={15} className={isActive ? (tab.id === 'All Logs' ? 'text-slate-800' : '') : tab.iconColor} />
@@ -998,7 +950,7 @@ function AdminInspectionReviewContent() {
                       )}
 
                       {/* Header: Historical Submitter */}
-                      <div className={`flex justify-between items-start gap-2 mb-4 ${!insp.isLatest ? 'opacity-60' : ''}`}>
+                      <div className={`flex justify-between items-start gap-2 mb-5 ${!insp.isLatest ? 'opacity-60' : ''}`}>
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-white shadow-sm border border-slate-100 text-slate-600`}>
                             {insp.is_admin_action ? <Settings2 size={16} className="text-purple-500"/> : String(insp.historical_staff_name || 'U').charAt(0).toUpperCase()}
@@ -1090,7 +1042,7 @@ function AdminInspectionReviewContent() {
                             <ShieldAlert size={14} /> No photos attached
                           </div>
                         ) : (
-                          <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2 pt-1">
+                          <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none pb-2 pt-1">
                             {photosArray.map((url: string, i: number) => (
                               <button
                                 key={i}
