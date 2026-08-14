@@ -90,6 +90,15 @@ function StaffInspectionsContent() {
         // Find the most recent inspection for this specific asset
         const latestInsp = (inspections || []).find(i => String(i.asset_id) === String(asset.id));
         
+        // 🟢 FIX: Define what constitutes a "System Log" (Admin assignments, configs, handovers)
+        const isSystemLog = latestInsp && (
+          String(latestInsp.notes || '').toLowerCase().includes('admin') ||
+          String(latestInsp.notes || '').toLowerCase().includes('asset configuration') ||
+          String(latestInsp.notes || '').toLowerCase().includes('handover') ||
+          String(latestInsp.status || '').toLowerCase() === 'assigned' ||
+          String(latestInsp.status || '').toLowerCase() === 'stock intake'
+        );
+
         let nextDue = null;
         if (asset.next_inspection_date) {
           nextDue = new Date(asset.next_inspection_date);
@@ -103,19 +112,28 @@ function StaffInspectionsContent() {
         now.setHours(0,0,0,0);
         const isOverdue = nextDue ? (new Date(nextDue).setHours(0,0,0,0) < now.getTime()) : false;
 
-        const assetInspStatus = (asset.inspection_status || '').toLowerCase();
-        let currentStatus = latestInsp?.status || 'Pending';
+        const assetInspStatus = String(asset.inspection_status || '').toLowerCase();
         
-        if (isOverdue && !['pending', 're-inspection'].includes(currentStatus.toLowerCase())) {
+        // 🟢 FIX: Prevent "Ghost" Pending states from tricking the UI
+        let currentStatus = 'Action Required';
+        
+        if (latestInsp && !isSystemLog) {
+           currentStatus = latestInsp.status; // Use real user submission status
+        } else if (assetInspStatus && assetInspStatus !== 'pending') {
+           currentStatus = asset.inspection_status; // Use explicit asset states (e.g. Assigned, Overdue)
+        } else if (isSystemLog && String(latestInsp.status).toLowerCase() === 'assigned') {
+           currentStatus = 'Assigned';
+        }
+
+        if (isOverdue && !String(currentStatus).toLowerCase().includes('pending') && !String(currentStatus).toLowerCase().includes('re-inspection')) {
           currentStatus = 'Overdue';
-        } else if (assetInspStatus.includes('action required') || assetInspStatus === 'pending') {
-          currentStatus = assetInspStatus === 'pending' ? 'Pending Review' : 'Action Required';
         }
 
         return {
           ...asset,
           latest_inspection: latestInsp,
           computed_status: currentStatus,
+          is_system_log: !!isSystemLog,
           is_overdue: isOverdue,
           next_due: nextDue
         };
@@ -187,47 +205,56 @@ function StaffInspectionsContent() {
           <div className="grid grid-cols-1 gap-6">
             <AnimatePresence>
               {myAssets.map((asset, index) => {
-                const status = (asset.computed_status || 'Pending').toLowerCase();
+                const latestInsp = asset.latest_inspection;
+                const isSystemLog = asset.is_system_log;
+                const photosArray = latestInsp?.photos || [];
+
+                const status = String(asset.computed_status || 'Action Required').toLowerCase();
                 const isOverdue = asset.is_overdue || status === 'overdue';
                 const isReInspect = status === 're-inspection';
-                const isPendingReview = status.includes('pending') || asset.inspection_status?.toLowerCase().includes('pending');
-                const isApproved = status === 'approved' || status === 'pass';
                 const isRejected = status === 'rejected' || status === 'fail';
+                const isApproved = status === 'approved' || status === 'pass';
+                
+                // 🟢 FIX: A submission is ONLY "Pending Review" if it is a REAL user submission (Not a system log)
+                const isPendingReview = (status.includes('pending') || status.includes('review')) && latestInsp && !isSystemLog;
 
                 // Determine styling based on current state
                 let statusColor = 'text-slate-500';
                 let statusBg = isDarkMode ? 'bg-slate-500/10 border-slate-500/20' : 'bg-slate-50 border-slate-200';
                 let StatusIcon = Clock;
                 let cardGlow = '';
+                let displayStatus = 'Action Required';
 
                 if (isApproved) {
                   statusColor = isDarkMode ? 'text-emerald-400' : 'text-emerald-600';
                   statusBg = isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200';
                   StatusIcon = CheckCircle2;
                   cardGlow = 'hover:border-emerald-400/50 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]';
+                  displayStatus = 'Asset Compliance Up To Date';
                 } else if (isOverdue) {
                   statusColor = isDarkMode ? 'text-rose-400' : 'text-rose-600';
                   statusBg = isDarkMode ? 'bg-rose-500/10 border-rose-500/30' : 'bg-rose-50 border-rose-200';
                   StatusIcon = AlertTriangle;
                   cardGlow = 'border-rose-500/50 shadow-[0_0_30px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30';
+                  displayStatus = 'Overdue';
                 } else if (isReInspect || isRejected) {
                   statusColor = isDarkMode ? 'text-orange-400' : 'text-orange-600';
                   statusBg = isDarkMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-orange-50 border-orange-200';
                   StatusIcon = RefreshCw;
                   cardGlow = 'border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.2)] ring-1 ring-orange-500/30';
+                  displayStatus = isReInspect ? 'Re-Inspection Required' : 'Rejected';
                 } else if (isPendingReview) {
                   statusColor = isDarkMode ? 'text-blue-400' : 'text-blue-600';
                   statusBg = isDarkMode ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200';
                   StatusIcon = Clock;
                   cardGlow = 'hover:border-blue-400/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.2)]';
+                  displayStatus = 'Review in Progress';
+                } else {
+                  displayStatus = isSystemLog ? 'Assigned' : 'Action Required';
                 }
 
-                // Extract latest inspection logic
-                const latestInsp = asset.latest_inspection;
-                const photosArray = latestInsp?.photos || [];
-
-                // Determine if we show the camera button
-                const needsAction = isOverdue || isReInspect || isRejected || (!isApproved && !isPendingReview);
+                // 🟢 FIX: Show the camera button if the user needs to act (which is any time it isn't approved AND isn't actively pending review)
+                const needsAction = !isApproved && !isPendingReview;
 
                 return (
                   <motion.div 
@@ -281,7 +308,7 @@ function StaffInspectionsContent() {
                               <span className={`text-[9px] font-black uppercase tracking-widest ${theme.textSub}`}>Last Submitted</span>
                             </div>
                             <p className={`text-sm font-bold ${theme.textMain}`}>
-                              {latestInsp?.created_at ? new Date(latestInsp.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Never'}
+                              {(!isSystemLog && latestInsp?.created_at) ? new Date(latestInsp.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Never'}
                             </p>
                           </div>
                         </div>
@@ -293,11 +320,11 @@ function StaffInspectionsContent() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                           <h3 className={`text-[11px] font-black uppercase tracking-widest ${theme.textSub}`}>Current Compliance Status</h3>
                           <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 shadow-sm ${statusBg} ${statusColor} ${isOverdue || isReInspect ? 'animate-pulse' : ''}`}>
-                            <StatusIcon size={14} /> {isPendingReview ? 'Review in Progress' : asset.computed_status}
+                            <StatusIcon size={14} /> {displayStatus}
                           </span>
                         </div>
 
-                        {/* 🌟 NEW: LAST SUBMISSION DETAILS */}
+                        {/* LAST SUBMISSION DETAILS */}
                         {latestInsp ? (
                           <div className="flex-1 flex flex-col space-y-5">
                             

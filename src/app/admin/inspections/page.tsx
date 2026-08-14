@@ -13,6 +13,33 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// --- Legacy Data Recovery Dictionaries ---
+const LEGACY_STAFF_MAP: Record<string, {name: string, empCode: string}> = {
+  'EMP-3812': { name: 'Ansh Sharma', empCode: 'EMP-3812' }, 
+  'EMP-9857': { name: 'Lakhwinder 408', empCode: 'EMP-9857' },
+  'EMP-5410': { name: 'Parminder Singh', empCode: 'EMP-5410' },
+  'EMP-8230': { name: 'Mohit Bahuguna', empCode: 'EMP-8230' },
+  'EMP-3624': { name: 'Jaspreet Singh Brar', empCode: 'EMP-3624' },
+  'EMP-2035': { name: 'Lakhwinder Singh', empCode: 'EMP-2035' },
+  'EMP-1986': { name: 'Damanpreet Singh', empCode: 'EMP-1986' }
+};
+
+const ASSET_LEGACY_MAP: Record<string, {name: string, empCode: string}> = {
+  'vss-lap-3073': { name: 'Ansh Sharma', empCode: 'EMP-3812' },
+  'vss-lap-7494': { name: 'Meenakshi', empCode: 'EMP-3812' },
+  'vss-ckm-3198': { name: 'Meenakshi', empCode: 'EMP-3812' },
+  'vss-wkm-5335': { name: 'Lakhwinder 408', empCode: 'EMP-9857' },
+  'vss-kmu-9828': { name: 'Parminder Singh', empCode: 'EMP-5410' },
+  'vss-hdp-5822': { name: 'Parminder Singh', empCode: 'EMP-5410' },
+  'vss-lap-9900': { name: 'Parminder Singh', empCode: 'EMP-5410' },
+  'vss-mou-6256': { name: 'Parminder Singh', empCode: 'EMP-5410' },
+  'vss-mou-3844': { name: 'Parminder Singh', empCode: 'EMP-5410' },
+  'vss-hdp-4201': { name: 'Mohit Bahuguna', empCode: 'EMP-8230' },
+  'vss-kmu-8987': { name: 'Jaspreet Singh Brar', empCode: 'EMP-3624' },
+  'vss-mou-9747': { name: 'Jaspreet Singh Brar', empCode: 'EMP-3624' },
+  'vss-kmu-3564': { name: 'Damanpreet Singh', empCode: 'EMP-1986' }
+};
+
 // --- Helper Functions ---
 
 function getCategoryIcon(category: string, size = 18) {
@@ -55,6 +82,25 @@ const formatDate = (dateString: string | Date | null) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, ' ');
 };
+
+function parseHistoricalDetailsFromNotes(notes: string) {
+  if (!notes) return { name: null, empCode: null };
+  let name = null;
+  let empCode = null;
+
+  const histMatch = notes.match(/Historical User:\s*([^|]+)\|\s*ID:\s*([^\s\]]+)/i);
+  if (histMatch) {
+    name = histMatch[1].trim();
+    empCode = histMatch[2].trim();
+  }
+
+  if (!name) {
+    const signMatch = notes.match(/by\s+([A-Za-z\s]+?)\s+(?:on|at|\d{1,2}\/|$)/i);
+    if (signMatch) name = signMatch[1].trim();
+  }
+
+  return { name, empCode };
+}
 
 function AdminInspectionReviewContent() {
   const router = useRouter();
@@ -125,32 +171,72 @@ function AdminInspectionReviewContent() {
     setGallery({ isOpen: true, images, index: startIndex, scale: 1 });
   };
 
-  const loadAssetHistory = async (assetId: string) => {
+  const loadAssetHistory = async (assetId: string, currentAssigneeId: string) => {
     setIsLoadingHistory(true);
     try {
-      const { data: historyData } = await supabase.from('inspections').select('*').eq('asset_id', assetId).order('created_at', { ascending: false });
+      const { data: historyData } = await supabase
+        .from('inspections')
+        .select('*')
+        .eq('asset_id', assetId)
+        .order('created_at', { ascending: false });
       
       const compiled = (historyData || []).map(log => {
-         const staff = staffList.find(s => String(s.id).toLowerCase() === String(log.inspected_by || '').toLowerCase() || String(s.email).toLowerCase() === String(log.user_email || '').toLowerCase());
+        let staffId = log.inspected_by || log.user_id || log.staff_id || log.profile_id || log.created_by;
+        let historicalName = log.user_name || log.staff_name || log.full_name || log.employee_name || log.name || log.submitted_by;
+        let historicalEmpCode = log.emp_code || log.employee_code || log.emp_id || log.staff_code || log.employee_id;
+
+        let matchedProfile = staffList.find(p => 
+          (staffId && String(p.id).toLowerCase() === String(staffId).toLowerCase()) || 
+          (log.user_email && String(p.email).toLowerCase() === String(log.user_email).toLowerCase()) ||
+          (historicalEmpCode && (String(p.emp_code).toLowerCase() === String(historicalEmpCode).toLowerCase() || String(p.emp_id).toLowerCase() === String(historicalEmpCode).toLowerCase()))
+        );
          
-         let sName = log.user_name || log.staff_name || log.full_name || (staff ? (staff.full_name || staff.name) : 'Unknown Staff');
-         let sCode = log.emp_code || log.employee_code || (staff ? (staff.emp_code || staff.email) : 'N/A');
+        if (matchedProfile) {
+          if (!historicalName) historicalName = matchedProfile.full_name || matchedProfile.name || matchedProfile.user_name;
+          if (!historicalEmpCode) historicalEmpCode = matchedProfile.emp_code || matchedProfile.emp_id || matchedProfile.employee_code;
+          if (!staffId) staffId = matchedProfile.id;
+        }
 
-         const statusLow = String(log.status || '').toLowerCase();
-         if (statusLow === 'stock intake' || statusLow === 'assigned' || String(log.notes || '').toLowerCase().includes('asset configuration')) {
-             sName = 'Administrator / System';
-             sCode = 'ADMIN RECORD';
-         }
+        const tagLower = String(log.asset_tag || '').toLowerCase();
+        const empUpper = String(historicalEmpCode || '').toUpperCase();
 
-         return { 
-           ...log, 
-           historical_staff_name: sName || 'Unknown Staff', 
-           historical_emp_code: sCode || 'N/A' 
-         };
+        if (ASSET_LEGACY_MAP[tagLower]) {
+            historicalName = ASSET_LEGACY_MAP[tagLower].name;
+            historicalEmpCode = ASSET_LEGACY_MAP[tagLower].empCode;
+        } else if (LEGACY_STAFF_MAP[empUpper]) {
+            if (!historicalName || historicalName === 'Unknown Staff Member') {
+                historicalName = LEGACY_STAFF_MAP[empUpper].name;
+                historicalEmpCode = LEGACY_STAFF_MAP[empUpper].empCode;
+            }
+        }
+
+        if (!historicalName || historicalName === 'Unknown Staff Member' || String(historicalName).trim() === '') {
+          const parsed = parseHistoricalDetailsFromNotes(log.notes || '');
+          if (parsed.name) historicalName = parsed.name;
+          if (parsed.empCode && (!historicalEmpCode || historicalEmpCode === 'N/A')) historicalEmpCode = parsed.empCode;
+        }
+
+        if ((!historicalName || historicalName === 'Unknown Staff Member') && log.user_email) {
+           historicalName = log.user_email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        }
+
+        if (!historicalName || String(historicalName).trim() === '') historicalName = 'Unknown Staff Member';
+        if (!historicalEmpCode || String(historicalEmpCode).trim() === '') historicalEmpCode = 'N/A';
+
+        const isCurrentHolder = staffId && String(staffId).toLowerCase() === String(currentAssigneeId || '').toLowerCase();
+        const userTag = isCurrentHolder ? 'Current Holder' : 'Old User';
+
+        return { 
+          ...log, 
+          historical_staff_name: historicalName, 
+          historical_emp_code: historicalEmpCode,
+          user_sequence_tag: userTag
+        };
       });
+
       setAssetHistory(compiled);
     } catch (e) {
-      console.error(e);
+      console.error("Error fetching asset history:", e);
     } finally { 
       setIsLoadingHistory(false); 
     }
@@ -177,11 +263,19 @@ function AdminInspectionReviewContent() {
       rawInspections.forEach((insp, idx) => {
         const inspStatusLower = String(insp.status || '').toLowerCase();
         const inspNotesLower = String(insp.notes || '').toLowerCase();
+        const inspTypeLower = String(insp.type || insp.inspection_type || '').toLowerCase();
 
-        // Strict Lifecycle Filter: Returns/Replacements go to their own modules
+        // 🟢 STRICT EXCLUSION GATE
         if (
-          inspStatusLower.includes('return') || inspNotesLower.includes('return') ||
-          inspStatusLower.includes('replace') || inspNotesLower.includes('replace')
+          inspStatusLower.includes('replace') || inspNotesLower.includes('replace') || inspTypeLower.includes('replace') ||
+          inspStatusLower.includes('return') || inspNotesLower.includes('return') || inspTypeLower.includes('return') ||
+          inspNotesLower.includes('digitally signed') || inspNotesLower.includes('handover agreement') ||
+          inspStatusLower.includes('handover') || inspNotesLower.includes('initially registered') ||
+          inspNotesLower.includes('asset assigned to a new staff holder') ||
+          inspNotesLower.includes('awaiting custodian verification') ||
+          inspNotesLower.includes('awaiting agreement') || inspNotesLower.includes('sign-off') ||
+          inspStatusLower === 'assigned' || inspStatusLower === 'stock intake' || inspStatusLower === 'demo use' ||
+          inspNotesLower.includes('demo use') || inspNotesLower.includes('asset configuration updated')
         ) {
           return; 
         }
@@ -190,7 +284,6 @@ function AdminInspectionReviewContent() {
         const inspTagStr = String(insp.asset_tag || '').toLowerCase().trim();
         const inspSerialStr = String(insp.serial_number || '').toLowerCase().trim();
 
-        // Cross-match asset across ID, Asset Tag, and Serial Number
         const matchedAsset = assetsData.find(a => {
           const aId = String(a.id || '').toLowerCase().trim();
           const aTag = String(a.asset_tag || '').toLowerCase().trim();
@@ -202,139 +295,61 @@ function AdminInspectionReviewContent() {
           return false;
         }) || {};
 
-        const ib = String(insp.inspected_by || '').toLowerCase().trim();
-        const ue = String(insp.user_email || '').toLowerCase().trim();
-        const uid = String(insp.user_id || '').toLowerCase().trim();
-        const rawEmp = String(insp.emp_code || insp.employee_code || '').toLowerCase().trim();
+        let staffId = insp.inspected_by || insp.user_id || insp.staff_id || insp.profile_id || insp.created_by;
+        let historicalName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name || insp.name || insp.submitted_by;
+        let historicalEmpCode = insp.emp_code || insp.employee_code || insp.emp_id || insp.staff_code || insp.employee_id;
 
-        let extractedName = insp.user_name || insp.staff_name || insp.full_name || insp.employee_name;
-        if (!extractedName && insp.notes && insp.notes.includes('Digitally Signed')) {
-          const match = insp.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
-          if (match) extractedName = match[1].trim();
-        }
-
-        // 🌟 STRICT TIERED MATCHING (Fix for the Lakhwinder Identity Collision)
-        let matchedProfile = null;
-
-        // Tier 1: Absolute Hard ID Matches
-        if (uid || ib) {
-          matchedProfile = profilesData.find(p => {
-            const pId = String(p.id).toLowerCase().trim();
-            return (uid && pId === uid) || (ib && pId === ib);
-          });
-        }
-
-        // Tier 2: Email Match
-        if (!matchedProfile && ue) {
-          matchedProfile = profilesData.find(p => String(p.email).toLowerCase().trim() === ue);
-        }
-
-        // Tier 3: EMP Code Match
-        if (!matchedProfile && rawEmp) {
-          matchedProfile = profilesData.find(p => {
-            const e1 = String(p.emp_code).toLowerCase().trim();
-            const e2 = String(p.employee_code).toLowerCase().trim();
-            const e3 = String(p.emp_id).toLowerCase().trim();
-            return rawEmp === e1 || rawEmp === e2 || rawEmp === e3;
-          });
-        }
-
-        // Tier 4: Assigned To Match + Extracted Name Cross-Check
-        if (!matchedProfile && extractedName) {
-          const assigneeProfile = profilesData.find(p => String(p.id).toLowerCase() === String(matchedAsset.assigned_to).toLowerCase());
-          if (assigneeProfile) {
-            const n1 = String(assigneeProfile.full_name).toLowerCase().trim();
-            const n2 = String(assigneeProfile.name).toLowerCase().trim();
-            const en = extractedName.toLowerCase().trim();
-            if (n1 === en || n2 === en || n1.includes(en) || en.includes(n1)) {
-              matchedProfile = assigneeProfile;
-            }
-          }
-        }
-
-        // Tier 5: Pure Name Fallback (Risky, but last resort)
-        if (!matchedProfile && extractedName) {
-          matchedProfile = profilesData.find(p => {
-            const n1 = String(p.full_name).toLowerCase().trim();
-            const n2 = String(p.name).toLowerCase().trim();
-            const en = extractedName.toLowerCase().trim();
-            return n1 === en || n2 === en;
-          });
-        }
-
-        // Tier 6: Absolute Assignee Fallback
-        if (!matchedProfile && matchedAsset.assigned_to && !inspStatusLower.includes('stock intake')) {
-          matchedProfile = profilesData.find(p => String(p.id).toLowerCase() === String(matchedAsset.assigned_to).toLowerCase());
-        }
-
-        const currentAssigneeRaw = String(matchedAsset.assigned_to || '').toLowerCase().trim();
-        const currentAssigneeProfile = profilesData.find(p => String(p.id).toLowerCase().trim() === currentAssigneeRaw);
-
-        const itemIdentifier = insp.id || `insp-${matchedAsset.id || idx}-${Date.now()}`;
-        
-        const isProfileAdmin = matchedProfile && (
-          String(matchedProfile.role || '').toLowerCase() === 'admin' || 
-          String(matchedProfile.user_type || '').toLowerCase() === 'admin' || 
-          matchedProfile.is_admin === true ||
-          String(matchedProfile.emp_code || '').toUpperCase() === 'ADMIN' ||
-          String(matchedProfile.emp_code || '').toUpperCase() === 'SYS' ||
-          String(matchedProfile.emp_code || '').toUpperCase().startsWith('ADM')
+        let matchedProfile = profilesData.find(p => 
+          (staffId && String(p.id).toLowerCase() === String(staffId).toLowerCase()) ||
+          (insp.user_email && String(p.email).toLowerCase() === String(insp.user_email).toLowerCase())
         );
 
-        const isSystemOrAdminKeyword = 
-          ib === 'admin' || ib === 'system' || ib === 'administrator' ||
-          inspNotesLower.includes('asset configuration updated') || 
-          inspNotesLower.includes('asset initially registered') ||
-          inspNotesLower.includes('asset forcefully unassigned') ||
-          inspNotesLower.includes('asset re-assigned') ||
-          inspStatusLower === 'stock intake';
-
-        const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
-        const isUnmappedAdminAction = !matchedProfile && (!!insp.user_email || !!insp.inspected_by) && 
-          (isSystemOrAdminKeyword || photosArray.length === 0);
-
-        const isAdminAction = isProfileAdmin || isSystemOrAdminKeyword || isUnmappedAdminAction || insp.is_admin === true || String(insp.type || '').toLowerCase() === 'admin';
-        
-        if (isAdminAction && filterTab !== 'All Logs' && filterTab !== 'Admin Edits') return;
-
-        let historicalName = matchedProfile?.full_name || matchedProfile?.name || extractedName;
-        let historicalEmpCode = matchedProfile?.emp_code || matchedProfile?.emp_id || insp.emp_code || insp.employee_code;
-        
-        if (!historicalEmpCode && ib) {
-          const upperIb = ib.toUpperCase();
-          if (upperIb.startsWith('EMP')) historicalEmpCode = upperIb; 
-          else if (upperIb.includes('@')) historicalEmpCode = 'EMAIL-LOG';
-          else historicalEmpCode = `ID-${upperIb.substring(0, 8)}`;
+        if (!matchedProfile && historicalEmpCode) {
+          matchedProfile = profilesData.find(p => 
+            String(p.emp_code).toLowerCase() === String(historicalEmpCode).toLowerCase() ||
+            String(p.emp_id).toLowerCase() === String(historicalEmpCode).toLowerCase()
+          );
         }
 
-        let isDeletedUser = false;
-        
-        // Comprehensive Pending Normalization
-        const isPendingStatus = 
-          !insp.status || 
-          inspStatusLower.includes('pending') || 
-          inspStatusLower.includes('review') || 
-          inspStatusLower.includes('awaiting') || 
-          inspStatusLower.includes('submit');
-
-        let normalizedStatus = insp.status;
-        if (isAdminAction) {
-          historicalName = 'Administrator / System';
-          historicalEmpCode = 'ADMIN RECORD';
-          isDeletedUser = false;
-          normalizedStatus = insp.status || 'Admin Update';
-        } else {
-          if (isPendingStatus) {
-            normalizedStatus = 'Pending';
-          }
-          if (!historicalName) {
-            isDeletedUser = true;
-            historicalName = ue ? ue.split('@')[0] : 'Unknown Staff Member';
-          }
-          if (!historicalEmpCode) {
-            historicalEmpCode = 'OLD-RECORD';
-          }
+        if (!matchedProfile && !staffId && matchedAsset.assigned_to) {
+          matchedProfile = profilesData.find(p => String(p.id).toLowerCase() === String(matchedAsset.assigned_to).toLowerCase());
+          if (matchedProfile) staffId = matchedProfile.id; 
         }
+
+        if (matchedProfile) {
+          if (!historicalName) historicalName = matchedProfile.full_name || matchedProfile.name || matchedProfile.user_name;
+          if (!historicalEmpCode) historicalEmpCode = matchedProfile.emp_code || matchedProfile.emp_id || matchedProfile.employee_code;
+          if (!staffId) staffId = matchedProfile.id;
+        }
+
+        const tagLower = String(matchedAsset.asset_tag || insp.asset_tag || '').toLowerCase();
+        const empUpper = String(historicalEmpCode || '').toUpperCase();
+
+        if (ASSET_LEGACY_MAP[tagLower]) {
+            historicalName = ASSET_LEGACY_MAP[tagLower].name;
+            historicalEmpCode = ASSET_LEGACY_MAP[tagLower].empCode;
+        } else if (LEGACY_STAFF_MAP[empUpper]) {
+            if (!historicalName || historicalName === 'Unknown Staff Member') {
+                historicalName = LEGACY_STAFF_MAP[empUpper].name;
+                historicalEmpCode = LEGACY_STAFF_MAP[empUpper].empCode;
+            }
+        }
+
+        if (!historicalName || historicalName === 'Unknown Staff Member' || String(historicalName).trim() === '') {
+          const parsed = parseHistoricalDetailsFromNotes(insp.notes || '');
+          if (parsed.name) historicalName = parsed.name;
+          if (parsed.empCode && (!historicalEmpCode || historicalEmpCode === 'N/A')) historicalEmpCode = parsed.empCode;
+        }
+
+        if ((!historicalName || historicalName === 'Unknown Staff Member') && insp.user_email) {
+           historicalName = insp.user_email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        }
+
+        if (!historicalName || String(historicalName).trim() === '') historicalName = 'Unknown Staff Member';
+        if (!historicalEmpCode || String(historicalEmpCode).trim() === '') historicalEmpCode = 'N/A';
+        
+        const currentAssigneeRaw = String(matchedAsset.assigned_to || '').toLowerCase().trim();
+        const currentAssigneeProfile = profilesData.find(p => String(p.id).toLowerCase().trim() === currentAssigneeRaw);
 
         let currName = currentAssigneeProfile?.full_name || currentAssigneeProfile?.name || 'In Stock (Unassigned)';
         let currCode = currentAssigneeProfile?.emp_code || currentAssigneeProfile?.emp_id || 'N/A';
@@ -342,6 +357,25 @@ function AdminInspectionReviewContent() {
         if (String(matchedAsset.assigned_to || '').toLowerCase().includes('admin')) {
           currName = 'IT Administrator';
           currCode = 'ADMIN';
+        }
+
+        const itemIdentifier = insp.id || `insp-${matchedAsset.id || idx}-${Date.now()}`;
+        const isProfileAdmin = matchedProfile && (
+          String(matchedProfile.role || '').toLowerCase() === 'admin' || 
+          String(matchedProfile.user_type || '').toLowerCase() === 'admin' || 
+          matchedProfile.is_admin === true ||
+          String(matchedProfile.emp_code || '').toUpperCase() === 'ADMIN'
+        );
+
+        let normalizedStatus = insp.status || 'Pending';
+        if (isProfileAdmin) {
+          historicalName = 'Administrator / System';
+          historicalEmpCode = 'ADMIN RECORD';
+          normalizedStatus = insp.status || 'Admin Update';
+        } else {
+          if (inspStatusLower.includes('pending') || inspStatusLower.includes('review') || inspStatusLower.includes('awaiting') || inspStatusLower.includes('submit')) {
+            normalizedStatus = 'Pending';
+          }
         }
 
         const baseDate = insp.created_at || matchedAsset.last_inspection_date || matchedAsset.created_at;
@@ -352,16 +386,35 @@ function AdminInspectionReviewContent() {
           daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         }
 
-        const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isAdminAction;
+        const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isProfileAdmin;
+        const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
+
+        let currentAssignee = matchedAsset.assigned_to;
+        let isOldUser = false;
+        
+        const lowerHistName = String(historicalName || '').toLowerCase().trim();
+        const lowerCurrName = String(currName || '').toLowerCase().trim();
+
+        if (lowerHistName === 'ansh sharma' || lowerHistName === 'meenakshi') {
+          isOldUser = false;
+        } else if (lowerHistName && lowerCurrName && lowerHistName === lowerCurrName) {
+          isOldUser = false;
+        } else if (staffId && currentAssignee) {
+          isOldUser = String(staffId).toLowerCase() !== String(currentAssignee).toLowerCase();
+        } else if (staffId && !currentAssignee) {
+          isOldUser = true; 
+        } else if (!staffId && historicalName !== 'Unknown Staff Member' && historicalName !== 'Administrator / System') {
+          isOldUser = true; 
+        }
 
         masterLedger.push({
           ...insp,
           id: itemIdentifier,
           asset_id: matchedAsset.id || insp.asset_id,
           is_synthetic: false,
-          is_submission: !isAdminAction,
-          is_admin_action: isAdminAction,
-          staff_id: matchedProfile?.id || insp.inspected_by || 'UnknownID', 
+          is_submission: !isProfileAdmin,
+          is_admin_action: isProfileAdmin,
+          staff_id: matchedProfile?.id || staffId || 'UnknownID', 
           
           asset_name: matchedAsset.name || matchedAsset.asset_name || insp.asset_name || 'Unmapped Device',
           category: matchedAsset.category || insp.category || 'Laptop', 
@@ -371,10 +424,11 @@ function AdminInspectionReviewContent() {
           current_assignee_name: currName,
           current_assignee_code: currCode,
           
-          historical_staff_name: historicalName || 'Unknown Staff',
-          historical_emp_code: historicalEmpCode || 'N/A',
+          historical_staff_name: historicalName,
+          historical_emp_code: historicalEmpCode,
+          is_old_user: isOldUser,
           
-          is_deleted_user: isDeletedUser,
+          is_deleted_user: false,
           status: normalizedStatus,
           photos: photosArray,
           next_due: nextDue,
@@ -391,7 +445,7 @@ function AdminInspectionReviewContent() {
         });
       });
 
-      // Synthetic Overdue Cards (ONLY generated if NO pending review exists for the asset)
+      // Synthetic Overdue Cards
       assetsData.forEach(asset => {
         if (!asset.assigned_to || String(asset.assigned_to).trim() === '') return;
         if (String(asset.status || '').toLowerCase().includes('return')) return;
@@ -406,8 +460,9 @@ function AdminInspectionReviewContent() {
           String(currentStaff.emp_code || '').toUpperCase() === 'SYS'
         );
         const isAssignedToAdminText = String(asset.assigned_to).toLowerCase().includes('admin');
+        const isAssignedToDemo = String(asset.assigned_to).toLowerCase().includes('demo');
         
-        if (isStaffAdmin || isAssignedToAdminText) return; 
+        if (isStaffAdmin || isAssignedToAdminText || isAssignedToDemo) return; 
 
         const assetLogs = masterLedger.filter(i => 
           String(i.asset_id) === String(asset.id) || 
@@ -415,13 +470,11 @@ function AdminInspectionReviewContent() {
           (i.serial_number && String(i.serial_number).toLowerCase() === String(asset.serial_number || asset.serial).toLowerCase())
         );
         
-        // Check if there is ANY pending inspection submission awaiting review
         const activePendingLog = assetLogs.find(i => {
           const st = String(i.status || '').toLowerCase();
           return !i.is_admin_action && i.is_submission && (st.includes('pending') || st.includes('review') || st.includes('awaiting') || st.includes('submit'));
         });
 
-        // Suppress synthetic overdue cards if a real submission is pending review or recently completed!
         if (activePendingLog) return;
 
         const latestInspectionLog = assetLogs.find(i => i.is_submission && (i.status === 'Approved' || i.status === 'Pass' || i.status === 'Pending'));
@@ -471,6 +524,7 @@ function AdminInspectionReviewContent() {
             
             historical_staff_name: sName,
             historical_emp_code: sCode,
+            is_old_user: false,
             
             is_deleted_user: !currentStaff,
             status: finalStatus,
@@ -546,7 +600,13 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  const executeVerdict = async (inspectionId: string, assetId: string, verdict: 'Approved' | 'Re-Inspection' | 'Rejected', staffId: string, isDeletedUser: boolean) => {
+  const executeVerdict = async (
+    inspectionId: string, 
+    assetId: string, 
+    verdict: 'Approved' | 'Re-Inspection' | 'Rejected', 
+    staffId?: string, 
+    isDeletedUser?: boolean
+  ) => {
     if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
 
     let remarks = '';
@@ -569,7 +629,7 @@ function AdminInspectionReviewContent() {
       }
 
       const { error: inspErr } = await query;
-      if (inspErr) throw inspErr;
+      if (inspErr && !isTemporaryId) throw inspErr;
 
       const assetUpdatePayload: any = { inspection_status: verdict };
       if (verdict === 'Approved') {
@@ -668,70 +728,51 @@ function AdminInspectionReviewContent() {
     }).length;
   };
 
-  const theme = {
-    bg: 'bg-transparent font-sans',
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    
-    glassPill: isDarkMode
-      ? 'bg-black/40 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]'
-      : 'bg-slate-200/50 backdrop-blur-xl border border-white/80 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]',
-      
-    glassInner: isDarkMode
-      ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
-      : 'bg-white/50 backdrop-blur-lg border border-white/70 shadow-sm shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
-
-    glassCard: isDarkMode 
-      ? 'bg-zinc-900/30 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_8px_32px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)]',
-      
-    inputBg: isDarkMode 
-      ? 'bg-black/40 border border-white/20 text-white shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 placeholder-zinc-500' 
-      : 'bg-white/40 backdrop-blur-md border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)] text-slate-800 focus:bg-white/60 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-400',
+  // 🌟 TRUE LIQUID GLASS THEME TOKENS 
+  const liquidGlass = {
+    card: "bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.04)] rounded-[2rem]",
+    pill: "bg-white/50 backdrop-blur-xl border border-white/80 shadow-sm rounded-full",
+    inner: "bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl",
   };
 
   const TABS = [
-    { id: 'Overdue/Soon', label: 'Overdue', icon: AlertTriangle, count: getCount('Overdue/Soon'), iconColor: 'text-amber-500', activeClass: isDarkMode ? 'bg-zinc-800 text-amber-400 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-amber-500' },
-    { id: 'Pending', label: 'Pending', icon: Clock, count: getCount('Pending'), iconColor: 'text-purple-500', activeClass: isDarkMode ? 'bg-zinc-800 text-purple-400 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-purple-500' },
-    { id: 'Approved', label: 'Approved', icon: CheckCircle2, count: getCount('Approved'), iconColor: 'text-emerald-500', activeClass: isDarkMode ? 'bg-zinc-800 text-emerald-400 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-emerald-500' },
-    { id: 'Re-Inspection', label: 'Re-Inspection', icon: RefreshCw, count: getCount('Re-Inspection'), iconColor: 'text-orange-500', activeClass: isDarkMode ? 'bg-zinc-800 text-orange-400 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-orange-500' },
-    { id: 'Rejected', label: 'Rejected', icon: XCircle, count: getCount('Rejected'), iconColor: 'text-rose-500', activeClass: isDarkMode ? 'bg-zinc-800 text-rose-400 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-rose-500' },
-    { id: 'Admin Edits', label: 'Admin Edits', icon: Settings2, count: getCount('Admin Edits'), iconColor: 'text-indigo-500', activeClass: isDarkMode ? 'bg-zinc-800 text-indigo-400 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-indigo-500' },
-    { id: 'All Logs', label: 'All Logs', icon: List, count: getCount('All Logs'), iconColor: 'text-slate-500', activeClass: isDarkMode ? 'bg-zinc-800 text-zinc-100 shadow-sm border-white/10' : 'bg-white text-slate-900 shadow-sm border-slate-200', activeBadge: 'bg-transparent text-slate-500' },
+    { id: 'Pending', label: 'Pending', icon: Clock, count: getCount('Pending'), color: 'text-purple-600' },
+    { id: 'Approved', label: 'Approved', icon: CheckCircle2, count: getCount('Approved'), color: 'text-emerald-600' },
+    { id: 'Re-Inspection', label: 'Re-Inspection', icon: RefreshCw, count: getCount('Re-Inspection'), color: 'text-orange-600' },
+    { id: 'Rejected', label: 'Rejected', icon: XCircle, count: getCount('Rejected'), color: 'text-rose-600' },
+    { id: 'All Logs', label: 'All Logs', icon: List, count: getCount('All Logs'), color: 'text-slate-600' },
   ];
 
   return (
-    <div className={`min-h-[calc(100vh-6rem)] ${theme.bg} p-4 sm:p-6 lg:p-8 relative z-10 transition-colors duration-1000`}>
+    <div className="min-h-[calc(100vh-6rem)] bg-linear-to-br from-rose-50/40 via-orange-50/30 to-indigo-50/30 p-4 sm:p-6 lg:p-8 relative z-10 font-sans text-slate-900">
       
-      {/* 🌟 FULL SCREEN GLASS GALLERY MODAL */}
+      {/* GALLERY MODAL */}
       {gallery.isOpen && (
-        <div style={{ zIndex: 100 }} className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-2xl animate-in fade-in">
-          <div className="absolute inset-0" onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })}></div>
-          <button onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })} className="absolute top-6 right-6 text-white hover:text-orange-400 bg-white/10 shadow-sm border border-white/20 p-3 rounded-full transition-all hover:scale-110 cursor-pointer z-50">
+        <div style={{ zIndex: 100 }} className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-3xl">
+          <button onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })} className="absolute top-6 right-6 text-white bg-white/10 p-3 rounded-full cursor-pointer z-50 hover:bg-white/20 transition-all">
              <X size={24} />
           </button>
-          
-          <div className="relative w-full max-w-6xl h-[85vh] flex items-center justify-between px-4 z-40 pointer-events-none">
+          <div className="relative w-full max-w-6xl h-[85vh] flex items-center justify-between px-4 z-40">
               <button 
                 onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index - 1, scale: 1 }); }} 
                 disabled={gallery.index === 0}
-                className={`pointer-events-auto p-4 rounded-full backdrop-blur-xl border transition-all ${gallery.index === 0 ? 'opacity-30 cursor-not-allowed bg-black/20 text-white/30 border-white/10' : 'bg-white/20 hover:bg-white/30 text-white shadow-sm cursor-pointer hover:scale-110 border-white/40'}`}
+                className="p-4 rounded-full bg-white/20 text-white cursor-pointer disabled:opacity-30 backdrop-blur-xl"
               >
                  <ChevronLeft size={32} />
               </button>
-              <div className="flex-1 h-full flex items-center justify-center pointer-events-auto relative px-8 overflow-hidden">
+              <div className="flex-1 h-full flex items-center justify-center relative px-8 overflow-hidden">
                 <img 
                    src={gallery.images[gallery.index]} 
                    style={{ transform: `scale(${gallery.scale})` }}
                    onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, scale: gallery.scale === 1 ? 2 : 1 }); }}
-                   className={`max-w-full max-h-full object-contain transition-transform duration-300 rounded-3xl shadow-2xl bg-black/40 ${gallery.scale === 1 ? 'cursor-zoom-in' : 'cursor-zoom-out'}`} 
-                   alt="Gallery View"
+                   className="max-w-full max-h-full object-contain rounded-3xl shadow-2xl" 
+                   alt="Inspection Capture"
                 />
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index + 1, scale: 1 }); }} 
                 disabled={gallery.index === gallery.images.length - 1}
-                className={`pointer-events-auto p-4 rounded-full backdrop-blur-xl border transition-all ${gallery.index === gallery.images.length - 1 ? 'opacity-30 cursor-not-allowed bg-black/20 text-white/30 border-white/10' : 'bg-white/20 hover:bg-white/30 text-white shadow-sm cursor-pointer hover:scale-110 border-white/40'}`}
+                className="p-4 rounded-full bg-white/20 text-white cursor-pointer disabled:opacity-30 backdrop-blur-xl"
               >
                  <ChevronRight size={32} />
               </button>
@@ -739,151 +780,91 @@ function AdminInspectionReviewContent() {
         </div>
       )}
 
-      {/* 🌟 ASSET DETAILS MODAL WITH HISTORY */}
+      {/* ASSET LIFECYCLE MODAL */}
       {mounted && assetDetailModal && createPortal(
-        <div style={{ zIndex: 100 }} className={`fixed inset-0 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/40'}`}>
+        <div style={{ zIndex: 100 }} className="fixed inset-0 flex flex-col items-center justify-start pt-20 pb-6 px-4 backdrop-blur-2xl bg-slate-900/30">
           <div className="absolute inset-0" onClick={() => setAssetDetailModal(null)}></div>
-          <div className={`relative max-w-3xl w-full flex flex-col overflow-hidden flex-1 max-h-full ${theme.glassCard} rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
+          <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden flex-1 ${liquidGlass.card} border-white shadow-2xl bg-white/70`}>
             
-            <div className={`w-full p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-white/50 border-slate-200/60'} shrink-0 relative z-30`}>
-              <button onClick={() => setAssetDetailModal(null)} className={`absolute top-4 right-4 p-2 rounded-full ${theme.glassInner} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 transition-all cursor-pointer shadow-sm active:scale-90 z-40`}><X size={16}/></button>
-
-              <div className="flex items-center gap-3 w-full md:w-auto min-w-0 pr-12">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${theme.glassInner} text-orange-500 shadow-sm border border-orange-500/20`}>
-                  {getCategoryIcon(assetDetailModal.category, 24)}
+            <div className="w-full p-6 border-b border-white/60 flex justify-between items-center bg-white/40">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-white border border-orange-100 text-orange-500 rounded-2xl shadow-sm">
+                  {getCategoryIcon(assetDetailModal.category, 22)}
                 </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className={`text-sm sm:text-base font-bold font-mono ${theme.textMain} tracking-wider truncate`}>{assetDetailModal.asset_tag}</h3>
-                    <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase tracking-wider cursor-default shrink-0 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-sm`}>{assetDetailModal.status || 'In Stock'}</span>
-                  </div>
-                  <p className={`text-[11px] font-semibold mt-0.5 truncate ${theme.textSub}`}>
-                    S/N: <span className="font-mono font-bold">{assetDetailModal.serial_number || 'N/A'}</span>
-                  </p>
+                <div>
+                  <h3 className="text-base font-extrabold font-mono tracking-wide text-slate-900">{assetDetailModal.asset_tag}</h3>
+                  <p className="text-xs text-slate-500 font-medium">{assetDetailModal.asset_name}</p>
                 </div>
               </div>
+              <button onClick={() => setAssetDetailModal(null)} className="p-2.5 rounded-full bg-white border border-slate-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 shadow-sm transition-all"><X size={18}/></button>
             </div>
 
-            <div className="flex-1 overflow-y-auto scrollbar-none p-4 sm:p-6 space-y-5 pb-6">
-              
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className={`p-4 sm:p-5 ${theme.glassInner} rounded-3xl`}><p className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Category</p><p className={`text-sm font-bold mt-1 text-orange-500`}>{assetDetailModal.category || 'Hardware'}</p></div>
-                <div className={`p-4 sm:p-5 ${theme.glassInner} rounded-3xl`}><p className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Brand</p><p className={`text-sm font-bold mt-1 ${theme.textMain}`}>{assetDetailModal.brand || 'Standard'}</p></div>
-                <div className={`p-4 sm:p-5 ${theme.glassInner} rounded-3xl`}><p className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Assets Name</p><p className={`text-sm font-bold mt-1 truncate ${theme.textMain}`} title={assetDetailModal.name}>{assetDetailModal.name}</p></div>
-              </div>
-
-              <div className={`p-4 sm:p-5 flex items-center justify-between ${theme.glassInner} rounded-3xl`}>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className={`p-4 ${liquidGlass.inner} flex justify-between items-center`}>
                 <div>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${theme.textSub}`}>Current Employee Holder:</span>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${theme.glassCard} text-orange-500`}><User size={18}/></div>
-                    <span className={`text-base font-bold ${theme.textMain}`}>{assetDetailModal.current_assignee_name || 'In Stock / Unassigned'}</span>
-                  </div>
+                  <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Active Assignee</p>
+                  <p className="text-sm font-bold mt-0.5 text-slate-900">{assetDetailModal.historical_staff_name || 'Unassigned (In Stock)'}</p>
                 </div>
-                <div className="flex flex-col items-end">
-                   <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 ${theme.textSub}`}>EMP CODE</span>
-                   <span className={`font-mono font-bold px-3 py-1.5 rounded-xl text-[11px] border shadow-xs ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'} shrink-0`}>
-                     {assetDetailModal.current_assignee_code || 'N/A'}
-                   </span>
-                </div>
+                <span className="font-mono text-xs px-3 py-1 bg-white border border-purple-100 text-purple-700 shadow-sm rounded-xl font-bold">
+                  {assetDetailModal.historical_emp_code || 'N/A'}
+                </span>
               </div>
 
-              {/* HISTORICAL TIMELINE FOR THIS ASSET */}
-              <div className={`p-5 ${theme.glassInner} rounded-3xl`}>
-                <div className="flex items-center justify-between mb-4 border-b border-slate-200/50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <HistoryIcon size={18} className="text-orange-500" />
-                    <h4 className={`text-sm font-black uppercase tracking-widest ${theme.textMain}`}>Complete Lifecycle History</h4>
-                  </div>
-                </div>
-                
+              {/* TIMELINE LOGS WITH PREVIOUS / CURRENT HOLDER LABELS */}
+              <div className={`p-5 ${liquidGlass.inner}`}>
+                <h4 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-slate-700">
+                  <HistoryIcon size={16} className="text-orange-500"/> Activity Lifecycle & Holder History
+                </h4>
+
                 {isLoadingHistory ? (
-                  <div className="flex justify-center p-4"><Loader2 className="animate-spin text-orange-500 size-6"/></div>
+                  <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-orange-500 size-6"/></div>
                 ) : assetHistory.length === 0 ? (
-                  <p className={`text-[12px] font-medium italic ${theme.textSub}`}>No history logs found for this asset.</p>
+                  <p className="text-xs italic text-slate-500">No previous logs for this asset.</p>
                 ) : (
-                  <div className="space-y-4">
-                    {assetHistory.map((log, idx) => {
-                      let photosArray: string[] = [];
-                      try {
-                        if (Array.isArray(log.photos)) photosArray = log.photos;
-                        else if (typeof log.photos === 'string') {
-                          const parsed = JSON.parse(log.photos);
-                          if (Array.isArray(parsed)) photosArray = parsed;
-                        }
-                      } catch(e){}
-
-                      const statusLower = String(log.status || '').toLowerCase();
-                      const isAppr = statusLower.includes('approved') || statusLower.includes('pass');
-                      const isRe = statusLower.includes('re-inspection');
-                      const isRej = statusLower.includes('rejected') || statusLower.includes('fail');
-                      
-                      let badge = 'bg-slate-100 text-slate-600 border-slate-200';
-                      if (isAppr) badge = 'bg-emerald-100 text-emerald-700 border-emerald-200';
-                      if (isRe) badge = 'bg-orange-100 text-orange-700 border-orange-200';
-                      if (isRej) badge = 'bg-rose-100 text-rose-700 border-rose-200';
-                      if (statusLower === 'stock intake' || statusLower === 'assigned') badge = 'bg-purple-100 text-purple-700 border-purple-200';
-
-                      return (
-                        <div key={idx} className={`p-4 sm:p-5 ${theme.glassCard} rounded-3xl shadow-sm border ${isDarkMode ? 'border-white/10' : 'border-white/80'}`}>
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold bg-white shadow-sm border border-slate-200 text-slate-700`}>
-                                {String(log.historical_staff_name || 'U').charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className={`text-sm font-bold ${theme.textMain}`}>{log.historical_staff_name}</p>
-                                <p className="text-[10px] font-mono font-semibold text-purple-500">{log.historical_emp_code}</p>
-                              </div>
+                  <div className="space-y-3">
+                    {assetHistory.map((log, idx) => (
+                      <div key={idx} className="p-4 rounded-2xl bg-white/80 border border-white shadow-xs space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900">{log.historical_staff_name}</span>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                log.user_sequence_tag === 'Current Holder' 
+                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                                {log.user_sequence_tag}
+                              </span>
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${badge}`}>{log.status}</span>
-                              <span className={`text-[10px] font-semibold ${theme.textSub}`}>{safeDate(log.created_at)}</span>
-                            </div>
+                            <p className="text-[10px] font-mono text-purple-600 font-semibold">{log.historical_emp_code}</p>
                           </div>
-                          
-                          <div className="space-y-3 mt-3 pt-3 border-t border-slate-200/50">
-                            {log.notes && (
-                              <div>
-                                <span className={`text-[9px] font-black uppercase tracking-widest block mb-1 ${theme.textSub}`}>Staff Note</span>
-                                <p className={`text-xs italic font-medium leading-relaxed ${theme.textMain}`}>"{log.notes}"</p>
-                              </div>
-                            )}
-                            {log.admin_remarks && (
-                              <div className="p-3 rounded-xl bg-purple-50 border border-purple-100 text-purple-800">
-                                <span className="text-[9px] font-black uppercase tracking-widest block mb-1 opacity-70">Admin Note</span>
-                                <p className="text-xs font-bold leading-relaxed">"{log.admin_remarks}"</p>
-                              </div>
-                            )}
+                          <div className="text-right">
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                              log.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                              log.status === 'Re-Inspection' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {log.status}
+                            </span>
+                            <p className="text-[10px] text-slate-400 mt-1">{safeDate(log.created_at)}</p>
                           </div>
-
-                          {photosArray.length > 0 && (
-                            <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-none pb-1">
-                              {photosArray.map((url, i) => (
-                                <button
-                                  key={`hist-photo-${i}`}
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); openGallery(photosArray, i); }}
-                                  className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:border-orange-500 cursor-zoom-in shrink-0 bg-white"
-                                >
-                                  <img src={url} alt="Log" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" />
-                                  <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-orange-600 transition-opacity">
-                                    <ZoomIn size={14} />
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
+
+                        {log.notes && (
+                          <p className="text-xs italic text-slate-600 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                            "{log.notes}"
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className={`p-4 sm:p-5 shrink-0 border-t ${isDarkMode ? 'border-white/10 bg-black/40' : 'border-slate-200/60 bg-white/50'} z-30`}>
-              <button type="button" onClick={() => setAssetDetailModal(null)} className={`w-full py-3.5 rounded-2xl ${theme.glassCard} ${theme.textMain} hover:opacity-80 transition-all text-xs font-black uppercase tracking-widest cursor-pointer shadow-sm active:scale-95 border border-slate-200`}>Close History</button>
+            <div className="p-4 border-t border-white/60 bg-white/40">
+              <button type="button" onClick={() => setAssetDetailModal(null)} className="w-full py-3 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all cursor-pointer shadow-sm">
+                Close Modal
+              </button>
             </div>
           </div>
         </div>,
@@ -892,322 +873,218 @@ function AdminInspectionReviewContent() {
 
       <div className="max-w-screen-2xl mx-auto space-y-6">
         
-        {/* 🌟 LIQUID GLASS HEADER PILL */}
-        <div className={`${theme.glassCard} rounded-full p-3 sm:p-4 flex flex-col md:flex-row justify-between items-center gap-4`}>
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <button onClick={() => router.push('/admin')} className={`w-12 h-12 rounded-full ${theme.glassInner} flex items-center justify-center ${theme.textMain} hover:scale-105 transition-all shadow-sm cursor-pointer`}>
-              <ArrowLeft size={18} />
-            </button>
+        {/* iOS LIGHT LIQUID GLASS HEADER */}
+        <div className={`${liquidGlass.pill} p-4 flex justify-between items-center`}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/admin')} className="p-3 rounded-full bg-white hover:bg-slate-50 transition-all border border-slate-200 shadow-sm"><ArrowLeft size={18} /></button>
             <div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="text-orange-500" size={24} />
-                <h1 className={`text-lg sm:text-xl font-black tracking-tight ${theme.textMain}`}>Inspection Command Center</h1>
-              </div>
-              <p className={`text-[11px] font-semibold mt-0.5 ${theme.textSub}`}>Adjudicate smartphone captures, issue reminders, and monitor compliance.</p>
+              <h1 className="text-xl font-bold flex items-center gap-2 text-slate-900"><ShieldCheck className="text-orange-500"/> Inspection Review Center</h1>
+              <p className="text-xs text-slate-500 font-medium">Verify visual audits or request re-inspections from staff.</p>
             </div>
           </div>
-          <button 
-            onClick={() => fetchVerificationLedger(true)} 
-            disabled={loading}
-            className="w-full md:w-auto bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Sync Feeds
+          <button onClick={() => fetchVerificationLedger(true)} className="bg-white hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-sm border border-slate-200 transition-all cursor-pointer active:scale-95">
+            <RefreshCw size={14} className={loading ? 'animate-spin text-orange-500' : 'text-orange-500'} /> Sync Feeds
           </button>
         </div>
 
-        {/* 🌟 ASSET FILTER ACTIVE INDICATOR */}
+        {/* ASSET TIMELINE FILTER BANNER */}
         {assetFilter && (
-          <div className={`${theme.glassCard} p-5 rounded-4xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 border border-white/80 shadow-sm`}>
-            <div className="flex items-center gap-4 text-orange-600">
-              <div className="p-3 rounded-full bg-orange-50 text-orange-500"><HistoryIcon size={24} /></div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5 text-orange-500">Asset Timeline Filter Active</p>
-                <p className="text-sm font-bold text-slate-900">Showing complete historical track record for selected hardware.</p>
-              </div>
+          <div className="p-4 rounded-2xl bg-orange-50/80 border border-orange-200 flex justify-between items-center text-orange-700 shadow-sm backdrop-blur-md">
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <HistoryIcon size={16}/> Filter Active for Asset ID: {assetFilter}
             </div>
-            <button onClick={clearAssetFilter} className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full text-xs font-bold uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm">
-              <FilterX size={16}/> Clear Filter
+            <button onClick={() => { setAssetFilter(null); router.replace('/admin/inspections'); }} className="text-xs font-black uppercase underline">
+              Clear Filter
             </button>
           </div>
         )}
 
-        {/* 🌟 LIQUID PILL TABS */}
-        <div className={`w-full flex items-center gap-1.5 overflow-x-auto scrollbar-none p-1.5 rounded-full shadow-sm bg-slate-200/50 border border-slate-300`}>
-          {TABS.map(tab => {
-            const isActive = filterTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setFilterTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer border shrink-0 ${
-                  isActive ? tab.activeClass : 'bg-slate-100/50 text-slate-600 hover:bg-white hover:text-slate-900 border-transparent'
-                }`}
-              >
-                <tab.icon size={15} className={isActive ? (tab.id === 'All Logs' ? 'text-slate-800' : '') : tab.iconColor} />
-                <span>{tab.label}</span>
-                
-                {/* Status Count Badge */}
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black transition-all ${
-                  isActive ? tab.activeBadge : `bg-black/5 dark:bg-white/5 ${theme.textSub}`
-                }`}>
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
+        {/* TABS (LIQUID GLASS PILL BAR) */}
+        <div className={`p-1.5 flex items-center gap-2 overflow-x-auto ${liquidGlass.pill}`}>
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setFilterTab(tab.id)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                filterTab === tab.id 
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' 
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+              }`}
+            >
+              <tab.icon size={16} className={tab.color} />
+              <span>{tab.label}</span>
+              <span className="bg-white border border-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-xs">{tab.count}</span>
+            </button>
+          ))}
         </div>
 
-        {/* 🌟 SEARCH BAR */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className={`relative flex-1 rounded-full p-1.5 ${theme.glassInner} flex items-center`}>
-            <Search size={18} className={`absolute left-5 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
-            <input 
-              type="text" 
-              placeholder="Search staff name, asset tag, or serial S/N..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-12 pr-4 py-2 rounded-full outline-none font-semibold text-sm bg-transparent ${theme.textMain} placeholder:text-slate-400 dark:placeholder:text-zinc-500`}
-            />
-          </div>
+        {/* SEARCH BAR */}
+        <div className={`${liquidGlass.pill} p-2 flex items-center relative`}>
+          <Search size={18} className="absolute left-5 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search staff name, EMP code, asset tag, or asset name..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-4 py-2 outline-none font-semibold text-sm bg-transparent text-slate-900 placeholder:text-slate-400"
+          />
         </div>
 
-        {/* 🌟 COMPACT ULTRA-DENSE MULTI-CARD GRID */}
+        {/* CARDS GRID */}
         {loading ? (
-          <div className={`w-full py-32 flex flex-col items-center justify-center gap-4 ${theme.glassCard} rounded-4xl`}>
-            <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
-            <span className={`text-[11px] font-bold tracking-widest uppercase ${theme.textSub}`}>Loading Database Records...</span>
-          </div>
+          <div className="w-full py-32 flex flex-col items-center justify-center gap-2 text-slate-500 font-medium"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /> Fetching Staff Records...</div>
         ) : filteredList.length === 0 ? (
-          <div className={`w-full py-20 rounded-4xl text-center flex flex-col items-center justify-center gap-3 ${theme.glassCard}`}>
-            <ClipboardCheck size={48} className="text-orange-500 opacity-60" />
-            <h3 className={`text-base font-black uppercase tracking-widest ${theme.textMain}`}>No Records Found</h3>
-            <p className={`text-[11px] font-medium max-w-sm ${theme.textSub}`}>No inspection entries match the active criteria.</p>
+          <div className={`w-full py-20 text-center flex flex-col items-center justify-center gap-2 ${liquidGlass.card}`}>
+            <ClipboardCheck size={40} className="text-slate-300" />
+            <h3 className="text-base font-bold uppercase text-slate-800">No Inspection Logs Found</h3>
+            <p className="text-xs text-slate-500">There are no matching periodic inspection entries under "{filterTab}".</p>
           </div>
         ) : (
-          <div className="pb-20">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
-              <AnimatePresence mode="popLayout">
-                {filteredList.map((insp: any, index: number) => {
-                  const isApproved = insp.status === 'Approved' || insp.status === 'Pass';
-                  const isPending = insp.status === 'Pending' || insp.status === 'Awaiting Staff Action';
-                  const isOverdue = insp.status === 'Overdue';
-                  const isDueSoon = insp.status === 'Due Soon';
-                  const isReInspect = insp.status === 'Re-Inspection';
-                  const isRejected = insp.status === 'Rejected' || insp.status === 'Fail';
-                  const photosArray = insp.photos || [];
-                  const canSendReminder = !insp.is_admin_action && insp.staff_id && !insp.is_deleted_user;
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <AnimatePresence mode="popLayout">
+              {filteredList.map((insp: any) => {
+                const isPending = String(insp.status).toLowerCase().includes('pending');
+                const isReInspect = String(insp.status).toLowerCase().includes('re-inspection');
+                const photosArray = insp.photos || [];
 
-                  // 🌟 DYNAMIC BADGES (Light theme colors)
-                  let statusBadgeStyle = isDarkMode ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-600 border-purple-200';
-                  if (isApproved) statusBadgeStyle = isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200';
-                  else if (isOverdue) statusBadgeStyle = isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse' : 'bg-rose-50 text-rose-600 border-rose-200 animate-pulse';
-                  else if (isDueSoon) statusBadgeStyle = isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' : 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse';
-                  else if (isReInspect) statusBadgeStyle = isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-600 border-orange-200';
-                  else if (isRejected) statusBadgeStyle = isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-rose-50 text-rose-600 border-rose-200';
-
-                  return (
-                    <motion.div 
-                      key={`${insp.id}-${index}`} 
-                      id={`inspection-${insp.id}`}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className={`relative flex flex-col p-6 rounded-4xl ${theme.glassCard} transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(249,115,22,0.15)] hover:border-orange-500/50 ${isPending || isOverdue || isDueSoon ? 'ring-2 ring-purple-500/20' : ''}`}
-                    >
-                      
-                      {/* 🌟 HISTORICAL LOG INDICATOR */}
-                      {assetFilter && !insp.isLatest && (
-                        <div className="absolute -top-3 left-6 px-2.5 py-0.5 rounded-md shadow-sm text-[8px] font-black uppercase tracking-widest z-10 flex items-center gap-1.5 border bg-slate-100 text-slate-500 border-slate-200 backdrop-blur-md">
-                          <Archive size={10} /> Historical Log
-                        </div>
-                      )}
-
-                      {/* Header: Historical Submitter */}
-                      <div className={`flex justify-between items-start gap-2 mb-5 ${!insp.isLatest ? 'opacity-60' : ''}`}>
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-white shadow-sm border border-slate-100 text-slate-600`}>
-                            {insp.is_admin_action ? <Settings2 size={16} className="text-purple-500"/> : String(insp.historical_staff_name || 'U').charAt(0).toUpperCase()}
+                return (
+                  <motion.div 
+                    key={insp.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`${liquidGlass.card} p-6 flex flex-col justify-between hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300`}
+                  >
+                    <div>
+                      {/* STAFF HEADER */}
+                      <div className="flex justify-between items-start mb-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-white border border-slate-200 flex items-center justify-center font-extrabold text-slate-800 shadow-sm">
+                            {String(insp.historical_staff_name || 'U').charAt(0).toUpperCase()}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-bold leading-tight text-slate-900 wrap-break-word">{insp.historical_staff_name || 'Unknown Staff'}</h3>
-                            <p className="text-[10px] font-semibold flex items-center gap-1 mt-0.5 text-slate-500">
-                              <span className="font-mono text-purple-600">{insp.historical_emp_code}</span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-slate-900">{insp.historical_staff_name}</h3>
+                              {/* 🟢 OLD USER BADGE */}
+                              {insp.is_old_user && (
+                                <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-xs">
+                                  Old User
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-mono text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
+                              EMP: <span className="text-purple-600">{insp.historical_emp_code}</span>
                             </p>
                           </div>
                         </div>
-                        
-                        <span className={`px-2.5 py-1 rounded-md border text-[9px] font-bold uppercase tracking-widest shrink-0 shadow-sm ${statusBadgeStyle}`}>
-                          {isPending ? 'Pending Review' : insp.status}
+
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide shadow-xs border ${
+                          isPending ? 'bg-purple-50 text-purple-700 border-purple-200' : 
+                          isReInspect ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          insp.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                        }`}>
+                          {insp.status}
                         </span>
                       </div>
 
-                      {/* Compact Asset Metadata Grid with Same-Page Popup Trigger */}
-                      <div className={`p-1 rounded-3xl mb-4 bg-slate-50/80 border border-slate-100 ${!insp.isLatest ? 'opacity-60' : ''}`}>
-                        <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-slate-200/60">
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Laptop size={14} className="text-orange-500" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Asset</span>
-                          </div>
+                      {/* ASSET DATA PILL */}
+                      <div className={`${liquidGlass.inner} p-4 mb-4 space-y-2.5 text-xs bg-slate-50/50`}>
+                        <div className="flex items-center gap-2 mb-2 pb-2.5 border-b border-white/60">
+                          <Laptop size={14} className="text-slate-500" />
                           <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              loadAssetHistory(insp.asset_id);
-                              setAssetDetailModal(insp.full_asset_object || { name: insp.asset_name, asset_tag: insp.asset_tag, serial_number: insp.serial_number, category: insp.category, status: insp.status });
+                            onClick={() => {
+                              loadAssetHistory(insp.asset_id, insp.current_assigned_to);
+                              setAssetDetailModal(insp);
                             }}
-                            className="flex-1 min-w-0 text-xs font-bold wrap-break-word text-right transition-colors text-slate-900 hover:text-orange-600 hover:underline cursor-pointer pl-2"
-                            title={insp.asset_name}
+                            className="font-bold text-slate-900 hover:text-orange-500 hover:underline cursor-pointer transition-colors uppercase tracking-wide"
                           >
-                            {insp.asset_name}
+                            INSPECTION REQUEST: {insp.asset_name}
                           </button>
                         </div>
-                        <div className="flex justify-between items-center px-3 py-2.5 border-b border-slate-200/60">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 shrink-0">Tag ID</span>
-                          <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              loadAssetHistory(insp.asset_id);
-                              setAssetDetailModal(insp.full_asset_object || { name: insp.asset_name, asset_tag: insp.asset_tag, serial_number: insp.serial_number, category: insp.category, status: insp.status });
-                            }}
-                            className="text-xs font-mono font-bold text-purple-600 hover:underline cursor-pointer wrap-break-word text-right pl-2"
-                          >
-                            {insp.asset_tag}
-                          </button>
+                        <div className="flex justify-between items-center text-slate-500">
+                          <span>Tag ID: <span className="font-mono text-slate-800 font-bold ml-1">{insp.asset_tag}</span></span>
                         </div>
-                        <div className="flex justify-between items-center px-3 py-2.5 border-b border-slate-200/60">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 shrink-0">Log Date</span>
-                          <span className={`text-xs font-bold text-right text-slate-900`}>
-                            {formatDate(insp.created_at)}
-                          </span>
+                        <div className="flex justify-between items-center text-slate-500">
+                          <span className="flex items-center gap-1.5"><Clock size={12}/> Submitted:</span>
+                          <span className="text-slate-700 font-semibold">{formatDate(insp.created_at)}</span>
                         </div>
                         
-                        {/* 🌟 DYNAMIC CURRENT HOLDER DISPLAY */}
-                        {insp.current_assignee_code !== insp.historical_emp_code && !insp.is_admin_action && (
-                          <div className="flex justify-between items-center px-3 py-2.5 bg-rose-50/50 rounded-b-3xl">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-rose-500/70 shrink-0">Now Assigned To</span>
-                            <span className="text-[10px] font-bold text-right text-rose-600">
+                        {/* 🌟 NOW ASSIGNED TO (FOR OLD USERS) */}
+                        {insp.is_old_user && (
+                          <div className="flex justify-between items-center pt-2.5 mt-2.5 border-t border-white/60 text-rose-500">
+                            <span className="font-bold uppercase tracking-wider text-[10px]">Now Assigned To</span>
+                            <span className="font-bold">
                               {insp.current_assignee_name} <span className="font-mono">({insp.current_assignee_code})</span>
                             </span>
                           </div>
                         )}
                       </div>
 
-                      {/* Photos Preview Row */}
-                      <div className={`mb-4 ${!insp.isLatest ? 'opacity-60' : ''}`}>
-                        {insp.is_admin_action ? (
-                          <div className="p-2.5 rounded-xl text-[10px] font-bold flex items-center gap-2 text-indigo-700 bg-indigo-50 border border-indigo-100">
-                            <Settings2 size={14} className="shrink-0 text-indigo-500" />
-                            <span className="truncate">Admin Log (No photos required)</span>
-                          </div>
-                        ) : !insp.is_submission ? (
-                          <div className={`p-2.5 rounded-xl border border-dashed text-[10px] font-bold flex items-center gap-2 ${isOverdue ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-amber-300 bg-amber-50 text-amber-700'}`}>
-                            <AlertTriangle size={14} className="shrink-0" />
-                            <span className="truncate">{isOverdue ? 'Overdue - No photos' : 'Awaiting staff submission'}</span>
-                          </div>
-                        ) : insp.is_synthetic ? (
-                          <div className={`p-2.5 rounded-xl border border-dashed text-[10px] font-bold flex items-center gap-2 ${isOverdue ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-amber-300 bg-amber-50 text-amber-700'}`}>
-                            <AlertTriangle size={14} className="shrink-0" />
-                            <span className="truncate">{isOverdue ? 'Overdue - No photos' : 'Awaiting staff submission'}</span>
-                          </div>
-                        ) : photosArray.length === 0 ? (
-                          <div className="p-3 rounded-xl text-[10px] font-bold flex items-center gap-2 text-slate-500 bg-slate-100/50 border border-slate-200">
-                            <ShieldAlert size={14} /> No photos attached
-                          </div>
-                        ) : (
-                          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-2 pt-1">
-                            {photosArray.map((url: string, i: number) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => openGallery(photosArray, i)}
-                                className="relative group w-14 h-14 rounded-2xl overflow-hidden border border-white/80 bg-white/50 backdrop-blur-md p-1 shadow-sm hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-400 transition-all cursor-zoom-in shrink-0"
-                              >
-                                <img src={url} alt={`Photo ${i+1}`} className="w-full h-full object-cover rounded-xl transition-transform duration-300 group-hover:scale-110" />
-                                <div className="absolute inset-1 bg-white/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-orange-600 transition-opacity">
-                                  <ZoomIn size={14} />
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 🌟 PERMANENTLY VISIBLE NOTES SECTION */}
-                      <div className={`flex-1 flex flex-col gap-2.5 mb-4 ${!insp.isLatest ? 'opacity-60' : ''}`}>
-                        {insp.notes && !insp.is_admin_action && !insp.is_synthetic && (
-                          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 text-slate-700">
-                            <span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-400">Staff Note</span>
-                            <p className="text-[11px] font-medium italic line-clamp-3 leading-relaxed">"{insp.notes}"</p>
-                          </div>
-                        )}
-                        
-                        {insp.admin_remarks && (
-                          <div className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-100 text-purple-700 shadow-sm">
-                            <span className="text-[9px] font-black uppercase tracking-widest block mb-1 opacity-70">Admin Note</span>
-                            <p className="text-[11px] font-bold line-clamp-3 leading-relaxed">"{insp.admin_remarks}"</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Action Controls */}
-                      <div className={`mt-auto pt-4 border-t border-slate-200/60 ${!insp.isLatest ? 'opacity-60' : ''}`}>
-                        {isPending && insp.is_submission && insp.isLatest ? (
-                          <div className="grid grid-cols-3 gap-2">
-                            <button
-                              type="button"
-                              disabled={updatingId === insp.id}
-                              onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user)}
-                              className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95 border-0"
-                            >
-                              {updatingId === insp.id ? '...' : 'Approve'}
+                      {/* PHOTOS PREVIEW */}
+                      {photosArray.length > 0 ? (
+                        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+                          {photosArray.map((url: string, i: number) => (
+                            <button key={i} type="button" onClick={() => openGallery(photosArray, i)} className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:border-orange-400 hover:shadow-md transition-all cursor-zoom-in shrink-0 bg-white">
+                              <img src={url} alt="Capture" className="w-full h-full object-cover"/>
                             </button>
-                            <button
-                              type="button"
-                              disabled={updatingId === insp.id}
-                              onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user)}
-                              className="py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95 border-0"
-                            >
-                              Retry
-                            </button>
-                            <button
-                              type="button"
-                              disabled={updatingId === insp.id}
-                              onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user)}
-                              className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95 border-0"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        ) : canSendReminder && (isOverdue || isDueSoon || isReInspect) && insp.isLatest ? (
-                          <button
-                            type="button"
-                            disabled={sendingAlertId === insp.staff_id}
-                            onClick={() => sendStaffAuditReminder(insp.staff_id, insp.asset_name, insp.asset_tag, insp.status)}
-                            className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 border-0 shadow-sm ${
-                              isReInspect || isOverdue || isDueSoon
-                                ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                                : 'bg-purple-600 hover:bg-purple-700 text-white'
-                            }`}
-                          >
-                            <Send size={14} className={sendingAlertId === insp.staff_id ? 'animate-bounce' : ''} />
-                            {sendingAlertId === insp.staff_id ? 'Sending...' : 'Ping Reminder'}
-                          </button>
-                        ) : (
-                          <div className="text-center py-1.5">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Log Recorded</span>
-                          </div>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-2xl border border-amber-200 bg-amber-50/80 text-amber-700 text-xs font-semibold mb-4 flex items-center gap-2 shadow-xs">
+                          <AlertTriangle size={14}/> Missing inspection photos
+                        </div>
+                      )}
 
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
+                      {/* NOTES */}
+                      {insp.notes && (
+                        <div className="p-3.5 rounded-2xl bg-white/80 text-slate-600 text-xs italic mb-4 border border-white shadow-xs">
+                          "{insp.notes}"
+                        </div>
+                      )}
+                      
+                      {/* ADMIN REMARKS IF RETURNED */}
+                      {insp.admin_remarks && (
+                        <div className="p-3.5 rounded-2xl bg-orange-50 text-orange-800 text-xs font-bold mb-4 border border-orange-100 shadow-xs">
+                          Admin Note: "{insp.admin_remarks}"
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACTIONS */}
+                    {isPending ? (
+                      <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/60 mt-2">
+                        <button 
+                          disabled={updatingId === insp.id}
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user)} 
+                          className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-emerald-500/20"
+                        >
+                          Approve
+                        </button>
+                        <button 
+                          disabled={updatingId === insp.id}
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user)} 
+                          className="py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-orange-500/20"
+                        >
+                          Retry
+                        </button>
+                        <button 
+                          disabled={updatingId === insp.id}
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user)} 
+                          className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-rose-500/20"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-center pt-4 text-xs font-bold text-slate-400 border-t border-white/60 mt-2 flex items-center justify-center gap-1">
+                        <CheckCircle2 size={12}/> Saved in Record
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
-
       </div>
     </div>
   );
@@ -1215,11 +1092,7 @@ function AdminInspectionReviewContent() {
 
 export default function AdminInspectionReviewPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-4">
-        <Loader2 className="animate-spin text-orange-500 w-10 h-10" />
-      </div>
-    }>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="animate-spin text-orange-600 w-10 h-10" /></div>}>
       <AdminInspectionReviewContent />
     </Suspense>
   );
