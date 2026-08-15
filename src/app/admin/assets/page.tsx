@@ -269,6 +269,7 @@ function AssetRegistryContent() {
   const formStatusOptions = [
     { value: 'In Stock (Unassigned)', label: '📦 In Stock' },
     { value: 'Assigned', label: '👤 Assigned' },
+    { value: 'Pending Handover', label: '⏳ Pending Handover' },
     { value: 'Demo Use', label: '🧪 Demo' },
     { value: 'In Repair', label: '⚠️ Repair' },
     { value: 'Discard', label: '🗑️ Discard' }
@@ -282,6 +283,7 @@ function AssetRegistryContent() {
   const inspectionOptions = [
     { value: 'Approved', label: '✅ Approved' },
     { value: 'Re-Inspection', label: '🔄 Re-Inspection' },
+    { value: 'Pending Handover', label: '⏳ Pending Handover' },
     { value: 'Not Approved', label: '⚠️ Not Approved' },
     { value: 'Rejected', label: '❌ Rejected' }
   ];
@@ -331,31 +333,49 @@ function AssetRegistryContent() {
   const loadAssetHistory = async (assetId: string, assetTag?: string, serialNumber?: string) => {
     setIsLoadingHistory(true);
     try {
-      let combinedData: any[] = [];
-      
-      // Parallel fetch across ID, Tag, and Serial Number using case-insensitive ilike
-      const queries = [ supabase.from('inspections').select('*').eq('asset_id', assetId).order('created_at', { ascending: false }) ];
+      // Parallel fetch across ID, Tag, and Serial Number for BOTH inspections and replacements
+      const queries = [ 
+        supabase.from('inspections').select('*').eq('asset_id', assetId).order('created_at', { ascending: false }),
+        supabase.from('replacements').select('*').eq('old_asset_id', assetId).order('created_at', { ascending: false })
+      ];
       
       if (assetTag) {
         queries.push(supabase.from('inspections').select('*').ilike('asset_tag', `%${assetTag}%`).order('created_at', { ascending: false }));
         queries.push(supabase.from('inspections').select('*').ilike('asset_id', `%${assetTag}%`).order('created_at', { ascending: false }));
+        queries.push(supabase.from('replacements').select('*').ilike('asset_tag', `%${assetTag}%`).order('created_at', { ascending: false }));
       }
       if (serialNumber) {
         queries.push(supabase.from('inspections').select('*').ilike('serial_number', `%${serialNumber}%`).order('created_at', { ascending: false }));
         queries.push(supabase.from('inspections').select('*').ilike('asset_id', `%${serialNumber}%`).order('created_at', { ascending: false }));
+        queries.push(supabase.from('replacements').select('*').ilike('serial_number', `%${serialNumber}%`).order('created_at', { ascending: false }));
       }
 
       const results = await Promise.allSettled(queries);
+      let rawLogs: any[] = [];
       
       results.forEach(res => {
         if (res.status === 'fulfilled' && res.value.data) {
-          combinedData = [...combinedData, ...res.value.data];
+          // Normalize Replacements format into Inspections format for a unified ledger
+          const normalized = res.value.data.map(item => {
+            if (item.old_asset_id || item.reason) {
+              return {
+                ...item,
+                asset_id: item.old_asset_id,
+                inspected_by: item.user_id,
+                notes: `[REPLACEMENT REQUEST] Reason: ${item.reason} | Condition: ${item.condition}`,
+                status: item.status || 'Replacement Requested',
+                is_replacement: true
+              };
+            }
+            return item;
+          });
+          rawLogs = [...rawLogs, ...normalized];
         }
       });
 
       // Deduplicate overlapping records based on ID or fallback signature
       const uniqueLogsMap = new Map();
-      combinedData.forEach((item, index) => {
+      rawLogs.forEach((item, index) => {
         const key = item.id || `${item.asset_id}-${item.created_at}-${index}`;
         uniqueLogsMap.set(key, item);
       });
@@ -436,12 +456,35 @@ function AssetRegistryContent() {
       setStaffList(staffData);
       
       const compiledAssets = assetData.map(asset => {
-        const assignee = staffData.find(s => s.id === asset.assigned_to || s.email === asset.assigned_to) || {};
+        // Safe check for unassigned state
+        const assignedToStr = String(asset.assigned_to || '').trim();
+        const isActuallyUnassigned = !assignedToStr || assignedToStr.toLowerCase() === 'unassigned' || assignedToStr.toLowerCase() === 'null';
+
+        const assignee = isActuallyUnassigned ? {} : (staffData.find(s => 
+            String(s.id).toLowerCase() === assignedToStr.toLowerCase() || 
+            String(s.email).toLowerCase() === assignedToStr.toLowerCase() ||
+            String(s.emp_code).toLowerCase() === assignedToStr.toLowerCase() ||
+            String(s.emp_id).toLowerCase() === assignedToStr.toLowerCase()
+        ) || {});
+        
         const latestInspection = inspectionData.find(i => String(i.asset_id) === String(asset.id));
+        
+        let displayStatus = asset.status || 'In Stock (Unassigned)';
+        
+        // Correct false "Pending Handover" badging if there is no valid assigned user
+        if (isActuallyUnassigned && displayStatus.toLowerCase().includes('pending handover')) {
+            displayStatus = 'In Stock (Unassigned)';
+        }
+
+        let sName = assignee.full_name || assignee.name;
+        if (!sName && !isActuallyUnassigned) sName = 'Unknown User ID';
+        if (isActuallyUnassigned) sName = 'Unassigned';
+
         return {
           ...asset,
+          status: displayStatus,
           safe_display_name: asset.name || asset.asset_name || 'Unnamed Asset',
-          staff_name: assignee.full_name || assignee.name || asset.assigned_to || 'Unassigned',
+          staff_name: sName,
           emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
           staff_email: assignee.email || 'N/A',
           clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
@@ -467,10 +510,12 @@ function AssetRegistryContent() {
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('approved') || s.includes('pass')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
     if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
-    if (s.includes('rejected')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
-    return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+    if (s.includes('replace')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
+    if (s.includes('rejected') || s.includes('fail')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -500,7 +545,11 @@ function AssetRegistryContent() {
         setIsSaving(false); return;
       }
 
-      const resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
+      let resolvedStatus = newAssetAssignee ? 'Pending Handover' : newAssetStatus;
+      if (!newAssetAssignee && resolvedStatus.toLowerCase().includes('pending')) {
+          resolvedStatus = 'In Stock (Unassigned)';
+      }
+
       const finalTag = newAssetTag || generateCategoryPrefix(newAssetCategory);
       const newAssetId = generateSafeUuid();
       
@@ -563,6 +612,11 @@ function AssetRegistryContent() {
         resolvedInspectionStatus = 'Pending Handover';
       } else if (!editForm.assignee && viewAssetModal.assigned_to) {
         resolvedStatus = 'In Stock (Unassigned)';
+        resolvedInspectionStatus = 'Approved';
+      }
+
+      if (!editForm.assignee && (resolvedStatus.toLowerCase().includes('pending') || resolvedStatus.toLowerCase().includes('assigned'))) {
+          resolvedStatus = 'In Stock (Unassigned)';
       }
 
       const updatePayload: any = {
@@ -703,7 +757,12 @@ function AssetRegistryContent() {
       let photosArr: string[] = [];
       try {
         if (Array.isArray(asset.latest_photos)) photosArr = asset.latest_photos;
-        else photosArr = JSON.parse(asset.latest_photos);
+        else if (typeof asset.latest_photos === 'string' && asset.latest_photos.startsWith('[')) {
+          const parsed = JSON.parse(asset.latest_photos);
+          if (Array.isArray(parsed)) photosArr = parsed;
+        } else if (asset.latest_photos && typeof asset.latest_photos === 'object') {
+          photosArr = Object.values(asset.latest_photos);
+        }
       } catch(e){}
       if (photosArr.length > 0) {
         photosHtml = '<div style="display: flex; gap: 10px; flex-wrap: wrap;">' + 
@@ -1379,7 +1438,7 @@ function AssetRegistryContent() {
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status || 'In Stock'}</span>
+                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status}</span>
                       <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider border border-zinc-500/30 text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
                     </div>
                   </div>
@@ -1414,8 +1473,8 @@ function AssetRegistryContent() {
                     <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-semibold transition-all duration-300 cursor-default ${getInspectionStatusColor(asset.live_inspection_status)}`}>
                       {(() => {
                         const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st.includes('approved')) return <CheckCircle2 size={10} />;
-                        if (st.includes('return')) return <RefreshCw size={10} className="animate-spin" />;
+                        if (st.includes('approved') || st.includes('pass')) return <CheckCircle2 size={10} />;
+                        if (st.includes('return') || st.includes('replace')) return <RefreshCw size={10} className="animate-spin" />;
                         return <AlertTriangle size={10} />;
                       })()}
                       <span className="text-[8px] font-bold uppercase tracking-wider">{asset.live_inspection_status || 'Approved'}</span>
@@ -1733,9 +1792,11 @@ function AssetRegistryContent() {
                             let photosArray: string[] = [];
                             try {
                               if (Array.isArray(log.photos)) photosArray = log.photos;
-                              else if (typeof log.photos === 'string') {
+                              else if (typeof log.photos === 'string' && log.photos.startsWith('[')) {
                                 const parsed = JSON.parse(log.photos);
                                 if (Array.isArray(parsed)) photosArray = parsed;
+                              } else if (log.photos && typeof log.photos === 'object') {
+                                photosArray = Object.values(log.photos);
                               }
                             } catch(e){}
 
