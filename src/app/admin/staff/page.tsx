@@ -30,7 +30,7 @@ const PremiumGlassDropdown = ({ value, onChange, options, theme, isDarkMode, cla
   const selectedLabel = options.find((o:any) => o.value === value)?.label || value;
 
   return (
-    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`} ref={wrapperRef}>
+    <div className={`relative w-full ${open ? 'z-100' : 'z-10'}`} ref={wrapperRef}>
       <div 
         onClick={() => setOpen(!open)} 
         className={`flex items-center justify-between w-full ${className} ${theme.inputBg} rounded-xl transition-all shadow-sm cursor-pointer border ${
@@ -59,65 +59,6 @@ const PremiumGlassDropdown = ({ value, onChange, options, theme, isDarkMode, cla
                 {opt.label}
               </div>
             ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const SearchableStaffDropdown = ({ value, onChange, staffList, placeholder = "Type employee name or EMP code...", theme, isDarkMode }: any) => {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (value) {
-      const s = staffList.find((st: any) => st.id === value);
-      if (s) setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`);
-    } else setQuery('');
-  }, [value, staffList]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filtered = query.trim().length === 0 ? [] : staffList.filter((s: any) => `${s.full_name || s.name} ${s.emp_code || s.email}`.toLowerCase().includes(query.toLowerCase()));
-
-  return (
-    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`} ref={wrapperRef}>
-      <div className={`flex items-center w-full p-3 ${theme.inputBg} rounded-xl transition-all shadow-sm border ${open ? 'border-orange-500 ring-2 ring-orange-500/20' : isDarkMode ? 'border-white/20' : 'border-white/60'}`}>
-        <Search size={16} className={`mr-2 shrink-0 ${theme.textSub}`} />
-        <input type="text" value={open ? query : query || ''} onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder} className={`w-full text-sm font-semibold outline-none bg-transparent ${theme.textMain} placeholder:text-slate-500 dark:placeholder:text-zinc-400`} />
-        {value && <X size={16} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-2" onClick={() => { onChange(''); setQuery(''); }} />}
-        <ChevronDown size={16} className={`cursor-pointer ${theme.textSub}`} onClick={() => setOpen(!open)} />
-      </div>
-      
-      {open && (
-        <div className={`absolute top-full left-0 mt-1 w-full p-1.5 rounded-xl shadow-2xl backdrop-blur-3xl border ${
-          isDarkMode ? 'bg-zinc-900/95 border-zinc-700/80 shadow-black' : 'bg-white/95 border-slate-200/90 shadow-slate-300/50'
-        } overflow-hidden`}>
-          <div onClick={() => { onChange(''); setQuery(''); setOpen(false); }} className={`p-2.5 text-xs font-bold uppercase cursor-pointer rounded-lg flex items-center justify-center gap-2 mb-1 ${isDarkMode ? 'text-orange-400 bg-zinc-800 hover:bg-zinc-700' : 'text-orange-600 bg-slate-100 hover:bg-slate-200'}`}>
-            <Package size={14}/> Unassign / Return to Stock
-          </div>
-          
-          <div className="max-h-56 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
-            {query.trim().length === 0 ? (
-              <div className={`p-3 text-center text-xs font-semibold ${isDarkMode ? 'text-zinc-400' : 'text-slate-500'}`}>🔍 Type an employee name or EMP code...</div>
-            ) : filtered.length === 0 ? (
-              <div className="p-3 text-center text-xs font-semibold text-rose-500">No employee found for "{query}".</div>
-            ) : (
-              filtered.map((s: any) => (
-                <div key={s.id} className={`p-3 text-xs cursor-pointer rounded-lg flex justify-between items-center transition-all ${isDarkMode ? 'text-zinc-200 hover:bg-zinc-800' : 'text-slate-800 hover:bg-slate-100'}`} onClick={() => { onChange(s.id); setQuery(`${s.full_name || s.name} (${s.emp_code || s.email})`); setOpen(false); }}>
-                  <span className="font-semibold text-sm">{s.full_name || s.name}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold shadow-sm ${isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-800'}`}>{s.emp_code || s.email}</span>
-                </div>
-              ))
-            )}
           </div>
         </div>
       )}
@@ -462,13 +403,13 @@ function AdminStaffDirectoryContent() {
       : 'bg-white/40 backdrop-blur-[40px] border border-white/50 shadow-[0_16px_40px_rgba(31,38,135,0.05)]',
     glassInnerCard: isDarkMode 
       ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-sm' 
-      : 'bg-white/20 backdrop-blur-md border border-white/40 shadow-sm', // 🌟 Pure Frosted Glass Inner Container
+      : 'bg-white/20 backdrop-blur-md border border-white/40 shadow-sm',
     glassItem: isDarkMode
       ? 'bg-black/20 backdrop-blur-2xl border border-white/10 transition-all duration-300'
       : 'bg-white/50 backdrop-blur-2xl border border-white/60 transition-all duration-300',
     inputBg: isDarkMode 
       ? 'bg-black/40 border border-white/20 text-white shadow-inner focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 placeholder-zinc-500' 
-      : 'bg-white/60 border border-white/60 shadow-sm text-slate-800 focus:bg-white/90 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-400', // 🌟 Highly legible inputs
+      : 'bg-white/60 border border-white/60 shadow-sm text-slate-800 focus:bg-white/90 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-400',
   };
 
   return (
@@ -664,13 +605,13 @@ function AdminStaffDirectoryContent() {
           </div>
         )}
 
-        {/* 🌟 HR DOSSIER MODAL (FROSTED GLASS) WITH FIXED TOP MARGIN (pt-24 to avoid Announcement Bar) */}
+        {/* 🌟 HR DOSSIER MODAL (FROSTED GLASS) WITH FIXED TOP MARGIN */}
         {isDossierModalOpen && (
-          <div className={`fixed inset-0 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 z-100 animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/20 backdrop-blur-md'}`}>
-            <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] border flex-1 max-h-full rounded-4xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
+          <div className={`fixed inset-0 flex flex-col items-center justify-start pt-16 sm:pt-24 pb-8 px-4 z-100 overflow-y-auto animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/30 backdrop-blur-md'}`}>
+            <div className={`relative max-w-3xl w-full flex flex-col shrink-0 overflow-hidden shadow-2xl border rounded-3xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
               
               {/* MODAL HEADER */}
-              <div className={`p-4 sm:p-5 border-b flex justify-between items-center relative z-30 shrink-0 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'}`}>
+              <div className={`p-4 sm:p-5 border-b flex flex-wrap gap-4 justify-between items-start sm:items-center shrink-0 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'}`}>
                 <div>
                   <h3 className={`text-sm sm:text-base font-bold uppercase tracking-widest flex items-center gap-2 ${theme.textMain}`}>
                     {isEditing ? <Edit2 size={16} className="text-orange-500"/> : <UserCheck size={16} className="text-orange-500"/>} 
@@ -693,144 +634,150 @@ function AdminStaffDirectoryContent() {
                 </div>
               </div>
 
-              {/* MODAL BODY (SCROLLABLE FORM) - ALL FROSTED GLASS & READABLE INPUTS */}
-              <form onSubmit={handleSaveDossier} className="flex-1 overflow-y-auto custom-scrollbar flex flex-col p-4 sm:p-6 space-y-5">
+              {/* MODAL BODY (SCROLLABLE FORM WITH ISOLATED Z-INDEXES) */}
+              <form onSubmit={handleSaveDossier} className="flex flex-col relative w-full">
+                <div className="p-4 sm:p-6 space-y-6 pb-40">
+                  
+                  {/* SECTION 1: Identity & Credentials */}
+                  <div className={`relative z-70 p-5 ${theme.glassInnerCard} rounded-2xl border ${isDarkMode ? 'border-white/5' : 'border-white/40'}`}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <ShieldCheck className="text-orange-500" size={16}/>
+                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>1. Identity & Credentials</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Full Legal Name *</label>
+                        <input 
+                          type="text" required placeholder="e.g. Marcus Vance" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Company Email *</label>
+                        <input 
+                          type="email" required placeholder="m.vance@company.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Employee Code</label>
+                        <input 
+                          type="text" placeholder="EMP-xxxx" value={formData.emp_code} onChange={e => setFormData({...formData, emp_code: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold uppercase outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Contact Phone</label>
+                        <input 
+                          type="text" placeholder="+1 (555) 019-2834" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 mb-1.5 ${theme.textSub}`}><Lock size={10} className="text-orange-500"/> Login Password *</label>
+                        <input 
+                          type="text" required={!isEditing} placeholder={isEditing ? "Type to overwrite password" : "e.g. SecurePass#2026"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: HR & Organization (Higher Z-Index than Section 3) */}
+                  <div className={`relative z-60 p-5 ${theme.glassInnerCard} rounded-2xl border ${isDarkMode ? 'border-white/5' : 'border-white/40'}`}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Building className="text-orange-500" size={16}/>
+                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>2. HR Organization & Dates</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Department</label>
+                        <PremiumGlassDropdown 
+                          value={formData.department} 
+                          onChange={(val: string) => setFormData({...formData, department: val})} 
+                          options={[
+                            {value: 'Migration', label: 'Migration'},
+                            {value: 'Calling Team', label: 'Calling Team'},
+                            {value: 'DOE', label: 'DOE'},
+                            {value: 'Accounts', label: 'Accounts'},
+                            {value: 'Education', label: 'Education'},
+                            {value: 'Social Media', label: 'Social Media'},
+                            {value: 'Administration', label: 'Administration'}
+                          ]} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3 px-3"
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={10} className="text-orange-500"/> Date of Birth</label>
+                        <input 
+                          type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={10} className="text-orange-500"/> Joining Date</label>
+                        <input 
+                          type="date" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} 
+                          className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 3: System Access (Lower Z-Index than Section 2, Higher than Footer) */}
+                  <div className={`relative z-50 p-5 ${theme.glassInnerCard} rounded-2xl border ${isDarkMode ? 'border-white/5' : 'border-white/40'}`}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Power className="text-orange-500" size={16}/>
+                      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>3. System Access & Roles</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>System Access Level</label>
+                        <PremiumGlassDropdown 
+                          value={formData.role} 
+                          onChange={(val: string) => setFormData({...formData, role: val})} 
+                          options={[
+                            {value: 'Staff', label: '🟢 Staff Access'},
+                            {value: 'Admin', label: '🟣 Admin Access'}
+                          ]} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3 px-3"
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Employee Account State</label>
+                        <PremiumGlassDropdown 
+                          value={formData.status} 
+                          onChange={(val: string) => setFormData({...formData, status: val})} 
+                          options={[
+                            {value: 'Active', label: '🟢 Active'},
+                            {value: 'Disabled', label: '🔴 Disabled'}
+                          ]} 
+                          theme={theme} 
+                          isDarkMode={isDarkMode}
+                          className="py-3 px-3"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
                 
-                <div className={`p-4 sm:p-5 ${theme.glassInnerCard} rounded-3xl space-y-4`}>
-                  <div className={`flex items-center gap-2 border-b pb-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                    <span className="w-5 h-5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">1</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>Employee Identity & Auth</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Full Legal Name *</label>
-                      <input 
-                        type="text" required placeholder="e.g. Marcus Vance" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Company Email *</label>
-                      <input 
-                        type="email" required placeholder="m.vance@company.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><Lock size={10} className="text-orange-500"/> Portal Login Password *</label>
-                      <input 
-                        type="text" required={!isEditing} placeholder={isEditing ? "Type to overwrite password" : "e.g. SecurePass#2026"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Contact Phone</label>
-                      <input 
-                        type="text" placeholder="+1 (555) 019-2834" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Employee Code</label>
-                      <input 
-                        type="text" placeholder="EMP-xxxx" value={formData.emp_code} onChange={e => setFormData({...formData, emp_code: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold uppercase outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={10} className="text-orange-500"/> Date of Birth</label>
-                      <input 
-                        type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ${theme.textSub}`}><CalendarDays size={10} className="text-orange-500"/> Joining Date</label>
-                      <input 
-                        type="date" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} 
-                        className={`w-full p-3 rounded-xl text-sm font-semibold outline-none transition-all border ${theme.inputBg}`} 
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`p-4 sm:p-5 ${theme.glassInnerCard} rounded-3xl space-y-4`}>
-                  <div className={`flex items-center gap-2 border-b pb-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                    <span className="w-5 h-5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">2</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>Organizational Assignment</span>
-                  </div>
-                  
-                  <div className="relative z-70">
-                    <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Department</label>
-                    <PremiumGlassDropdown 
-                      value={formData.department} 
-                      onChange={(val: string) => setFormData({...formData, department: val})} 
-                      options={[
-                        {value: 'Migration', label: 'Migration'},
-                        {value: 'Calling Team', label: 'Calling Team'},
-                        {value: 'DOE', label: 'DOE'},
-                        {value: 'Accounts', label: 'Accounts'},
-                        {value: 'Education', label: 'Education'},
-                        {value: 'Social Media', label: 'Social Media'},
-                        {value: 'Administration', label: 'Administration'}
-                      ]} 
-                      theme={theme} 
-                      isDarkMode={isDarkMode}
-                      className="py-3 px-3"
-                    />
-                  </div>
-                </div>
-
-                <div className={`p-4 sm:p-5 rounded-3xl border transition-colors duration-200 ${theme.glassInnerCard}`}>
-                  <span className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest mb-4 ${formData.status === 'Active' ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : (isDarkMode ? 'text-rose-400' : 'text-rose-600')}`}>
-                    <ShieldCheck size={14} /> 3. System Access & Security
-                  </span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-60">
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>System Access Level</label>
-                      <PremiumGlassDropdown 
-                        value={formData.role} 
-                        onChange={(val: string) => setFormData({...formData, role: val})} 
-                        options={[
-                          {value: 'Staff', label: '🟢 Staff Access'},
-                          {value: 'Admin', label: '🟣 Admin Access'}
-                        ]} 
-                        theme={theme} 
-                        isDarkMode={isDarkMode}
-                        className="py-3 px-3"
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-[9px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textSub}`}>Employee Account State</label>
-                      <PremiumGlassDropdown 
-                        value={formData.status} 
-                        onChange={(val: string) => setFormData({...formData, status: val})} 
-                        options={[
-                          {value: 'Active', label: '🟢 Active'},
-                          {value: 'Disabled', label: '🔴 Disabled'}
-                        ]} 
-                        theme={theme} 
-                        isDarkMode={isDarkMode}
-                        className="py-3 px-3"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* MODAL FOOTER */}
-                <div className={`pt-5 mt-auto border-t flex gap-3 shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                  <button type="button" onClick={() => setIsDossierModalOpen(false)} className={`px-6 py-3.5 rounded-xl ${theme.glassInnerCard} ${theme.textMain} hover:opacity-80 transition-all text-[11px] font-bold uppercase tracking-widest cursor-pointer shadow-xs active:scale-95`}>Cancel</button>
-                  <button type="submit" disabled={isSaving} className="flex-1 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest flex justify-center items-center gap-1.5 shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer transition-all active:scale-95 disabled:opacity-50 border border-orange-400">
+                {/* MODAL FOOTER (Lowest Modal Z-Index so dropdowns pop over it) */}
+                <div className={`relative z-5 p-4 sm:p-5 border-t flex gap-3 shrink-0 backdrop-blur-xl ${isDarkMode ? 'border-white/10 bg-zinc-900/60' : 'border-white/40 bg-white/60'}`}>
+                  <button type="button" onClick={() => setIsDossierModalOpen(false)} className={`flex-1 py-3.5 rounded-xl ${theme.glassInnerCard} ${theme.textMain} hover:opacity-80 transition-all text-[11px] font-bold uppercase tracking-widest cursor-pointer shadow-xs active:scale-95 border ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>Cancel</button>
+                  <button type="submit" disabled={isSaving} className="flex-2 py-3.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest flex justify-center items-center gap-1.5 shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer transition-all active:scale-95 disabled:opacity-50 border border-orange-400">
                     {isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                    <span>{isSaving ? 'Syncing...' : (isEditing ? 'Save Dossier Updates' : 'Activate Account')}</span>
+                    <span>{isSaving ? 'Syncing...' : (isEditing ? 'Save Dossier Updates' : 'Register New Account')}</span>
                   </button>
                 </div>
               </form>
