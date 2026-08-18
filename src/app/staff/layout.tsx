@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, Laptop, ClipboardCheck, 
-  LogOut, Menu, X, Loader2, Ticket, PlusCircle, Bell, History, AlertTriangle,
+  LogOut, X, Loader2, Bell, History, AlertTriangle,
   Monitor, ShieldAlert, Check, StopCircle, MessageSquare, Send, MousePointer2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
@@ -44,7 +42,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [alertHistory, setAlertHistory] = useState<AlertRecord[]>([]);
@@ -126,115 +123,61 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 12000);
   };
 
-  // 🌟 NEW: ACTIVE DEADLINE SCANNER FOR INSPECTIONS
+  // 🌟 DEADLINE SCANNER
   useEffect(() => {
     if (!staffProfile.id) return;
-    
     const checkAssetDeadlines = async () => {
       if (sessionStorage.getItem('has_checked_deadlines_today')) return;
-
       try {
-        const { data: assets } = await supabase
-          .from('assets')
-          .select('id, name, asset_name, next_inspection_date')
-          .eq('assigned_to', staffProfile.id);
-
+        const { data: assets } = await supabase.from('assets').select('id, name, asset_name, next_inspection_date').eq('assigned_to', staffProfile.id);
         if (!assets || assets.length === 0) return;
-
-        const now = new Date();
-        now.setHours(0, 0, 0, 0); 
-
+        const now = new Date(); now.setHours(0, 0, 0, 0); 
         let hasOverdue = false;
 
         assets.forEach(asset => {
           if (asset.next_inspection_date) {
-            const dueDate = new Date(asset.next_inspection_date);
-            dueDate.setHours(0, 0, 0, 0);
+            const dueDate = new Date(asset.next_inspection_date); dueDate.setHours(0, 0, 0, 0);
             const displayName = asset.name || asset.asset_name || 'Assigned Asset';
-
             if (dueDate < now) {
               hasOverdue = true;
-              addSystemAlert(
-                "🚨 OVERDUE INSPECTION", 
-                `Your inspection for ${displayName} was due on ${dueDate.toLocaleDateString()}. Please submit your inspection immediately!`, 
-                true
-              );
+              addSystemAlert("🚨 OVERDUE INSPECTION", `Your inspection for ${displayName} was due on ${dueDate.toLocaleDateString()}. Please submit your inspection immediately!`, true);
               if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification("Overdue IT Inspection!", { 
-                  body: `Your inspection for ${displayName} is past due. Please open the IT Portal to resolve this.`, 
-                  icon: '/logo.png' 
-                });
+                new Notification("Overdue IT Inspection!", { body: `Your inspection for ${displayName} is past due. Please open the IT Portal to resolve this.`, icon: '/logo.png' });
               }
             } else if (dueDate.getTime() === now.getTime()) {
               hasOverdue = true;
-              addSystemAlert(
-                "⚠️ INSPECTION DUE TODAY", 
-                `Your hardware inspection for ${displayName} is due today!`, 
-                true
-              );
+              addSystemAlert("⚠️ INSPECTION DUE TODAY", `Your hardware inspection for ${displayName} is due today!`, true);
             }
           }
         });
-
-        if (hasOverdue) {
-          sessionStorage.setItem('has_checked_deadlines_today', 'true');
-        }
-      } catch (e) {
-        console.error("Failed to scan deadlines", e);
-      }
+        if (hasOverdue) sessionStorage.setItem('has_checked_deadlines_today', 'true');
+      } catch (e) { console.error("Failed to scan deadlines", e); }
     };
-
     checkAssetDeadlines();
   }, [staffProfile.id]);
 
-  // 🌟 NEW: REAL-TIME STAFF NOTIFICATION RECEIVER
+  // 🌟 REAL-TIME STAFF NOTIFICATION RECEIVER
   useEffect(() => {
     if (!staffProfile.id) return;
-    
-    const staffNotifChannel = supabase
-      .channel(`staff-alerts-${staffProfile.id}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'notifications',
-        filter: `target_user=eq.${staffProfile.id}`
-      }, (payload) => {
+    const staffNotifChannel = supabase.channel(`staff-alerts-${staffProfile.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_user=eq.${staffProfile.id}` }, (payload) => {
         const newNotif = payload.new;
-        
-        // 1. Trigger the Dashboard Toast & Sound
         addSystemAlert(newNotif.title, newNotif.message, true);
-        
-        // 2. Trigger Native Windows Desktop Notification
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(newNotif.title, { 
-            body: newNotif.message, 
-            icon: '/logo.png' 
-          });
+          new Notification(newNotif.title, { body: newNotif.message, icon: '/logo.png' });
         }
-      })
-      .subscribe();
-      
+      }).subscribe();
     return () => { supabase.removeChannel(staffNotifChannel); };
   }, [staffProfile.id]);
 
   useEffect(() => {
     if (!staffProfile.id) return;
-    
-    const presenceChannel = supabase.channel('vsit_online_presence', {
-      config: { presence: { key: staffProfile.id || staffProfile.email } }
-    });
-
+    const presenceChannel = supabase.channel('vsit_online_presence', { config: { presence: { key: staffProfile.id || staffProfile.email } } });
     presenceChannel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await presenceChannel.track({
-          user_id: staffProfile.id,
-          email: staffProfile.email,
-          name: staffProfile.name,
-          online_at: new Date().toISOString()
-        });
+        await presenceChannel.track({ user_id: staffProfile.id, email: staffProfile.email, name: staffProfile.name, online_at: new Date().toISOString() });
       }
     });
-
     return () => { supabase.removeChannel(presenceChannel); };
   }, [staffProfile]);
 
@@ -259,11 +202,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     const handlePing = (payload: any, channelUsed: string) => {
       setIncomingRequest((prev: any) => {
         if (!prev) addSystemAlert("⚠️ Remote Access Requested", "IT Admin requested live screen sharing! Please click Accept on your dashboard.");
-        return { 
-          adminName: payload.payload?.adminName || 'IT Administrator', 
-          adminCode: payload.payload?.adminCode || 'EMP-ADMIN', 
-          channelId: payload.payload?.channelId || channelUsed 
-        };
+        return { adminName: payload.payload?.adminName || 'IT Administrator', adminCode: payload.payload?.adminCode || 'EMP-ADMIN', channelId: payload.payload?.channelId || channelUsed };
       });
     };
 
@@ -276,40 +215,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   const executeAdminCommand = async (cmd: any) => {
     if (!isControlGrantedRef.current) return;
-
-    if (cmd.type !== 'mousemove' && cmd.type !== 'scroll') {
-      console.log("⚡ COMMAND RECEIVED FROM DB BRIDGE:", cmd.type);
-    }
-
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       try {
-        if (cmd.type === 'mousemove') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-        }
-        else if (cmd.type === 'mousedown') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-          (window as any).electronAPI.sendMouseDown(cmd.button);
-        }
-        else if (cmd.type === 'mouseup') {
-          (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
-          (window as any).electronAPI.sendMouseUp(cmd.button);
-        }
+        if (cmd.type === 'mousemove') (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent);
+        else if (cmd.type === 'mousedown') { (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); (window as any).electronAPI.sendMouseDown(cmd.button); }
+        else if (cmd.type === 'mouseup') { (window as any).electronAPI.sendMouseMove(cmd.xPercent, cmd.yPercent); (window as any).electronAPI.sendMouseUp(cmd.button); }
         else if (cmd.type === 'keydown') (window as any).electronAPI.sendKeyDown(cmd.key);
         else if (cmd.type === 'keyup') (window as any).electronAPI.sendKeyUp(cmd.key);
         else if (cmd.type === 'scroll') (window as any).electronAPI.sendScroll(cmd.deltaY);
         else if (cmd.type === 'refresh') (window as any).electronAPI.sendSystemCommand('refresh_app');
-        else if (cmd.type === 'sync_clipboard') {
-          if ((window as any).electronAPI.readClipboard) {
-            const text = await (window as any).electronAPI.readClipboard();
-            if (channelRef.current) {
-              channelRef.current.send({ type: 'broadcast', event: 'clipboard_data', payload: { text } });
-            }
-            addSystemAlert("📋 Clipboard Synced", "Clipboard securely synced to IT Admin.");
-          }
-        }
-      } catch (e) {
-        console.error("OS execution failed:", e);
-      }
+      } catch (e) { console.error("OS execution failed:", e); }
     }
   };
 
@@ -320,7 +235,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
     try {
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-
       let stream: MediaStream | null = null;
       const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
 
@@ -342,9 +256,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       peerRef.current = peer;
 
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          stopScreenSharing("Network connection failed.");
-        }
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') stopScreenSharing("Network connection failed.");
       };
 
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
@@ -356,15 +268,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       const controlChannel = supabase.channel(`${targetChannelId}_controls`, { config: { broadcast: { ack: false } } });
       controlChannelRef.current = controlChannel;
       
-      controlChannel.on('broadcast', { event: 'control_command' }, (payload) => {
-        executeAdminCommand(payload.payload);
-      }).subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log("🟢 STAFF DEDICATED CONTROL CHANNEL OPEN!");
-      });
-
-      peer.onicecandidate = (event) => {
-        if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } });
-      };
+      controlChannel.on('broadcast', { event: 'control_command' }, (payload) => { executeAdminCommand(payload.payload); }).subscribe();
+      peer.onicecandidate = (event) => { if (event.candidate) sessionChannel.send({ type: 'broadcast', event: 'ice_candidate_staff', payload: { candidate: event.candidate } }); };
 
       sessionChannel.on('broadcast', { event: 'sdp_answer_admin' }, async (payload) => {
         try {
@@ -375,8 +280,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       }).on('broadcast', { event: 'ice_candidate_admin' }, async (payload) => {
         if (peer.remoteDescription && payload.payload?.candidate) await peer.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)).catch(() => {});
       }).on('broadcast', { event: 'terminate_session' }, (payload) => {
-        const reason = payload?.payload?.reason || "Session ended by remote user.";
-        stopScreenSharing(reason);
+        stopScreenSharing(payload?.payload?.reason || "Session ended by remote user.");
       }).on('broadcast', { event: 'admin_stopped_sharing' }, (payload) => {
         stopScreenSharing(payload?.payload?.reason || "Admin stopped the session.");
       }).on('broadcast', { event: 'chat_message' }, (payload) => {
@@ -395,7 +299,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           } catch (e) {}
         }
       });
-
     } catch (err: any) {
       addSystemAlert("❌ Connection Failed", err.message || 'Permission denied');
       setIsConnecting(false); setIsStreaming(false); setIncomingRequest(null); setListenerKey(prev => prev + 1);
@@ -407,16 +310,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     if (channelRef.current) {
       channelRef.current.send({ type: 'broadcast', event: 'staff_stopped_sharing', payload: { reason } });
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
+      supabase.removeChannel(channelRef.current); channelRef.current = null;
     }
-    if (controlChannelRef.current) {
-      supabase.removeChannel(controlChannelRef.current);
-      controlChannelRef.current = null;
-    }
+    if (controlChannelRef.current) { supabase.removeChannel(controlChannelRef.current); controlChannelRef.current = null; }
     setIsStreaming(false); setIsConnecting(false); setIncomingRequest(null); setShowChat(false);
     setIsControlGranted(false); setRemoteControlRequest(false);
-    
     addSystemAlert("🛑 Session Disconnected", reason);
     setListenerKey(prev => prev + 1);
   };
@@ -431,8 +329,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   };
 
   const handleAcceptControl = () => {
-    setIsControlGranted(true);
-    setRemoteControlRequest(false);
+    setIsControlGranted(true); setRemoteControlRequest(false);
     if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'control_accepted', payload: {} });
     addSystemAlert("✅ Control Granted", "Remote user now has full mouse and keyboard access.");
   };
@@ -452,8 +349,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const theme = {
     bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
     glassPanel: isDarkMode 
-      ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-2xl' 
-      : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
+      ? 'bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-2xl' 
+      : 'bg-white/40 backdrop-blur-3xl border border-white/40 shadow-sm',
     text: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     subText: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
@@ -467,12 +364,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const unreadCount = alertHistory.filter(a => !a.read).length;
 
   return (
-    <div className={`min-h-screen ${theme.bg} flex font-sans relative overflow-hidden transition-colors duration-1000 z-0`}>
+    <div className={`h-screen w-full ${theme.bg} flex flex-col font-sans relative overflow-hidden transition-colors duration-1000 z-0`}>
       
-      <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
-      <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      {/* 🌟 GLOBAL BACKGROUND ORBS */}
+      <div className="absolute top-[-10%] left-[-5%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[50vw] h-[50vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
+      {/* 🌟 FIXED TOAST NOTIFICATIONS */}
+      <div className="absolute bottom-6 right-6 z-9999 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast) => (
           <div key={toast.id} className={`pointer-events-auto ${theme.glassPanel} border-l-4 border-l-rose-500 rounded-3xl p-4 w-85 sm:w-100 flex gap-3 animate-in slide-in-from-right-8 fade-in duration-300`}>
             <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0 border border-rose-500/20 text-rose-600">
@@ -487,16 +386,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         ))}
       </div>
 
+      {/* 🌟 WEB RTC & CONTROL OVERLAYS */}
       {isStreaming && (
         <>
           {adminPing && (
-            <div className="fixed z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
+            <div className="absolute z-99999 pointer-events-none flex items-center justify-center" style={{ left: `${adminPing.x}vw`, top: `${adminPing.y}vh`, transform: 'translate(-50%, -50%)' }}>
               <div className="absolute w-12 h-12 bg-rose-500/30 rounded-full animate-ping" />
               <div className="relative w-4 h-4 bg-rose-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
             </div>
           )}
           
-          <div className="fixed bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
+          <div className="absolute bottom-6 right-6 z-9999 flex flex-col items-end gap-3 pointer-events-none">
             
             {remoteControlRequest && (
               <div className={`${theme.glassPanel} p-5 rounded-3xl w-96 flex flex-col gap-4 animate-in slide-in-from-right-8 pointer-events-auto`}>
@@ -563,7 +463,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       )}
 
       {incomingRequest && !isStreaming && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md z-99999 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className={`${theme.glassPanel} rounded-4xl max-w-md w-full p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] space-y-6 animate-in zoom-in-95 border-2 ${isDarkMode ? 'border-orange-500/50' : 'border-white/50'}`}>
             <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 flex items-center justify-center mx-auto shadow-sm border border-orange-500/20 animate-bounce"><Monitor size={32} /></div>
             <div className="text-center space-y-1.5">
@@ -585,42 +485,35 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-56 z-50 flex flex-col transition-transform duration-300 ${theme.glassPanel} border-y-0 border-l-0 border-r ${isDarkMode ? 'border-r-white/10' : 'border-r-white/40'} ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className={`h-16 flex items-center px-5 border-b shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/30'}`}><img src="/logo.png" alt="Logo" className="h-7 w-auto drop-shadow-sm" /></div>
-        <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto custom-scrollbar">
-          {[
-            { name: 'Dashboard', href: '/staff', icon: LayoutDashboard },
-            { name: 'My Assets', href: '/staff/assets', icon: Laptop },
-            { name: 'My Inspections', href: '/staff/inspections', icon: ClipboardCheck },
-            { name: 'IT Tickets', href: '/staff/tickets', icon: Ticket },
-            { name: 'Asset Requests', href: '/staff/requests', icon: PlusCircle },
-            { name: 'Replacement Log', href: '/staff/replacements', icon: History }
-          ].map((link) => {
-            const Icon = link.icon;
-            const isActive = link.href === '/staff' ? pathname === '/staff' : pathname.startsWith(link.href);
-            return (
-              <Link key={link.name} href={link.href} onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-[13px] group border ${isActive ? (isDarkMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 font-bold shadow-sm' : 'bg-white/50 text-orange-600 border-white/60 shadow-sm font-bold backdrop-blur-md') : (isDarkMode ? 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200 font-semibold' : 'text-slate-600 border-transparent hover:bg-white/30 hover:text-slate-900 hover:border-white/40 font-semibold')}`}>
-                <Icon size={18} className={`${isActive ? (isDarkMode ? 'text-orange-400' : 'text-orange-600') : 'text-current opacity-70 group-hover:opacity-100'} transition-colors`} /> {link.name}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className={`p-4 border-t shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/30'}`}>
-          <button onClick={handleLogout} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all text-xs font-bold cursor-pointer border shadow-sm ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20' : 'bg-white/30 text-rose-600 border-white/50 hover:bg-white/50 hover:shadow-md'}`}><LogOut size={15}/> Logout</button>
-        </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
+      {/* 🌟 1. TOP HEADER (Replaces Left Sidebar) */}
+      <header className={`shrink-0 w-full h-16 sm:h-20 z-50 flex items-center justify-between px-4 lg:px-8 shadow-sm ${theme.glassPanel} border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/40'}`}>
         
-        <header className={`h-16 shrink-0 flex items-center justify-between px-4 lg:px-6 z-30 ${theme.glassPanel} border-x-0 border-t-0 border-b ${isDarkMode ? 'border-b-white/10' : 'border-b-white/40'}`}>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMobileMenuOpen(true)} className={`p-2 -ml-2 lg:hidden rounded-xl transition-colors ${isDarkMode ? 'text-zinc-400 hover:bg-white/10' : 'text-slate-500 hover:bg-white/30'}`}><Menu size={20} /></button>
-            <h2 className={`text-sm lg:text-[15px] font-extrabold tracking-tight hidden sm:block ${theme.text}`}>Virtual Staffing Solutions <span className="opacity-40 px-1">|</span> Staff Dashboard</h2>
-          </div>
+        {/* Left: Logo & Title */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <img 
+            src="/logo.png" 
+            alt="Logo" 
+            className="h-10 sm:h-12 w-auto object-contain drop-shadow-sm cursor-pointer hover:scale-105 transition-transform" 
+            onClick={() => router.push('/staff')} 
+          />
+          <h1 className="font-extrabold text-purple-600 dark:text-purple-400 text-sm sm:text-base tracking-wide hidden sm:block mt-1">
+            Staff Dashboard
+          </h1>
+        </div>
 
+        {/* Right: Notifications & Logout */}
+        <div className="flex items-center gap-4 sm:gap-6">
+          
           <div className="relative">
-            <button onClick={() => { setIsNotifOpen(!isNotifOpen); if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); }} className={`relative p-2.5 rounded-xl border transition-all shadow-sm cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white/30 border-white/50 text-slate-600 hover:bg-white/50 backdrop-blur-md'}`} title="Session Alerts History">
-              <Bell size={18} />
+            <button 
+              onClick={() => { 
+                setIsNotifOpen(!isNotifOpen); 
+                if (!isNotifOpen) setAlertHistory(prev => prev.map(a => ({ ...a, read: true }))); 
+              }} 
+              className={`relative p-2.5 rounded-xl border transition-all shadow-sm cursor-pointer ${isDarkMode ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10' : 'bg-white/40 border-white/60 text-slate-600 hover:bg-white/60 backdrop-blur-md'}`} 
+              title="Session Alerts History"
+            >
+              <Bell size={20} />
               {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-md border-2 border-white/50">{unreadCount}</span>}
             </button>
 
@@ -653,14 +546,20 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </div>
             )}
           </div>
-        </header>
 
-        <main className="flex-1 relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
-          {children}
-          
-          <StaffAIChatbot isDarkMode={isDarkMode} />
-        </main>
-      </div>
+          <button onClick={handleLogout} className={`flex items-center gap-1.5 sm:gap-2 px-4 py-2.5 sm:py-3 rounded-xl transition-all text-xs font-bold cursor-pointer border shadow-sm ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 hover:shadow-md'}`}>
+            <LogOut size={16}/> <span className="hidden sm:inline">Logout</span>
+          </button>
+        </div>
+
+      </header>
+
+      {/* 🌟 2. MAIN CONTENT WRAPPER */}
+      <main className="flex-1 w-full min-h-0 relative z-10 overflow-y-auto custom-scrollbar">
+         {children}
+         <StaffAIChatbot isDarkMode={isDarkMode} />
+      </main>
+
     </div>
   );
 }

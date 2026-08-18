@@ -8,10 +8,17 @@ import {
   AlertCircle, Clock, X, CheckCircle2, AlertTriangle, 
   Loader2, CheckCircle, Lock, Monitor, LogOut, Star, Camera, ArrowRight,
   ChevronDown, PackageOpen, ImagePlus, UploadCloud, FileSignature, ShieldCheck,
-  RefreshCcw, ChevronLeft
+  RefreshCcw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+
+// --- Utility Functions ---
+
+function safeString(val: any) {
+  if (val === null || val === undefined) return '';
+  return String(val);
+}
 
 function getAuditWindowInfo(category: string = 'Laptop') {
   const today = new Date();
@@ -91,8 +98,10 @@ export default function StaffDashboardPage() {
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   const [isAuthorized, setIsAuthorized] = useState(false); 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
+  const [currentAssetIndex, setCurrentAssetIndex] = useState(0); 
   const [myTickets, setMyTickets] = useState<any[]>([]);
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
@@ -116,8 +125,10 @@ export default function StaffDashboardPage() {
   const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
   const [localPhotos, setLocalPhotos] = useState<File[]>([]);
 
-  // Handover Agreement State
+  // Handover Agreement & Inspection View State
   const [handoverAsset, setHandoverAsset] = useState<any>(null);
+  const [viewAgreementAsset, setViewAgreementAsset] = useState<any>(null);
+  const [viewInspectionAsset, setViewInspectionAsset] = useState<any>(null);
   const [isSigning, setIsSigning] = useState(false);
 
   const formatDisplayName = (raw: string) => {
@@ -126,6 +137,17 @@ export default function StaffDashboardPage() {
     s = s.replace(/[_-]/g, ' ');  
     return s.charAt(0).toUpperCase() + s.slice(1); 
   };
+
+  useEffect(() => {
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
+      setIsDarkMode(isDark);
+    };
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const loadRealDatabase = async (showSpin = false) => {
     if (showSpin) setIsRefreshing(true);
@@ -245,6 +267,8 @@ export default function StaffDashboardPage() {
           live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
           live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
           live_admin_remarks: asset.admin_remarks || latestReturnInsp?.admin_remarks || latestInsp?.admin_remarks || null,
+          latest_notes: latestInsp?.notes || null,
+          latest_photos: latestInsp?.photos || null,
           nextDue,
           isOverdue,
           isReturnPending,
@@ -272,6 +296,7 @@ export default function StaffDashboardPage() {
       }
 
       setAssignedAssets(displayAssets);
+      if (currentAssetIndex >= displayAssets.length) setCurrentAssetIndex(0);
       
       const needsInspCount = displayAssets.filter(a => a.isInspectionRejected || a.isOverdue || a.isReturnRejected || a.isReplaceRejected).length;
       
@@ -454,11 +479,21 @@ export default function StaffDashboardPage() {
     return 'bg-slate-100/80 text-slate-600 font-bold border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
   };
 
+  const getInspectionStatusColor = (status: string) => {
+    const s = safeString(status).toLowerCase().trim();
+    if (s.includes('approved') || s.includes('pass')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+    if (s.includes('replace')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
+    if (s.includes('rejected') || s.includes('fail')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
+  };
+
   const getAssetAuditState = (asset: any) => {
     const auditWindow = getAuditWindowInfo(asset.category);
     
     if (asset.isReturnPending || asset.isReplacePending) {
-      return { disabled: true, text: "Locked", classes: "bg-white/30 backdrop-blur-md text-slate-400 font-bold border border-white/40 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
+      return { disabled: true, text: "Locked", classes: "bg-white/40 backdrop-blur-xl text-slate-400 font-bold border border-white/60 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
     }
 
     if (asset.isInspectionRejected) {
@@ -479,9 +514,10 @@ export default function StaffDashboardPage() {
               (insp.status === 'Approved' || insp.status === 'Pending Review' || insp.status === 'Pending');
     });
 
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-md text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditWindow.windowStart.toLocaleDateString()}`, classes: "bg-white/40 backdrop-blur-md text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    const auditDateStr = auditWindow.windowStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens\n${auditDateStr}`, classes: "bg-white/40 backdrop-blur-xl text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
     return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
   };
@@ -490,7 +526,7 @@ export default function StaffDashboardPage() {
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
   const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
 
-  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME (RESTORED TO PURE LIGHT)
+  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME
   const theme = {
     glassCard: 'bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60', 
     glassPanel: 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.7)]',
@@ -510,27 +546,31 @@ export default function StaffDashboardPage() {
   const currentPhotoCount = remotePhotos.length + localPhotos.length;
   const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
 
+  // 🌟 Carousel Active Asset calculation
+  const activeIndex = assignedAssets.length > 0 ? Math.min(currentAssetIndex, Math.max(0, assignedAssets.length - 1)) : 0;
+  const visibleAsset = assignedAssets[activeIndex];
+
   return (
-    <div className="flex-1 flex flex-col w-full h-full p-4 lg:p-6 gap-5 overflow-hidden lg:min-h-0 z-10 font-sans bg-transparent transition-colors duration-1000">
+    <div className="w-full h-full flex flex-col px-4 sm:px-5 lg:px-6 py-4 sm:py-5 lg:py-6 gap-4 sm:gap-5 overflow-hidden relative z-10 font-sans bg-transparent transition-colors duration-1000">
       
-      {/* 🌟 WELCOME BANNER */}
-      <div className={`${theme.glassCard} rounded-4xl p-5 md:px-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0 transition-all`}>
+      {/* 🌟 WELCOME BANNER (Compacted for split screen) */}
+      <div className={`shrink-0 ${theme.glassCard} rounded-3xl p-4 md:px-5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 transition-all`}>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+          <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
             Welcome back, {formatDisplayName(currentUser.name)} 👋
           </h1>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs sm:text-sm font-semibold text-slate-600">
-            <span className="px-3 py-1 bg-white/40 backdrop-blur-xl border border-white/80 rounded-lg text-[10px] sm:text-xs font-bold tracking-widest text-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)]">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5 text-[10px] sm:text-xs font-semibold text-slate-600">
+            <span className="px-2 py-0.5 bg-white/40 backdrop-blur-xl border border-white/80 rounded-md text-[9px] sm:text-[10px] font-bold tracking-widest text-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)]">
               ID: {currentUser.emp_id}
             </span>
             <span className="font-bold text-slate-600">{currentUser.email}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 mt-2 sm:mt-0">
           <button 
             onClick={() => loadRealDatabase(true)} 
             disabled={isRefreshing}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-orange-400 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-orange-400 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Sync Feeds
           </button>
@@ -543,26 +583,26 @@ export default function StaffDashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`${theme.glassCard} bg-orange-50/50 border-orange-200/50 rounded-4xl p-5 shadow-[0_8px_30px_rgba(249,115,22,0.1)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden`}
+            className={`shrink-0 ${theme.glassCard} bg-orange-50/50 border-orange-200/50 rounded-3xl p-4 shadow-[0_8px_30px_rgba(249,115,22,0.1)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden`}
           >
             <div className="absolute top-[-50%] left-[-10%] w-64 h-64 bg-orange-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
-            <div className="flex items-start gap-4 relative z-10">
-              <div className="p-3 bg-white/80 backdrop-blur-md border border-orange-100 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] text-orange-600 rounded-2xl shrink-0">
-                <FileSignature size={24} />
+            <div className="flex items-start gap-3 relative z-10">
+              <div className="p-2.5 bg-white/80 backdrop-blur-md border border-orange-100 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] text-orange-600 rounded-xl shrink-0">
+                <FileSignature size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                  Action Required <span className="px-2 py-0.5 bg-orange-500 text-white rounded-md text-[10px] animate-pulse shadow-sm">1 Pending</span>
+                <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                  Action Required <span className="px-2 py-0.5 bg-orange-500 text-white rounded-md text-[9px] animate-pulse shadow-sm">1 Pending</span>
                 </h3>
-                <p className="text-xs font-semibold text-slate-600 mt-1">
+                <p className="text-[11px] font-semibold text-slate-600 mt-0.5">
                   You have new hardware assigned to you. Please review and sign the Handover Agreement.
                 </p>
               </div>
             </div>
             <button
               onClick={() => setHandoverAsset(pendingHandovers[0])}
-              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer hover:scale-105 hover:shadow-[0_0_30px_rgba(249,115,22,0.5)] active:scale-95 whitespace-nowrap border border-orange-400 shrink-0 relative z-10"
+              className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer hover:scale-105 hover:shadow-[0_0_30px_rgba(249,115,22,0.5)] active:scale-95 whitespace-nowrap border border-orange-400 shrink-0 relative z-10"
             >
               Review & Sign
             </button>
@@ -570,7 +610,7 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col xl:flex-row gap-5 shrink-0">
+      <div className="shrink-0 flex flex-col xl:flex-row gap-4 sm:gap-5 w-full">
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600', type: 'TICKET', isActionDisabled: false, path: null },
@@ -582,242 +622,361 @@ export default function StaffDashboardPage() {
               key={item.name} 
               onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
               disabled={item.isActionDisabled}
-              className={`relative ${theme.glassItem} min-h-24 p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(0,0,0,0.06)]'}`}
+              className={`relative ${theme.glassItem} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(0,0,0,0.06)]'}`}
             >
               <div className="flex items-start justify-between w-full">
-                <div className={`p-3 rounded-2xl bg-white/40 border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110 group-hover:bg-white/60'} ${item.color}`}>
-                  {item.isActionDisabled ? <Lock size={18} /> : <item.icon size={18} strokeWidth={2.5} />}
+                <div className={`p-2.5 rounded-xl bg-white/40 border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110 group-hover:bg-white/60'} ${item.color}`}>
+                  {item.isActionDisabled ? <Lock size={16} /> : <item.icon size={16} strokeWidth={2.5} />}
                 </div>
                 {!item.isActionDisabled && (
                   <div className="p-1.5 rounded-full bg-white/40 border border-white/60 text-slate-400 group-hover:bg-white/80 group-hover:text-purple-600 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]">
-                    <ArrowRight size={14} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
+                    <ArrowRight size={12} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 )}
               </div>
               <div className="text-left w-full mt-2">
-                <h3 className={`font-bold text-[13px] tracking-tight leading-tight transition-colors ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-purple-600'}`}>{item.name}</h3>
-                <p className="text-[10px] font-bold mt-0.5 leading-snug line-clamp-1 text-slate-500">{item.desc}</p>
+                <h3 className={`font-bold text-[12px] tracking-tight leading-tight transition-colors ${item.isActionDisabled ? 'text-slate-500' : 'text-slate-900 group-hover:text-purple-600'}`}>{item.name}</h3>
+                <p className="text-[9px] font-bold mt-0.5 leading-snug line-clamp-1 text-slate-500">{item.desc}</p>
               </div>
             </button>
           ))}
         </div>
 
         <div className="xl:w-1/3 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-white/50">
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
+          <div className={`${theme.glassCard} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
-              <div className="p-3 rounded-2xl bg-white/60 border border-white/80 text-purple-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Laptop size={18} strokeWidth={2.5} /></div>
-              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Assigned</span>
+              <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-purple-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Laptop size={16} strokeWidth={2.5} /></div>
+              <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Assigned</span>
             </div>
             <div>
-              <h2 className="text-3xl font-black leading-none mb-1 text-slate-900">{stats.totalAssets}</h2>
-              <p className="text-[10px] font-bold text-slate-500">Hardware Units</p>
+              <h2 className="text-2xl font-black leading-none mb-1 text-slate-900">{stats.totalAssets}</h2>
+              <p className="text-[9px] font-bold text-slate-500">Hardware Units</p>
             </div>
           </div>
           
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
+          <div className={`${theme.glassCard} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
-              <div className="p-3 rounded-2xl bg-white/60 border border-white/80 text-amber-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><AlertCircle size={18} strokeWidth={2.5} /></div>
-              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Action Req.</span>
+              <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-amber-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><AlertCircle size={16} strokeWidth={2.5} /></div>
+              <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Action Req.</span>
             </div>
             <div>
-              <h2 className="text-3xl font-black text-amber-600 leading-none mb-1">{stats.needsInspection}</h2>
-              <p className="text-[10px] font-bold text-slate-500">Pending Tasks</p>
+              <h2 className="text-2xl font-black text-amber-600 leading-none mb-1">{stats.needsInspection}</h2>
+              <p className="text-[9px] font-bold text-slate-500">Pending Tasks</p>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} min-h-24 p-4 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
+          <div className={`${theme.glassCard} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
-              <div className="p-3 rounded-2xl bg-white/60 border border-white/80 text-orange-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Ticket size={18} strokeWidth={2.5} /></div>
-              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Open Tix</span>
+              <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-orange-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Ticket size={16} strokeWidth={2.5} /></div>
+              <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Open Tix</span>
             </div>
             <div>
-              <h2 className="text-3xl font-black text-orange-600 leading-none mb-1">{stats.openTickets}</h2>
-              <p className="text-[10px] font-bold text-slate-500">Active Tickets</p>
+              <h2 className="text-2xl font-black text-orange-600 leading-none mb-1">{stats.openTickets}</h2>
+              <p className="text-[9px] font-bold text-slate-500">Active Tickets</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 pt-1">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-5 min-h-0 w-full pt-1">
         
-        {/* MY HARDWARE LIST */}
-        <div className="w-full lg:w-2/3 flex flex-col lg:min-h-0">
-          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0`}>
-            <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40">
+        {/* 🌟 MY HARDWARE CAROUSEL LIST */}
+        <div className="w-full lg:w-2/3 flex flex-col min-h-[450px] lg:min-h-0">
+          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col min-h-0`}>
+            
+            <div className="flex items-center justify-between border-b pb-4 mb-5 border-white/40 shrink-0">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-900">
                 <Laptop className="text-purple-500 shrink-0" size={18}/> My Hardware Units
               </div>
-              <span className="text-xs font-bold text-slate-500">{assignedAssets.length} Total</span>
+              
+              <div className="flex items-center gap-3">
+                 {assignedAssets.length > 1 ? (
+                    <span className="bg-white/40 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] flex items-center gap-2">
+                      <span className="text-sm font-black tracking-widest">
+                        <span className="text-orange-500">{activeIndex + 1}</span> 
+                        <span className="text-slate-400 mx-1 text-xs">/</span> 
+                        <span className="text-purple-600">{assignedAssets.length}</span>
+                      </span>
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mt-0.5">DEVICES</span>
+                    </span>
+                 ) : (
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 bg-white/40 px-4 py-2 rounded-xl border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]">
+                      {assignedAssets.length} Assigned
+                    </span>
+                 )}
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+            {/* Carousel Item Container - No internal scroll, flex grows to fit */}
+            <div className="flex-1 relative w-full flex flex-col justify-center min-h-0">
+              
+              {/* Overlay Navigation Buttons */}
+              {assignedAssets.length > 1 && (
+                <>
+                  <div className="absolute inset-y-0 -left-2 sm:-left-4 flex items-center z-20 pointer-events-none">
+                    <button 
+                      onClick={() => setCurrentAssetIndex(prev => (prev > 0 ? prev - 1 : assignedAssets.length - 1))} 
+                      className="pointer-events-auto p-3 sm:p-4 rounded-full bg-white/50 backdrop-blur-2xl border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(255,255,255,1)] hover:bg-white/80 transition-all text-slate-600 hover:text-orange-600 hover:border-orange-300 hover:scale-110 active:scale-95 ml-2"
+                    >
+                      <ChevronLeft size={24} strokeWidth={3} />
+                    </button>
+                  </div>
+                  <div className="absolute inset-y-0 -right-2 sm:-right-4 flex items-center z-20 pointer-events-none">
+                    <button 
+                      onClick={() => setCurrentAssetIndex(prev => (prev < assignedAssets.length - 1 ? prev + 1 : 0))} 
+                      className="pointer-events-auto p-3 sm:p-4 rounded-full bg-white/50 backdrop-blur-2xl border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(255,255,255,1)] hover:bg-white/80 transition-all text-slate-600 hover:text-orange-600 hover:border-orange-300 hover:scale-110 active:scale-95 mr-2"
+                    >
+                      <ChevronRight size={24} strokeWidth={3} />
+                    </button>
+                  </div>
+                </>
+              )}
+
               {assignedAssets.length === 0 ? (
-                <div className="py-10 text-center font-medium text-xs text-slate-500">No active assets linked to your account.</div>
+                <div className="absolute inset-0 flex items-center justify-center font-medium text-xs text-slate-500">No active assets linked to your account.</div>
               ) : (
-                assignedAssets.map(asset => {
-                  const btnState = getAssetAuditState(asset);
+                <AnimatePresence mode="wait">
+                  {visibleAsset && (() => {
+                    const asset = visibleAsset;
+                    const btnState = getAssetAuditState(asset);
+                    return (
+                      <motion.div 
+                        key={asset.id}
+                        initial={{ opacity: 0, scale: 0.98, x: 10 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.98, x: -10 }}
+                        transition={{ duration: 0.25 }}
+                        className={`w-full h-full py-5 sm:py-6 px-12 sm:px-16 lg:px-20 rounded-4xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
+                      >
+                        {/* Top Banner section */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
+                          <h4 className="font-semibold text-base sm:text-lg tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
+                            {asset.name || asset.asset_name || asset.model || 'Generic Device'}
+                          </h4>
+                          <span className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                            asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                            asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                            asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                            asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
+                            asset.isInspectionRejected ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
+                            asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
+                            'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}>
+                            {
+                              asset.isReturnRejected ? 'Return Declined' : 
+                              asset.isReturnPending ? 'Pending Return' : 
+                              asset.isReplaceRejected ? 'Replacement Declined' : 
+                              asset.isReplacePending ? 'Replacement Pending' : 
+                              asset.isInspectionRejected ? 'Re-Inspection Req' : 
+                              asset.isOverdue ? 'Overdue' : 'Assigned & Active'
+                            }
+                          </span>
+                        </div>
 
-                  return (
-                    <div key={asset.id} className={`${theme.glassItem} p-5 sm:p-6 rounded-3xl hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] hover:border-orange-300`}>
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
-                        <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate">
-                          {asset.name || asset.asset_name || asset.model || 'Generic Device'}
-                        </h4>
-                        <span className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                          asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                          asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
-                          asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                          asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
-                          asset.isInspectionRejected ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
-                          asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
-                          'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}>
-                          {
-                            asset.isReturnRejected ? 'Return Declined' : 
-                            asset.isReturnPending ? 'Pending Return' : 
-                            asset.isReplaceRejected ? 'Replacement Declined' : 
-                            asset.isReplacePending ? 'Replacement Pending' : 
-                            asset.isInspectionRejected ? 'Re-Inspection Req' : 
-                            asset.isOverdue ? 'Overdue' : 'Assigned & Active'
-                          }
-                        </span>
-                      </div>
+                        {/* 🌟 INNER GLASS GRID */}
+                        <div className={`flex flex-col gap-4 p-4 sm:p-5 rounded-3xl shrink-0 my-3 ${theme.glassInner}`}>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+                            <div className="min-w-0">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span>
+                              <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">{asset.asset_tag || 'N/A'}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Serial S/N</span>
+                              <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">{asset.serial_number || 'N/A'}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Category</span>
+                              <span className="text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">{asset.category || 'N/A'}</span>
+                            </div>
+                          </div>
 
-                      {/* 🌟 INNER GLASS GRID */}
-                      <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-2xl ${theme.glassInner}`}>
-                        <div className="min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span>
-                          <span className="font-mono text-xs font-medium text-slate-800 truncate block">{asset.asset_tag || 'N/A'}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Category</span>
-                          <span className="text-xs font-medium text-slate-800 truncate block">{asset.category || 'N/A'}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Updated</span>
-                          <span className="text-xs font-medium text-slate-800 block">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-IN') : 'N/A'}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Next Due</span>
-                          <span className={`text-xs font-medium block ${asset.isOverdue ? 'text-rose-600 animate-pulse' : 'text-slate-800'}`}>{asset.nextDue ? asset.nextDue.toLocaleDateString('en-IN') : 'N/A'}</span>
-                        </div>
-                      </div>
-                      
-                      { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
-                        <div className="p-4 mt-4 rounded-2xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-xs font-medium flex gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)]">
-                          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                          <div>
-                            <span className="block text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
-                            {extractAdminReason(asset.live_admin_remarks, asset.notes)}
+                          <div className="w-full border-t border-slate-300/30 dark:border-white/10 my-0.5"></div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-5">
+                            <div className="min-w-0">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-2 text-slate-500">Status (Inspection)</span>
+                              <div className="flex items-center">
+                                <button 
+                                  onClick={() => setViewInspectionAsset(asset)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shadow-sm transition-transform hover:scale-105 cursor-pointer ${getInspectionStatusColor(asset.live_inspection_status)}`}
+                                >
+                                  {asset.live_inspection_status || 'Approved'}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Updated</span>
+                              <span className="text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">
+                                {asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-GB') : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Next Due</span>
+                              <span className={`text-xs sm:text-sm font-bold wrap-break-word block ${asset.isOverdue ? 'text-rose-600 animate-pulse' : 'text-slate-900'}`}>
+                                {asset.nextDue ? asset.nextDue.toLocaleDateString('en-GB') : 'N/A'}
+                              </span>
+                            </div>
+                            {/* HANDOVER AGREEMENT ROW */}
+                            <div className="min-w-0 flex flex-col justify-start">
+                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-2 text-slate-500">Handover</span>
+                              <button 
+                                onClick={() => asset.status === 'Pending Handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit ${asset.status === 'Pending Handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
+                              >
+                                <FileSignature size={14} />
+                                {asset.status === 'Pending Handover' ? 'Pending' : 'Signed'}
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      )}
-
-                      <div className="flex flex-wrap items-center justify-end gap-3 pt-5 mt-4 border-t border-white/40">
-                        {asset.isReturnPending ? (
-                          <button disabled className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${theme.glassButton} opacity-60 cursor-not-allowed`}>
-                            Waiting on Admin
-                          </button>
-                        ) : asset.isReturnRejected ? (
-                          <button 
-                            onClick={async () => { 
-                              await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
-                              loadRealDatabase(false);
-                              setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
-                            }} 
-                            className="px-5 py-2.5 rounded-2xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:shadow-[0_0_20px_rgba(244,63,94,0.4)]"
-                          >
-                            Return (Retry)
-                          </button>
-                        ) : (
-                          <button 
-                            disabled={asset.isReplacePending || asset.isReplaceRejected}
-                            onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
-                            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                              (asset.isReplacePending || asset.isReplaceRejected)
-                                ? 'bg-white/30 border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
-                                : 'bg-orange-50 border border-orange-200 text-orange-600 hover:bg-orange-100/80 hover:border-orange-300 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
-                            }`}
-                          >
-                            Return
-                          </button>
-                        )}
                         
-                        {asset.isReplacePending ? (
-                          <button disabled className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${theme.glassButton} opacity-60 cursor-not-allowed`}>
-                            Waiting on Admin
-                          </button>
-                        ) : asset.isReplaceRejected ? (
-                          <button 
-                            onClick={async () => {
-                              await supabase.from('assets').update({ status: 'Assigned', admin_remarks: null }).eq('id', asset.id);
-                              loadRealDatabase(false);
-                              setReplaceAssetId(asset.id); 
-                              setShowReplaceModal(true); 
-                            }} 
-                            className="px-5 py-2.5 rounded-2xl border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 cursor-pointer transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]"
-                          >
-                            Replace (Retry)
-                          </button>
-                        ) : (
-                          <button 
-                            disabled={asset.isReturnPending || asset.isReturnRejected}
-                            onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
-                            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                              (asset.isReturnPending || asset.isReturnRejected)
-                                ? 'bg-white/30 border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
-                                : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100/80 hover:border-purple-300 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
-                            }`}
-                          >
-                            Replace
-                          </button>
+                        {/* Admin Action Notice */}
+                        { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
+                          <div className="p-3 sm:p-4 mt-2 mb-3 rounded-2xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-xs font-medium flex gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0">
+                            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                            <div>
+                              <span className="block text-[9px] sm:text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
+                              {extractAdminReason(asset.live_admin_remarks, asset.notes)}
+                            </div>
+                          </div>
                         )}
 
-                        <button 
-                          disabled={btnState.disabled}
-                          onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                          className={`px-6 py-2.5 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.4)] ${btnState.classes}`}
-                        >
-                          {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={15} />}
-                          {btnState.disabled && btnState.text.includes('Opens') && <Lock size={15} />}
-                          <span>{btnState.text}</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                        {/* Action Bar Distributed Bottom */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 pt-4 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
+                          
+                          {/* LEFT: RETURN */}
+                          <div className="w-full sm:flex-1 flex justify-start">
+                            {asset.isReturnPending ? (
+                              <button disabled className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
+                                Waiting on Admin
+                              </button>
+                            ) : asset.isReturnRejected ? (
+                              <button 
+                                onClick={async () => { 
+                                  await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
+                                  loadRealDatabase(false);
+                                  setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
+                                }} 
+                                className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
+                              >
+                                Return (Retry)
+                              </button>
+                            ) : (
+                              <button 
+                                disabled={asset.isReplacePending || asset.isReplaceRejected}
+                                onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
+                                className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                                  (asset.isReplacePending || asset.isReplaceRejected)
+                                    ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
+                                    : 'bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
+                                }`}
+                              >
+                                Return
+                              </button>
+                            )}
+                          </div>
+                          
+                          {/* CENTER: REPLACE */}
+                          <div className="w-full sm:flex-1 flex justify-center">
+                            {asset.isReplacePending ? (
+                              <button disabled className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
+                                Waiting on Admin
+                              </button>
+                            ) : asset.isReplaceRejected ? (
+                              <button 
+                                onClick={async () => {
+                                  await supabase.from('assets').update({ status: 'Assigned', admin_remarks: null }).eq('id', asset.id);
+                                  loadRealDatabase(false);
+                                  setReplaceAssetId(asset.id); 
+                                  setShowReplaceModal(true); 
+                                }} 
+                                className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
+                              >
+                                Replace (Retry)
+                              </button>
+                            ) : (
+                              <button 
+                                disabled={asset.isReturnPending || asset.isReturnRejected}
+                                onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
+                                className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                                  (asset.isReturnPending || asset.isReturnRejected)
+                                    ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
+                                    : 'bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
+                                }`}
+                              >
+                                Replace
+                              </button>
+                            )}
+                          </div>
+
+                          {/* RIGHT: AUDIT / OPENS */}
+                          <div className="w-full sm:flex-1 flex justify-end">
+                            <button 
+                              disabled={btnState.disabled}
+                              onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
+                              className={`px-5 sm:px-6 py-2 sm:py-2.5 font-bold text-[11px] sm:text-xs rounded-2xl transition-all flex flex-col items-center justify-center shadow-sm ${
+                                btnState.disabled && !btnState.text.includes('Opens') 
+                                ? 'bg-emerald-50/80 backdrop-blur-xl text-emerald-600 border border-emerald-200 cursor-not-allowed'
+                                : btnState.disabled && btnState.text.includes('Opens')
+                                ? 'bg-white/40 backdrop-blur-xl text-slate-500 border border-white/60 cursor-not-allowed'
+                                : 'bg-linear-to-r from-orange-500 to-orange-600 text-white cursor-pointer border border-orange-400 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5 sm:gap-2 leading-tight text-center">
+                                {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} className="shrink-0" />}
+                                {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} className="shrink-0" />}
+                                <span>
+                                  {btnState.text.includes('Opens') ? (
+                                    <>
+                                      <span className="block text-[9px] sm:text-[10px] font-bold">Opens</span>
+                                      <span className="block text-[11px] sm:text-xs">{btnState.text.replace('Opens\n', '').replace('Opens ', '')}</span>
+                                    </>
+                                  ) : (
+                                    btnState.text
+                                  )}
+                                </span>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                      </motion.div>
+                    );
+                  })()}
+                </AnimatePresence>
               )}
             </div>
+
           </div>
         </div>
 
         {/* MY TICKETS */}
-        <div className="w-full lg:w-1/3 flex flex-col lg:min-h-0 pb-4 lg:pb-0">
-          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col lg:min-h-0 group/panel`}>
-            <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40 group-hover/panel:border-purple-300 transition-colors duration-500">
+        <div className="w-full xl:w-1/3 flex flex-col min-h-[400px] lg:min-h-0 pb-4 lg:pb-0">
+          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col min-h-0 group/panel`}>
+            <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40 group-hover/panel:border-purple-300 transition-colors duration-500 shrink-0">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-purple-500 shrink-0" size={18}/> My Tickets</div>
               <span className="text-xs font-bold text-slate-500">{myTickets.length} Raised</span>
             </div>
             
             <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
               {myTickets.length === 0 ? (
-                <div className="py-10 text-center font-medium text-xs text-slate-500">No service requests submitted yet.</div>
+                <div className="py-20 text-center font-medium text-sm text-slate-500">No service requests submitted yet.</div>
               ) : (
                 myTickets.map(tix => {
                   const isResolved = ['resolved', 'closed'].includes((tix.status || '').toLowerCase());
                   return (
-                    <div key={tix.id} className={`p-5 rounded-3xl transition-all duration-300 space-y-4 ${theme.glassItem} hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(168,85,247,0.2)] hover:border-purple-300`}>
+                    <div key={tix.id} className={`p-5 rounded-3xl transition-all duration-300 space-y-3 ${theme.glassItem} hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(168,85,247,0.2)] hover:border-purple-300`}>
                       <div className="flex items-start justify-between gap-3">
-                        <span className="font-semibold text-sm leading-snug wrap-break-word text-slate-800">{tix.title || tix.subject}</span>
+                        <span className="font-bold text-[13px] leading-snug wrap-break-word text-slate-800">{tix.title || tix.subject}</span>
                         <span className={`px-3 py-1 rounded-xl text-[9px] font-bold tracking-widest uppercase border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)] ${getStatusBadge(tix.status)}`}>{tix.status || 'Open'}</span>
                       </div>
                       
                       <p className="text-xs font-medium line-clamp-3 wrap-break-word text-slate-600">{tix.description || tix.note}</p>
 
                       {(tix.admin_remarks || tix.admin_notes || tix.resolution_notes) && (
-                        <div className="p-4 rounded-2xl border border-purple-500/10 bg-purple-500/5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]">
-                          <strong className="block mb-1.5 text-[10px] uppercase tracking-widest font-bold text-purple-600">Admin Response:</strong>
-                          <span className="font-medium text-slate-700 text-xs wrap-break-word">{tix.admin_remarks || tix.admin_notes || tix.resolution_notes}</span>
+                        <div className="p-3.5 rounded-2xl border border-purple-500/10 bg-purple-500/5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]">
+                          <strong className="block mb-1.5 text-[9px] uppercase tracking-widest font-bold text-purple-600">Admin Response:</strong>
+                          <span className="font-semibold text-slate-700 text-xs wrap-break-word">{tix.admin_remarks || tix.admin_notes || tix.resolution_notes}</span>
                         </div>
                       )}
 
@@ -828,7 +987,7 @@ export default function StaffDashboardPage() {
                                 <Clock size={12}/> Resolved in: {formatDuration(tix.created_at, tix.updated_at)}
                               </div>
                           )}
-                          <div className="flex items-center gap-1 mt-1">
+                          <div className="flex items-center gap-1.5 mt-1">
                             <span className="text-[9px] font-bold uppercase tracking-widest mr-2 text-slate-500">Rate Support:</span>
                             {[1, 2, 3, 4, 5].map(star => (
                               <button
@@ -844,9 +1003,9 @@ export default function StaffDashboardPage() {
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest pt-4 font-bold border-t border-white/40 text-slate-500">
+                      <div className="flex items-center justify-between text-[9px] uppercase tracking-widest pt-4 mt-2 font-bold border-t border-white/40 text-slate-500">
                         <span className="wrap-break-word">Category: <strong className="text-slate-800">{tix.category || 'General'}</strong></span>
-                        <span className="shrink-0">{tix.created_at ? new Date(tix.created_at).toLocaleDateString() : 'Just now'}</span>
+                        <span className="shrink-0">{tix.created_at ? new Date(tix.created_at).toLocaleDateString('en-GB') : 'Just now'}</span>
                       </div>
                     </div>
                   );
@@ -855,7 +1014,87 @@ export default function StaffDashboardPage() {
             </div>
           </div>
         </div>
+
       </div>
+
+      {/* 🌟 VIEW INSPECTION DETAILS MODAL */}
+      <AnimatePresence>
+        {viewInspectionAsset && (() => {
+          const asset = viewInspectionAsset;
+          let photosArray: string[] = [];
+          try {
+            if (Array.isArray(asset.latest_photos)) photosArray = asset.latest_photos;
+            else if (typeof asset.latest_photos === 'string' && asset.latest_photos.startsWith('[')) {
+              const parsed = JSON.parse(asset.latest_photos);
+              if (Array.isArray(parsed)) photosArray = parsed;
+            } else if (asset.latest_photos && typeof asset.latest_photos === 'object') {
+              photosArray = Object.values(asset.latest_photos);
+            }
+          } catch(e){}
+
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/40">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                animate={{ scale: 1, opacity: 1, y: 0 }} 
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className={`w-full max-w-3xl shadow-2xl overflow-hidden font-sans flex flex-col relative transition-all duration-300 rounded-4xl bg-[#e9e9ec] border border-white max-h-[85vh]`}
+              >
+                <div className="p-5 sm:p-6 flex justify-between items-center shrink-0 border-b border-slate-200/60 bg-white/40">
+                   <div className="flex items-center gap-3.5">
+                     <div className={`w-12 h-12 rounded-3xl flex items-center justify-center shadow-sm bg-white border border-slate-200 ${getInspectionStatusColor(asset.live_inspection_status).split(' ')[2]}`}>
+                        <ClipboardCheck size={20} strokeWidth={2.5} />
+                     </div>
+                     <div>
+                       <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                         Inspection Details
+                       </h3>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                         {asset.name || asset.asset_tag}
+                       </p>
+                     </div>
+                   </div>
+                   <button onClick={() => setViewInspectionAsset(null)} className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
+                </div>
+
+                <div className="p-5 sm:p-6 overflow-y-auto flex-1 flex flex-col gap-5 custom-scrollbar bg-white/20">
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 sm:p-5 rounded-3xl bg-white shadow-sm border border-slate-100">
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Status</span><span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm ${getInspectionStatusColor(asset.live_inspection_status)}`}>{asset.live_inspection_status || 'Approved'}</span></div>
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Date</span><span className="font-bold text-slate-900 text-xs sm:text-sm">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-GB') : 'N/A'}</span></div>
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Category</span><span className="font-bold text-slate-900 text-xs sm:text-sm wrap-break-word block">{asset.category}</span></div>
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span><span className="font-mono font-bold text-purple-600 text-xs sm:text-sm">{asset.asset_tag}</span></div>
+                   </div>
+
+                   {asset.latest_notes && (
+                     <div className="space-y-2 bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-100">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Custodian Notes</h4>
+                       <p className="text-xs sm:text-sm font-semibold text-slate-700 whitespace-pre-wrap leading-relaxed">{asset.latest_notes}</p>
+                     </div>
+                   )}
+
+                   {asset.live_admin_remarks && (
+                     <div className="space-y-2 bg-rose-50/80 p-4 sm:p-5 rounded-3xl shadow-sm border border-rose-100">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-1.5">Admin Remarks</h4>
+                       <p className="text-xs sm:text-sm font-semibold text-rose-700 whitespace-pre-wrap leading-relaxed">{asset.live_admin_remarks}</p>
+                     </div>
+                   )}
+
+                   {photosArray.length > 0 && (
+                     <div className="space-y-3 bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-100">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Uploaded Evidence</h4>
+                       <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-2">
+                         {photosArray.map((url, i) => (
+                           <img key={`insp-photo-${i}`} src={url} alt="Evidence" className="h-28 w-28 sm:h-36 sm:w-36 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0 hover:scale-105 transition-transform" />
+                         ))}
+                       </div>
+                     </div>
+                   )}
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
 
       <AnimatePresence>
         {modal.isOpen && (
@@ -874,7 +1113,7 @@ export default function StaffDashboardPage() {
       {/* 🌟 NEW REPLACEMENT MODAL */}
       <AnimatePresence>
         {showReplaceModal && activeAsset && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 20 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
@@ -882,34 +1121,34 @@ export default function StaffDashboardPage() {
               className="bg-[#e9e9ec] rounded-4xl w-full max-w-105 shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300"
             >
               
-              <div className="p-6 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+              <div className="p-5 sm:p-6 flex justify-between items-center shrink-0 bg-white/40 border-b border-white/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200">
                     <RefreshCcw className="text-purple-600" size={20} />
                   </div>
                   <div>
-                    <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                    <h3 className="text-[15px] sm:text-[16px] font-black text-slate-900 uppercase tracking-wider leading-tight">
                       Asset Replace Request
                     </h3>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
                       Initiate Hardware Swap
                     </p>
                   </div>
                 </div>
-                <button onClick={resetReplaceModal} className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
+                <button onClick={resetReplaceModal} className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
               </div>
 
               {!qrUrl ? (
-                <div className="px-6 pb-6 space-y-5">
+                <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5">
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">Select Assigned Asset</label>
-                    <div className="w-full px-4 py-3.5 bg-white rounded-2xl text-sm font-semibold text-slate-800 shadow-sm opacity-90 cursor-not-allowed flex justify-between items-center">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">Select Assigned Asset</label>
+                    <div className="w-full px-4 py-3 bg-white rounded-2xl text-[13px] font-bold text-slate-800 shadow-sm opacity-90 cursor-not-allowed flex justify-between items-center border border-slate-100">
                       <span className="truncate">{activeAsset.name || activeAsset.category} ({activeAsset.asset_tag})</span>
                       <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 bg-white rounded-2xl p-4 shadow-sm gap-4">
+                  <div className="grid grid-cols-2 bg-white rounded-2xl p-4 shadow-sm gap-4 border border-slate-100">
                     <div>
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tag ID</p>
                       <p className="text-sm font-black text-slate-900">{activeAsset.asset_tag}</p>
@@ -921,26 +1160,26 @@ export default function StaffDashboardPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">Current Asset Condition</label>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">Current Asset Condition</label>
                     <div className="relative">
                       <select 
                         value={replaceCondition} 
                         onChange={(e) => setReplaceCondition(e.target.value)} 
-                        className="w-full px-4 py-3.5 bg-white rounded-2xl text-sm font-semibold text-slate-800 shadow-sm outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-[#ff7300]/20"
+                        className="w-full px-4 py-3 bg-white rounded-2xl text-[13px] font-bold text-slate-800 shadow-sm outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-[#ff7300]/20 border border-slate-100"
                       >
                         <option value="Minor Wear">Minor Hardware Issue</option>
                         <option value="Minor Wear">Minor Wear (Scratches/Dents)</option>
                         <option value="Damaged">Damaged / Broken Part</option>
                         <option value="Not Working">Not Working / Won't Power On</option>
                       </select>
-                      <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                         <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 pl-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">
                       Replace Reason & Notes
                     </label>
                     <textarea 
@@ -948,46 +1187,46 @@ export default function StaffDashboardPage() {
                       value={replaceReason} 
                       onChange={(e) => setReplaceReason(e.target.value)} 
                       placeholder={`Provide reason for this request...`}
-                      className="w-full px-5 py-4 bg-white/70 rounded-2xl text-sm font-semibold text-slate-700 outline-none resize-none h-24 shadow-inner placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-purple-500/20 border border-transparent" 
+                      className="w-full px-4 py-3.5 bg-white/70 rounded-2xl text-[13px] font-bold text-slate-700 outline-none resize-none h-24 shadow-inner placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-purple-500/20 border border-transparent" 
                     />
                   </div>
 
-                  <div className="flex gap-4 pt-2">
-                    <button type="button" onClick={resetReplaceModal} className="flex-1 py-4 bg-white rounded-full text-[11px] font-black text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors cursor-pointer">
+                  <div className="flex gap-3 pt-3">
+                    <button type="button" onClick={resetReplaceModal} className="flex-1 py-3 bg-white rounded-xl text-[10px] font-black text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors cursor-pointer border border-slate-200">
                       Cancel
                     </button>
-                    <button type="button" onClick={() => handleGenerateQR(activeAsset)} className={`flex-1 py-4 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md transition-all cursor-pointer bg-purple-600 hover:bg-purple-700`}>
+                    <button type="button" onClick={() => handleGenerateQR(activeAsset)} className={`flex-1 py-3 rounded-xl text-[10px] font-black text-white uppercase tracking-widest shadow-md transition-all cursor-pointer bg-purple-600 hover:bg-purple-700 border border-purple-500`}>
                       Generate QR
                     </button>
                   </div>
                 </div>
               ) : (
                 
-                <form onSubmit={handleReplaceSubmit} className="px-6 pb-6 space-y-6 flex flex-col animate-in slide-in-from-right-4">
+                <form onSubmit={handleReplaceSubmit} className="px-5 py-5 sm:px-6 sm:py-6 space-y-5 flex flex-col animate-in slide-in-from-right-4">
                   
                   <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
                     <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">
                       {isLaptopObj ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
                     </p>
                     
-                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-4">
-                      <img src={qrUrl} alt="Upload QR Code" className="w-40 h-40 object-contain" />
+                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-5">
+                      <img src={qrUrl} alt="Upload QR Code" className="w-40 h-40 sm:w-48 sm:h-48 object-contain" />
                     </div>
                     
-                    <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                    <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden border border-slate-200">
                       <div 
                         className={`h-full transition-all duration-500 bg-purple-500`} 
                         style={{ width: `${Math.min((currentPhotoCount / REQUIRED_PHOTOS) * 100, 100)}%` }} 
                       />
                     </div>
                     
-                    <p className={`text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
+                    <p className={`text-[11px] sm:text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
                       {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${REQUIRED_PHOTOS - currentPhotoCount} more photo(s)...`}
                     </p>
 
-                    <div className="mt-4 pt-4 border-t border-slate-100 w-full">
-                      <label className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer uppercase tracking-widest transition-colors">
+                    <div className="mt-5 pt-5 border-t border-slate-100 w-full">
+                      <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer uppercase tracking-widest transition-colors">
                         Or upload directly from computer
                         <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
                           if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
@@ -996,11 +1235,11 @@ export default function StaffDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-4">
-                    <button type="button" onClick={() => setQrUrl(null)} className="w-14 h-13 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setQrUrl(null)} className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
                       <ChevronLeft size={20} strokeWidth={2.5} />
                     </button>
-                    <button type="submit" disabled={!hasEnoughPhotos || isSubmittingReplace} className={`flex-1 h-13 rounded-full text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer bg-purple-600 hover:bg-purple-700`}>
+                    <button type="submit" disabled={!hasEnoughPhotos || isSubmittingReplace} className={`flex-1 h-12 rounded-xl text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer bg-purple-600 hover:bg-purple-700 border border-purple-500`}>
                       {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
                     </button>
                   </div>
@@ -1011,134 +1250,158 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* 🌟 HANDOVER AGREEMENT MODAL */}
+      {/* 🌟 HANDOVER AGREEMENT MODAL (READ OR SIGN) */}
       <AnimatePresence>
-        {handoverAsset && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
-              animate={{ scale: 1, opacity: 1, y: 0 }} 
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className={`w-full max-w-2xl shadow-2xl overflow-hidden font-sans flex flex-col relative transition-all duration-300 rounded-4xl bg-[#e9e9ec] border border-white`}
-            >
-               <div className="p-6 flex justify-between items-center shrink-0">
-                 <div className="flex items-center gap-4">
-                   <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
-                      <FileSignature className="text-orange-500" size={20} strokeWidth={2.5} />
+        {(handoverAsset || viewAgreementAsset) && (() => {
+          const activeItem = handoverAsset || viewAgreementAsset;
+          const isViewMode = !!viewAgreementAsset;
+          const targetDateStr = isViewMode ? (activeItem.live_inspection_date || activeItem.created_at) : new Date().toISOString();
+          const printDate = new Date(targetDateStr).toLocaleString('en-IN', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', 
+            hour: '2-digit', minute: '2-digit', hour12: true 
+          }).replace(/,/g, '');
+
+          return (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                animate={{ scale: 1, opacity: 1, y: 0 }} 
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className={`w-full max-w-2xl shadow-2xl overflow-hidden font-sans flex flex-col relative transition-all duration-300 rounded-4xl bg-[#e9e9ec] border border-white max-h-[90vh]`}
+              >
+                 <div className="p-5 sm:p-6 flex justify-between items-center shrink-0 bg-white/40 border-b border-white/60">
+                   <div className="flex items-center gap-3">
+                     <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200">
+                        <FileSignature className={isViewMode ? "text-emerald-500" : "text-orange-500"} size={20} strokeWidth={2.5} />
+                     </div>
+                     <div>
+                       <h3 className="text-[14px] sm:text-[16px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                         Handover Agreement
+                       </h3>
+                       <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                         {isViewMode ? 'Official Signed Document' : 'Review & Digitally Sign'}
+                       </p>
+                     </div>
                    </div>
-                   <div>
-                     <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
-                       Handover Agreement
-                     </h3>
-                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                       Review & Digitally Sign
-                     </p>
-                   </div>
+                   <button onClick={() => { if(!isSigning) { setHandoverAsset(null); setViewAgreementAsset(null); } }} className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
                  </div>
-                 <button onClick={() => !isSigning && setHandoverAsset(null)} className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
-               </div>
 
-               <div className="px-6 pb-6 overflow-y-auto flex-1 flex flex-col gap-5 custom-scrollbar">
-                  <div className="bg-orange-50/50 border border-orange-100 p-4 rounded-2xl">
-                     <p className="text-xs font-semibold text-slate-700">
-                       You are acknowledging receipt of the following IT asset in good working condition.
-                     </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 p-4 rounded-3xl bg-white shadow-sm border border-slate-100">
-                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Asset Name</span><span className="font-bold text-slate-900 text-sm">{handoverAsset.name || handoverAsset.asset_name}</span></div>
-                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Category</span><span className="font-bold text-slate-900 text-sm">{handoverAsset.category}</span></div>
-                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span><span className="font-mono font-bold text-purple-600 text-sm">{handoverAsset.asset_tag}</span></div>
-                     <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Serial S/N</span><span className="font-mono font-bold text-slate-900 text-sm truncate block">{handoverAsset.serial_number || 'N/A'}</span></div>
-                  </div>
-
-                  <div className="space-y-3 bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Terms & Conditions</h4>
-                    <ul className="text-xs font-medium text-slate-600 space-y-2 list-disc pl-4">
-                      <li><strong className="text-slate-900">Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
-                      <li><strong className="text-slate-900">Acceptable Use:</strong> The asset is strictly for official business. Unauthorized software or tampering is prohibited.</li>
-                      <li><strong className="text-slate-900">Return Policy:</strong> I agree to return the equipment in its original condition upon termination or request.</li>
-                      <li><strong className="text-slate-900">Damage/Loss:</strong> I will immediately report damage/loss and may be held financially liable for negligence.</li>
-                    </ul>
-                  </div>
-
-                  {/* 🌟 ULTRA-PREMIUM SCALLOPED SILVER METALLIC HOLOGRAM (STAFF SIGNATURE) */}
-                  <div className="flex flex-col items-center mt-6">
-                    <div className="relative w-32.5 h-32.5 mb-4">
-                      <svg viewBox="0 0 1000 1000" width="130" height="130" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                          <radialGradient id="g1-staff-sign" cx="50%" cy="50%" r="70%">
-                            <stop offset="0%" stopColor="#ffffff"/>
-                            <stop offset="35%" stopColor="#e8f5ff"/>
-                            <stop offset="65%" stopColor="#f8e6f6"/>
-                            <stop offset="100%" stopColor="#e6e6e6"/>
-                          </radialGradient>
-                          <linearGradient id="glassTopStaffSign" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9"/>
-                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0"/>
-                          </linearGradient>
-                          <linearGradient id="glassBotStaffSign" x1="0%" y1="100%" x2="0%" y2="0%">
-                            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9"/>
-                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0"/>
-                          </linearGradient>
-                          <path id="topArcStaffSign" d="M 100 500 A 400 400 0 1 1 900 500"/>
-                          <path id="botArcStaffSign" d="M 900 500 A 400 400 0 1 1 100 500"/>
-                        </defs>
-                        <g>
-                          <circle cx="500" cy="500" r="450" fill="none" stroke="#d7dbe0" strokeWidth="60" strokeDasharray="0 50" strokeLinecap="round"/>
-                          <circle cx="500" cy="500" r="450" fill="url(#g1-staff-sign)"/>
-                          
-                          <g stroke="#ffffff" strokeWidth="4" opacity="0.8" fill="none">
-                            <circle cx="500" cy="500" r="320" />
-                            <circle cx="500" cy="500" r="180" />
-                            <path d="M 180,500 L 820,500 M 500,180 L 500,820 M 273,273 L 727,727 M 273,727 L 727,273" />
-                          </g>
-
-                          <circle cx="500" cy="500" r="350" fill="none" stroke="#d7dbe0" strokeWidth="40" opacity="0.5"/>
-
-                          <text fontFamily="Arial, Helvetica, sans-serif" fontSize="48" fontWeight="900" fill="#334155" letterSpacing="8">
-                            <textPath href="#topArcStaffSign" startOffset="50%" textAnchor="middle">DIGITALLY SIGNED</textPath>
-                          </text>
-                          <text fontFamily="Arial, Helvetica, sans-serif" fontSize="48" fontWeight="900" fill="#334155" letterSpacing="8">
-                            <textPath href="#botArcStaffSign" startOffset="50%" textAnchor="middle">VERIFIED AUTHENTIC</textPath>
-                          </text>
-
-                          <path d="M 220,320 Q 500,120 780,320 Q 500,220 220,320 Z" fill="url(#glassTopStaffSign)"/>
-                          <path d="M 220,680 Q 500,880 780,680 Q 500,780 220,680 Z" fill="url(#glassBotStaffSign)"/>
-
-                          <text x="500" y="440" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontSize="120" fontWeight="900" fill="#1e293b">DIGITAL</text>
-                          <text x="500" y="510" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontSize="60" fontWeight="900" fill="#1e293b" letterSpacing="4">AUTHENTICITY</text>
-                          
-                          <line x1="220" y1="540" x2="780" y2="540" stroke="#1e293b" strokeWidth="12"/>
-
-                          <text x="500" y="610" textAnchor="middle" fontFamily="Courier New, monospace" fontSize="42" fontWeight="900" fill="#334155">EMP: {currentUser.emp_id}</text>
-                          <text x="500" y="670" textAnchor="middle" fontFamily="Courier New, monospace" fontSize="38" fontWeight="900" fill="#64748b">ID: AUTH-{handoverAsset.id.slice(0,8).toUpperCase()}</text>
-                        </g>
-                      </svg>
+                 <div className="px-5 py-5 sm:px-6 sm:py-6 overflow-y-auto flex-1 flex flex-col gap-4 custom-scrollbar bg-white/20">
+                    <div className={`${isViewMode ? 'bg-emerald-50/80 border-emerald-200' : 'bg-orange-50/80 border-orange-200'} border p-4 sm:p-5 rounded-2xl flex items-start gap-3 shadow-sm`}>
+                       {isViewMode ? <CheckCircle2 size={18} className="text-emerald-500 shrink-0 mt-0.5"/> : <AlertCircle size={18} className="text-orange-500 shrink-0 mt-0.5"/>}
+                       <p className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">
+                         {isViewMode ? "This asset was officially verified and handed over. You are bound by the terms below." : "You are acknowledging receipt of the following IT asset in good working condition."}
+                       </p>
                     </div>
-                    <div className="w-48 border-b-2 border-slate-300"></div>
-                    <p className="mt-2 text-base font-black text-slate-900">{formatDisplayName(currentUser.name)}</p>
-                    <p className="text-[11px] font-bold text-purple-600 uppercase tracking-widest">Authorized Custodian</p>
-                  </div>
 
-               </div>
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-white shadow-sm border border-slate-100">
+                       <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Asset Name</span><span className="font-bold text-slate-900 text-xs sm:text-sm wrap-break-word block">{activeItem.name || activeItem.asset_name}</span></div>
+                       <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Category</span><span className="font-bold text-slate-900 text-xs sm:text-sm wrap-break-word block">{activeItem.category}</span></div>
+                       <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span><span className="font-mono font-bold text-purple-600 text-xs sm:text-sm wrap-break-word block">{activeItem.asset_tag}</span></div>
+                       <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Serial S/N</span><span className="font-mono font-bold text-slate-900 text-xs sm:text-sm wrap-break-word block">{activeItem.serial_number || 'N/A'}</span></div>
+                    </div>
 
-               <div className="px-6 py-4 sm:px-6 sm:py-5 flex gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60 bg-white/50">
-                  <button onClick={() => !isSigning && setHandoverAsset(null)} className="flex-1 py-3.5 rounded-full text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 bg-white border border-slate-200 text-slate-700 shadow-sm">
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handleDigitalSign}
-                    disabled={isSigning} 
-                    className="flex-2 py-3.5 text-white rounded-full text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]"
-                  >
-                    {isSigning ? <Loader2 size={16} className="animate-spin" /> : <FileSignature size={16} />}
-                    {isSigning ? 'Signing...' : 'Agree & Digitally Sign'}
-                  </button>
-               </div>
-            </motion.div>
-          </div>
-        )}
+                    <div className="space-y-3 bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Terms & Conditions</h4>
+                      <ul className="text-[11px] sm:text-xs font-semibold text-slate-600 space-y-2 list-disc pl-4">
+                        <li><strong className="text-slate-900">Custody & Care:</strong> I am solely responsible for the safety, security, and proper care of the equipment assigned to me.</li>
+                        <li><strong className="text-slate-900">Acceptable Use:</strong> The asset is strictly for official business. Unauthorized software or tampering is prohibited.</li>
+                        <li><strong className="text-slate-900">Return Policy:</strong> I agree to return the equipment in its original condition upon termination or request.</li>
+                        <li><strong className="text-slate-900">Damage/Loss:</strong> I will immediately report damage/loss and may be held financially liable for negligence.</li>
+                      </ul>
+                    </div>
+
+                    {/* 🌟 ULTRA-PREMIUM SCALLOPED SILVER METALLIC HOLOGRAM (STAFF SIGNATURE) */}
+                    <div className="flex flex-col items-center mt-6 relative">
+                      {isViewMode && (
+                         <div className="absolute top-0 right-2 px-3 py-1 bg-emerald-100/80 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
+                           Document Locked
+                         </div>
+                      )}
+                      <div className={`relative w-32 h-32 sm:w-40 sm:h-40 mb-4 ${isViewMode ? 'opacity-100' : 'opacity-80'}`}>
+                        <svg viewBox="0 0 1000 1000" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                            <radialGradient id="g1-staff-sign" cx="50%" cy="50%" r="70%">
+                              <stop offset="0%" stopColor="#ffffff"/>
+                              <stop offset="35%" stopColor="#e8f5ff"/>
+                              <stop offset="65%" stopColor="#f8e6f6"/>
+                              <stop offset="100%" stopColor="#e6e6e6"/>
+                            </radialGradient>
+                            <linearGradient id="glassTopStaffSign" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9"/>
+                              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0"/>
+                            </linearGradient>
+                            <linearGradient id="glassBotStaffSign" x1="0%" y1="100%" x2="0%" y2="0%">
+                              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9"/>
+                              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0"/>
+                            </linearGradient>
+                            <path id="topArcStaffSign" d="M 100 500 A 400 400 0 1 1 900 500"/>
+                            <path id="botArcStaffSign" d="M 900 500 A 400 400 0 1 1 100 500"/>
+                          </defs>
+                          <g>
+                            <circle cx="500" cy="500" r="450" fill="none" stroke="#d7dbe0" strokeWidth="60" strokeDasharray="0 50" strokeLinecap="round"/>
+                            <circle cx="500" cy="500" r="450" fill="url(#g1-staff-sign)"/>
+                            
+                            <g stroke="#ffffff" strokeWidth="4" opacity="0.8" fill="none">
+                              <circle cx="500" cy="500" r="320" />
+                              <circle cx="500" cy="500" r="180" />
+                              <path d="M 180,500 L 820,500 M 500,180 L 500,820 M 273,273 L 727,727 M 273,727 L 727,273" />
+                            </g>
+
+                            <circle cx="500" cy="500" r="350" fill="none" stroke="#d7dbe0" strokeWidth="40" opacity="0.5"/>
+
+                            <text fontFamily="Arial, Helvetica, sans-serif" fontSize="48" fontWeight="900" fill="#334155" letterSpacing="8">
+                              <textPath href="#topArcStaffSign" startOffset="50%" textAnchor="middle">DIGITALLY SIGNED</textPath>
+                            </text>
+                            <text fontFamily="Arial, Helvetica, sans-serif" fontSize="48" fontWeight="900" fill="#334155" letterSpacing="8">
+                              <textPath href="#botArcStaffSign" startOffset="50%" textAnchor="middle">VERIFIED AUTHENTIC</textPath>
+                            </text>
+
+                            <path d="M 220,320 Q 500,120 780,320 Q 500,220 220,320 Z" fill="url(#glassTopStaffSign)"/>
+                            <path d="M 220,680 Q 500,880 780,680 Q 500,780 220,680 Z" fill="url(#glassBotStaffSign)"/>
+
+                            <text x="500" y="440" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontSize="120" fontWeight="900" fill="#1e293b">DIGITAL</text>
+                            <text x="500" y="510" textAnchor="middle" fontFamily="Arial Black, Arial, sans-serif" fontSize="60" fontWeight="900" fill="#1e293b" letterSpacing="4">AUTHENTICITY</text>
+                            
+                            <line x1="220" y1="540" x2="780" y2="540" stroke="#1e293b" strokeWidth="12"/>
+
+                            <text x="500" y="610" textAnchor="middle" fontFamily="Courier New, monospace" fontSize="42" fontWeight="900" fill="#334155">EMP: {currentUser.emp_id}</text>
+                            <text x="500" y="670" textAnchor="middle" fontFamily="Courier New, monospace" fontSize="38" fontWeight="900" fill="#64748b">ID: AUTH-{activeItem.id.slice(0,8).toUpperCase()}</text>
+                          </g>
+                        </svg>
+                      </div>
+                      <div className="w-56 border-b-2 border-slate-300"></div>
+                      <p className="mt-2 text-base sm:text-lg font-black text-slate-900">{formatDisplayName(currentUser.name)}</p>
+                      <p className="text-[10px] sm:text-[11px] font-bold text-purple-600 uppercase tracking-widest mt-1">{isViewMode ? `Signed on ${printDate}` : 'Authorized Custodian'}</p>
+                    </div>
+
+                 </div>
+
+                 <div className="px-5 py-4 sm:px-6 sm:py-5 flex gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60 bg-white/60 backdrop-blur-xl">
+                    {isViewMode ? (
+                      <button onClick={() => setViewAgreementAsset(null)} className="w-full py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 bg-slate-800 text-white shadow-xl hover:shadow-[0_8px_30px_rgba(15,23,42,0.3)]">
+                        Close Document
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => !isSigning && setHandoverAsset(null)} className="flex-1 py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 bg-white border border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50">
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={handleDigitalSign}
+                          disabled={isSigning} 
+                          className="flex-2 py-3.5 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 bg-orange-500 shadow-[0_4px_20px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]"
+                        >
+                          {isSigning ? <Loader2 size={16} className="animate-spin" /> : <FileSignature size={16} strokeWidth={2.5} />}
+                          {isSigning ? 'Signing...' : 'Agree & Sign'}
+                        </button>
+                      </>
+                    )}
+                 </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
     </div>
@@ -1287,8 +1550,8 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
         className="relative w-full max-w-2xl max-h-[80vh] sm:max-h-[85vh] rounded-4xl flex flex-col overflow-hidden bg-white/80 backdrop-blur-3xl border border-white shadow-[0_32px_80px_rgba(0,0,0,0.15)]"
       >
-        <div className="px-6 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5 flex justify-between items-center shrink-0 border-b border-slate-200/60">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-4 flex justify-between items-center shrink-0 border-b border-slate-200/60">
+          <div className="flex items-center gap-3">
             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-3xl flex items-center justify-center ${getHeaderColors()}`}>
                {getHeaderIcon()}
             </div>
@@ -1303,7 +1566,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
           </button>
         </div>
 
-        <div className="px-6 py-4 sm:px-8 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-3 sm:gap-4 custom-scrollbar">
+        <div className="px-5 py-4 sm:px-6 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-4 custom-scrollbar">
           {successDone ? (
             <div className="py-10 text-center space-y-4">
               <CheckCircle2 size={72} className="text-emerald-500 mx-auto animate-bounce"/>
@@ -1330,13 +1593,13 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
               </div>
             </div>
           ) : (
-            <form id="genericModalForm" onSubmit={handleLivePostgresSubmit} className="space-y-3 sm:space-y-4">
+            <form id="genericModalForm" onSubmit={handleLivePostgresSubmit} className="space-y-4">
               
               {needsLock && (
                 <div className="p-4 sm:p-5 rounded-3xl space-y-3 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)]">
                   <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-rose-600">🔒 Security Verification Required</p>
                   <div className="flex gap-2 sm:gap-3">
-                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className="flex-1 px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[13px] font-semibold outline-none transition-all bg-white/60 border border-slate-200 text-[#0f172a] placeholder-[#818b9c] focus:ring-2 focus:ring-orange-500/20"/>
+                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className="flex-1 px-4 py-3 rounded-2xl text-[12px] sm:text-[13px] font-semibold outline-none transition-all bg-white/60 border border-slate-200 text-[#0f172a] placeholder-[#818b9c] focus:ring-2 focus:ring-orange-500/20"/>
                     {!isUnlocked && <button type="button" onClick={handleAttemptUnlock} className="px-5 sm:px-6 bg-rose-500 hover:bg-rose-600 text-white font-bold uppercase tracking-widest text-[10px] sm:text-[11px] rounded-2xl cursor-pointer transition-all shadow-[0_4px_15px_rgba(244,63,94,0.4)] border border-rose-400">Verify</button>}
                   </div>
                   {lockError && <p className="text-[10px] sm:text-[11px] text-rose-500 font-bold px-1">Incorrect device code.</p>}
@@ -1354,7 +1617,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                         value={selectedReturnId}
                         onChange={(e) => setSelectedReturnId(e.target.value)}
                         required
-                        className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"
+                        className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"
                       >
                         <option value="" disabled>Choose Hardware...</option>
                         {assignedAssets?.map((a: any) => (
@@ -1375,16 +1638,16 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                         exit={{ opacity: 0, height: 0, marginTop: -5 }}
                         className="overflow-hidden"
                       >
-                        <div className="px-4 sm:px-5 py-3 sm:py-4 rounded-2xl flex gap-4 bg-white/40 backdrop-blur-xl border border-white/60 shadow-sm">
+                        <div className="px-4 py-3 rounded-2xl flex gap-4 bg-white/40 backdrop-blur-xl border border-white/60 shadow-sm">
                           <div className="flex-1 space-y-1">
                             <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Tag ID</span>
-                            <span className="text-[11px] sm:text-[13px] font-semibold wrap-break-word text-slate-900">
+                            <span className="text-[11px] sm:text-[12px] font-semibold wrap-break-word text-slate-900">
                               {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.asset_tag}
                             </span>
                           </div>
                           <div className="flex-1 space-y-1">
                             <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Serial Number</span>
-                            <span className="text-[11px] sm:text-[13px] font-semibold wrap-break-word text-slate-900">
+                            <span className="text-[11px] sm:text-[12px] font-semibold wrap-break-word text-slate-900">
                               {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.serial_number || 'N/A'}
                             </span>
                           </div>
@@ -1399,13 +1662,13 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 <>
                   <div className="flex flex-col gap-1.5 sm:gap-2">
                     <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Issue Subject</label>
-                    <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className="w-full px-4 sm:px-5 py-3.5 rounded-2xl outline-none text-[12px] sm:text-[14px] font-semibold transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"/>
+                    <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className="w-full px-4 py-3 rounded-2xl outline-none text-[12px] sm:text-[13px] font-semibold transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"/>
                   </div>
                   
                   <div className="flex flex-col gap-1.5 sm:gap-2">
                     <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Category</label>
                     <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
                         <option>Hardware</option>
                         <option>Software</option>
                         <option>Network</option>
@@ -1418,7 +1681,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                     <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Attach Screenshot (Optional)</label>
                     <label className="w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer bg-white/40 backdrop-blur-xl border-white/80 hover:border-purple-400 hover:bg-white/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]">
                        <input type="file" className="hidden" accept="image/*" onChange={(e) => setScreenshot(e.target.files?.[0] || null)} />
-                       <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white shadow-sm border border-slate-100">
+                       <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm border border-slate-100">
                          {screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className="text-slate-400" />}
                        </div>
                        <span className={`text-[11px] sm:text-[12px] font-semibold text-center ${screenshot ? 'text-purple-600' : 'text-slate-900'}`}>
@@ -1433,7 +1696,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 <div className="flex flex-col gap-1.5 sm:gap-2">
                   <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Equipment Category</label>
                   <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-emerald-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
                       <option>Laptop / PC</option>
                       <option>Monitor</option>
                       <option>Keyboard / Mouse</option>
@@ -1449,7 +1712,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300">
                   <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Current Asset Condition</label>
                   <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] ${type === 'RETURN' ? 'hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]' : 'hover:border-amber-300 hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]'}`}>
-                    <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full pl-4 sm:pl-5 pr-10 py-3.5 text-[12px] sm:text-[14px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                    <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
                       <option>Pristine / Flawless</option>
                       <option>Good / Minor Scratches</option>
                       <option>Poor / Damaged (Requires Fix)</option>
@@ -1464,28 +1727,28 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">
                   {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : type === 'REQUEST' ? 'Business Justification' : 'Detailed Explanation'}
                 </label>
-                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 sm:px-5 py-3.5 rounded-2xl text-[12px] sm:text-[14px] font-semibold transition-all outline-none resize-none min-h-20 bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 ${type === 'RETURN' ? 'focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300' : type === 'REQUEST' ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300' : 'focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300'}`}/>
+                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 py-3 rounded-2xl text-[12px] sm:text-[13px] font-semibold transition-all outline-none resize-none min-h-20 bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 ${type === 'RETURN' ? 'focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300' : type === 'REQUEST' ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300' : 'focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300'}`}/>
               </div>
             </form>
           )}
         </div>
 
         {!successDone && (
-          <div className="px-6 py-4 sm:px-8 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60">
+          <div className="px-5 py-4 sm:px-6 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60">
             {showQR ? (
-              <button onClick={onClose} className={`w-full py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+              <button onClick={onClose} className={`w-full py-3 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
                 Close Portal
               </button>
             ) : (
               <>
-                <button onClick={onClose} className={`flex-1 py-3.5 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+                <button onClick={onClose} className={`flex-1 py-3 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
                   Cancel
                 </button>
                 <button 
                   type="submit"
                   form="genericModalForm"
                   disabled={isTransmitting || (needsLock && !isUnlocked)} 
-                  className={`flex-1 py-3.5 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
+                  className={`flex-1 py-3 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
                     type === 'RETURN' 
                       ? 'bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]' 
                       : type === 'REQUEST'
