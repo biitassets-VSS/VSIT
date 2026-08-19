@@ -15,7 +15,6 @@ function MobileVerifyContent() {
   const [isLocked, setIsLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [uploadedCount, setUploadedCount] = useState(0);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,9 +85,9 @@ function MobileVerifyContent() {
         ctx.shadowBlur = 4;
         
         ctx.fillText(`👤 STAFF: ${staffName} (${empCode})`, textX, textY);
-        ctx.fillText(`📅 DATE: ${new Date().toLocaleString('en-IN')}`, textX, textY + fontSize * 1.5);
+        ctx.fillText(`📅 DATE/TIME: ${new Date().toLocaleString('en-IN')}`, textX, textY + fontSize * 1.5);
         ctx.fillText(`📱 DEVICE: ${getDeviceName()}`, textX, textY + fontSize * 3);
-        ctx.fillText(`🔒 SECURE RETURN VERIFICATION`, textX, textY + fontSize * 4.5);
+        ctx.fillText(`🔒 SECURE LIVE CAPTURE`, textX, textY + fontSize * 4.5);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -103,48 +102,42 @@ function MobileVerifyContent() {
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
-    const files = Array.from(e.target.files);
+    // Process only the single captured photo
+    const file = e.target.files[0];
     setUploading(true);
-    setProgress(0);
-
-    let currentUploads = uploadedCount;
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        // 1. Process Watermark (Fast Optimized)
-        const watermarkedBlob = await processWatermark(files[i]);
-        
-        // 2. Prepare for Upload
-        const fileExt = 'jpg';
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        // 3. Upload to Supabase 'attachments' bucket
-        const { error } = await supabase.storage
-          .from('attachments')
-          .upload(`asset-attachments/${fileName}`, watermarkedBlob, { contentType: 'image/jpeg' });
-        
-        if (error) throw error;
-        
-        // 4. Get Public URL
-        const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
-        
-        // 5. Broadcast directly back to the Staff Dashboard / Admin Page in Real-time
-        if (sessionId) {
-          await supabase.channel(`qr_session_${sessionId}`).send({
-            type: 'broadcast',
-            event: 'photo_uploaded',
-            payload: { url: data.publicUrl }
-          });
-        }
-        
-        currentUploads++;
-        setProgress(Math.round(((i + 1) / files.length) * 100));
+      // 1. Process Watermark (Fast Optimized)
+      const watermarkedBlob = await processWatermark(file);
+      
+      // 2. Prepare for Upload
+      const fileExt = 'jpg';
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      // 3. Upload to Supabase 'attachments' bucket
+      const { error } = await supabase.storage
+        .from('attachments')
+        .upload(`asset-attachments/${fileName}`, watermarkedBlob, { contentType: 'image/jpeg' });
+      
+      if (error) throw error;
+      
+      // 4. Get Public URL
+      const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
+      
+      // 5. Broadcast directly back to the Staff Dashboard / Admin Page in Real-time
+      if (sessionId) {
+        await supabase.channel(`qr_session_${sessionId}`).send({
+          type: 'broadcast',
+          event: 'photo_uploaded',
+          payload: { url: data.publicUrl }
+        });
       }
       
-      setUploadedCount(currentUploads);
+      const newCount = uploadedCount + 1;
+      setUploadedCount(newCount);
 
-      // 🌟 Check if we have met the required amount natively over multiple shots
-      if (currentUploads >= requiredCount) {
+      // 🌟 Check if we have met the required amount natively over sequential shots
+      if (newCount >= requiredCount) {
         setSuccess(true);
         if (sessionId) {
           localStorage.setItem(`locked_session_${sessionId}`, 'true');
@@ -154,9 +147,10 @@ function MobileVerifyContent() {
 
     } catch (err: any) {
       console.error(err);
-      alert(`Failed to encrypt and upload photos: ${err.message}. Please try again.`);
+      alert(`Failed to encrypt and upload photo: ${err.message}. Please try again.`);
     } finally {
       setUploading(false);
+      // Reset input so the exact same file can trigger onChange again if needed
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -237,7 +231,7 @@ function MobileVerifyContent() {
           <div className="flex flex-col items-center gap-4 py-4 bg-zinc-900/50 rounded-full border border-white/5">
             <Loader2 className="animate-spin text-orange-500 w-8 h-8" />
             <span className="font-black tracking-widest uppercase text-[10px] text-orange-400">
-              Encrypting & Transmitting... {progress}%
+              Encrypting & Transmitting...
             </span>
           </div>
         ) : (
@@ -250,11 +244,11 @@ function MobileVerifyContent() {
         )}
       </div>
 
-      {/* 🌟 NATIVE CAMERA TRIGGER (Allows multiple selection, but works sequentially on iOS) */}
+      {/* 🌟 NATIVE CAMERA TRIGGER - NO "MULTIPLE" ATTRIBUTE, FORCES LIVE CAMERA */}
       <input 
         type="file" 
         accept="image/*" 
-        multiple 
+        capture="environment"
         ref={fileInputRef} 
         className="hidden" 
         onChange={handleCapture} 
