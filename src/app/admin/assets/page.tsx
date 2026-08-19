@@ -326,6 +326,7 @@ function AssetRegistryContent() {
     }
   }, [viewAssetModal, isEditingAsset]);
 
+  // 🌟 ROBUST OMNI-MATCH HISTORY ENGINE (WITH MULTI-PASS INHERITANCE FOR LEGACY & RETURN LOGS)
   const loadAssetHistory = async (assetId: string, assetTag?: string, serialNumber?: string) => {
     setIsLoadingHistory(true);
     try {
@@ -390,6 +391,7 @@ function AssetRegistryContent() {
 
       uniqueLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      // PASS 1: Resolve direct profile matches, DB columns, and regex extractions
       let knownAssetStaffName: string | null = null;
       let knownAssetEmpCode: string | null = null;
 
@@ -452,6 +454,7 @@ function AssetRegistryContent() {
          return { ...log, staff_name: staffName, emp_code: empCode };
       });
 
+      // PASS 2: Inheritance for Return/Replacement/Approval logs that lack explicit user names
       const compiled = pass1.map(log => {
          let staffName = log.staff_name;
          let empCode = log.emp_code;
@@ -814,7 +817,9 @@ function AssetRegistryContent() {
   };
 
   const getAssetViewUrl = (asset: any) => {
-    const baseUrl = 'https://virtual-staffing.vercel.app/public-asset';
+    const currentDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
+    const baseUrl = `${currentDomain}/public-asset`;
+    
     const params = new URLSearchParams();
     params.append('id', asset.clean_tag || asset.id);
     params.append('status', asset.status || 'In Stock');
