@@ -8,7 +8,7 @@ import {
   User, X, Save, RefreshCw, Download, Printer, Edit2, 
   Upload, FileSpreadsheet, Package, Mouse, 
   Headphones, SlidersHorizontal, ChevronDown, ChevronUp, CheckCircle2, 
-  Clock, AlertTriangle, Loader2, CheckSquare, Settings2, Trash2,
+  Clock, AlertTriangle, Loader2, CheckSquare, Trash2,
   Keyboard, RectangleHorizontal, Monitor, Sparkles, History as HistoryIcon,
   Filter, FilterX, ShieldCheck, FileText, Cpu, Zap
 } from 'lucide-react';
@@ -216,14 +216,11 @@ function AssetRegistryContent() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [isPrintConfigModalOpen, setIsPrintConfigModalOpen] = useState(false);
   const [viewAssetModal, setViewAssetModal] = useState<any>(null);
   
   const [assetHistory, setAssetHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showFullHistory, setShowFullHistory] = useState(false);
-
-  const [printConfig, setPrintConfig] = useState({ pageSize: 'A4', columns: 2, rows: 8, labelWidth: 8.88, labelHeight: 3.4, marginTop: 1.25, marginLeft: 1.37, gapX: 0.5, gapY: 0.0, packSmallAssets: true });
 
   const [newAssetCategory, setNewAssetCategory] = useState('Laptop');
   const [newAssetTag, setNewAssetTag] = useState(''); 
@@ -329,11 +326,9 @@ function AssetRegistryContent() {
     }
   }, [viewAssetModal, isEditingAsset]);
 
-  // 🌟 ROBUST OMNI-MATCH HISTORY RESOLUTION ENGINE (WITH AUTO-RECOVERY)
   const loadAssetHistory = async (assetId: string, assetTag?: string, serialNumber?: string) => {
     setIsLoadingHistory(true);
     try {
-      // Parallel fetch across ID, Tag, and Serial Number for BOTH inspections and replacements
       const queries = [ 
         supabase.from('inspections').select('*').eq('asset_id', assetId).order('created_at', { ascending: false }),
         supabase.from('replacements').select('*').eq('old_asset_id', assetId).order('created_at', { ascending: false })
@@ -355,15 +350,16 @@ function AssetRegistryContent() {
       
       results.forEach(res => {
         if (res.status === 'fulfilled' && res.value.data) {
-          // Normalize Replacements format into Inspections format for a unified ledger
           const normalized = res.value.data.map(item => {
             if (item.old_asset_id || item.reason) {
               return {
                 ...item,
-                asset_id: item.old_asset_id,
-                inspected_by: item.user_id,
-                notes: `[REPLACEMENT REQUEST] Reason: ${item.reason} | Condition: ${item.condition}`,
-                status: item.status || 'Replacement Requested',
+                asset_id: item.old_asset_id || item.asset_id,
+                inspected_by: item.user_id || item.staff_id || item.requested_by || item.created_by || item.inspected_by,
+                user_name: item.user_name || item.employee_name || item.full_name || item.staff_name,
+                emp_code: item.emp_code || item.employee_code,
+                notes: item.notes || `[RETURN / REPLACEMENT REQUEST] Reason: ${item.reason || 'N/A'} | Condition: ${item.condition || 'N/A'}`,
+                status: item.status || 'Return Requested',
                 is_replacement: true
               };
             }
@@ -373,7 +369,6 @@ function AssetRegistryContent() {
         }
       });
 
-      // Deduplicate overlapping records based on ID or fallback signature
       const uniqueLogsMap = new Map();
       rawLogs.forEach((item, index) => {
         const key = item.id || `${item.asset_id}-${item.created_at}-${index}`;
@@ -381,57 +376,116 @@ function AssetRegistryContent() {
       });
       let uniqueLogs = Array.from(uniqueLogsMap.values());
       
-      // 🌟 SYNTHETIC FALLBACK: If asset is assigned but DB logs were truly lost/corrupted, auto-generate visual log
       if (uniqueLogs.length === 0 && (viewAssetModal.assigned_to || viewAssetModal.status === 'Assigned' || viewAssetModal.status === 'Pending Handover')) {
           uniqueLogs.push({
               id: 'synthetic-recovery-log',
               status: viewAssetModal.live_inspection_status || 'Approved',
               created_at: viewAssetModal.live_inspection_date || new Date().toISOString(),
-              notes: 'Digitally Signed Handover Agreement (Auto-recovered from assignment state)',
+              notes: `Digitally Signed Handover Agreement by ${viewAssetModal.staff_name} (${viewAssetModal.emp_code}) (Auto-recovered)`,
               inspected_by: viewAssetModal.assigned_to,
               user_name: viewAssetModal.staff_name,
               emp_code: viewAssetModal.emp_code
           });
       }
 
-      // Re-sort by creation date
       uniqueLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      const compiled = uniqueLogs.map(log => {
-         const ib = String(log.inspected_by || '').toLowerCase().trim();
-         const ue = String(log.user_email || '').toLowerCase().trim();
+      let knownAssetStaffName: string | null = null;
+      let knownAssetEmpCode: string | null = null;
+
+      const pass1 = uniqueLogs.map(log => {
+         const ib = String(log.inspected_by || log.user_id || log.staff_id || log.requested_by || log.created_by || '').toLowerCase().trim();
+         const ue = String(log.user_email || log.email || '').toLowerCase().trim();
          const uid = String(log.user_id || '').toLowerCase().trim();
          
          const staff = staffList.find(s => {
              const sId = String(s.id).toLowerCase().trim();
              const sEmail = String(s.email).toLowerCase().trim();
-             return (ib && sId === ib) || (uid && sId === uid) || (ue && sEmail === ue);
+             const sEmpCode = String(s.emp_code || s.emp_id).toLowerCase().trim();
+             return (ib && (sId === ib || sEmpCode === ib)) || (uid && sId === uid) || (ue && sEmail === ue);
          });
          
-         let staffName = log.user_name || log.staff_name || log.full_name || log.employee_name || (staff ? (staff.full_name || staff.name) : null);
-         
-         // Dynamically extract name from signature payload if explicit staff profile isn't matched
-         if (!staffName && log.notes && log.notes.includes('Handover Agreement')) {
-           const match = log.notes.match(/by\s+(.*?)\s+(?:on|at|$)/i);
-           if (match) staffName = match[1].trim();
-         }
-         
-         if (!staffName) {
-           const statusLow = String(log.status || '').toLowerCase();
-           if (statusLow === 'stock intake' || statusLow === 'assigned' || String(log.notes || '').toLowerCase().includes('admin')) {
-               staffName = 'Administrator / System';
-           } else {
-               staffName = 'Unknown Staff';
-           }
+         let staffName = log.user_name || log.staff_name || log.full_name || log.employee_name || log.name;
+         if (staffName && (staffName.includes('Unknown') || staffName === 'null' || staffName.trim() === '')) {
+             staffName = null;
          }
 
-         let empCode = log.emp_code || log.employee_code || (staff ? (staff.emp_code || staff.email) : 'N/A');
+         let empCode = log.emp_code || log.employee_code;
+         if (empCode && (empCode.includes('N/A') || empCode === 'null' || empCode.trim() === '')) {
+             empCode = null;
+         }
 
-         return { 
-           ...log, 
-           staff_name: staffName, 
-           emp_code: empCode 
-         };
+         if (!staffName && staff) {
+             staffName = staff.full_name || staff.name;
+             empCode = empCode || staff.emp_code || staff.email;
+         }
+
+         const notesStr = String(log.notes || '');
+
+         if (!staffName && notesStr) {
+             let m = notesStr.match(/by\s+([A-Za-z\s\.]+?)(?:\s*\(\s*EMP|\s+on\b|\s+at\b|$)/i);
+             if (m && !m[1].toLowerCase().includes('admin') && !m[1].toLowerCase().includes('system')) staffName = m[1].trim();
+
+             if (!staffName) {
+                 m = notesStr.match(/(?:assigned|handed over)\s+to\s+([A-Za-z\s\.]+?)(?:\s*\(\s*EMP|\s+on\b|$)/i);
+                 if (m && !m[1].toLowerCase().includes('admin')) staffName = m[1].trim();
+             }
+
+             if (!staffName) {
+                 m = notesStr.match(/(?:previous holder|holder):?\s+([A-Za-z\s\.]+?)(?:\s*\(\s*EMP|$)/i);
+                 if (m && !m[1].toLowerCase().includes('admin')) staffName = m[1].trim();
+             }
+
+             if (staffName) staffName = staffName.replace(/\s+(upon|processed|awaiting|signed).*$/i, '').trim();
+         }
+
+         if (!empCode && notesStr) {
+             const empMatch = notesStr.match(/(EMP-\d+)/i);
+             if (empMatch) empCode = empMatch[1].toUpperCase();
+         }
+
+         if (staffName && !staffName.includes('Administrator') && !staffName.includes('Unknown')) {
+             knownAssetStaffName = staffName;
+             if (empCode && empCode !== 'N/A') knownAssetEmpCode = empCode;
+         }
+
+         return { ...log, staff_name: staffName, emp_code: empCode };
+      });
+
+      const compiled = pass1.map(log => {
+         let staffName = log.staff_name;
+         let empCode = log.emp_code;
+
+         if (!staffName || staffName.includes('Unknown') || staffName.trim() === '') {
+             const statusLow = String(log.status || '').toLowerCase();
+             const notesLow = String(log.notes || '').toLowerCase();
+
+             const isReturnOrExchange = statusLow.includes('return') || statusLow.includes('replace') || notesLow.includes('return') || notesLow.includes('replace') || log.is_replacement;
+
+             if (isReturnOrExchange && knownAssetStaffName) {
+                 staffName = knownAssetStaffName;
+                 empCode = empCode || knownAssetEmpCode || 'N/A';
+             } else if (statusLow === 'stock intake' || statusLow === 'in stock' || notesLow.includes('by admin') || notesLow.includes('returned to inventory')) {
+                 staffName = 'Administrator / System';
+                 empCode = 'SYS-ADMIN';
+             } else if (knownAssetStaffName) {
+                 staffName = knownAssetStaffName;
+                 empCode = empCode || knownAssetEmpCode || 'N/A';
+             } else if (viewAssetModal.staff_name && !viewAssetModal.staff_name.includes('Unknown') && viewAssetModal.staff_name !== 'Unassigned') {
+                 staffName = viewAssetModal.staff_name;
+                 empCode = empCode || viewAssetModal.emp_code;
+             } else {
+                 staffName = 'Unknown Staff';
+                 empCode = 'N/A';
+             }
+         }
+
+         if (!empCode || empCode.trim() === '' || empCode === 'null') {
+             if (staffName === 'Administrator / System') empCode = 'SYS-ADMIN';
+             else empCode = 'N/A';
+         }
+
+         return { ...log, staff_name: staffName, emp_code: empCode };
       });
 
       setAssetHistory(compiled);
@@ -456,7 +510,6 @@ function AssetRegistryContent() {
       setStaffList(staffData);
       
       const compiledAssets = assetData.map(asset => {
-        // Safe check for unassigned state
         const assignedToStr = String(asset.assigned_to || '').trim();
         const isActuallyUnassigned = !assignedToStr || assignedToStr.toLowerCase() === 'unassigned' || assignedToStr.toLowerCase() === 'null';
 
@@ -468,10 +521,8 @@ function AssetRegistryContent() {
         ) || {});
         
         const latestInspection = inspectionData.find(i => String(i.asset_id) === String(asset.id));
-        
         let displayStatus = asset.status || 'In Stock (Unassigned)';
         
-        // Correct false "Pending Handover" badging if there is no valid assigned user
         if (isActuallyUnassigned && displayStatus.toLowerCase().includes('pending handover')) {
             displayStatus = 'In Stock (Unassigned)';
         }
@@ -487,6 +538,7 @@ function AssetRegistryContent() {
           staff_name: sName,
           emp_code: assignee.emp_code || assignee.emp_id || 'N/A',
           staff_email: assignee.email || 'N/A',
+          department: assignee.department || assignee.designation || 'N/A', 
           clean_tag: (asset.asset_tag && String(asset.asset_tag).length < 20) ? asset.asset_tag : generateCategoryPrefix(asset.category, asset.id),
           live_inspection_status: latestInspection?.status || asset.inspection_status || 'Approved',
           live_inspection_date: latestInspection?.created_at || asset.last_inspection_date || null,
@@ -510,12 +562,12 @@ function AssetRegistryContent() {
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved') || s.includes('pass')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
-    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
-    if (s.includes('replace')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
-    if (s.includes('rejected') || s.includes('fail')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
-    if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
-    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
+    if (s.includes('approved') || s.includes('pass')) return 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30';
+    if (s.includes('return')) return 'text-purple-600 bg-purple-500/10 border-purple-500/30';
+    if (s.includes('replace')) return 'text-indigo-600 bg-indigo-500/10 border-indigo-500/30';
+    if (s.includes('rejected') || s.includes('fail')) return 'text-rose-600 bg-rose-500/10 border-rose-500/30';
+    if (s.includes('pending handover')) return 'text-amber-600 bg-amber-500/10 border-amber-500/30';
+    return 'text-blue-600 bg-blue-500/10 border-blue-500/30';
   };
 
   const openAssetViewModal = (asset: any) => {
@@ -571,11 +623,17 @@ function AssetRegistryContent() {
       }
       if (error) throw error;
       
+      const assigneeObj = staffList.find(s => s.id === newAssetAssignee);
+      const aName = assigneeObj ? (assigneeObj.full_name || assigneeObj.name) : '';
+      const aCode = assigneeObj ? (assigneeObj.emp_code || assigneeObj.email) : '';
+
       await supabase.from('inspections').insert({ 
         asset_id: newAssetId, 
         inspected_by: newAssetAssignee || null, 
+        user_name: aName || 'Administrator',
+        emp_code: aCode || 'SYS',
         status: newAssetAssignee ? 'Pending Handover' : 'Stock Intake', 
-        notes: `Asset initially registered and verified.` 
+        notes: newAssetAssignee ? `Asset assigned to ${aName} (${aCode}) upon registration.` : `Asset initially registered and verified into stock.` 
       });
 
       if (newAssetAssignee) {
@@ -634,11 +692,17 @@ function AssetRegistryContent() {
       }
 
       if (isNewAssignee) {
+        const assignedStaff = staffList.find(s => s.id === editForm.assignee);
+        const staffName = assignedStaff ? (assignedStaff.full_name || assignedStaff.name) : 'Unknown Staff';
+        const empCode = assignedStaff ? (assignedStaff.emp_code || assignedStaff.email) : 'N/A';
+
         await supabase.from('inspections').insert({
           asset_id: viewAssetModal.id,
           inspected_by: editForm.assignee,
+          user_name: staffName,
+          emp_code: empCode,
           status: 'Pending Handover',
-          notes: 'Asset assigned to a new staff holder by Admin. Awaiting custodian verification and sign-off.'
+          notes: `Asset assigned to new holder: ${staffName} (${empCode}). Awaiting custodian verification and sign-off.`
         });
 
         try {
@@ -652,10 +716,23 @@ function AssetRegistryContent() {
         } catch (e) { console.error('Notification failed:', e); }
 
       } else if (!editForm.assignee && viewAssetModal.assigned_to) {
+        const prevStaffName = viewAssetModal.staff_name.includes('Unknown') ? 'Previous Staff' : viewAssetModal.staff_name;
+        const prevEmpCode = viewAssetModal.emp_code.includes('N/A') ? 'UNKNOWN' : viewAssetModal.emp_code;
+
         await supabase.from('inspections').insert({
             asset_id: viewAssetModal.id,
             status: 'Stock Intake',
-            notes: 'Asset forcefully unassigned and returned to inventory by Admin.'
+            user_name: 'Administrator',
+            emp_code: 'SYS-ADMIN',
+            notes: `Asset returned to inventory and unassigned. Previous Holder: ${prevStaffName} (${prevEmpCode}). Processed by Admin.`
+        });
+      } else if (viewAssetModal.status !== resolvedStatus || viewAssetModal.asset_condition !== editForm.condition || viewAssetModal.live_inspection_status !== resolvedInspectionStatus) {
+        await supabase.from('inspections').insert({
+            asset_id: viewAssetModal.id,
+            status: resolvedInspectionStatus,
+            user_name: adminName,
+            emp_code: 'SYS-ADMIN',
+            notes: `Asset metadata updated by Admin. Status: ${resolvedStatus} | Condition: ${editForm.condition}`
         });
       }
 
@@ -704,12 +781,19 @@ function AssetRegistryContent() {
 
     let matchesStatus = true;
     if (statusFilter !== 'All') {
-      if (statusFilter === 'In Stock') matchesStatus = status.includes('stock') || status.includes('unassigned');
-      else if (statusFilter === 'Assigned') matchesStatus = status === 'assigned' || status.includes('assigned');
-      else if (statusFilter === 'Pending Handover') matchesStatus = status.includes('pending');
-      else if (statusFilter === 'In Repair') matchesStatus = status.includes('repair');
-      else if (statusFilter === 'Demo Use') matchesStatus = status.includes('demo');
-      else matchesStatus = status === statusFilter.toLowerCase();
+      if (statusFilter === 'In Stock') {
+        matchesStatus = status.includes('stock') || status.includes('unassigned');
+      } else if (statusFilter === 'Assigned') {
+        matchesStatus = (status.includes('assigned') && !status.includes('unassigned')) || status === 'assigned';
+      } else if (statusFilter === 'Pending Handover') {
+        matchesStatus = status.includes('pending');
+      } else if (statusFilter === 'In Repair') {
+        matchesStatus = status.includes('repair');
+      } else if (statusFilter === 'Demo Use') {
+        matchesStatus = status.includes('demo');
+      } else {
+        matchesStatus = status === statusFilter.toLowerCase();
+      }
     }
 
     let matchesCond = true;
@@ -729,10 +813,181 @@ function AssetRegistryContent() {
     else setSelectedAssetIds(new Set(filteredAssets.map(a => a.id))); 
   };
 
-  const executeGridBulkPrint = () => {
-    alert('Bulk print triggered for ' + selectedAssetIds.size + ' assets.');
-    setIsPrintConfigModalOpen(false);
-  }
+  const getAssetViewUrl = (asset: any) => {
+    const baseUrl = 'https://virtual-staffing.vercel.app/public-asset';
+    const params = new URLSearchParams();
+    params.append('id', asset.clean_tag || asset.id);
+    params.append('status', asset.status || 'In Stock');
+    params.append('staff', asset.staff_name || 'Unassigned');
+    params.append('emp', asset.emp_code || 'N/A');
+    params.append('dept', asset.department || 'N/A');
+    params.append('date', asset.live_inspection_date ? safeDate(asset.live_inspection_date) : 'N/A');
+    return `${baseUrl}?${params.toString()}`;
+  };
+
+  const executeGridBulkPrint = (assetsToPrint: any[]) => {
+    if (!assetsToPrint || assetsToPrint.length === 0) return;
+
+    const chunkArray = (arr: any[], size: number) => Array.from({ length: Math.ceil(arr.length / size) }, (v, i) => arr.slice(i * size, i * size + size));
+    const pages = chunkArray(assetsToPrint, 24);
+
+    const pagesHtml = pages.map(pageAssets => {
+      const stickersHtml = pageAssets.map(asset => {
+        const cleanTag = asset.clean_tag || generateCategoryPrefix(asset.category, asset.id);
+        const urlToEncode = getAssetViewUrl(asset);
+        const catLow = String(asset.category || '').toLowerCase();
+        
+        const isSmallItem = catLow.includes('mouse') || catLow.includes('headphone');
+
+        if (isSmallItem) {
+          const smallQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(urlToEncode)}`;
+          return `
+            <div class="sticker">
+              <div class="sub-sticker">
+                <img src="${smallQrUrl}" class="qr-code-micro" />
+                <span class="tag-id-micro">${cleanTag}</span>
+              </div>
+              <div class="sub-sticker border-left">
+                <img src="${smallQrUrl}" class="qr-code-micro" />
+                <span class="tag-id-micro">${cleanTag}</span>
+              </div>
+            </div>
+          `;
+        } else {
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(urlToEncode)}`;
+          return `
+            <div class="sticker">
+              <img src="${qrUrl}" class="qr-code" />
+              <div class="tag-info">
+                <span class="tag-label">ASSET TAG ID</span>
+                <span class="tag-id">${cleanTag}</span>
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+      return `<div class="page">${stickersHtml}</div>`;
+    }).join('');
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Asset_QR_Labels</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+            
+            @page { size: A4; margin: 0; }
+            
+            body { 
+              margin: 0; 
+              padding: 0; 
+              font-family: 'Inter', sans-serif; 
+              background: white; 
+              -webkit-print-color-adjust: exact; 
+              color: #000;
+            }
+            
+            .page {
+              width: 210mm;
+              height: 297mm;
+              padding-top: 12.5mm;
+              padding-left: 4.5mm; 
+              box-sizing: border-box;
+              display: grid;
+              grid-template-columns: repeat(3, 6.7cm);
+              grid-template-rows: repeat(8, 3.4cm);
+              align-content: start;
+              justify-content: start;
+              page-break-after: always;
+            }
+            
+            .sticker {
+              width: 6.7cm;
+              height: 3.4cm;
+              display: flex;
+              align-items: center;
+              justify-content: flex-start;
+              padding: 3mm; 
+              box-sizing: border-box;
+              border: 1px dashed #cbd5e1; 
+              overflow: hidden;
+            }
+            
+            .qr-code { 
+              height: 100%; 
+              aspect-ratio: 1/1; 
+              object-fit: contain; 
+              margin-right: 12px;
+            }
+            .tag-info { 
+              display: flex; 
+              flex-direction: column; 
+              justify-content: center; 
+            }
+            .tag-label { 
+              font-size: 8px; 
+              color: #64748b; 
+              font-weight: 700; 
+              text-transform: uppercase; 
+              margin-bottom: 2px; 
+            }
+            .tag-id { 
+              font-size: 11px; 
+              font-weight: 700; 
+              color: #0f172a; 
+              word-break: break-all;
+            }
+
+            .sub-sticker {
+              flex: 1;
+              height: 100%;
+              display: flex;
+              flex-direction: column; 
+              align-items: center;
+              justify-content: center;
+              gap: 3px;
+              box-sizing: border-box;
+              padding: 1mm;
+            }
+            .border-left {
+              border-left: 1px dashed #94a3b8; 
+            }
+            .qr-code-micro {
+              height: 1.4cm; 
+              width: 1.4cm;
+              object-fit: contain;
+            }
+            .tag-id-micro {
+              font-size: 6px; 
+              font-weight: 800;
+              color: #000;
+              text-align: center;
+              word-break: break-all;
+              line-height: 1.1;
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+          <script>
+            window.onload = () => { setTimeout(() => { window.print(); }, 800); };
+          </script>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    } else {
+      alert("Pop-up blocked. Please allow pop-ups to generate the print layout.");
+    }
+  };
+
+  const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
+    executeGridBulkPrint([asset]);
+  };
 
   // 🌟 BRANDED HTML/CSS PDF GENERATOR WITH ULTRA-PREMIUM KEBAB-CASE SVG STAMPS
   const handleGenerateHandoverPDF = (asset: any) => {
@@ -912,15 +1167,6 @@ function AssetRegistryContent() {
 
             .signatures { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 20px; }
             .sig-block { width: 45%; position: relative; }
-            
-            .hologram-stamp-svg { 
-              position: absolute;
-              top: -105px;
-              right: 15px;
-              transform: rotate(-5deg);
-              opacity: 0.95;
-              z-index: 10;
-            }
 
             .sig-line { border-bottom: 1px solid #cbd5e1; height: 20px; margin-top: 15px; margin-bottom: 8px; }
             .sig-name { font-weight: 900; font-size: 16px; color: #0f172a; margin-top: 10px; position:relative; z-index:20; }
@@ -1184,7 +1430,7 @@ function AssetRegistryContent() {
                     </g>
                   </svg>
                 </div>
-
+                
                 <div style="height: 10px;"></div>
                 <div class="sig-line"></div>
                 <div class="sig-name">${staffName}</div>
@@ -1195,7 +1441,6 @@ function AssetRegistryContent() {
           </div>
           
           <script>
-            // Allow time for images/watermarks to load before triggering print
             window.onload = function() {
               setTimeout(function() {
                 window.print();
@@ -1214,14 +1459,6 @@ function AssetRegistryContent() {
       alert("Pop-up blocked. Please allow pop-ups for this site to generate the Handover Agreement PDF.");
     }
   }
-
-  const handlePrintPhysicalSticker = (asset: any, cleanTag: string) => {
-    alert('Print single sticker triggered for ' + cleanTag);
-  }
-
-  const getAssetViewUrl = (asset: any) => {
-    return `https://virtual-staffing.vercel.app/public-asset?id=${asset.clean_tag || asset.id}`;
-  };
 
   // 🌟 TRUE GLASSMORPHISM THEME (PREMIUM 2026 - V4 CANONICAL)
   const theme = {
@@ -1249,15 +1486,15 @@ function AssetRegistryContent() {
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden font-sans antialiased pb-12 transition-colors duration-1000`}>
+    <div className={`w-full min-h-screen flex flex-col relative transition-colors duration-1000 ${theme.bg}`}>
       {/* 🌟 GLOBAL BACKGROUND ORBS */}
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-12 mx-auto space-y-6 pt-6 relative z-10">
+      <div className="w-full flex-1 flex flex-col p-4 sm:p-6 lg:p-8 2xl:px-12 mx-auto gap-4 sm:gap-6 relative z-10">
         
-        {/* BRAND HEADER */}
-        <div className={`${theme.glassCard} rounded-4xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5`}>
+        {/* BRAND HEADER (Shrinks to fit) */}
+        <div className={`shrink-0 ${theme.glassCard} rounded-4xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5`}>
           <div className="flex items-center gap-4">
             <button onClick={() => router.push('/admin')} className={`p-3 ${theme.glassItem} rounded-2xl ${theme.textSub} hover:scale-105 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 transition-all cursor-pointer`}>
               <ArrowLeft size={20} />
@@ -1276,7 +1513,7 @@ function AssetRegistryContent() {
 
           <div className="flex flex-wrap items-center gap-3">
             {selectedAssetIds.size > 0 && (
-              <button onClick={() => setIsPrintConfigModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer border border-purple-500">
+              <button onClick={() => executeGridBulkPrint(assets.filter(a => selectedAssetIds.has(a.id)))} className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer border border-purple-500">
                 <Printer size={14} /> <span>Print {selectedAssetIds.size} QRs</span>
               </button>
             )}
@@ -1289,8 +1526,8 @@ function AssetRegistryContent() {
           </div>
         </div>
 
-        {/* TABS & SEARCH */}
-        <div className="space-y-4">
+        {/* TABS & SEARCH (Shrinks to fit) */}
+        <div className="shrink-0 space-y-4">
           <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
             {[
               { name: 'All', icon: <Package size={14}/> }, 
@@ -1326,7 +1563,7 @@ function AssetRegistryContent() {
               <span>{selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}</span>
             </button>
 
-            {/* 🌟 SEARCH BAR */}
+            {/* SEARCH BAR */}
             <div className={`flex-1 p-1 ${theme.inputBg} rounded-xl transition-all border flex items-center`}>
               <div className="relative w-full">
                 <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
@@ -1341,7 +1578,7 @@ function AssetRegistryContent() {
             </div>
           </div>
 
-          {/* 🌟 FIXED CONTRAST FILTER TABS USING CUSTOM GLASS DROPDOWNS */}
+          {/* FILTER TABS */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
               <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${theme.textMain}`}>
@@ -1391,159 +1628,106 @@ function AssetRegistryContent() {
           </div>
         </div>
 
-        {/* 🌟 ASSET GRID - COMPACT & CLEAN */}
-        {loading ? (
-          <div className={`${theme.glassCard} rounded-3xl w-full py-24 flex flex-col items-center justify-center gap-3`}>
-            <Loader2 size={32} className="animate-spin text-orange-500" />
-            <span className={`text-[11px] font-bold tracking-widest uppercase ${theme.textMain}`}>Loading Asset Records...</span>
-          </div>
-        ) : filteredAssets.length === 0 ? (
-          <div className={`${theme.glassCard} rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-3`}>
-            <Package size={48} className="text-orange-500 opacity-80" />
-            <h3 className={`text-lg font-bold ${theme.textMain}`}>No Hardware Found</h3>
-            <p className={`text-[11px] font-medium max-w-sm ${theme.textSub}`}>No assets match your selected filter combination.</p>
-            <button onClick={() => { setStatusFilter('All'); setConditionFilter('All'); setSearchQuery(''); setSelectedCategory('All'); }} className="mt-3 px-6 py-2.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border border-orange-400">
-              Reset All Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-            {filteredAssets.map(asset => {
-              const isSelected = selectedAssetIds.has(asset.id);
+        {/* 🌟 ASSET GRID - MAXIMUM PAGE SCROLL */}
+        <div className="w-full mt-2 pb-20">
+          {loading ? (
+            <div className={`w-full py-32 ${theme.glassCard} rounded-3xl flex flex-col items-center justify-center gap-3`}>
+              <Loader2 size={32} className="animate-spin text-orange-500" />
+              <span className={`text-[11px] font-bold tracking-widest uppercase ${theme.textMain}`}>Loading Asset Records...</span>
+            </div>
+          ) : filteredAssets.length === 0 ? (
+            <div className={`w-full py-32 ${theme.glassCard} rounded-3xl text-center flex flex-col items-center justify-center space-y-3`}>
+              <Package size={48} className="text-orange-500 opacity-80" />
+              <h3 className={`text-lg font-bold ${theme.textMain}`}>No Hardware Found</h3>
+              <p className={`text-[11px] font-medium max-w-sm ${theme.textSub}`}>No assets match your selected filter combination.</p>
+              <button onClick={() => { setStatusFilter('All'); setConditionFilter('All'); setSearchQuery(''); setSelectedCategory('All'); }} className="mt-3 px-6 py-2.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border border-orange-400">
+                Reset All Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5">
+              {filteredAssets.map(asset => {
+                const isSelected = selectedAssetIds.has(asset.id);
 
-              return (
-                <div key={asset.id} onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('button') || target.closest('input')) return;
-                  toggleSelectAsset(asset.id);
-                }} className={`${theme.glassItem} rounded-3xl flex flex-col justify-between group cursor-pointer ${isSelected ? 'border-orange-500/80 ring-2 ring-orange-500/50 bg-orange-500/5' : 'hover:-translate-y-1 hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)]'} overflow-hidden`}>
-                  
-                  <div className={`p-4 border-b ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${theme.glassInnerCard} text-orange-500`}>
-                          {getCategoryIcon(asset.category, 16)}
-                        </div>
-                        <div className="overflow-hidden min-w-0">
-                          <h3 className={`text-xs font-bold leading-tight truncate ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
-                          <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 ${theme.glassInnerCard} ${theme.textMain} hover:scale-110 hover:text-orange-500 cursor-pointer transition-transform rounded-lg`}>
-                          <QrCode size={14} />
-                        </button>
-                        <input type="checkbox" checked={isSelected} readOnly className="w-3.5 h-3.5 rounded cursor-pointer accent-orange-500" />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status}</span>
-                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider border border-zinc-500/30 text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
-                    </div>
-                  </div>
-
-                  <div className={`p-4 space-y-2 flex-1 ${isDarkMode ? 'bg-white/5' : 'bg-black/5'}`}>
-                    <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Tag ID</span> 
-                      <span className="font-mono font-semibold text-[10px] text-orange-500 dark:text-orange-400">{asset.clean_tag}</span>
-                    </div>
-                    <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Serial S/N</span> 
-                      <span className={`font-mono font-medium text-[10px] truncate max-w-28 ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
-                    </div>
+                return (
+                  <div key={asset.id} onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest('button') || target.closest('input')) return;
+                    toggleSelectAsset(asset.id);
+                  }} className={`${theme.glassItem} rounded-3xl flex flex-col justify-between group cursor-pointer ${isSelected ? 'border-orange-500/80 ring-2 ring-orange-500/50 bg-orange-500/5' : 'hover:-translate-y-1 hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)]'} overflow-hidden`}>
                     
-                    <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
-                      <div className="flex flex-col min-w-0 pr-1.5">
-                        <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Holder</span> 
-                        <span className={`font-medium text-[10px] truncate ${theme.textMain} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
+                    <div className={`p-4 border-b ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${theme.glassInnerCard} text-orange-500`}>
+                            {getCategoryIcon(asset.category, 16)}
+                          </div>
+                          <div className="overflow-hidden min-w-0">
+                            <h3 className={`text-xs font-bold leading-tight truncate ${theme.textMain}`} title={asset.safe_display_name}>{asset.safe_display_name}</h3>
+                            <p className={`text-[10px] font-medium mt-0.5 truncate ${theme.textSub}`}>{asset.brand || 'Standard Brand'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <button onClick={(e) => { e.stopPropagation(); openAssetViewModal(asset); }} className={`p-2 ${theme.glassInnerCard} ${theme.textMain} hover:scale-110 hover:text-orange-500 cursor-pointer transition-transform rounded-lg`}>
+                            <QrCode size={14} />
+                          </button>
+                          <input type="checkbox" checked={isSelected} onChange={() => {}} className="w-3.5 h-3.5 rounded cursor-pointer accent-orange-500" />
+                        </div>
                       </div>
-                      <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[9px] shadow-sm shrink-0 border ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>{asset.emp_code}</span>
-                    </div>
-                  </div>
 
-                  <div className={`p-3 sm:p-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'} flex items-center justify-between`}>
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={12} className={theme.textSub} />
-                      <div className="flex flex-col">
-                        <span className={`text-[7px] font-bold uppercase tracking-wider ${theme.textSub}`}>Last Audited</span>
-                        <span className={`text-[9px] font-mono font-medium ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all duration-300 cursor-default ${getStockStatusBadge(asset.status)}`}>{asset.status}</span>
+                        <span className={`px-2 py-0.5 rounded-lg text-[8px] font-bold uppercase tracking-wider border border-zinc-500/30 text-zinc-500 dark:text-zinc-400 bg-zinc-500/10 cursor-default`}>{asset.asset_condition || 'New'}</span>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-semibold transition-all duration-300 cursor-default ${getInspectionStatusColor(asset.live_inspection_status)}`}>
-                      {(() => {
-                        const st = (asset.live_inspection_status || '').toLowerCase().trim();
-                        if (st.includes('approved') || st.includes('pass')) return <CheckCircle2 size={10} />;
-                        if (st.includes('return') || st.includes('replace')) return <RefreshCw size={10} className="animate-spin" />;
-                        return <AlertTriangle size={10} />;
-                      })()}
-                      <span className="text-[8px] font-bold uppercase tracking-wider">{asset.live_inspection_status || 'Approved'}</span>
-                    </div>
-                  </div>
 
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    <div className={`p-4 space-y-2 flex-1 ${isDarkMode ? 'bg-white/5' : 'bg-black/5'}`}>
+                      <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Tag ID</span> 
+                        <span className="font-mono font-semibold text-[10px] text-orange-500 dark:text-orange-400">{asset.clean_tag}</span>
+                      </div>
+                      <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Serial S/N</span> 
+                        <span className={`font-mono font-medium text-[10px] truncate max-w-28 ${theme.textMain}`} title={asset.serial_number}>{asset.serial_number || 'N/A'}</span>
+                      </div>
+                      
+                      <div className={`flex justify-between items-center p-2 ${theme.glassInnerCard} rounded-xl`}>
+                        <div className="flex flex-col min-w-0 pr-1.5">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider ${theme.textSub}`}>Holder</span> 
+                          <span className={`font-medium text-[10px] truncate ${theme.textMain} mt-0.5`} title={asset.staff_name}>{asset.staff_name}</span>
+                        </div>
+                        <span className={`font-mono font-semibold px-1.5 py-0.5 rounded text-[9px] shadow-sm shrink-0 border ${isDarkMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>{asset.emp_code}</span>
+                      </div>
+                    </div>
+
+                    <div className={`p-3 sm:p-4 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'} flex items-center justify-between`}>
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={12} className={theme.textSub} />
+                        <div className="flex flex-col">
+                          <span className={`text-[7px] font-bold uppercase tracking-wider ${theme.textSub}`}>Last Audited</span>
+                          <span className={`text-[9px] font-mono font-medium ${theme.textMain}`}>{safeDate(asset.live_inspection_date)}</span>
+                        </div>
+                      </div>
+                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-semibold transition-all duration-300 cursor-default ${getInspectionStatusColor(asset.live_inspection_status)}`}>
+                        {(() => {
+                          const st = (asset.live_inspection_status || '').toLowerCase().trim();
+                          if (st.includes('approved') || st.includes('pass')) return <CheckCircle2 size={10} />;
+                          if (st.includes('return') || st.includes('replace')) return <RefreshCw size={10} className="animate-spin" />;
+                          return <AlertTriangle size={10} />;
+                        })()}
+                        <span className="text-[8px] font-bold uppercase tracking-wider">{asset.live_inspection_status || 'Approved'}</span>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 🚀 PRINT SETTINGS UI MODAL */}
-      {isPrintConfigModalOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200 ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/40'}`}>
-          <div className={`max-w-xl w-full p-6 space-y-5 animate-in zoom-in-95 duration-200 ${theme.glassCard} rounded-3xl border-2 ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
-            <div className={`flex justify-between items-center pb-3 border-b ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div>
-                <h3 className={`text-base font-bold tracking-tight flex items-center gap-2 ${theme.textMain}`}>
-                  <Settings2 size={18} className="text-orange-500"/> Label Print Layout
-                </h3>
-                <p className={`text-[9px] mt-1 uppercase tracking-widest font-bold text-amber-600 bg-amber-500/10 inline-block px-2.5 py-0.5 rounded-lg border border-amber-500/20`}>
-                  Important: Uncheck "Fit to Page", set Margins to "None".
-                </p>
-              </div>
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`p-2 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white transition-all rounded-full cursor-pointer`}><X size={14}/></button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-2.5">
-                <h4 className={`text-[11px] font-bold uppercase tracking-widest text-orange-500`}>Sheet Formatting</h4>
-                <div>
-                  <label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Paper Size</label>
-                  <PremiumGlassDropdown 
-                    value={printConfig.pageSize} 
-                    onChange={(val: string) => setPrintConfig({...printConfig, pageSize: val})} 
-                    options={[
-                      { value: 'A4', label: 'A4 (210 x 297mm)' },
-                      { value: 'Letter', label: 'US Letter (8.5 x 11in)' }
-                    ]} 
-                    theme={theme} 
-                    isDarkMode={isDarkMode}
-                    className="py-2 px-3"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Columns</label><input type="number" min="1" value={printConfig.columns} onChange={e => setPrintConfig({...printConfig, columns: parseInt(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
-                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Rows</label><input type="number" min="1" value={printConfig.rows} onChange={e => setPrintConfig({...printConfig, rows: parseInt(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
-                </div>
-              </div>
-              <div className="space-y-2.5">
-                <h4 className={`text-[11px] font-bold uppercase tracking-widest text-orange-500`}>Label Dimensions</h4>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Width (cm)</label><input type="number" step="0.01" value={printConfig.labelWidth} onChange={e => setPrintConfig({...printConfig, labelWidth: parseFloat(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
-                  <div><label className={`text-[9px] font-bold uppercase block mb-1 ${theme.textSub}`}>Height (cm)</label><input type="number" step="0.01" value={printConfig.labelHeight} onChange={e => setPrintConfig({...printConfig, labelHeight: parseFloat(e.target.value) || 1})} className={`w-full p-2 ${theme.inputBg} rounded-xl outline-none font-semibold text-xs`} /></div>
-                </div>
-              </div>
-            </div>
-
-            <div className={`flex gap-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <button onClick={() => setIsPrintConfigModalOpen(false)} className={`flex-1 py-2.5 ${theme.glassInnerCard} ${theme.textMain} hover:opacity-90 rounded-xl transition-colors cursor-pointer text-[11px] font-bold uppercase tracking-wider`}>Cancel</button>
-              <button onClick={executeGridBulkPrint} className="flex-2 py-2.5 bg-linear-to-r from-purple-600 to-purple-700 text-white shadow-[0_4px_15px_rgba(168,85,247,0.3)] rounded-xl text-[11px] font-bold uppercase tracking-wider flex justify-center items-center gap-1.5 cursor-pointer transition-all border border-purple-500"><Printer size={14}/> Generate Print Page</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🚀 VIEW MODAL & HISTORY ENGINE (COMPACT DETAILS WITH FIXED TOP CLEARANCE) */}
+      {/* VIEW MODAL & HISTORY ENGINE */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
@@ -1552,7 +1736,6 @@ function AssetRegistryContent() {
           <div className={`fixed top-16 sm:top-20 inset-x-0 bottom-0 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto ${isDarkMode ? 'bg-slate-950/60' : 'bg-slate-900/20'}`}>
             <div className={`relative max-w-3xl w-full flex flex-col overflow-hidden flex-1 max-h-full ${theme.glassCard} rounded-3xl sm:rounded-4xl border-2 shadow-[0_32px_80px_rgba(0,0,0,0.4)] ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'}`}>
               
-              {/* 🌟 ENTERPRISE COMPACT HEADER - ABSOLUTE CLOSE BUTTON TO PREVENT OVERLAP */}
               <div className={`w-full p-4 sm:p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'bg-black/40 border-white/10' : 'bg-white/50 border-slate-200/60'} shrink-0 relative z-30`}>
                 <button onClick={() => setViewAssetModal(null)} className={`absolute top-4 right-4 p-2 rounded-full ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 transition-all cursor-pointer shadow-sm active:scale-90 z-40`}><X size={16}/></button>
 
@@ -1588,7 +1771,6 @@ function AssetRegistryContent() {
                 </div>
               </div>
 
-              {/* 🌟 SCROLLABLE MODAL BODY */}
               <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 ${isEditingAsset ? 'pb-32' : 'pb-6'}`}>
                 {isEditingAsset ? (
                   <div className="space-y-5 animate-in fade-in duration-200">
@@ -1831,7 +2013,6 @@ function AssetRegistryContent() {
                 )}
               </div>
 
-              {/* 🌟 FIXED MODAL FOOTER */}
               {isEditingAsset && (
                 <div className={`p-4 sm:p-5 shrink-0 flex gap-3 border-t ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/40 bg-white/30'} z-50`}>
                   <button type="button" onClick={() => setIsEditingAsset(false)} className={`px-6 py-3.5 rounded-xl ${theme.glassInnerCard} ${theme.textMain} hover:opacity-80 transition-all text-[11px] font-bold uppercase tracking-widest cursor-pointer shadow-xs active:scale-95`}>Cancel</button>
@@ -1846,12 +2027,11 @@ function AssetRegistryContent() {
         );
       })()}
 
-      {/* 🚀 ADD NEW ASSET MODAL */}
+      {/* ADD NEW ASSET MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-xl animate-in fade-in duration-200 bg-black/20">
           <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] border flex-1 max-h-full rounded-4xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
             
-            {/* MAC OS MODAL HEADER */}
             <div className={`p-4 sm:p-5 border-b flex justify-between items-center relative z-30 shrink-0 ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-white/50 bg-white/40'}`}>
               <div className="flex items-center gap-3 pr-12 min-w-0">
                 <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 shrink-0">
@@ -1871,11 +2051,9 @@ function AssetRegistryContent() {
               </button>
             </div>
             
-            {/* FORM BODY */}
             <form onSubmit={handleSaveNewAsset} className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
               <div className="p-4 sm:p-6 space-y-5 pb-8">
                 
-                {/* SECTION 1: CATEGORY & TAG */}
                 <div className={`relative z-70 grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 ${theme.glassInnerCard} rounded-3xl border ${isDarkMode ? 'border-white/10' : 'border-white/80'}`}>
                   <div>
                     <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
@@ -1920,7 +2098,6 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                {/* SECTION 2: SERIAL & VENDOR */}
                 <div className="relative z-60 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
@@ -1949,7 +2126,6 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                {/* SECTION 3: BRAND & NAME */}
                 <div className="relative z-50 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
@@ -1994,7 +2170,6 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                {/* SECTION 4: FINANCIALS & DATES */}
                 <div className="relative z-40 grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
@@ -2033,7 +2208,6 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                {/* SECTION 5: HARDWARE SPECIFICATIONS & CHIPS */}
                 <div className="relative z-30 space-y-2">
                   <div className="flex flex-wrap justify-between items-center gap-2">
                     <label className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMain}`}>
@@ -2083,7 +2257,6 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                {/* SECTION 6: CONDITION & STATUS */}
                 <div className={`relative z-20 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}>
                   <div>
                     <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
@@ -2114,7 +2287,6 @@ function AssetRegistryContent() {
                   </div>
                 </div>
 
-                {/* SECTION 7: STAFF ASSIGNEE DROPDOWN */}
                 <div className={`relative z-10 p-5 ${theme.glassInnerCard} rounded-3xl border ${isDarkMode ? 'border-white/10' : 'border-white/80'}`}>
                   <label className={`text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${theme.textMain}`}>
                     Assign to Employee Holder (Optional)
@@ -2155,7 +2327,7 @@ function AssetRegistryContent() {
         </div>
       )}
 
-      {/* 🚀 BULK UPLOAD MODAL */}
+      {/* BULK UPLOAD MODAL */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 px-4 backdrop-blur-md animate-in fade-in duration-200 bg-black/20">
           <div className={`max-w-md w-full p-6 sm:p-8 text-center animate-in zoom-in-95 duration-200 ${theme.glassCard} rounded-4xl border-2 ${isDarkMode ? 'border-orange-500/30' : 'border-white/80'} space-y-5`}>

@@ -622,7 +622,7 @@ export default function StaffDashboardPage() {
               key={item.name} 
               onClick={() => { if (item.isActionDisabled) return; if (item.path) { router.push(item.path); } else { setModal({ isOpen: true, type: item.type, targetAsset: assignedAssets[0] }); } }} 
               disabled={item.isActionDisabled}
-              className={`relative ${theme.glassItem} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(0,0,0,0.06)]'}`}
+              className={`relative ${theme.glassItem} min-h-18 sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(0,0,0,0.06)]'}`}
             >
               <div className="flex items-start justify-between w-full">
                 <div className={`p-2.5 rounded-xl bg-white/40 border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110 group-hover:bg-white/60'} ${item.color}`}>
@@ -643,7 +643,7 @@ export default function StaffDashboardPage() {
         </div>
 
         <div className="xl:w-1/3 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t xl:border-t-0 xl:border-l pt-4 xl:pt-0 xl:pl-5 border-white/50">
-          <div className={`${theme.glassCard} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
+          <div className={`${theme.glassCard} min-h-18 sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
               <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-purple-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Laptop size={16} strokeWidth={2.5} /></div>
               <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Assigned</span>
@@ -654,7 +654,7 @@ export default function StaffDashboardPage() {
             </div>
           </div>
           
-          <div className={`${theme.glassCard} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
+          <div className={`${theme.glassCard} min-h-18 sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
               <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-amber-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><AlertCircle size={16} strokeWidth={2.5} /></div>
               <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Action Req.</span>
@@ -665,7 +665,7 @@ export default function StaffDashboardPage() {
             </div>
           </div>
 
-          <div className={`${theme.glassCard} min-h-[72px] sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
+          <div className={`${theme.glassCard} min-h-18 sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
             <div className="flex justify-between items-start">
               <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-orange-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><Ticket size={16} strokeWidth={2.5} /></div>
               <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Open Tix</span>
@@ -681,7 +681,7 @@ export default function StaffDashboardPage() {
       <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-5 min-h-0 w-full pt-1">
         
         {/* 🌟 MY HARDWARE CAROUSEL LIST */}
-        <div className="w-full lg:w-2/3 flex flex-col min-h-[450px] lg:min-h-0">
+        <div className="w-full lg:w-2/3 flex flex-col min-h-112.5 lg:min-h-0">
           <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col min-h-0`}>
             
             <div className="flex items-center justify-between border-b pb-4 mb-5 border-white/40 shrink-0">
@@ -951,7 +951,7 @@ export default function StaffDashboardPage() {
         </div>
 
         {/* MY TICKETS */}
-        <div className="w-full xl:w-1/3 flex flex-col min-h-[400px] lg:min-h-0 pb-4 lg:pb-0">
+        <div className="w-full xl:w-1/3 flex flex-col min-h-100 lg:min-h-0 pb-4 lg:pb-0">
           <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col min-h-0 group/panel`}>
             <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40 group-hover/panel:border-purple-300 transition-colors duration-500 shrink-0">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-800"><Ticket className="text-purple-500 shrink-0" size={18}/> My Tickets</div>
@@ -1033,7 +1033,7 @@ export default function StaffDashboardPage() {
           } catch(e){}
 
           return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/40">
+            <div className="fixed inset-0 z-100 flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/40">
               <motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 20 }} 
                 animate={{ scale: 1, opacity: 1, y: 0 }} 
@@ -1113,7 +1113,7 @@ export default function StaffDashboardPage() {
       {/* 🌟 NEW REPLACEMENT MODAL */}
       <AnimatePresence>
         {showReplaceModal && activeAsset && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 20 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
@@ -1262,7 +1262,7 @@ export default function StaffDashboardPage() {
           }).replace(/,/g, '');
 
           return (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
               <motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 20 }} 
                 animate={{ scale: 1, opacity: 1, y: 0 }} 
