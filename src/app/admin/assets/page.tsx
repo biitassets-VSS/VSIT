@@ -818,16 +818,8 @@ function AssetRegistryContent() {
 
   const getAssetViewUrl = (asset: any) => {
     const currentDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    const baseUrl = `${currentDomain}/public-asset`;
-    
-    const params = new URLSearchParams();
-    params.append('id', asset.clean_tag || asset.id);
-    params.append('status', asset.status || 'In Stock');
-    params.append('staff', asset.staff_name || 'Unassigned');
-    params.append('emp', asset.emp_code || 'N/A');
-    params.append('dept', asset.department || 'N/A');
-    params.append('date', asset.live_inspection_date ? safeDate(asset.live_inspection_date) : 'N/A');
-    return `${baseUrl}?${params.toString()}`;
+    // Clean URL with only the asset tag ID -> fetches live data on scan
+    return `${currentDomain}/public-asset?id=${encodeURIComponent(asset.clean_tag || asset.id)}`;
   };
 
   const executeGridBulkPrint = (assetsToPrint: any[]) => {
