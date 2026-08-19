@@ -75,31 +75,38 @@ function AdminReturnsContent() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
+      // 1. Fetch only logs that explicitly mention "return" (Ignore "Pending Handover")
       const { data: returnsData, error } = await supabase
         .from('inspections')
         .select('*, assets(*)')
-        .or('notes.ilike.%return%,status.ilike.%return%')
+        .or('status.ilike.%return%,notes.ilike.%return request%')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       const validReturns = returnsData || [];
 
+      // 2. Fetch assets that currently have a Return status
       const { data: assetReturns } = await supabase
         .from('assets')
         .select('*')
         .ilike('status', '%return%');
 
+      // 3. Find orphaned return assets that don't have a matching inspection log
       const orphanedAssets = (assetReturns || []).filter(asset => {
-         return !validReturns.some(r => r.asset_id === asset.id && (r.status || '').toLowerCase().includes('pending'));
+         return !validReturns.some(r => 
+           r.asset_id === asset.id && 
+           (r.status || '').toLowerCase().includes('return')
+         );
       });
 
+      // 🌟 FORCE SYNTHETIC RETURNS TO WIN DATE SORTS
       const syntheticReturns = orphanedAssets.map(asset => ({
          id: `synthetic-${asset.id}`,
          asset_id: asset.id,
          user_id: asset.assigned_to,
-         status: asset.status,
-         notes: asset.notes || '[RETURN REQUEST] (Legacy Submission via Old App)',
-         created_at: asset.updated_at || asset.last_inspection_date || new Date().toISOString(),
+         status: asset.status, // "Pending Return"
+         notes: asset.notes || '[RETURN REQUEST] Submitted via Staff Dashboard',
+         created_at: new Date().toISOString(), 
          assets: asset,
          isSynthetic: true 
       }));
@@ -161,7 +168,7 @@ function AdminReturnsContent() {
         if (p.emp_id) profilesMap[cleanId(p.emp_id)] = p;
       });
 
-      // 🌟 AGGRESSIVE IDENTITY RESOLUTION ENGINE
+      // 🌟 AGGRESSIVE IDENTITY RESOLUTION ENGINE (DEEP EXTRACTION)
       const mergedData = allReturns.map((item: any) => {
         const profile = profilesMap[cleanId(item.user_id)] || 
                         profilesMap[cleanId(item.user_email)] || 
@@ -175,61 +182,71 @@ function AdminReturnsContent() {
            resolvedEmpCode = String(item.inspected_by).toUpperCase();
         }
 
-        // 1. Text Regex Extractor Function
+        // Regex Text Extraction Engine
         const extractIdentityFromText = (text: string) => {
             if (!text) return null;
-            // Match format: [Historical User: Jaspreet Singh Brar | ID: EMP-3624]
-            let histMatch = text.match(/Historical User:\s*([^|]+?)\s*\|\s*ID:\s*([^\]]+)/i);
-            if (histMatch) return { name: histMatch[1].trim(), emp: histMatch[2].trim() };
-            
-            // Match format: Staff: Jaspreet Singh Brar (EMP-3624)
-            let staffMatch = text.match(/Staff:\s*([^(]+?)\s*\((EMP-[^)]+)\)/i);
-            if (staffMatch) return { name: staffMatch[1].trim(), emp: staffMatch[2].trim() };
-            
-            return null;
+            let name = null;
+            let emp = null;
+            const patterns = [
+                /Historical User:\s*([^|]+?)\s*\|\s*ID:\s*([^\]]+)/i,
+                /Staff:\s*([^(]+?)\s*\((EMP-[^)]+)\)/i,
+                /by\s+([A-Za-z\s\.]+?)(?:\s*\(\s*(EMP-\d+)\s*\)|\s+on\b|\s+at\b)/i,
+                /(?:assigned|handed over)\s+to\s+([A-Za-z\s\.]+?)(?:\s*\(\s*(EMP-\d+)\s*\)|\s+on\b)/i,
+                /(?:previous holder|holder):?\s+([A-Za-z\s\.]+?)(?:\s*\(\s*(EMP-\d+)\s*\)|\s*\||$)/i
+            ];
+
+            for (const p of patterns) {
+                const match = text.match(p);
+                if (match) {
+                    const potentialName = match[1].trim();
+                    if (!potentialName.toLowerCase().includes('admin') && !potentialName.toLowerCase().includes('system')) {
+                        name = potentialName;
+                        if (match[2]) emp = match[2].trim();
+                        break;
+                    }
+                }
+            }
+            if (!emp) {
+                const empMatch = text.match(/(EMP-\d+)/i);
+                if (empMatch) emp = empMatch[1].toUpperCase();
+            }
+            if (name) name = name.replace(/\s+(upon|processed|awaiting|signed).*$/i, '').trim();
+            return (name || emp) ? { name, emp } : null;
         };
 
-        // 2. Try to extract from the current item's combined notes if name/emp is missing
+        // Fallback 1: Extract from current notes
         if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
             const currentItemText = `${item.notes || ''} ${item.admin_remarks || ''} ${item.assets?.notes || ''}`;
             const extracted = extractIdentityFromText(currentItemText);
             if (extracted) {
                 if (!resolvedName || resolvedName === 'Staff Member') resolvedName = extracted.name;
-                if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') resolvedEmpCode = extracted.emp;
+                if ((!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') && extracted.emp) resolvedEmpCode = extracted.emp;
             }
         }
 
-        // 3. Fallback: Search deeply through ALL asset history
+        // Fallback 2: Search ALL historical logs for this specific asset
         if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
             const assetHistory = allAssetInspections?.filter((insp: any) => insp.asset_id === item.asset_id) || [];
             
             for (const hist of assetHistory) {
-                // Check direct fields
-                if (!resolvedName || resolvedName === 'Staff Member') {
-                    if (hist.user_name) resolvedName = hist.user_name;
-                    else if (hist.user_email) resolvedName = formatEmailAsName(hist.user_email);
+                if ((!resolvedName || resolvedName === 'Staff Member') && hist.user_name && !hist.user_name.toLowerCase().includes('admin')) {
+                    resolvedName = hist.user_name;
                 }
-                
-                if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
-                    if (hist.emp_code) resolvedEmpCode = hist.emp_code;
-                    else if (hist.inspected_by && String(hist.inspected_by).toUpperCase().startsWith('EMP')) {
-                        resolvedEmpCode = String(hist.inspected_by).toUpperCase();
-                    }
+                if ((!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') && hist.emp_code && hist.emp_code !== 'SYS-ADMIN') {
+                    resolvedEmpCode = hist.emp_code;
                 }
 
-                // Check baked-in regex text
                 const histText = `${hist.notes || ''} ${hist.admin_remarks || ''}`;
                 const extracted = extractIdentityFromText(histText);
                 if (extracted) {
                     if (!resolvedName || resolvedName === 'Staff Member') resolvedName = extracted.name;
-                    if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') resolvedEmpCode = extracted.emp;
+                    if ((!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') && extracted.emp) resolvedEmpCode = extracted.emp;
                 }
 
-                if (resolvedName !== 'Staff Member' && resolvedEmpCode !== 'UNKNOWN') break;
+                if (resolvedName && resolvedName !== 'Staff Member' && resolvedEmpCode && resolvedEmpCode !== 'UNKNOWN') break;
             }
         }
 
-        // Final Fallbacks
         if (!resolvedName || resolvedName === 'Staff Member') {
             if (String(item.user_id).includes('@')) resolvedName = formatEmailAsName(String(item.user_id));
             if (String(item.assets?.assigned_to).includes('@')) resolvedName = formatEmailAsName(String(item.assets?.assigned_to));
@@ -258,15 +275,13 @@ function AdminReturnsContent() {
 
       const finalReturns: any[] = [];
       Object.values(assetGroups).forEach(group => {
-        // Sort group by created_at DESC to find the absolute latest request
         group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         group.forEach((item, index) => {
-          item.isLatest = index === 0; // Only the absolute newest entry is active
+          item.isLatest = index === 0; 
           finalReturns.push(item);
         });
       });
 
-      // Sort full list: Active/Pending first, then by date descending
       finalReturns.sort((a, b) => {
         const aActive = (a.isLatest && (a.status || '').toLowerCase().includes('pending')) ? -1 : 1;
         const bActive = (b.isLatest && (b.status || '').toLowerCase().includes('pending')) ? -1 : 1;
@@ -282,7 +297,6 @@ function AdminReturnsContent() {
     }
   };
 
-  // 🌟 BULLETPROOF ACTION MODAL SUBMIT HANDLER
   const executeReturnAction = async (e: React.FormEvent) => {
     e.preventDefault();
     const { assetId, action, staffId, item } = actionModal;
@@ -343,7 +357,7 @@ function AdminReturnsContent() {
       if (action === 'Approved') {
         const combinedNotes = `[RETURNED] Staff: ${item.resolvedName} (${item.resolvedEmpCode}) | Reason: ${cleanStaffNotes} | Admin Validation: ${finalRemarks} (${adminName})`;
         assetPayload = { 
-          status: 'In Stock', 
+          status: 'In Stock (Unassigned)', 
           assigned_to: null, 
           inspection_status: 'Approved',
           notes: combinedNotes 
@@ -533,7 +547,7 @@ function AdminReturnsContent() {
             {filteredList.map((item, index) => {
               const uniqueKey = item.id ? `return-${item.id}-${index}` : `return-fallback-${index}`;
               const isHistorical = !item.isLatest; 
-              const isPending = !isHistorical && (item.status || '').toLowerCase().includes('pending');
+              const isPending = !isHistorical && ((item.status || '').toLowerCase().includes('pending') || (item.status || '').toLowerCase().includes('request'));
               const asset = item.assets || {};
               const photosList = Array.isArray(item.photos) ? item.photos : item.photo_url ? [item.photo_url] : [];
 
@@ -564,7 +578,7 @@ function AdminReturnsContent() {
                     <div className={`p-5 rounded-2xl space-y-3 ${theme.glassInner}`}>
                       {item.isSynthetic && (
                         <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-500 mb-2 border-b border-amber-500/20 pb-2">
-                          <AlertTriangle size={12} /> Legacy Submission
+                          <AlertTriangle size={12} /> System Generated
                         </div>
                       )}
                       <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isHistorical ? theme.textSub : theme.textMain}`}>
@@ -596,11 +610,11 @@ function AdminReturnsContent() {
                       <span className={`px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 shadow-sm cursor-default ${
                         isPending 
                           ? isDarkMode ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 animate-pulse' : 'bg-orange-50 border-orange-200 text-orange-600 animate-pulse' 
-                          : item.status.includes('Approved') 
+                          : (item.status || '').toLowerCase().includes('approved') 
                             ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600'
                             : isDarkMode ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-600'
                       } ${isHistorical ? 'opacity-50' : ''}`}>
-                        {item.status}
+                        {item.status || 'Pending Return'}
                       </span>
                     </div>
 
