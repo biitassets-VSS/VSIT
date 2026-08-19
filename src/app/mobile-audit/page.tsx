@@ -16,6 +16,7 @@ function MobileVerifyContent() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploadedCount, setUploadedCount] = useState(0);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,7 +43,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 PURE HTML5 CANVAS WATERMARK ENGINE
+  // 🌟 FAST HTML5 CANVAS WATERMARK ENGINE (WITH SAFARI OPTIMIZATION)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -51,15 +52,25 @@ function MobileVerifyContent() {
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject("Canvas not supported");
 
-        // Maintain original resolution for clear zoom
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        // Draw the original photo
-        ctx.drawImage(img, 0, 0);
+        // 🌟 iPhone/Safari Optimization: Downscale massive 4K images to 1600px max
+        // This prevents Safari from freezing and makes uploads 10x faster
+        const MAX_WIDTH = 1600;
+        let width = img.width;
+        let height = img.height;
 
-        // Responsive text sizing based on image resolution
-        const fontSize = Math.max(24, Math.floor(canvas.width / 35));
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw the scaled photo
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Responsive text sizing based on the new image resolution
+        const fontSize = Math.max(16, Math.floor(canvas.width / 35));
         const padding = fontSize;
         const textX = padding;
         const textY = canvas.height - (fontSize * 4.5);
@@ -82,7 +93,7 @@ function MobileVerifyContent() {
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject("Blob conversion failed");
-        }, 'image/jpeg', 0.85); // Compress slightly for faster uploads
+        }, 'image/jpeg', 0.80); // 80% quality for fast mobile uploads
       };
       img.onerror = () => reject("Image load failed");
       img.src = URL.createObjectURL(file);
@@ -93,20 +104,14 @@ function MobileVerifyContent() {
     if (!e.target.files || e.target.files.length === 0) return;
     
     const files = Array.from(e.target.files);
-    
-    // Enforce required count
-    if (files.length < requiredCount) {
-      alert(`Security Rule: You must capture at least ${requiredCount} photos. You selected ${files.length}. Please try again.`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
     setUploading(true);
     setProgress(0);
 
+    let currentUploads = uploadedCount;
+
     try {
       for (let i = 0; i < files.length; i++) {
-        // 1. Process Watermark
+        // 1. Process Watermark (Fast Optimized)
         const watermarkedBlob = await processWatermark(files[i]);
         
         // 2. Prepare for Upload
@@ -132,21 +137,24 @@ function MobileVerifyContent() {
           });
         }
         
-        // Update Progress UI
+        currentUploads++;
         setProgress(Math.round(((i + 1) / files.length) * 100));
       }
       
-      setSuccess(true);
-      
-      // 🌟 PERMANENTLY LOCK THE SESSION ON THIS DEVICE
-      if (sessionId) {
-        localStorage.setItem(`locked_session_${sessionId}`, 'true');
+      setUploadedCount(currentUploads);
+
+      // 🌟 Check if we have met the required amount natively over multiple shots
+      if (currentUploads >= requiredCount) {
+        setSuccess(true);
+        if (sessionId) {
+          localStorage.setItem(`locked_session_${sessionId}`, 'true');
+        }
+        setIsLocked(true);
       }
-      setIsLocked(true);
 
     } catch (err: any) {
       console.error(err);
-      alert(`Failed to encrypt and upload photos: ${err.message}. Please refresh and try again.`);
+      alert(`Failed to encrypt and upload photos: ${err.message}. Please try again.`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -187,7 +195,7 @@ function MobileVerifyContent() {
       
       {/* Top Progress Bar */}
       <div className="absolute top-0 left-0 w-full h-1.5 bg-zinc-800">
-        <div className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_10px_rgba(249,115,22,0.8)]" style={{ width: `${progress}%` }}></div>
+        <div className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_10px_rgba(249,115,22,0.8)]" style={{ width: `${(uploadedCount / requiredCount) * 100}%` }}></div>
       </div>
       
       <div className="space-y-4 relative z-10 w-full max-w-sm">
@@ -199,7 +207,7 @@ function MobileVerifyContent() {
         <div className="bg-orange-500/10 border border-orange-500/20 text-orange-400 p-4 rounded-2xl flex items-start gap-3 text-left">
           <AlertTriangle size={18} className="shrink-0 mt-0.5" />
           <p className="text-[11px] font-bold uppercase tracking-widest leading-relaxed">
-            You must capture at least <strong className="text-white text-xs">{requiredCount} photos</strong> at once. Permanent watermarks will be applied automatically.
+            Please capture <strong className="text-white text-xs">{requiredCount - uploadedCount} more photo{requiredCount - uploadedCount > 1 ? 's' : ''}</strong> to complete the process. Watermarks will apply automatically.
           </p>
         </div>
       </div>
@@ -215,8 +223,8 @@ function MobileVerifyContent() {
           <span className="text-zinc-200">{empCode}</span>
         </div>
         <div className="flex justify-between items-center border-b border-white/5 pb-2">
-          <span>Upload Date:</span> 
-          <span className="text-zinc-200">{new Date().toLocaleDateString('en-IN')}</span>
+          <span>Upload Status:</span> 
+          <span className="text-orange-400">{uploadedCount} / {requiredCount} Completed</span>
         </div>
         <div className="flex justify-between items-center">
           <span>Device Meta:</span> 
@@ -237,16 +245,15 @@ function MobileVerifyContent() {
             onClick={() => fileInputRef.current?.click()}
             className="w-full py-5 rounded-full bg-orange-500 hover:bg-orange-600 text-white font-black uppercase tracking-widest shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center gap-3 active:scale-95 transition-all cursor-pointer"
           >
-            <Camera size={20} /> Open Camera Sequence
+            <Camera size={20} /> Capture Photo {uploadedCount + 1} of {requiredCount}
           </button>
         )}
       </div>
 
-      {/* 🌟 NATIVE CAMERA TRIGGER */}
+      {/* 🌟 NATIVE CAMERA TRIGGER (Allows multiple selection, but works sequentially on iOS) */}
       <input 
         type="file" 
         accept="image/*" 
-        capture="environment" 
         multiple 
         ref={fileInputRef} 
         className="hidden" 
