@@ -212,6 +212,7 @@ function AssetRegistryContent() {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [conditionFilter, setConditionFilter] = useState<string>('All');
+  const [staffFilter, setStaffFilter] = useState<string>('All');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -240,6 +241,14 @@ function AssetRegistryContent() {
   const [isEditingAsset, setIsEditingAsset] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // 🌟 DYNAMIC STAFF FILTER GENERATION
+  const uniqueStaffNames = Array.from(new Set(assets.map(a => a.staff_name))).filter(name => name && name !== 'Unassigned').sort();
+  const staffFilterOptions = [
+    { value: 'All', label: '👥 All Staff Holders' },
+    { value: 'Unassigned', label: '📦 Unassigned (Stock)' },
+    ...uniqueStaffNames.map(name => ({ value: String(name), label: `👤 ${name}` }))
+  ];
 
   const filterStatusOptions = [
     { value: 'All', label: '📦 All Stock Statuses' },
@@ -326,7 +335,6 @@ function AssetRegistryContent() {
     }
   }, [viewAssetModal, isEditingAsset]);
 
-  // 🌟 ROBUST OMNI-MATCH HISTORY ENGINE (WITH MULTI-PASS INHERITANCE FOR LEGACY & RETURN LOGS)
   const loadAssetHistory = async (assetId: string, assetTag?: string, serialNumber?: string) => {
     setIsLoadingHistory(true);
     try {
@@ -391,7 +399,6 @@ function AssetRegistryContent() {
 
       uniqueLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      // PASS 1: Resolve direct profile matches, DB columns, and regex extractions
       let knownAssetStaffName: string | null = null;
       let knownAssetEmpCode: string | null = null;
 
@@ -454,7 +461,6 @@ function AssetRegistryContent() {
          return { ...log, staff_name: staffName, emp_code: empCode };
       });
 
-      // PASS 2: Inheritance for Return/Replacement/Approval logs that lack explicit user names
       const compiled = pass1.map(log => {
          let staffName = log.staff_name;
          let empCode = log.emp_code;
@@ -801,8 +807,18 @@ function AssetRegistryContent() {
 
     let matchesCond = true;
     if (conditionFilter !== 'All') matchesCond = cond.includes(conditionFilter.toLowerCase());
+
+    // 🌟 DYNAMIC STAFF FILTER LOGIC
+    let matchesStaff = true;
+    if (staffFilter !== 'All') {
+      if (staffFilter === 'Unassigned') {
+        matchesStaff = safeString(a.staff_name) === 'Unassigned' || !a.assigned_to;
+      } else {
+        matchesStaff = safeString(a.staff_name) === staffFilter;
+      }
+    }
     
-    return matchesSearch && matchesCat && matchesStatus && matchesCond;
+    return matchesSearch && matchesCat && matchesStatus && matchesCond && matchesStaff;
   });
 
   const toggleSelectAsset = (id: string) => {
@@ -818,7 +834,6 @@ function AssetRegistryContent() {
 
   const getAssetViewUrl = (asset: any) => {
     const currentDomain = typeof window !== 'undefined' ? window.location.origin : 'https://virtual-staffing.vercel.app';
-    // Clean URL with only the asset tag ID -> fetches live data on scan
     return `${currentDomain}/public-asset?id=${encodeURIComponent(asset.clean_tag || asset.id)}`;
   };
 
@@ -834,19 +849,33 @@ function AssetRegistryContent() {
         const urlToEncode = getAssetViewUrl(asset);
         const catLow = String(asset.category || '').toLowerCase();
         
-        const isSmallItem = catLow.includes('mouse') || catLow.includes('headphone');
+        // 🌟 UPDATED: ALL KMU, MOU, CKM, WKM, HDP AND MICE/HEADPHONES/KEYBOARDS ARE SMALL SPLIT-PRINT LABELS
+        const isSmallItem = 
+          cleanTag.includes('-KMU-') || 
+          cleanTag.includes('-MOU-') || 
+          cleanTag.includes('-CKM-') || 
+          cleanTag.includes('-WKM-') || 
+          cleanTag.includes('-HDP-') || 
+          catLow.includes('mouse') || 
+          catLow.includes('headphone') || 
+          catLow.includes('keyboard') || 
+          catLow.includes('combo') || 
+          catLow.includes('kit');
+
+        // Only explicitly mark "KEYBOARD / MOUSE" if it is actually a combo/kit
+        const isKit = cleanTag.includes('-CKM-') || cleanTag.includes('-WKM-') || catLow.includes('combo') || catLow.includes('kit');
 
         if (isSmallItem) {
-          const smallQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(urlToEncode)}`;
+          const smallQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(urlToEncode)}`;
           return `
             <div class="sticker">
               <div class="sub-sticker">
                 <img src="${smallQrUrl}" class="qr-code-micro" />
-                <span class="tag-id-micro">${cleanTag}</span>
+                <span class="tag-id-micro">${cleanTag}${isKit ? '<br/>(KEYBOARD)' : ''}</span>
               </div>
               <div class="sub-sticker border-left">
                 <img src="${smallQrUrl}" class="qr-code-micro" />
-                <span class="tag-id-micro">${cleanTag}</span>
+                <span class="tag-id-micro">${cleanTag}${isKit ? '<br/>(MOUSE)' : ''}</span>
               </div>
             </div>
           `;
@@ -986,9 +1015,7 @@ function AssetRegistryContent() {
     executeGridBulkPrint([asset]);
   };
 
-  // 🌟 BRANDED HTML/CSS PDF GENERATOR WITH ULTRA-PREMIUM KEBAB-CASE SVG STAMPS
   const handleGenerateHandoverPDF = (asset: any) => {
-    
     const sourceDate = asset.live_inspection_date ? new Date(asset.live_inspection_date) : new Date();
     const printDate = sourceDate.toLocaleString('en-IN', { 
       year: 'numeric', month: '2-digit', day: '2-digit', 
@@ -1001,9 +1028,6 @@ function AssetRegistryContent() {
     const staffEmail = asset.staff_email || 'N/A';
     const condition = asset.asset_condition || 'New';
 
-    const adminAuthCode = `SEC-ADM-${Math.floor(Math.random() * 9000) + 1000}`;
-    const adminNameDisplay = "SYSTEM.ADMIN";
-    
     let photosHtml = '<p style="font-style: italic; color: #64748b; font-size: 12px; margin: 0;">No inspection photos available on record.</p>';
     if (asset.latest_photos) {
       let photosArr: string[] = [];
@@ -1457,7 +1481,6 @@ function AssetRegistryContent() {
     }
   }
 
-  // 🌟 TRUE GLASSMORPHISM THEME (PREMIUM 2026 - V4 CANONICAL)
   const theme = {
     bg: 'bg-transparent font-sans',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
@@ -1484,13 +1507,11 @@ function AssetRegistryContent() {
 
   return (
     <div className={`w-full min-h-screen flex flex-col relative transition-colors duration-1000 ${theme.bg}`}>
-      {/* 🌟 GLOBAL BACKGROUND ORBS */}
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
       <div className="w-full flex-1 flex flex-col p-4 sm:p-6 lg:p-8 2xl:px-12 mx-auto gap-4 sm:gap-6 relative z-10">
         
-        {/* BRAND HEADER (Shrinks to fit) */}
         <div className={`shrink-0 ${theme.glassCard} rounded-4xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5`}>
           <div className="flex items-center gap-4">
             <button onClick={() => router.push('/admin')} className={`p-3 ${theme.glassItem} rounded-2xl ${theme.textSub} hover:scale-105 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 transition-all cursor-pointer`}>
@@ -1523,7 +1544,6 @@ function AssetRegistryContent() {
           </div>
         </div>
 
-        {/* TABS & SEARCH (Shrinks to fit) */}
         <div className="shrink-0 space-y-4">
           <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
             {[
@@ -1560,7 +1580,6 @@ function AssetRegistryContent() {
               <span>{selectedAssetIds.size === filteredAssets.length && filteredAssets.length > 0 ? 'Deselect All' : 'Select All'}</span>
             </button>
 
-            {/* SEARCH BAR */}
             <div className={`flex-1 p-1 ${theme.inputBg} rounded-xl transition-all border flex items-center`}>
               <div className="relative w-full">
                 <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${theme.textSub}`} />
@@ -1575,7 +1594,6 @@ function AssetRegistryContent() {
             </div>
           </div>
 
-          {/* FILTER TABS */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
               <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${theme.textMain}`}>
@@ -1604,11 +1622,24 @@ function AssetRegistryContent() {
                 />
               </div>
 
-              {(statusFilter !== 'All' || conditionFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
+              {/* 🌟 STAFF FILTER DROPDOWN */}
+              <div className="w-48">
+                <PremiumGlassDropdown 
+                  value={staffFilter} 
+                  onChange={setStaffFilter} 
+                  options={staffFilterOptions} 
+                  theme={theme} 
+                  isDarkMode={isDarkMode}
+                  className="py-2 px-3"
+                />
+              </div>
+
+              {(statusFilter !== 'All' || conditionFilter !== 'All' || staffFilter !== 'All' || searchQuery !== '' || selectedCategory !== 'All') && (
                 <button
                   onClick={() => {
                     setStatusFilter('All');
                     setConditionFilter('All');
+                    setStaffFilter('All');
                     setSearchQuery('');
                     setSelectedCategory('All');
                   }}
@@ -1625,7 +1656,6 @@ function AssetRegistryContent() {
           </div>
         </div>
 
-        {/* 🌟 ASSET GRID - MAXIMUM PAGE SCROLL */}
         <div className="w-full mt-2 pb-20">
           {loading ? (
             <div className={`w-full py-32 ${theme.glassCard} rounded-3xl flex flex-col items-center justify-center gap-3`}>
@@ -1637,7 +1667,7 @@ function AssetRegistryContent() {
               <Package size={48} className="text-orange-500 opacity-80" />
               <h3 className={`text-lg font-bold ${theme.textMain}`}>No Hardware Found</h3>
               <p className={`text-[11px] font-medium max-w-sm ${theme.textSub}`}>No assets match your selected filter combination.</p>
-              <button onClick={() => { setStatusFilter('All'); setConditionFilter('All'); setSearchQuery(''); setSelectedCategory('All'); }} className="mt-3 px-6 py-2.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border border-orange-400">
+              <button onClick={() => { setStatusFilter('All'); setConditionFilter('All'); setStaffFilter('All'); setSearchQuery(''); setSelectedCategory('All'); }} className="mt-3 px-6 py-2.5 bg-linear-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white shadow-[0_4px_15px_rgba(249,115,22,0.4)] rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border border-orange-400">
                 Reset All Filters
               </button>
             </div>
@@ -1724,7 +1754,6 @@ function AssetRegistryContent() {
         </div>
       </div>
 
-      {/* VIEW MODAL & HISTORY ENGINE */}
       {viewAssetModal && (() => {
         const liveModalTag = editForm.asset_tag || viewAssetModal.clean_tag;
         const visibleHistory = showFullHistory ? assetHistory : assetHistory.slice(0, 1);
