@@ -112,6 +112,9 @@ export default function StaffAIChatbot({ isDarkMode }: StaffAIChatbotProps) {
       else if (/(outlook|email|syncing|sync)/i.test(lowerInput)) {
         finalResponse = "📧 **Outlook Email Fixes:**\n\n1️⃣ **Not Opening:** Press CTRL+Shift+ESC, 'End Task' Outlook. Try again.\n2️⃣ **Not Syncing:** Open Outlook -> File -> Office Account -> Update Options -> Update Now. (Do this weekly!).\n[IMG:/chat-images/outlook-update.png]";
       }
+      else if (/(excel|sheet|spreadsheet)/i.test(lowerInput)) {
+        finalResponse = "📊 **Excel Sheet Not Opening / Not Working:**\n\nPlease ensure that the email account signed in to your browser is the same account provided by the administrator. If a different account is logged in, you may be unable to access the Excel sheet due to permission restrictions.\n\nIf the correct account is already signed in and the file still does not open:\n1. Close all browser tabs.\n2. Clear your browser cache and browsing history.\n3. Sign in again with the email account provided by the administrator.\n4. Try opening the Excel sheet once more.\n\nIf the issue persists, please raise a ticket under the Software category, provide a brief description of the issue, and send it to the IT Admin team for further assistance.";
+      }
       else if (/(hello|hi|hey|greetings|help|support|assist)/i.test(lowerInput)) {
         finalResponse = "Hello there! I am the VSIT automated assistant. I can answer questions about raising tickets, software errors, signing agreements, or replacing broken hardware. How can I help you today?";
       }
