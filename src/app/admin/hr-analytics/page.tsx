@@ -232,7 +232,7 @@ export default function HRAnalyticsPage() {
                 <div className="flex-1 flex items-center justify-center p-10"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>
               ) : (
                 <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
+                  <table className="w-full text-left border-collapse min-w-175">
                     <thead className={`text-[9px] font-bold uppercase tracking-widest border-b ${isDarkMode ? 'bg-black/40 border-white/10 text-zinc-400' : 'bg-white/80 border-white/40 text-slate-500'}`}>
                       <tr>
                         <th className="p-4">Applicant Detail</th>
@@ -284,8 +284,8 @@ export default function HRAnalyticsPage() {
           PROFILE REVIEW SCREEN MODAL (Full details & Dynamic Actions)
       ==================================================== */}
       {reviewModal && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center p-2 sm:p-4 pt-16 sm:pt-20 pb-10 bg-black/40 backdrop-blur-md animate-in fade-in overflow-y-auto">
-          <div className={`relative w-full max-w-4xl flex flex-col rounded-[2rem] shadow-[0_32px_80px_rgba(0,0,0,0.3)] border overflow-hidden my-auto ${theme.glassCard}`}>
+        <div className="fixed inset-0 z-100 flex items-start justify-center p-2 sm:p-4 pt-16 sm:pt-20 pb-10 bg-black/40 backdrop-blur-md animate-in fade-in overflow-y-auto">
+          <div className={`relative w-full max-w-4xl flex flex-col rounded-4xl shadow-[0_32px_80px_rgba(0,0,0,0.3)] border overflow-hidden my-auto ${theme.glassCard}`}>
             
             {/* Header Sticky */}
             <div className={`px-6 py-5 border-b shrink-0 flex justify-between items-center sticky top-0 z-20 ${isDarkMode ? 'border-white/10 bg-zinc-900/90' : 'border-slate-200 bg-white/90'} backdrop-blur-xl`}>
@@ -376,28 +376,28 @@ export default function HRAnalyticsPage() {
               
               {/* Everyone can be rejected unless already rejected */}
               {reviewModal.status !== 'Rejected' && (
-                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Rejected')} disabled={isUpdating} className="flex-1 min-w-[120px] py-3.5 text-rose-500 bg-rose-500/10 hover:bg-rose-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-rose-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
+                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Rejected')} disabled={isUpdating} className="flex-1 min-w-30 py-3.5 text-rose-500 bg-rose-500/10 hover:bg-rose-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-rose-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
                   {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Reject
                 </button>
               )}
 
               {/* If New / Pending -> Allow Approve */}
               {(reviewModal.status === 'Pending Review' || !reviewModal.status) && (
-                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Approved')} disabled={isUpdating} className="flex-1 min-w-[120px] py-3.5 text-blue-500 bg-blue-500/10 hover:bg-blue-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
+                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Approved')} disabled={isUpdating} className="flex-1 min-w-30 py-3.5 text-blue-500 bg-blue-500/10 hover:bg-blue-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-blue-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
                   {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Approve Profile
                 </button>
               )}
 
               {/* If Approved -> Allow Assign Demo */}
               {reviewModal.status === 'Approved' && (
-                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Demo Assigned')} disabled={isUpdating} className="flex-1 min-w-[120px] py-3.5 text-purple-500 bg-purple-500/10 hover:bg-purple-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-purple-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
+                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Demo Assigned')} disabled={isUpdating} className="flex-1 min-w-30 py-3.5 text-purple-500 bg-purple-500/10 hover:bg-purple-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-purple-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
                   {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} />} Assign Demo
                 </button>
               )}
 
               {/* If Demo Assigned/Submitted -> Allow Select */}
               {(reviewModal.status === 'Demo Assigned' || reviewModal.status === 'Demo Submitted' || reviewModal.status === 'Approved') && (
-                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Selected')} disabled={isUpdating} className="flex-1 min-w-[120px] py-3.5 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-emerald-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
+                <button onClick={() => handleStatusUpdate(reviewModal.id, 'Selected')} disabled={isUpdating} className="flex-1 min-w-30 py-3.5 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-all border border-emerald-500/20 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
                   {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Mark as Selected
                 </button>
               )}

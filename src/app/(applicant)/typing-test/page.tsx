@@ -181,7 +181,7 @@ export default function TypingTestPage() {
           
           {/* Reference Text Display (EYE COMFORT MODE) */}
           <div className="flex-1 p-8 md:p-12 overflow-y-auto custom-scrollbar select-none relative z-10">
-            <p className={`font-mono text-xl md:text-2xl leading-[2.2] tracking-wide break-words`}>
+            <p className={`font-mono text-xl md:text-2xl leading-[2.2] tracking-wide wrap-break-word`}>
               {SAMPLE_TEXT.split('').map((char, index) => {
                 let colorClass = theme.textSub; // Untyped (Soft Gray)
                 let bgClass = '';
