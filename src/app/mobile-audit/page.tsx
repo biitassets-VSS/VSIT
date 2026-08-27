@@ -3,50 +3,52 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { 
-  Camera, Lock, Loader2, ShieldCheck, CheckCircle2, 
-  MonitorPlay, Laptop, PanelLeft, PanelRight, ScanBarcode
-} from 'lucide-react';
+import { Camera, Lock, Loader2, ShieldCheck, CheckCircle2, AlertTriangle, MonitorSmartphone, Mouse } from 'lucide-react';
 
 function MobileVerifyContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session');
-  
-  const requiredCount = 5; 
+  const assetId = searchParams.get('assetId');
+  const requiredCount = parseInt(searchParams.get('req') || '2', 10);
   const staffName = searchParams.get('name') || 'Unknown Staff';
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
-  
-  const auditType = searchParams.get('auditType')?.toUpperCase() || '';
-  
-  let pageTitle = "SECURE HANDOFF";
-  if (auditType === 'INSPECTION') pageTitle = "SECURE INSPECTION";
-  else if (auditType === 'RETURN') pageTitle = "SECURE RETURN";
-  else if (auditType === 'REPLACE' || auditType === 'REPLACEMENT') pageTitle = "SECURE REPLACEMENT";
+  const category = searchParams.get('cat') || 'Hardware';
+  const notes = searchParams.get('notes') || '';
+  const isLaptop = category.toLowerCase().includes('laptop');
 
   const [isLocked, setIsLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadedCount, setUploadedCount] = useState(0);
-  const [capturedUrls, setCapturedUrls] = useState<string[]>([]);
   const [success, setSuccess] = useState(false);
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const channelRef = useRef<any>(null);
+
+  // 🌟 AI-Guided Step Instructions
+  const laptopSteps = [
+    { title: "Screen & Keypad", desc: "Open laptop, capture full display and keyboard.", icon: MonitorSmartphone },
+    { title: "Top Lid (Closed)", desc: "Close laptop, capture the top exterior cover.", icon: MonitorSmartphone },
+    { title: "Left Side Ports", desc: "Capture all ports on the left edge clearly.", icon: MonitorSmartphone },
+    { title: "Right Side Ports", desc: "Capture all ports on the right edge clearly.", icon: MonitorSmartphone },
+    { title: "Bottom S/N & Tag", desc: "Flip over, capture the Asset Tag & Serial Number.", icon: MonitorSmartphone }
+  ];
+
+  const accessorySteps = [
+    { title: "Top / Front View", desc: "Capture the main visible surface of the device.", icon: Mouse },
+    { title: "Bottom / Asset Tag", desc: "Capture the bottom showing the Asset Tag or S/N.", icon: Mouse }
+  ];
+
+  const activeSteps = isLaptop ? laptopSteps : accessorySteps;
+  const currentStepInfo = activeSteps[Math.min(uploadedCount, activeSteps.length - 1)] || activeSteps[0];
 
   useEffect(() => {
-    if (!sessionId) { setLoading(false); return; }
+    if (!sessionId) {
+      setLoading(false);
+      return;
+    }
     const locked = localStorage.getItem(`locked_session_${sessionId}`);
     if (locked) setIsLocked(true);
-    
-    const channel = supabase.channel(`qr_session_${sessionId}`, {
-      config: { broadcast: { ack: true } }
-    });
-    
-    channel.subscribe();
-    channelRef.current = channel;
     setLoading(false);
-
-    return () => { supabase.removeChannel(channel); }
   }, [sessionId]);
 
   const getDeviceName = () => {
@@ -59,87 +61,84 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 EXACT AI PHOTO MAPPING (Keyboard, Lid, Left, Right, Bottom Tag)
-  const laptopGuides = [
-    { title: "Screen & Keyboard", desc: "Capture the display and keyboard area fully.", icon: MonitorPlay, sampleImg: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?q=80&w=800&auto=format&fit=crop" },
-    { title: "Top Lid", desc: "Capture the outer lid showing the brand logo.", icon: Laptop, sampleImg: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800&auto=format&fit=crop" },
-    { title: "Left Side Ports", desc: "Capture the left side showing all USB/Type-C ports.", icon: PanelLeft, sampleImg: "https://images.unsplash.com/photo-1625842268584-8f3296236761?q=80&w=800&auto=format&fit=crop" },
-    { title: "Right Side Ports", desc: "Capture the right side showing all ports.", icon: PanelRight, sampleImg: "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?q=80&w=800&auto=format&fit=crop" },
-    { title: "Bottom & Tag", desc: "Capture the bottom casing showing the serial number / asset tag.", icon: ScanBarcode, sampleImg: "https://images.unsplash.com/photo-1601524909162-ae8725290836?q=80&w=800&auto=format&fit=crop" }
-  ];
-  
-  const currentGuide = laptopGuides[Math.min(uploadedCount, laptopGuides.length - 1)];
-
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      const objectUrl = URL.createObjectURL(file); 
-
       img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        setTimeout(() => {
-          try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return reject(new Error("Canvas not supported"));
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject("Canvas not supported");
 
-            const MAX_WIDTH = 1200; 
-            let width = img.width;
-            let height = img.height;
+        const MAX_WIDTH = 1600;
+        let width = img.width;
+        let height = img.height;
 
-            if (width > MAX_WIDTH) {
-              height = Math.round((height * MAX_WIDTH) / width);
-              width = MAX_WIDTH;
-            }
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
 
-            canvas.width = width;
-            canvas.height = height;
-            
-            ctx.drawImage(img, 0, 0, width, height);
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
 
-            const fontSize = Math.max(14, Math.floor(canvas.width / 40));
-            const padding = fontSize;
-            const textX = padding;
-            const textY = canvas.height - (fontSize * 4.5);
-            
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-            ctx.fillRect(0, canvas.height - (fontSize * 6.5), canvas.width, fontSize * 6.5);
+        const fontSize = Math.max(16, Math.floor(canvas.width / 35));
+        const padding = fontSize;
+        const textX = padding;
+        const textY = canvas.height - (fontSize * 4.5);
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.fillRect(0, canvas.height - (fontSize * 6.5), canvas.width, fontSize * 6.5);
 
-            ctx.font = `bold ${fontSize}px sans-serif`;
-            ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 4;
-            
-            ctx.fillText(`👤 STAFF: ${staffName} (${empCode})`, textX, textY);
-            ctx.fillText(`📅 DATE/TIME: ${new Date().toLocaleString('en-IN')}`, textX, textY + fontSize * 1.5);
-            ctx.fillText(`📱 DEVICE: ${getDeviceName()}`, textX, textY + fontSize * 3);
-            ctx.fillText(`📍 ANGLE: ${currentGuide.title.toUpperCase()}`, textX, textY + fontSize * 4.5);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        
+        ctx.fillText(`👤 STAFF: ${staffName} (${empCode})`, textX, textY);
+        ctx.fillText(`📅 DATE/TIME: ${new Date().toLocaleString('en-IN')}`, textX, textY + fontSize * 1.5);
+        ctx.fillText(`📱 DEVICE: ${getDeviceName()}`, textX, textY + fontSize * 3);
+        ctx.fillText(`🔒 SECURE LIVE CAPTURE`, textX, textY + fontSize * 4.5);
 
-            canvas.toBlob((blob) => {
-              canvas.width = 0;
-              canvas.height = 0; 
-              if (blob) resolve(blob);
-              else reject(new Error("Blob conversion failed"));
-            }, 'image/jpeg', 0.70); 
-
-          } catch (err) {
-            reject(err);
-          }
-        }, 50); 
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject("Blob conversion failed");
+        }, 'image/jpeg', 0.80);
       };
-
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error("Image load failed"));
-      };
-
-      img.src = objectUrl;
+      img.onerror = () => reject("Image load failed");
+      img.src = URL.createObjectURL(file);
     });
+  };
+
+  const finalizeInspection = async (finalUrls: string[]) => {
+    if (!assetId) return;
+    try {
+      // 1. Update Asset Status instantly
+      await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', assetId);
+      
+      // 2. Insert Inspection Record
+      await supabase.from('inspections').insert({
+        asset_id: assetId,
+        status: 'Pending Review',
+        notes: notes || 'Mobile Device Audit Complete',
+        photos: finalUrls
+      });
+
+      // 3. Notify Admin Dashboard real-time
+      await supabase.from('notifications').insert({
+        target_role: 'admin',
+        title: 'New Hardware Audit',
+        message: `${staffName} submitted a new audit for ${category}. Awaiting your review.`,
+        type: 'inspection',
+        is_read: false
+      });
+    } catch (e) {
+      console.error("Failed to finalize in DB", e);
+    }
   };
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    
     const file = e.target.files[0];
     setUploading(true);
 
@@ -148,50 +147,33 @@ function MobileVerifyContent() {
       const fileExt = 'jpg';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
-      const { data: uploadData, error } = await supabase.storage
-        .from('asset-photos')
-        .upload(`${fileName}`, watermarkedBlob, { 
-          contentType: 'image/jpeg',
-          upsert: false 
+      const { error } = await supabase.storage.from('attachments').upload(`asset-attachments/${fileName}`, watermarkedBlob, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      
+      const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
+      const newUrls = [...uploadedUrls, data.publicUrl];
+      setUploadedUrls(newUrls);
+      
+      if (sessionId) {
+        await supabase.channel(`qr_session_${sessionId}`).send({
+          type: 'broadcast',
+          event: 'photo_uploaded',
+          payload: { url: data.publicUrl }
         });
-      
-      if (error) {
-        console.error("Supabase Storage Error Details:", error);
-        throw new Error(`Upload rejected. Check Supabase Storage RLS.`);
       }
-      
-      const { data } = supabase.storage.from('asset-photos').getPublicUrl(`${fileName}`);
-      const newCapturedUrls = [...capturedUrls, data.publicUrl];
-      setCapturedUrls(newCapturedUrls);
       
       const newCount = uploadedCount + 1;
       setUploadedCount(newCount);
 
       if (newCount >= requiredCount) {
+        await finalizeInspection(newUrls); // Instantly triggers dashboard lock
         setSuccess(true);
         if (sessionId) localStorage.setItem(`locked_session_${sessionId}`, 'true');
         setIsLocked(true);
-
-        if (channelRef.current) {
-          await channelRef.current.send({
-            type: 'broadcast',
-            event: 'session_complete',
-            payload: { success: true, photos: newCapturedUrls, type: auditType }
-          });
-        }
-      } else {
-        if (channelRef.current) {
-          await channelRef.current.send({
-            type: 'broadcast',
-            event: 'photo_uploaded',
-            payload: { url: data.publicUrl }
-          });
-        }
       }
 
     } catch (err: any) {
-      console.error("Upload Crash:", err);
-      alert(`${err.message}`);
+      alert(`Failed to upload photo: ${err.message}. Please try again.`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -200,7 +182,7 @@ function MobileVerifyContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
         <Loader2 className="animate-spin text-purple-500 w-10 h-10"/>
       </div>
     );
@@ -208,89 +190,80 @@ function MobileVerifyContent() {
 
   if (isLocked || success) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-8 text-center space-y-5 font-sans">
-        <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
-          {success ? <CheckCircle2 className="text-emerald-500 w-12 h-12" /> : <Lock className="text-emerald-500 w-12 h-12" />}
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-8 text-center space-y-5 font-sans relative overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vh] bg-emerald-500/20 blur-[100px] rounded-full pointer-events-none" />
+        <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/50 shadow-[0_0_40px_rgba(16,185,129,0.3)] z-10">
+          <CheckCircle2 className="text-emerald-400 w-12 h-12" />
         </div>
-        <h1 className="text-2xl font-black uppercase tracking-widest text-emerald-400">
-          {success ? 'Upload Complete' : 'Session Locked'}
+        <h1 className="text-2xl font-black uppercase tracking-widest text-white z-10">
+          Upload Complete
         </h1>
-        <p className="text-zinc-400 font-semibold text-sm leading-relaxed max-w-xs">
-          The hardware photos have been securely beamed back to your workstation. You may now close this window on your phone.
+        <p className="text-slate-300 font-semibold text-sm leading-relaxed max-w-xs z-10">
+          The hardware photos have been securely transmitted to the admin dashboard. Your staff portal is now updated.
+        </p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-8 px-4 py-2 bg-white/10 rounded-full border border-white/20 z-10">
+          You may safely close this window
         </p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-start py-8 px-5 text-center space-y-5 font-sans relative overflow-x-hidden overflow-y-auto">
-      <div className="absolute top-0 left-0 w-full h-1.5 bg-zinc-800">
+    <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-start pt-12 p-6 text-center space-y-6 font-sans relative overflow-hidden">
+      <div className="absolute top-[-20%] right-[-10%] w-[70vw] h-[70vh] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none" />
+      
+      <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-800">
         <div className="h-full bg-purple-500 transition-all duration-500 shadow-[0_0_15px_rgba(168,85,247,0.8)]" style={{ width: `${(uploadedCount / requiredCount) * 100}%` }}></div>
       </div>
       
-      <div className="space-y-2 relative z-10 w-full max-w-sm mt-2">
-        <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
-          <ShieldCheck className="text-purple-400 w-7 h-7" />
-        </div>
-        <h1 className="text-lg font-black uppercase tracking-widest text-white">{pageTitle}</h1>
+      <div className="space-y-3 relative z-10 w-full max-w-sm">
+        <h1 className="text-xl font-black uppercase tracking-widest text-white">Live Hardware Audit</h1>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Target: {category}</p>
       </div>
 
-      <div className="w-full max-w-sm text-left bg-zinc-900 border border-purple-500/30 rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] relative overflow-hidden animate-in zoom-in-95 duration-300">
-        <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 mb-3 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-          Required Angle {uploadedCount + 1} of {requiredCount}
-        </p>
-        <div className="w-full h-40 bg-zinc-800 rounded-2xl mb-4 overflow-hidden relative border border-white/10">
-          <img src={currentGuide.sampleImg} alt="Sample Angle" className="w-full h-full object-cover opacity-80 mix-blend-luminosity" />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-             <span className="bg-black/60 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/20 shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-               Sample Reference
-             </span>
-          </div>
+      {/* 🌟 AI Guided Photo Instruction Card */}
+      <div className="bg-white/10 backdrop-blur-2xl border border-white/20 p-5 rounded-3xl w-full max-w-sm flex flex-col items-center gap-3 shadow-[0_8px_30px_rgba(0,0,0,0.2)] z-10">
+        <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center border border-purple-500/40 shadow-inner">
+          <currentStepInfo.icon className="text-purple-400 w-7 h-7" />
         </div>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-black/50 border border-white/10 rounded-xl flex items-center justify-center shrink-0 text-white shadow-inner">
-            <currentGuide.icon size={20} strokeWidth={1.5} />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-white leading-tight mb-0.5">{currentGuide.title}</h3>
-            <p className="text-[10px] font-medium text-zinc-400 leading-snug">{currentGuide.desc}</p>
-          </div>
+        <div className="text-center">
+          <h2 className="text-sm font-black uppercase tracking-widest text-purple-300 mb-1">
+            Photo {uploadedCount + 1}: {currentStepInfo.title}
+          </h2>
+          <p className="text-[11px] font-semibold text-slate-300 leading-relaxed px-2">
+            {currentStepInfo.desc}
+          </p>
         </div>
       </div>
 
-      <div className="bg-zinc-900/50 border border-white/5 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 shadow-inner">
-        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-          <span>Staff Identity:</span> 
-          <span className="text-zinc-200 truncate max-w-36 text-right">{staffName}</span>
+      <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 z-10">
+        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+          <span>Staff Identity:</span> <span className="text-slate-200 truncate max-w-[150px] text-right">{staffName}</span>
         </div>
-        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-          <span>Employee Code:</span> 
-          <span className="text-zinc-200">{empCode}</span>
+        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+          <span>Upload Status:</span> <span className="text-purple-400">{uploadedCount} / {requiredCount} Complete</span>
         </div>
         <div className="flex justify-between items-center">
-          <span>Upload Status:</span> 
-          <span className="text-purple-400">{uploadedCount} / {requiredCount} Completed</span>
+          <span>Device Meta:</span> <span className="text-emerald-400 truncate max-w-[120px] text-right">{getDeviceName()}</span>
         </div>
       </div>
 
-      <div className="w-full max-w-sm pt-2 pb-4">
+      <div className="w-full max-w-sm pt-2 z-10">
         {uploading ? (
-          <div className="flex flex-col items-center gap-3 py-3.5 bg-zinc-900/50 rounded-full border border-white/5">
+          <div className="flex flex-col items-center gap-3 py-4 bg-slate-800/50 rounded-full border border-slate-700">
             <Loader2 className="animate-spin text-purple-500 w-6 h-6" />
-            <span className="font-black tracking-widest uppercase text-[9px] text-purple-400">
-              Encrypting & Transmitting...
-            </span>
+            <span className="font-black tracking-widest uppercase text-[10px] text-purple-400">Processing...</span>
           </div>
         ) : (
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="w-full py-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest shadow-[0_4px_25px_rgba(168,85,247,0.4)] flex items-center justify-center gap-2.5 active:scale-95 transition-all cursor-pointer border border-purple-500"
+            className="w-full py-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.4)] flex items-center justify-center gap-3 active:scale-95 transition-all border border-purple-400"
           >
-            <Camera size={18} /> Capture Angle {uploadedCount + 1}
+            <Camera size={18} /> Capture {currentStepInfo.title}
           </button>
         )}
       </div>
+
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
     </div>
   );
@@ -298,11 +271,7 @@ function MobileVerifyContent() {
 
 export default function MobileVerifyPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6 text-center">
-        <Loader2 className="animate-spin text-purple-500 w-10 h-10"/>
-      </div>
-    }>
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center"><Loader2 className="animate-spin text-purple-500 w-10 h-10"/></div>}>
       <MobileVerifyContent />
     </Suspense>
   );
