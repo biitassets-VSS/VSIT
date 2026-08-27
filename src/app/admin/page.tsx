@@ -147,14 +147,36 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const adminChannel = supabase
       .channel('admin-live-feed')
+      // 1. Listen for explicit Notifications
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
         triggerDesktopAlert(payload.new.title || 'System Alert', payload.new.message || 'New notification received.');
       })
+      // 2. Listen for Return/Replace Requests in Inspections
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, (payload) => {
+        const notes = (payload.new.notes || '').toLowerCase();
+        const status = (payload.new.status || '').toLowerCase();
+        
+        if (notes.includes('return') || status.includes('return')) {
+           triggerDesktopAlert('New Return Request', 'A staff member has initiated an asset return.');
+        } else if (notes.includes('replace') || status.includes('replace')) {
+           triggerDesktopAlert('New Replacement Request', 'A staff member has requested an asset replacement.');
+        }
+        loadAdminData(false);
+      })
+      // 3. Listen for direct Asset status changes
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => {
+        const newStatus = (payload.new.status || '').toLowerCase();
+        
+        if (newStatus.includes('return') || newStatus.includes('replace')) {
+           triggerDesktopAlert('Asset Status Update', 'An asset was flagged for return or replacement.');
+        }
+        loadAdminData(false);
+      })
+      // 4. Standard refresh listeners
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadAdminData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => loadAdminData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => loadAdminData(false))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false))
       .subscribe();
+
     return () => { supabase.removeChannel(adminChannel); };
   }, []);
 
