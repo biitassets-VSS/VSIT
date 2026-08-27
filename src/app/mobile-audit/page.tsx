@@ -5,23 +5,19 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Camera, Lock, Loader2, ShieldCheck, CheckCircle2, 
-  AlertTriangle, MonitorPlay, Laptop, PanelLeft, PanelRight, ScanBarcode
+  MonitorPlay, Laptop, PanelLeft, PanelRight, ScanBarcode
 } from 'lucide-react';
 
 function MobileVerifyContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session');
-  const assetId = searchParams.get('assetId');
-  const userId = searchParams.get('userId');
   
-  const requiredCount = parseInt(searchParams.get('req') || '5', 10);
+  const requiredCount = 5; 
   const staffName = searchParams.get('name') || 'Unknown Staff';
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
-  const cond = searchParams.get('cond') || 'Good';
-  const notes = searchParams.get('notes') || '';
   
   const isLaptop = (searchParams.get('cat') || '').toLowerCase().includes('laptop');
-  const auditType = searchParams.get('auditType')?.toUpperCase() || 'INSPECTION';
+  const auditType = searchParams.get('auditType')?.toUpperCase() || '';
   
   let pageTitle = "SECURE HANDOFF";
   if (auditType === 'INSPECTION') pageTitle = "SECURE INSPECTION";
@@ -53,7 +49,6 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 DYNAMIC UPLOAD GUIDES WITH 5 HIGH-QUALITY AI SAMPLE PHOTOS
   const laptopGuides = [
     { title: "Screen & Keyboard", desc: "Capture the display and keyboard area fully.", icon: MonitorPlay, sampleImg: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?q=80&w=800&auto=format&fit=crop" },
     { title: "Top Lid", desc: "Capture the outer lid showing the brand logo.", icon: Laptop, sampleImg: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800&auto=format&fit=crop" },
@@ -152,7 +147,7 @@ function MobileVerifyContent() {
       const fileExt = 'jpg';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
-      const { error } = await supabase.storage
+      const { data: uploadData, error } = await supabase.storage
         .from('asset-photos')
         .upload(`${fileName}`, watermarkedBlob, { 
           contentType: 'image/jpeg',
@@ -160,8 +155,8 @@ function MobileVerifyContent() {
         });
       
       if (error) {
-        console.error("Supabase Storage Error:", error);
-        throw new Error(`Upload rejected by server. Ensure your Supabase RLS policies are set up correctly.`);
+        console.error("Supabase Storage Error Details:", error);
+        throw new Error(`Upload rejected. Please check your Supabase Storage RLS policies for 'asset-photos'.`);
       }
       
       const { data } = supabase.storage.from('asset-photos').getPublicUrl(`${fileName}`);
@@ -171,81 +166,27 @@ function MobileVerifyContent() {
       const newCount = uploadedCount + 1;
       setUploadedCount(newCount);
 
-      // 🌟 IF ALL 5 PHOTOS ARE FINISHED -> EXECUTE DATABASE LOGIC HERE
       if (newCount >= requiredCount) {
         setSuccess(true);
         if (sessionId) localStorage.setItem(`locked_session_${sessionId}`, 'true');
         setIsLocked(true);
 
-        if (assetId) {
-          // 1. Update main asset status
-          const updatePayload: any = { 
-            photos: newCapturedUrls,
-            last_inspection_date: new Date().toISOString()
-          };
-          if (auditType === 'INSPECTION') updatePayload.inspection_status = 'Pending Review';
-          if (auditType === 'RETURN') updatePayload.status = 'Pending Return';
-          if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') updatePayload.status = 'Replacement Requested';
-          
-          await supabase.from('assets').update(updatePayload).eq('id', assetId);
-
-          // 2. Create historical Inspection / Action Log (Important for Admin Review)
-          await supabase.from('inspections').insert({
-            asset_id: assetId,
-            user_id: userId || null,
-            user_name: staffName,
-            status: 'Pending Review',
-            condition: cond,
-            notes: auditType === 'INSPECTION' ? notes : `[${auditType} REQUEST] ${notes}`,
-            photos: newCapturedUrls,
-            type: auditType
+        // 🌟 SHIFT POWER TO DESKTOP: We just send the photos over the channel!
+        if (sessionId) {
+          await supabase.channel(`qr_session_${sessionId}`).send({
+            type: 'broadcast',
+            event: 'session_complete',
+            payload: { success: true, photos: newCapturedUrls }
           });
-
-          // 3. Create explicit Replacement request if requested
-          if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') {
-             await supabase.from('replacements').insert({
-                old_asset_id: assetId,
-                asset_tag: searchParams.get('tag') || 'N/A',
-                serial_number: searchParams.get('sn') || 'N/A',
-                user_id: userId || null,
-                staff_name: staffName,
-                user_email: searchParams.get('email') || '',
-                emp_code: empCode,
-                condition: cond,
-                reason: notes,
-                photos: newCapturedUrls,
-                status: 'Pending Approval'
-             });
-          }
-
-          // 4. Fire Desktop Alert Notification for the Admin
-          await supabase.from('notifications').insert({
-            target_user: 'ADMIN_SYSTEM',
-            target_role: 'admin',
-            title: `New ${auditType} Submission`,
-            message: `${staffName} (${empCode}) has successfully captured and submitted a ${auditType} sequence.`,
-            type: 'info',
-            is_read: false
-          });
-          
-          // 5. Tell the Staff's Desktop Screen to close the QR popup!
-          if (sessionId) {
-            await supabase.channel(`qr_session_${sessionId}`).send({
-              type: 'broadcast',
-              event: 'session_complete',
-              payload: { success: true }
-            });
-          }
         }
       } else {
-         // Not finished yet, just broadcast progress
-         if (sessionId) {
-           await supabase.channel(`qr_session_${sessionId}`).send({
-             type: 'broadcast',
-             event: 'photo_uploaded',
-             payload: { url: data.publicUrl }
-           });
-         }
+        if (sessionId) {
+          await supabase.channel(`qr_session_${sessionId}`).send({
+            type: 'broadcast',
+            event: 'photo_uploaded',
+            payload: { url: data.publicUrl }
+          });
+        }
       }
 
     } catch (err: any) {
@@ -275,10 +216,7 @@ function MobileVerifyContent() {
           {success ? 'Upload Complete' : 'Session Locked'}
         </h1>
         <p className="text-zinc-400 font-semibold text-sm leading-relaxed max-w-xs">
-          The hardware photos have been successfully encrypted, watermarked, and transmitted to the database. This capture link is now permanently disabled.
-        </p>
-        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-8 px-4 py-2 bg-white/5 rounded-full border border-white/10">
-          You may safely close this window
+          The hardware photos have been securely beamed back to your workstation. You may now close this window on your phone.
         </p>
       </div>
     );
@@ -286,13 +224,10 @@ function MobileVerifyContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-start py-8 px-5 text-center space-y-5 font-sans relative overflow-x-hidden overflow-y-auto">
-      
-      {/* Top Progress Bar */}
       <div className="absolute top-0 left-0 w-full h-1.5 bg-zinc-800">
         <div className="h-full bg-purple-500 transition-all duration-500 shadow-[0_0_15px_rgba(168,85,247,0.8)]" style={{ width: `${(uploadedCount / requiredCount) * 100}%` }}></div>
       </div>
       
-      {/* Header */}
       <div className="space-y-2 relative z-10 w-full max-w-sm mt-2">
         <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
           <ShieldCheck className="text-purple-400 w-7 h-7" />
@@ -300,14 +235,11 @@ function MobileVerifyContent() {
         <h1 className="text-lg font-black uppercase tracking-widest text-white">{pageTitle}</h1>
       </div>
 
-      {/* 🌟 SAMPLE PHOTO REFERENCE UI */}
       <div className="w-full max-w-sm text-left bg-zinc-900 border border-purple-500/30 rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] relative overflow-hidden animate-in zoom-in-95 duration-300">
         <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 mb-3 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
           Required Angle {uploadedCount + 1} of {requiredCount}
         </p>
-
-        {/* Dynamic Sample Image based on current angle */}
         <div className="w-full h-40 bg-zinc-800 rounded-2xl mb-4 overflow-hidden relative border border-white/10">
           <img src={currentGuide.sampleImg} alt="Sample Angle" className="w-full h-full object-cover opacity-80 mix-blend-luminosity" />
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
@@ -316,7 +248,6 @@ function MobileVerifyContent() {
              </span>
           </div>
         </div>
-
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-black/50 border border-white/10 rounded-xl flex items-center justify-center shrink-0 text-white shadow-inner">
             <currentGuide.icon size={20} strokeWidth={1.5} />
@@ -328,23 +259,6 @@ function MobileVerifyContent() {
         </div>
       </div>
 
-      {/* Embedded Metadata Panel */}
-      <div className="bg-zinc-900/50 border border-white/5 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 shadow-inner">
-        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-          <span>Staff Identity:</span> 
-          <span className="text-zinc-200 truncate max-w-36 text-right">{staffName}</span>
-        </div>
-        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-          <span>Employee Code:</span> 
-          <span className="text-zinc-200">{empCode}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span>Upload Status:</span> 
-          <span className="text-purple-400">{uploadedCount} / {requiredCount} Completed</span>
-        </div>
-      </div>
-
-      {/* Capture Action */}
       <div className="w-full max-w-sm pt-2 pb-4">
         {uploading ? (
           <div className="flex flex-col items-center gap-3 py-3.5 bg-zinc-900/50 rounded-full border border-white/5">
@@ -362,15 +276,7 @@ function MobileVerifyContent() {
           </button>
         )}
       </div>
-
-      <input 
-        type="file" 
-        accept="image/*" 
-        capture="environment"
-        ref={fileInputRef} 
-        className="hidden" 
-        onChange={handleCapture} 
-      />
+      <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
     </div>
   );
 }
