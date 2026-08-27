@@ -418,7 +418,9 @@ export default function StaffDashboardPage() {
     const sessionId = crypto.randomUUID();
     setQrSessionId(sessionId);
     
-    const uploadLink = `${window.location.origin}/mobile-verify?session=${sessionId}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&emp=${encodeURIComponent(currentUser.emp_id)}`;
+    // 🌟 FIX: Changed /mobile-verify to /mobile-audit to match your folder structure
+    const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&emp=${encodeURIComponent(currentUser.emp_id)}`;
+    
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
   };
 
