@@ -106,26 +106,22 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
-  // Dashboard Unified Modal State
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
     isOpen: false,
     type: '',
   });
 
-  // Replacement Flow State
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
   const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
   const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
-  // QR and Photo State
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
   const [localPhotos, setLocalPhotos] = useState<File[]>([]);
 
-  // Handover Agreement & Inspection View State
   const [handoverAsset, setHandoverAsset] = useState<any>(null);
   const [viewAgreementAsset, setViewAgreementAsset] = useState<any>(null);
   const [viewInspectionAsset, setViewInspectionAsset] = useState<any>(null);
@@ -271,6 +267,7 @@ export default function StaffDashboardPage() {
         let isReturnPending = false;
         let isReplacePending = false;
         let isReplaceRejected = false;
+        let isInspectionRejected = false;
 
         const hasRejectionKeywords = ['reject', 'declin', 'missing', 'upload', 'resend', 'again'].some(kw => allAdminRemarks.includes(kw));
 
@@ -297,9 +294,25 @@ export default function StaffDashboardPage() {
             }
         }
 
+        if (!isReturnRejected && !isReturnPending && !isReturnApproved && !isReplacePending && !isReplaceRejected) {
+            if (inspStatus.includes('reject') || inspStatus.includes('fail') || inspStatus.includes('action required') || liveInspStatus.includes('reject') || liveInspStatus.includes('fail') || liveInspStatus.includes('re-inspection')) {
+                isInspectionRejected = true;
+            }
+        }
+
+        // 🌟 EXPLICIT STATUS OVERRIDE FIX
+        // This ensures the badge correctly shows the rejected status even if the DB row says 'Pending'
+        let finalDisplayStatus = latestInsp?.status || asset.inspection_status || 'Pending';
+        if (isReturnRejected) finalDisplayStatus = 'Return Declined';
+        else if (isReplaceRejected) finalDisplayStatus = 'Replace Declined';
+        else if (isInspectionRejected) finalDisplayStatus = 'Audit Rejected';
+        else if (isReturnPending) finalDisplayStatus = 'Return Pending';
+        else if (isReplacePending) finalDisplayStatus = 'Replace Pending';
+        else if (latestInsp?.status === 'Approved') finalDisplayStatus = 'Approved';
+
         return {
           ...asset,
-          live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
+          live_inspection_status: finalDisplayStatus,
           live_inspection_date: latestInsp?.created_at || asset.last_inspection_date || null,
           live_admin_remarks: asset.admin_remarks || latestReturnInsp?.admin_remarks || latestInsp?.admin_remarks || null,
           latest_notes: latestInsp?.notes || null,
@@ -310,7 +323,8 @@ export default function StaffDashboardPage() {
           isReturnRejected,
           isReturnApproved,
           isReplacePending,
-          isReplaceRejected
+          isReplaceRejected,
+          isInspectionRejected
         };
       });
 
@@ -367,29 +381,31 @@ export default function StaffDashboardPage() {
     const auditWindow = getAuditWindowInfo(asset.category);
     const liveStatus = (asset.live_inspection_status || '').toLowerCase();
     
+    // 1. Lock if waiting on a Return or Replacement to be approved
     if (asset.isReturnPending || asset.isReplacePending) {
       return { disabled: true, text: "Locked", classes: "bg-white/40 backdrop-blur-xl text-slate-400 font-bold border border-white/60 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
     }
 
-    if (liveStatus === 'pending review' || liveStatus === 'pending') {
-      return { disabled: true, text: "Under Review", classes: "bg-purple-50/80 backdrop-blur-xl text-purple-600 font-bold border border-purple-200 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]" };
-    }
-
-    // Explicit rejection rule (Admin rejects request)
-    if (liveStatus.includes('reject') || liveStatus.includes('fail')) {
+    // 2. Explicit Rejection Rules
+    if (asset.isInspectionRejected || liveStatus === 'audit rejected' || liveStatus.includes('fail')) {
       return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
-    // Explicit re-inspection rule (Admin requests new photos)
+    // 3. Admin requested new photos
     if (liveStatus.includes('re-inspection') || liveStatus.includes('action required')) {
       return { disabled: false, text: "Re-Inspection Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
+    // 4. Pending standard inspection. Notice we explicitly check that it isn't a declined return.
+    if (liveStatus === 'pending review' || liveStatus === 'pending') {
+      return { disabled: true, text: "Under Review", classes: "bg-purple-50/80 backdrop-blur-xl text-purple-600 font-bold border border-purple-200 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]" };
+    }
+
+    // 5. Normal Audit Cycle evaluation
     if (asset.isOverdue) {
       return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
-    // Check if an Approved inspection exists WITHIN this exact cycle
     const hasAudited = allInspections.some(insp => {
        const d = new Date(insp.created_at);
        return insp.asset_id === asset.id && 
@@ -402,18 +418,15 @@ export default function StaffDashboardPage() {
 
     if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
-    // Otherwise, check if window is open
     const auditDateStr = auditWindow.windowStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     if (!auditWindow.isOpen) return { disabled: true, text: `Opens\n${auditDateStr}`, classes: "bg-white/40 backdrop-blur-xl text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
-    // Window is open, active!
     return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
   };
 
   // 🌟 STRICT GLOBAL BUTTON SYNC
   const isGlobalAuditOpen = assignedAssets.some(a => {
     const state = getAssetAuditState(a);
-    // If ANY asset has a button that is NOT disabled, and is NOT waiting to open, global is open.
     return !state.disabled && !state.text.includes('Opens');
   });
 
@@ -422,7 +435,6 @@ export default function StaffDashboardPage() {
     return !state.disabled && !state.text.includes('Opens');
   }).length;
 
-  // Use the synchronized count for the stats
   useEffect(() => {
     setStats(prev => ({...prev, needsInspection: needsInspCount}));
   }, [assignedAssets, needsInspCount]);
@@ -581,9 +593,9 @@ export default function StaffDashboardPage() {
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
     if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
-    if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
-    if (s.includes('replace')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
-    if (s.includes('reject') || s.includes('fail') || s.includes('re-audit') || s.includes('re-inspection')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+    if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
+    if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
     if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
     return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
@@ -821,6 +833,7 @@ export default function StaffDashboardPage() {
                             asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
                             btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
                             asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
+                            asset.live_inspection_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                             'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
                             {
@@ -1368,7 +1381,6 @@ export default function StaffDashboardPage() {
                       </ul>
                     </div>
 
-                    {/* 🌟 ULTRA-PREMIUM SCALLOPED SILVER METALLIC HOLOGRAM (STAFF SIGNATURE) */}
                     <div className="flex flex-col items-center mt-6 relative">
                       {isViewMode && (
                          <div className="absolute top-0 right-2 px-3 py-1 bg-emerald-100/80 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
