@@ -381,7 +381,7 @@ export default function StaffTicketsPage() {
       {/* 🌟 2026 MACOS PURE LIQUID GLASS REPLACEMENT REQUEST MODAL - GRAY THEME REMOVED */}
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 z-999 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
             
             {/* Backdrop Blur overlay */}
             <motion.div 
@@ -395,7 +395,7 @@ export default function StaffTicketsPage() {
               initial={{ scale: 0.95, opacity: 0, y: 20 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className={`relative w-full max-w-120 rounded-[2.5rem] flex flex-col overflow-hidden ${theme.glassCard}`}
+              className={`relative w-full max-w-[30rem] rounded-[2.5rem] flex flex-col overflow-hidden ${theme.glassCard}`}
             >
               {/* Header */}
               <div className="px-8 pt-8 pb-5 flex justify-between items-center relative z-10">
@@ -420,8 +420,8 @@ export default function StaffTicketsPage() {
               {/* Top Divider */}
               <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
 
-              {/* Form Body */}
-              <form onSubmit={handleRequestSubmit} className="px-8 pt-6 pb-6 flex flex-col gap-6 relative z-10">
+              {/* Form Body - ADDED ID HERE */}
+              <form id="replacement-form" onSubmit={handleRequestSubmit} className="px-8 pt-6 pb-6 flex flex-col gap-6 relative z-10">
                 
                 {/* Select Asset - Uses inner glass theme */}
                 <div className="flex flex-col gap-2.5">
@@ -483,7 +483,7 @@ export default function StaffTicketsPage() {
                     onChange={(e) => setReason(e.target.value)}
                     required
                     placeholder="Describe what happened..."
-                    className={`w-full px-6 py-5 rounded-2xl text-[15px] font-semibold transition-all outline-none min-h-35 resize-none ${theme.glassInnerCard} ${
+                    className={`w-full px-6 py-5 rounded-2xl text-[15px] font-semibold transition-all outline-none min-h-[8.75rem] resize-none ${theme.glassInnerCard} ${
                       isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'
                     }`}
                   />
@@ -499,14 +499,16 @@ export default function StaffTicketsPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className={`w-35 py-3.5 rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
+                  className={`w-[8.75rem] py-3.5 rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
                 >
                   Cancel
                 </button>
+                {/* ADDED form="replacement-form" HERE */}
                 <button
                   type="submit"
+                  form="replacement-form"
                   disabled={isSubmitting || !selectedAssetId || !reason.trim()}
-                  className="w-35 py-3.5 bg-linear-to-r from-[#a78bfa] to-[#8b5cf6] text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all shadow-[0_4px_20px_rgba(139,92,246,0.35)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
+                  className="w-[8.75rem] py-3.5 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all shadow-[0_4px_20px_rgba(139,92,246,0.35)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
                 >
                   {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Transmit'}
                 </button>
