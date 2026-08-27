@@ -789,7 +789,6 @@ export default function StaffDashboardPage() {
                         animate={{ opacity: 1, scale: 1, x: 0 }}
                         exit={{ opacity: 0, scale: 0.98, x: -10 }}
                         transition={{ duration: 0.25 }}
-                        // 🌟 STRICT FIX: Removed overflow scroll completely. Reduced padding to keep elements tight and locked to 100% height.
                         className={`w-full h-full py-4 sm:py-5 px-10 sm:px-14 lg:px-16 rounded-3xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
                       >
                         {/* Top Banner section */}
@@ -885,7 +884,7 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
-                        {/* Action Bar Distributed Bottom - Tighter Buttons */}
+                        {/* 🌟 ACTION BAR - FIXED CROSS-LOCKING LOGIC */}
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
                           
                           {/* LEFT: RETURN */}
@@ -907,10 +906,10 @@ export default function StaffDashboardPage() {
                               </button>
                             ) : (
                               <button 
-                                disabled={asset.isReplacePending || asset.isReplaceRejected}
+                                disabled={asset.isReplacePending} // Changed: Removed isReplaceRejected
                                 onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
                                 className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                                  (asset.isReplacePending || asset.isReplaceRejected)
+                                  (asset.isReplacePending)
                                     ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
                                     : 'bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
                                 }`}
@@ -940,10 +939,10 @@ export default function StaffDashboardPage() {
                               </button>
                             ) : (
                               <button 
-                                disabled={asset.isReturnPending || asset.isReturnRejected}
+                                disabled={asset.isReturnPending} // Changed: Removed isReturnRejected
                                 onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
                                 className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                                  (asset.isReturnPending || asset.isReturnRejected)
+                                  (asset.isReturnPending)
                                     ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
                                     : 'bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
                                 }`}
