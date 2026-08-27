@@ -390,9 +390,10 @@ export default function StaffDashboardPage() {
       try {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        const { error } = await supabase.storage.from('attachments').upload(`asset-attachments/${fileName}`, file);
+        // 🌟 FIX: Ensuring manual local uploads correctly go to 'asset-photos'
+        const { error } = await supabase.storage.from('asset-photos').upload(fileName, file);
         if (!error) {
-          const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
+          const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
           uploadedUrls.push(data.publicUrl);
         }
       } catch (error) { console.error("Upload failed", error); }
@@ -541,7 +542,6 @@ export default function StaffDashboardPage() {
       return { disabled: true, text: "Locked", classes: "bg-white/40 backdrop-blur-xl text-slate-400 font-bold border border-white/60 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
     }
 
-    // 🌟 INSTANT LOCK FIX
     const liveStatus = (asset.live_inspection_status || '').toLowerCase();
     if (liveStatus === 'pending review' || liveStatus === 'pending') {
       return { disabled: true, text: "Under Review", classes: "bg-purple-50/80 backdrop-blur-xl text-purple-600 font-bold border border-purple-200 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]" };
@@ -1503,7 +1503,6 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
       }
 
       try {
-        // 🌟 INSTANT LOCK IMPLEMENTATION FOR RETURN
         await supabase.from('assets').update({ status: 'Pending Return', inspection_status: 'Pending Review' }).eq('id', targetAsset.id);
         if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map(a => a.id === targetAsset.id ? { ...a, status: 'Pending Return', live_inspection_status: 'Pending Review' } : a));
         
@@ -1627,13 +1626,21 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
               <div className="p-4 sm:p-5 rounded-[2rem] inline-block shadow-2xl mx-auto border bg-white border-slate-200">
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
               </div>
+              
+              {/* 🌟 Updated Staff Modal Requirements to match mobile-audit explicitly */}
               <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
                 <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
                 <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
-                  {(asset?.category || '').toLowerCase().includes('laptop') ? (
-                    <><li>✅ Screen & Keypad view</li><li>✅ Top and Bottom (with Tag)</li><li>✅ Left and Right Side Ports</li></>
+                  {(asset?.category || formCategory || '').toLowerCase().includes('laptop') ? (
+                    <>
+                      <li>✅ 1. Screen with Keypad</li>
+                      <li>✅ 2. Top lid brand logo</li>
+                      <li>✅ 3. Left side all ports</li>
+                      <li>✅ 4. Right side all ports</li>
+                      <li>✅ 5. Bottom full with Asset Tag</li>
+                    </>
                   ) : (
-                    <><li>✅ Clear Front / Top View</li><li>✅ Bottom View (showing Asset Tag)</li></>
+                    <><li>✅ 1. Clear Front / Top View</li><li>✅ 2. Bottom View (showing Asset Tag)</li></>
                   )}
                 </ul>
               </div>

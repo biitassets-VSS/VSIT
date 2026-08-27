@@ -24,13 +24,13 @@ function MobileVerifyContent() {
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 🌟 AI-Guided Step Instructions
+  // 🌟 AI-Guided Step Instructions based on exact rules
   const laptopSteps = [
     { title: "Screen & Keypad", desc: "Open laptop, capture full display and keyboard.", icon: MonitorSmartphone },
-    { title: "Top Lid (Closed)", desc: "Close laptop, capture the top exterior cover.", icon: MonitorSmartphone },
+    { title: "Top Lid Brand Logo", desc: "Close laptop, capture the top exterior brand logo.", icon: MonitorSmartphone },
     { title: "Left Side Ports", desc: "Capture all ports on the left edge clearly.", icon: MonitorSmartphone },
     { title: "Right Side Ports", desc: "Capture all ports on the right edge clearly.", icon: MonitorSmartphone },
-    { title: "Bottom S/N & Tag", desc: "Flip over, capture the Asset Tag & Serial Number.", icon: MonitorSmartphone }
+    { title: "Bottom S/N & Tag", desc: "Flip over, capture the bottom showing Asset Tag & Serial Number fully.", icon: MonitorSmartphone }
   ];
 
   const accessorySteps = [
@@ -113,10 +113,8 @@ function MobileVerifyContent() {
   const finalizeInspection = async (finalUrls: string[]) => {
     if (!assetId) return;
     try {
-      // 1. Update Asset Status instantly
       await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', assetId);
       
-      // 2. Insert Inspection Record
       await supabase.from('inspections').insert({
         asset_id: assetId,
         status: 'Pending Review',
@@ -124,7 +122,6 @@ function MobileVerifyContent() {
         photos: finalUrls
       });
 
-      // 3. Notify Admin Dashboard real-time
       await supabase.from('notifications').insert({
         target_role: 'admin',
         title: 'New Hardware Audit',
@@ -147,10 +144,14 @@ function MobileVerifyContent() {
       const fileExt = 'jpg';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
-      const { error } = await supabase.storage.from('attachments').upload(`asset-attachments/${fileName}`, watermarkedBlob, { contentType: 'image/jpeg' });
+      // 🌟 FIX: Updated bucket name to 'asset-photos' which exists in your Supabase DB
+      const { error } = await supabase.storage
+        .from('asset-photos')
+        .upload(fileName, watermarkedBlob, { contentType: 'image/jpeg' });
       if (error) throw error;
       
-      const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
+      // 🌟 FIX: Fetching public URL from the correct 'asset-photos' bucket
+      const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
       const newUrls = [...uploadedUrls, data.publicUrl];
       setUploadedUrls(newUrls);
       
@@ -166,7 +167,7 @@ function MobileVerifyContent() {
       setUploadedCount(newCount);
 
       if (newCount >= requiredCount) {
-        await finalizeInspection(newUrls); // Instantly triggers dashboard lock
+        await finalizeInspection(newUrls);
         setSuccess(true);
         if (sessionId) localStorage.setItem(`locked_session_${sessionId}`, 'true');
         setIsLocked(true);
@@ -182,7 +183,7 @@ function MobileVerifyContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#0d0914] flex items-center justify-center p-6 text-center">
         <Loader2 className="animate-spin text-purple-500 w-10 h-10"/>
       </div>
     );
@@ -190,7 +191,7 @@ function MobileVerifyContent() {
 
   if (isLocked || success) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-8 text-center space-y-5 font-sans relative overflow-hidden">
+      <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-center p-8 text-center space-y-5 font-sans relative overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vh] bg-emerald-500/20 blur-[100px] rounded-full pointer-events-none" />
         <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/50 shadow-[0_0_40px_rgba(16,185,129,0.3)] z-10">
           <CheckCircle2 className="text-emerald-400 w-12 h-12" />
@@ -209,7 +210,7 @@ function MobileVerifyContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-start pt-12 p-6 text-center space-y-6 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-start pt-12 p-6 text-center space-y-6 font-sans relative overflow-hidden">
       <div className="absolute top-[-20%] right-[-10%] w-[70vw] h-[70vh] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none" />
       
       <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-800">
@@ -222,7 +223,7 @@ function MobileVerifyContent() {
       </div>
 
       {/* 🌟 AI Guided Photo Instruction Card */}
-      <div className="bg-white/10 backdrop-blur-2xl border border-white/20 p-5 rounded-3xl w-full max-w-sm flex flex-col items-center gap-3 shadow-[0_8px_30px_rgba(0,0,0,0.2)] z-10">
+      <div className="bg-[#1a1325] border border-purple-500/20 p-5 rounded-3xl w-full max-w-sm flex flex-col items-center gap-3 shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-10">
         <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center border border-purple-500/40 shadow-inner">
           <currentStepInfo.icon className="text-purple-400 w-7 h-7" />
         </div>
@@ -236,11 +237,11 @@ function MobileVerifyContent() {
         </div>
       </div>
 
-      <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 z-10">
-        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+      <div className="bg-[#1a1325] border border-purple-500/20 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 z-10">
+        <div className="flex justify-between items-center border-b border-white/5 pb-2">
           <span>Staff Identity:</span> <span className="text-slate-200 truncate max-w-[150px] text-right">{staffName}</span>
         </div>
-        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+        <div className="flex justify-between items-center border-b border-white/5 pb-2">
           <span>Upload Status:</span> <span className="text-purple-400">{uploadedCount} / {requiredCount} Complete</span>
         </div>
         <div className="flex justify-between items-center">
@@ -250,18 +251,22 @@ function MobileVerifyContent() {
 
       <div className="w-full max-w-sm pt-2 z-10">
         {uploading ? (
-          <div className="flex flex-col items-center gap-3 py-4 bg-slate-800/50 rounded-full border border-slate-700">
+          <div className="flex flex-col items-center gap-3 py-4 bg-[#1a1325] rounded-full border border-purple-500/20">
             <Loader2 className="animate-spin text-purple-500 w-6 h-6" />
             <span className="font-black tracking-widest uppercase text-[10px] text-purple-400">Processing...</span>
           </div>
         ) : (
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="w-full py-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.4)] flex items-center justify-center gap-3 active:scale-95 transition-all border border-purple-400"
+            className="w-full py-4 rounded-full bg-[#a855f7] hover:bg-purple-500 text-white font-black uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.4)] flex items-center justify-center gap-3 active:scale-95 transition-all border border-purple-400"
           >
             <Camera size={18} /> Capture {currentStepInfo.title}
           </button>
         )}
+      </div>
+
+      <div className="absolute bottom-6 left-0 w-full text-center pointer-events-none">
+        <p className="text-[10px] font-black tracking-widest text-[#a855f7]/50">Designed by AinodeArt</p>
       </div>
 
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
@@ -271,7 +276,7 @@ function MobileVerifyContent() {
 
 export default function MobileVerifyPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center"><Loader2 className="animate-spin text-purple-500 w-10 h-10"/></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#0d0914] flex items-center justify-center p-6 text-center"><Loader2 className="animate-spin text-purple-500 w-10 h-10"/></div>}>
       <MobileVerifyContent />
     </Suspense>
   );
