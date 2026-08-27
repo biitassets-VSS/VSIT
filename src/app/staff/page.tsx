@@ -117,10 +117,15 @@ export default function StaffDashboardPage() {
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
   const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
+  const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
+  // QR and Photo State
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
+  const [localPhotos, setLocalPhotos] = useState<File[]>([]);
 
+  // Handover Agreement & Inspection View State
   const [handoverAsset, setHandoverAsset] = useState<any>(null);
   const [viewAgreementAsset, setViewAgreementAsset] = useState<any>(null);
   const [viewInspectionAsset, setViewInspectionAsset] = useState<any>(null);
@@ -144,6 +149,7 @@ export default function StaffDashboardPage() {
     return () => observer.disconnect();
   }, []);
 
+  // 🌟 DESKTOP NOTIFICATION SYSTEM
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
@@ -380,6 +386,22 @@ export default function StaffDashboardPage() {
     } catch (e) { console.error(e); }
   };
 
+  const uploadMultiplePhotos = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const { error } = await supabase.storage.from('asset-photos').upload(`${fileName}`, file);
+        if (!error) {
+          const { data } = supabase.storage.from('asset-photos').getPublicUrl(`${fileName}`);
+          uploadedUrls.push(data.publicUrl);
+        }
+      } catch (error) { console.error("Upload failed", error); }
+    }
+    return uploadedUrls;
+  };
+
   const resetReplaceModal = () => {
     setShowReplaceModal(false);
     setReplaceAssetId('');
@@ -387,6 +409,8 @@ export default function StaffDashboardPage() {
     setReplaceCondition('Minor Wear');
     setQrUrl(null);
     setQrSessionId(null);
+    setRemotePhotos([]);
+    setLocalPhotos([]);
   };
 
   const handleGenerateQR = (asset: any) => {
@@ -400,6 +424,74 @@ export default function StaffDashboardPage() {
     const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${currentUser.id}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&cond=${encodeURIComponent(replaceCondition)}&notes=${encodeURIComponent(replaceReason)}&auditType=REPLACEMENT&tag=${encodeURIComponent(asset.asset_tag)}&sn=${encodeURIComponent(asset.serial_number || '')}&email=${encodeURIComponent(currentUser.email)}`;
     
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
+  };
+
+  // The actual form handler for the Replace Modal (if they choose direct computer upload)
+  const handleReplaceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replaceAssetId) return;
+    setIsSubmittingReplace(true);
+
+    const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
+    if (!activeAsset) return;
+
+    try {
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
+
+      const { error: insertError } = await supabase.from('replacements').insert({
+        old_asset_id: activeAsset.id,
+        asset_tag: activeAsset.asset_tag,
+        serial_number: activeAsset.serial_number,
+        user_id: currentUser.id,
+        staff_name: currentUser.name,
+        user_email: currentUser.email, 
+        emp_code: currentUser.emp_id,
+        condition: replaceCondition,
+        reason: replaceReason,
+        photos: allPhotos.length > 0 ? allPhotos : null,
+        status: 'Pending Approval'
+      });
+      if (insertError) throw insertError;
+
+      // Update assets table logic
+      await supabase.from('assets').update({ 
+        status: 'Replacement Requested', 
+        photos: allPhotos,
+        admin_remarks: null 
+      }).eq('id', activeAsset.id);
+
+      // Create history inspection log
+      await supabase.from('inspections').insert({
+        asset_id: activeAsset.id,
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        status: 'Pending Review',
+        condition: replaceCondition,
+        notes: `[REPLACEMENT REQUEST] ${replaceReason}`,
+        photos: allPhotos,
+        type: 'REPLACEMENT'
+      });
+
+      // Ping Admin
+      await supabase.from('notifications').insert({
+        target_user: 'ADMIN_SYSTEM',
+        target_role: 'admin',
+        title: `New REPLACEMENT Submission`,
+        message: `${currentUser.name} (${currentUser.emp_id}) has submitted a manual replacement request.`,
+        type: 'info',
+        is_read: false
+      });
+
+      loadRealDatabase(false); 
+      resetReplaceModal();
+      toast.success(`Replacement request for ${activeAsset.asset_tag} sent successfully.`);
+    } catch (err: any) { 
+      console.error("Replace Submit Error:", err);
+      toast.error(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
+    } finally { 
+      setIsSubmittingReplace(false); 
+    }
   };
 
   const handleDigitalSign = async () => {
@@ -519,6 +611,10 @@ export default function StaffDashboardPage() {
   if (!isAuthorized) return null; 
 
   const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
+  const REQUIRED_PHOTOS = 5; 
+  const currentPhotoCount = remotePhotos.length + localPhotos.length;
+  const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
+
   const activeIndex = assignedAssets.length > 0 ? Math.min(currentAssetIndex, Math.max(0, assignedAssets.length - 1)) : 0;
   const visibleAsset = assignedAssets[activeIndex];
 
@@ -1554,11 +1650,9 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
               <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
                 <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
                 <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
-                  {(asset?.category || '').toLowerCase().includes('laptop') ? (
-                    <><li>✅ Screen & Keypad view</li><li>✅ Top and Bottom (with Tag)</li><li>✅ Left and Right Side Ports</li></>
-                  ) : (
-                    <><li>✅ Clear Front / Top View</li><li>✅ Bottom View (showing Asset Tag)</li></>
-                  )}
+                  <li>✅ Screen & Keypad view</li>
+                  <li>✅ Top and Bottom (with Tag)</li>
+                  <li>✅ Left and Right Side Ports</li>
                 </ul>
               </div>
             </div>
@@ -1735,4 +1829,4 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
       </motion.div>
     </div>
   );
-}
+} 
