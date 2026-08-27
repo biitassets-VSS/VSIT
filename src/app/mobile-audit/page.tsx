@@ -50,25 +50,24 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 DYNAMIC UPLOAD GUIDES
+  // 🌟 DYNAMIC UPLOAD GUIDES WITH SAMPLE PHOTOS
   const laptopGuides = [
-    { title: "Screen & Keyboard", desc: "Capture the display and keyboard area fully.", icon: MonitorPlay },
-    { title: "Top Lid", desc: "Capture the outer lid showing the brand logo.", icon: Laptop },
-    { title: "Left Side Ports", desc: "Capture the left side showing all USB/Type-C ports.", icon: PanelLeft },
-    { title: "Right Side Ports", desc: "Capture the right side showing all ports.", icon: PanelRight },
-    { title: "Bottom & Tag", desc: "Capture the bottom casing showing the serial number / asset tag.", icon: ScanBarcode }
+    { title: "Screen & Keyboard", desc: "Capture the display and keyboard area fully.", icon: MonitorPlay, sampleImg: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?q=80&w=800&auto=format&fit=crop" },
+    { title: "Top Lid", desc: "Capture the outer lid showing the brand logo.", icon: Laptop, sampleImg: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800&auto=format&fit=crop" },
+    { title: "Left Side Ports", desc: "Capture the left side showing all USB/Type-C ports.", icon: PanelLeft, sampleImg: "https://images.unsplash.com/photo-1625842268584-8f3296236761?q=80&w=800&auto=format&fit=crop" },
+    { title: "Right Side Ports", desc: "Capture the right side showing all ports.", icon: PanelRight, sampleImg: "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?q=80&w=800&auto=format&fit=crop" },
+    { title: "Bottom & Tag", desc: "Capture the bottom casing showing the serial number / asset tag.", icon: ScanBarcode, sampleImg: "https://images.unsplash.com/photo-1601524909162-ae8725290836?q=80&w=800&auto=format&fit=crop" }
   ];
   
   const accessoryGuides = [
-    { title: "Front / Top View", desc: "Capture a clear overall photo of the device.", icon: Camera },
-    { title: "Bottom / Tag View", desc: "Capture the bottom or back showing the asset tag.", icon: ScanBarcode }
+    { title: "Front / Top View", desc: "Capture a clear overall photo of the device.", icon: Camera, sampleImg: "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?q=80&w=800&auto=format&fit=crop" },
+    { title: "Bottom / Tag View", desc: "Capture the bottom or back showing the asset tag.", icon: ScanBarcode, sampleImg: "https://images.unsplash.com/photo-1625842268584-8f3296236761?q=80&w=800&auto=format&fit=crop" }
   ];
 
   const currentGuide = isLaptop 
     ? laptopGuides[Math.min(uploadedCount, laptopGuides.length - 1)] 
     : accessoryGuides[Math.min(uploadedCount, accessoryGuides.length - 1)];
 
-  // 🌟 COMPRESSED WATERMARK ENGINE (SAVES CLOUD STORAGE)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -119,7 +118,7 @@ function MobileVerifyContent() {
               canvas.height = 0; 
               if (blob) resolve(blob);
               else reject(new Error("Blob conversion failed"));
-            }, 'image/jpeg', 0.70); // 70% Quality compresses images to save DB storage space
+            }, 'image/jpeg', 0.70); 
 
           } catch (err) {
             reject(err);
@@ -147,7 +146,6 @@ function MobileVerifyContent() {
       const fileExt = 'jpg';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
-      // 🌟 FIX: Updated bucket name to 'asset-photos' based on your Supabase structure
       const { error } = await supabase.storage
         .from('asset-photos')
         .upload(`${fileName}`, watermarkedBlob, { contentType: 'image/jpeg' });
@@ -174,8 +172,7 @@ function MobileVerifyContent() {
         if (sessionId) localStorage.setItem(`locked_session_${sessionId}`, 'true');
         setIsLocked(true);
 
-        // 🌟 FIX: Database overwrite logic. Replaces old photos with the new set on the Asset record.
-        // The old historical photos are inherently kept safe in the 'inspections' table archive.
+        // Overwrites the main assets table with ONLY the latest photos
         if (assetId) {
           await supabase.from('assets').update({ photos: newCapturedUrls }).eq('id', assetId);
         }
@@ -183,7 +180,7 @@ function MobileVerifyContent() {
 
     } catch (err: any) {
       console.error(err);
-      alert(`Failed to encrypt and upload photo: ${err.message}. Please try again.`);
+      alert(`Upload failed: ${err.message}. Ensure Supabase RLS policies allow public inserts.`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -193,7 +190,7 @@ function MobileVerifyContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6 text-center">
-        <Loader2 className="animate-spin text-orange-500 w-10 h-10"/>
+        <Loader2 className="animate-spin text-purple-500 w-10 h-10"/>
       </div>
     );
   }
@@ -218,7 +215,7 @@ function MobileVerifyContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-start py-10 px-5 text-center space-y-6 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-start py-8 px-5 text-center space-y-5 font-sans relative overflow-x-hidden overflow-y-auto">
       
       {/* Top Progress Bar */}
       <div className="absolute top-0 left-0 w-full h-1.5 bg-zinc-800">
@@ -226,35 +223,42 @@ function MobileVerifyContent() {
       </div>
       
       {/* Header */}
-      <div className="space-y-3 relative z-10 w-full max-w-sm mt-4">
-        <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto border border-purple-500/30 mb-4 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
-          <ShieldCheck className="text-purple-400 w-8 h-8" />
+      <div className="space-y-2 relative z-10 w-full max-w-sm mt-2">
+        <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+          <ShieldCheck className="text-purple-400 w-7 h-7" />
         </div>
-        <h1 className="text-xl font-black uppercase tracking-widest text-white">{pageTitle}</h1>
+        <h1 className="text-lg font-black uppercase tracking-widest text-white">{pageTitle}</h1>
       </div>
 
-      {/* 🌟 DYNAMIC PHOTO ANGLE GUIDE */}
-      <div className="w-full max-w-sm text-left bg-zinc-900 border border-purple-500/30 rounded-3xl p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] relative overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        
-        <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 mb-4 flex items-center gap-2">
+      {/* 🌟 SAMPLE PHOTO REFERENCE UI */}
+      <div className="w-full max-w-sm text-left bg-zinc-900 border border-purple-500/30 rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] relative overflow-hidden animate-in zoom-in-95 duration-300">
+        <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 mb-3 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
           Required Angle {uploadedCount + 1} of {requiredCount}
         </p>
 
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-black/50 border border-white/10 rounded-2xl flex items-center justify-center shrink-0 text-white shadow-inner">
-            <currentGuide.icon size={24} strokeWidth={1.5} />
+        <div className="w-full h-40 bg-zinc-800 rounded-2xl mb-4 overflow-hidden relative border border-white/10">
+          <img src={currentGuide.sampleImg} alt="Sample Angle" className="w-full h-full object-cover opacity-80 mix-blend-luminosity" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+             <span className="bg-black/60 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/20">
+               Sample Reference
+             </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-black/50 border border-white/10 rounded-xl flex items-center justify-center shrink-0 text-white shadow-inner">
+            <currentGuide.icon size={20} strokeWidth={1.5} />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white leading-tight mb-1">{currentGuide.title}</h3>
-            <p className="text-[11px] font-medium text-zinc-400 leading-snug">{currentGuide.desc}</p>
+            <h3 className="text-sm font-bold text-white leading-tight mb-0.5">{currentGuide.title}</h3>
+            <p className="text-[10px] font-medium text-zinc-400 leading-snug">{currentGuide.desc}</p>
           </div>
         </div>
       </div>
 
       {/* Embedded Metadata Panel */}
-      <div className="bg-zinc-900/50 border border-white/5 p-5 rounded-3xl text-left w-full max-w-sm space-y-3 text-[10px] font-black uppercase tracking-widest text-zinc-500 shadow-inner">
+      <div className="bg-zinc-900/50 border border-white/5 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 shadow-inner">
         <div className="flex justify-between items-center border-b border-white/5 pb-2">
           <span>Staff Identity:</span> 
           <span className="text-zinc-200 truncate max-w-36 text-right">{staffName}</span>
@@ -270,20 +274,20 @@ function MobileVerifyContent() {
       </div>
 
       {/* Capture Action */}
-      <div className="w-full max-w-sm pt-2">
+      <div className="w-full max-w-sm pt-2 pb-4">
         {uploading ? (
-          <div className="flex flex-col items-center gap-4 py-4 bg-zinc-900/50 rounded-full border border-white/5">
-            <Loader2 className="animate-spin text-purple-500 w-8 h-8" />
-            <span className="font-black tracking-widest uppercase text-[10px] text-purple-400">
+          <div className="flex flex-col items-center gap-3 py-3.5 bg-zinc-900/50 rounded-full border border-white/5">
+            <Loader2 className="animate-spin text-purple-500 w-6 h-6" />
+            <span className="font-black tracking-widest uppercase text-[9px] text-purple-400">
               Encrypting & Transmitting...
             </span>
           </div>
         ) : (
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="w-full py-5 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest shadow-[0_4px_25px_rgba(168,85,247,0.4)] flex items-center justify-center gap-3 active:scale-95 transition-all cursor-pointer border border-purple-500"
+            className="w-full py-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest shadow-[0_4px_25px_rgba(168,85,247,0.4)] flex items-center justify-center gap-2.5 active:scale-95 transition-all cursor-pointer border border-purple-500"
           >
-            <Camera size={20} /> Capture Angle {uploadedCount + 1}
+            <Camera size={18} /> Capture Angle {uploadedCount + 1}
           </button>
         )}
       </div>
