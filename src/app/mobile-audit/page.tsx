@@ -12,13 +12,16 @@ function MobileVerifyContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session');
   const assetId = searchParams.get('assetId');
+  const userId = searchParams.get('userId');
   
   const requiredCount = parseInt(searchParams.get('req') || '5', 10);
   const staffName = searchParams.get('name') || 'Unknown Staff';
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
+  const cond = searchParams.get('cond') || 'Good';
+  const notes = searchParams.get('notes') || '';
   
   const isLaptop = (searchParams.get('cat') || '').toLowerCase().includes('laptop');
-  const auditType = searchParams.get('auditType')?.toUpperCase() || '';
+  const auditType = searchParams.get('auditType')?.toUpperCase() || 'INSPECTION';
   
   let pageTitle = "SECURE HANDOFF";
   if (auditType === 'INSPECTION') pageTitle = "SECURE INSPECTION";
@@ -50,7 +53,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 DYNAMIC UPLOAD GUIDES WITH SAMPLE PHOTOS
+  // 🌟 DYNAMIC UPLOAD GUIDES WITH 5 HIGH-QUALITY AI SAMPLE PHOTOS
   const laptopGuides = [
     { title: "Screen & Keyboard", desc: "Capture the display and keyboard area fully.", icon: MonitorPlay, sampleImg: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?q=80&w=800&auto=format&fit=crop" },
     { title: "Top Lid", desc: "Capture the outer lid showing the brand logo.", icon: Laptop, sampleImg: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800&auto=format&fit=crop" },
@@ -61,6 +64,9 @@ function MobileVerifyContent() {
   
   const accessoryGuides = [
     { title: "Front / Top View", desc: "Capture a clear overall photo of the device.", icon: Camera, sampleImg: "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?q=80&w=800&auto=format&fit=crop" },
+    { title: "Left View", desc: "Capture the left side profile.", icon: PanelLeft, sampleImg: "https://images.unsplash.com/photo-1585155770447-2f66e2a397b5?q=80&w=800&auto=format&fit=crop" },
+    { title: "Right View", desc: "Capture the right side profile.", icon: PanelRight, sampleImg: "https://images.unsplash.com/photo-1585155770447-2f66e2a397b5?q=80&w=800&auto=format&fit=crop" },
+    { title: "Close-up", desc: "Capture a close-up of any buttons or identifying marks.", icon: Camera, sampleImg: "https://images.unsplash.com/photo-1592209148011-8fc4d101d293?q=80&w=800&auto=format&fit=crop" },
     { title: "Bottom / Tag View", desc: "Capture the bottom or back showing the asset tag.", icon: ScanBarcode, sampleImg: "https://images.unsplash.com/photo-1625842268584-8f3296236761?q=80&w=800&auto=format&fit=crop" }
   ];
 
@@ -148,39 +154,103 @@ function MobileVerifyContent() {
       
       const { error } = await supabase.storage
         .from('asset-photos')
-        .upload(`${fileName}`, watermarkedBlob, { contentType: 'image/jpeg' });
+        .upload(`${fileName}`, watermarkedBlob, { 
+          contentType: 'image/jpeg',
+          upsert: false 
+        });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase Storage Error:", error);
+        throw new Error(`Upload rejected by server. Ensure your Supabase RLS policies are set up correctly.`);
+      }
       
       const { data } = supabase.storage.from('asset-photos').getPublicUrl(`${fileName}`);
       const newCapturedUrls = [...capturedUrls, data.publicUrl];
       setCapturedUrls(newCapturedUrls);
       
-      if (sessionId) {
-        await supabase.channel(`qr_session_${sessionId}`).send({
-          type: 'broadcast',
-          event: 'photo_uploaded',
-          payload: { url: data.publicUrl }
-        });
-      }
-      
       const newCount = uploadedCount + 1;
       setUploadedCount(newCount);
 
+      // 🌟 IF ALL 5 PHOTOS ARE FINISHED -> EXECUTE DATABASE LOGIC HERE
       if (newCount >= requiredCount) {
         setSuccess(true);
         if (sessionId) localStorage.setItem(`locked_session_${sessionId}`, 'true');
         setIsLocked(true);
 
-        // Overwrites the main assets table with ONLY the latest photos
         if (assetId) {
-          await supabase.from('assets').update({ photos: newCapturedUrls }).eq('id', assetId);
+          // 1. Update main asset status
+          const updatePayload: any = { 
+            photos: newCapturedUrls,
+            last_inspection_date: new Date().toISOString()
+          };
+          if (auditType === 'INSPECTION') updatePayload.inspection_status = 'Pending Review';
+          if (auditType === 'RETURN') updatePayload.status = 'Pending Return';
+          if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') updatePayload.status = 'Replacement Requested';
+          
+          await supabase.from('assets').update(updatePayload).eq('id', assetId);
+
+          // 2. Create historical Inspection / Action Log (Important for Admin Review)
+          await supabase.from('inspections').insert({
+            asset_id: assetId,
+            user_id: userId || null,
+            user_name: staffName,
+            status: 'Pending Review',
+            condition: cond,
+            notes: auditType === 'INSPECTION' ? notes : `[${auditType} REQUEST] ${notes}`,
+            photos: newCapturedUrls,
+            type: auditType
+          });
+
+          // 3. Create explicit Replacement request if requested
+          if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') {
+             await supabase.from('replacements').insert({
+                old_asset_id: assetId,
+                asset_tag: searchParams.get('tag') || 'N/A',
+                serial_number: searchParams.get('sn') || 'N/A',
+                user_id: userId || null,
+                staff_name: staffName,
+                user_email: searchParams.get('email') || '',
+                emp_code: empCode,
+                condition: cond,
+                reason: notes,
+                photos: newCapturedUrls,
+                status: 'Pending Approval'
+             });
+          }
+
+          // 4. Fire Desktop Alert Notification for the Admin
+          await supabase.from('notifications').insert({
+            target_user: 'ADMIN_SYSTEM',
+            target_role: 'admin',
+            title: `New ${auditType} Submission`,
+            message: `${staffName} (${empCode}) has successfully captured and submitted a ${auditType} sequence.`,
+            type: 'info',
+            is_read: false
+          });
+          
+          // 5. Tell the Staff's Desktop Screen to close the QR popup!
+          if (sessionId) {
+            await supabase.channel(`qr_session_${sessionId}`).send({
+              type: 'broadcast',
+              event: 'session_complete',
+              payload: { success: true }
+            });
+          }
         }
+      } else {
+         // Not finished yet, just broadcast progress
+         if (sessionId) {
+           await supabase.channel(`qr_session_${sessionId}`).send({
+             type: 'broadcast',
+             event: 'photo_uploaded',
+             payload: { url: data.publicUrl }
+           });
+         }
       }
 
     } catch (err: any) {
-      console.error(err);
-      alert(`Upload failed: ${err.message}. Ensure Supabase RLS policies allow public inserts.`);
+      console.error("Upload Crash:", err);
+      alert(`${err.message}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -237,10 +307,11 @@ function MobileVerifyContent() {
           Required Angle {uploadedCount + 1} of {requiredCount}
         </p>
 
+        {/* Dynamic Sample Image based on current angle */}
         <div className="w-full h-40 bg-zinc-800 rounded-2xl mb-4 overflow-hidden relative border border-white/10">
           <img src={currentGuide.sampleImg} alt="Sample Angle" className="w-full h-full object-cover opacity-80 mix-blend-luminosity" />
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-             <span className="bg-black/60 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/20">
+             <span className="bg-black/60 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/20 shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
                Sample Reference
              </span>
           </div>

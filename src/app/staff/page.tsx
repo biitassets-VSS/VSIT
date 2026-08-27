@@ -117,15 +117,10 @@ export default function StaffDashboardPage() {
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
   const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
-  const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
 
-  // QR and Photo State
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
-  const [localPhotos, setLocalPhotos] = useState<File[]>([]);
 
-  // Handover Agreement & Inspection View State
   const [handoverAsset, setHandoverAsset] = useState<any>(null);
   const [viewAgreementAsset, setViewAgreementAsset] = useState<any>(null);
   const [viewInspectionAsset, setViewInspectionAsset] = useState<any>(null);
@@ -149,7 +144,6 @@ export default function StaffDashboardPage() {
     return () => observer.disconnect();
   }, []);
 
-  // 🌟 DESKTOP NOTIFICATION SYSTEM
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
@@ -365,14 +359,16 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
+  // 🌟 LISTEN FOR SUCCESSFUL MOBILE SUBMISSION
   useEffect(() => {
     if (!qrSessionId) return;
     const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
-      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
-        if (payload.payload?.url) {
-          setRemotePhotos(prev => [...prev, payload.payload.url]);
-        }
-      }).subscribe();
+      .on('broadcast', { event: 'session_complete' }, () => {
+         resetReplaceModal();
+         toast.success("Photos uploaded successfully! Request sent to Admin.", { icon: '✅', duration: 4000 });
+         loadRealDatabase(false);
+      })
+      .subscribe();
     return () => { supabase.removeChannel(photoChannel); };
   }, [qrSessionId]);
 
@@ -384,22 +380,6 @@ export default function StaffDashboardPage() {
     } catch (e) { console.error(e); }
   };
 
-  const uploadMultiplePhotos = async (files: File[]) => {
-    const uploadedUrls: string[] = [];
-    for (const file of files) {
-      try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        const { error } = await supabase.storage.from('attachments').upload(`asset-attachments/${fileName}`, file);
-        if (!error) {
-          const { data } = supabase.storage.from('attachments').getPublicUrl(`asset-attachments/${fileName}`);
-          uploadedUrls.push(data.publicUrl);
-        }
-      } catch (error) { console.error("Upload failed", error); }
-    }
-    return uploadedUrls;
-  };
-
   const resetReplaceModal = () => {
     setShowReplaceModal(false);
     setReplaceAssetId('');
@@ -407,65 +387,19 @@ export default function StaffDashboardPage() {
     setReplaceCondition('Minor Wear');
     setQrUrl(null);
     setQrSessionId(null);
-    setRemotePhotos([]);
-    setLocalPhotos([]);
   };
 
   const handleGenerateQR = (asset: any) => {
     if (!replaceReason.trim()) return alert("Please provide a replacement reason.");
 
-    const requiredPhotos = (asset?.category || '').toLowerCase().includes('laptop') ? 5 : 2;
+    const requiredPhotos = 5; 
     const sessionId = crypto.randomUUID();
     setQrSessionId(sessionId);
     
-    // 🌟 FIX: Changed /mobile-verify to /mobile-audit to match your folder structure
-    const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&emp=${encodeURIComponent(currentUser.emp_id)}`;
+    // 🌟 Generates QR link telling the phone EXACTLY what to do and update
+    const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${currentUser.id}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&cond=${encodeURIComponent(replaceCondition)}&notes=${encodeURIComponent(replaceReason)}&auditType=REPLACEMENT&tag=${encodeURIComponent(asset.asset_tag)}&sn=${encodeURIComponent(asset.serial_number || '')}&email=${encodeURIComponent(currentUser.email)}`;
     
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
-  };
-
-  const handleReplaceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!replaceAssetId) return;
-    setIsSubmittingReplace(true);
-
-    const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
-    if (!activeAsset) return;
-
-    try {
-      const newUrls = await uploadMultiplePhotos(localPhotos);
-      const allPhotos = [...remotePhotos, ...newUrls];
-
-      const { error: insertError } = await supabase.from('replacements').insert({
-        old_asset_id: activeAsset.id,
-        asset_tag: activeAsset.asset_tag,
-        serial_number: activeAsset.serial_number,
-        user_id: currentUser.id,
-        staff_name: currentUser.name,
-        user_email: currentUser.email, 
-        emp_code: currentUser.emp_id,
-        condition: replaceCondition,
-        reason: replaceReason,
-        photos: allPhotos.length > 0 ? allPhotos : null,
-        status: 'Pending Approval'
-      });
-      if (insertError) throw insertError;
-
-      const { error: updateError } = await supabase.from('assets').update({ 
-        status: 'Replacement Requested', 
-        admin_remarks: null 
-      }).eq('id', activeAsset.id);
-      if (updateError) throw updateError;
-
-      loadRealDatabase(false); 
-      resetReplaceModal();
-      toast.success(`Replacement request for ${activeAsset.asset_tag} sent successfully.`);
-    } catch (err: any) { 
-      console.error("Replace Submit Error:", err);
-      toast.error(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
-    } finally { 
-      setIsSubmittingReplace(false); 
-    }
   };
 
   const handleDigitalSign = async () => {
@@ -571,7 +505,6 @@ export default function StaffDashboardPage() {
   const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
   const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
 
-  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME
   const theme = {
     glassCard: 'bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60', 
     glassPanel: 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.7)]',
@@ -586,19 +519,12 @@ export default function StaffDashboardPage() {
   if (!isAuthorized) return null; 
 
   const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
-  const isLaptopObj = (activeAsset?.category || '').toLowerCase().includes('laptop');
-  const REQUIRED_PHOTOS = isLaptopObj ? 5 : 2;
-  const currentPhotoCount = remotePhotos.length + localPhotos.length;
-  const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
-
-  // 🌟 Carousel Active Asset calculation
   const activeIndex = assignedAssets.length > 0 ? Math.min(currentAssetIndex, Math.max(0, assignedAssets.length - 1)) : 0;
   const visibleAsset = assignedAssets[activeIndex];
 
   return (
     <div className="w-full h-full flex flex-col px-4 sm:px-5 lg:px-6 py-4 sm:py-5 lg:py-6 gap-4 sm:gap-5 overflow-hidden relative z-10 font-sans bg-transparent transition-colors duration-1000">
       
-      {/* 🌟 WELCOME BANNER (Compacted for split screen) */}
       <div className={`shrink-0 ${theme.glassCard} rounded-3xl p-4 md:px-5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 transition-all`}>
         <div>
           <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
@@ -622,7 +548,6 @@ export default function StaffDashboardPage() {
         </div>
       </div>
 
-      {/* 🌟 PENDING HANDOVER ALERT BANNER */}
       <AnimatePresence>
         {pendingHandovers.length > 0 && (
           <motion.div
@@ -752,10 +677,8 @@ export default function StaffDashboardPage() {
               </div>
             </div>
             
-            {/* Carousel Item Container - No internal scroll, flex grows to fit */}
             <div className="flex-1 relative w-full flex flex-col justify-center min-h-0">
               
-              {/* Overlay Navigation Buttons */}
               {assignedAssets.length > 1 && (
                 <>
                   <div className="absolute inset-y-0 -left-2 sm:-left-4 flex items-center z-20 pointer-events-none">
@@ -793,7 +716,6 @@ export default function StaffDashboardPage() {
                         transition={{ duration: 0.25 }}
                         className={`w-full h-full py-4 sm:py-5 px-10 sm:px-14 lg:px-16 rounded-3xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
                       >
-                        {/* Top Banner section */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0">
                           <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
                             {asset.name || asset.asset_name || asset.model || 'Generic Device'}
@@ -818,7 +740,6 @@ export default function StaffDashboardPage() {
                           </span>
                         </div>
 
-                        {/* 🌟 COMPRESSED INNER GLASS GRID */}
                         <div className={`flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-[1.25rem] shrink-0 my-2 ${theme.glassInner}`}>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="min-w-0">
@@ -861,7 +782,6 @@ export default function StaffDashboardPage() {
                                 {asset.nextDue ? asset.nextDue.toLocaleDateString('en-GB') : 'N/A'}
                               </span>
                             </div>
-                            {/* HANDOVER AGREEMENT ROW */}
                             <div className="min-w-0 flex flex-col justify-start">
                               <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Handover</span>
                               <button 
@@ -875,7 +795,6 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
                         
-                        {/* Admin Action Notice - Made More Compact */}
                         { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
                           <div className="p-2.5 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-start">
                             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
@@ -886,10 +805,8 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
-                        {/* 🌟 ACTION BAR - FIXED CROSS-LOCKING LOGIC */}
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
                           
-                          {/* LEFT: RETURN */}
                           <div className="w-full sm:flex-1 flex justify-start">
                             {asset.isReturnPending ? (
                               <button disabled className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
@@ -908,7 +825,7 @@ export default function StaffDashboardPage() {
                               </button>
                             ) : (
                               <button 
-                                disabled={asset.isReplacePending} // Changed: Removed isReplaceRejected
+                                disabled={asset.isReplacePending}
                                 onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
                                 className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
                                   (asset.isReplacePending)
@@ -921,7 +838,6 @@ export default function StaffDashboardPage() {
                             )}
                           </div>
                           
-                          {/* CENTER: REPLACE */}
                           <div className="w-full sm:flex-1 flex justify-center">
                             {asset.isReplacePending ? (
                               <button disabled className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
@@ -941,7 +857,7 @@ export default function StaffDashboardPage() {
                               </button>
                             ) : (
                               <button 
-                                disabled={asset.isReturnPending} // Changed: Removed isReturnRejected
+                                disabled={asset.isReturnPending}
                                 onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
                                 className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
                                   (asset.isReturnPending)
@@ -954,7 +870,6 @@ export default function StaffDashboardPage() {
                             )}
                           </div>
 
-                          {/* RIGHT: AUDIT / OPENS */}
                           <div className="w-full sm:flex-1 flex justify-end">
                             <button 
                               disabled={btnState.disabled}
@@ -995,7 +910,6 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* MY TICKETS */}
         <div className="w-full xl:w-1/3 flex flex-col min-h-100 lg:min-h-0 pb-4 lg:pb-0">
           <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col min-h-0 group/panel`}>
             <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40 group-hover/panel:border-purple-300 transition-colors duration-500 shrink-0">
@@ -1062,7 +976,6 @@ export default function StaffDashboardPage() {
 
       </div>
 
-      {/* 🌟 VIEW INSPECTION DETAILS MODAL */}
       <AnimatePresence>
         {viewInspectionAsset && (() => {
           const asset = viewInspectionAsset;
@@ -1155,7 +1068,6 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* 🌟 NEW REPLACEMENT MODAL */}
       <AnimatePresence>
         {showReplaceModal && activeAsset && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
@@ -1252,7 +1164,7 @@ export default function StaffDashboardPage() {
                   <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
                     <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
                     <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">
-                      {isLaptopObj ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
+                      All devices require 5 security photos.
                     </p>
                     
                     <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-5">
@@ -1295,7 +1207,6 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* 🌟 HANDOVER AGREEMENT MODAL (READ OR SIGN) */}
       <AnimatePresence>
         {(handoverAsset || viewAgreementAsset) && (() => {
           const activeItem = handoverAsset || viewAgreementAsset;
@@ -1356,7 +1267,6 @@ export default function StaffDashboardPage() {
                       </ul>
                     </div>
 
-                    {/* 🌟 ULTRA-PREMIUM SCALLOPED SILVER METALLIC HOLOGRAM (STAFF SIGNATURE) */}
                     <div className="flex flex-col items-center mt-6 relative">
                       {isViewMode && (
                          <div className="absolute top-0 right-2 px-3 py-1 bg-emerald-100/80 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
@@ -1471,6 +1381,18 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const [qrUrl, setQrUrl] = useState('');
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
+  const [activeQrSession, setActiveQrSession] = useState('');
+
+  useEffect(() => {
+    if (!activeQrSession) return;
+    const channel = supabase.channel(`qr_session_${activeQrSession}`)
+      .on('broadcast', { event: 'session_complete' }, () => {
+          setShowQR(false);
+          setSuccessDone(true);
+          setTimeout(() => onClose(), 1500); 
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeQrSession]);
 
   const handleAttemptUnlock = () => {
     if (!asset) { alert("No hardware assigned to test against!"); return; }
@@ -1482,7 +1404,10 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const generateMobileHandoff = () => {
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
-    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}`;
+    const sessionId = crypto.randomUUID();
+    setActiveQrSession(sessionId);
+    
+    const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${user.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&req=5&tag=${encodeURIComponent(asset.asset_tag)}&sn=${encodeURIComponent(asset.serial_number || '')}&email=${encodeURIComponent(user.email)}`;
     setQrUrl(url); setShowQR(true);
   };
 
@@ -1503,13 +1428,13 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
       }
 
       try {
-        await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', targetAsset.id);
-        if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map(a => a.id === targetAsset.id ? { ...a, status: 'Pending Return' } : a));
-        
         const baseUrl = window.location.origin;
         const cat = targetAsset.category;
-        const finalNotes = `[RETURN REQUEST] ${formText}`;
-        const url = `${baseUrl}/mobile-audit?assetId=${targetAsset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
+        const finalNotes = formText;
+        const sessionId = crypto.randomUUID();
+        setActiveQrSession(sessionId);
+        
+        const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${targetAsset.id}&userId=${user.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}&req=5&tag=${encodeURIComponent(targetAsset.asset_tag)}&sn=${encodeURIComponent(targetAsset.serial_number || '')}&email=${encodeURIComponent(user.email)}`;
         setQrUrl(url); setShowQR(true);
       } catch(e) {
         toast.error("Error submitting return request.");
