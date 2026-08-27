@@ -184,7 +184,7 @@ export default function StaffDashboardPage() {
           notif.type === 'broadcast'
         ) {
           triggerDesktopAlert(notif.title || 'System Alert', notif.message || 'You have a new notification.');
-          loadRealDatabase(false); // Silent refresh to show any new ticket updates
+          loadRealDatabase(false);
         }
       })
       .subscribe();
@@ -725,9 +725,9 @@ export default function StaffDashboardPage() {
         
         {/* 🌟 MY HARDWARE CAROUSEL LIST */}
         <div className="w-full lg:w-2/3 flex flex-col min-h-112.5 lg:min-h-0">
-          <div className={`${theme.glassPanel} rounded-4xl p-5 md:p-6 flex-1 flex flex-col min-h-0`}>
+          <div className={`${theme.glassPanel} rounded-4xl p-4 md:p-5 flex-1 flex flex-col min-h-0`}>
             
-            <div className="flex items-center justify-between border-b pb-4 mb-5 border-white/40 shrink-0">
+            <div className="flex items-center justify-between border-b pb-3 mb-3 border-white/40 shrink-0">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-900">
                 <Laptop className="text-purple-500 shrink-0" size={18}/> My Hardware Units
               </div>
@@ -789,15 +789,15 @@ export default function StaffDashboardPage() {
                         animate={{ opacity: 1, scale: 1, x: 0 }}
                         exit={{ opacity: 0, scale: 0.98, x: -10 }}
                         transition={{ duration: 0.25 }}
-                        // 🌟 FIX: Added overflow-y-auto, custom-scrollbar, and strict max-height boundary
-                        className={`w-full h-auto min-h-full max-h-full overflow-y-auto custom-scrollbar py-5 sm:py-6 px-12 sm:px-16 lg:px-20 rounded-4xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
+                        // 🌟 STRICT FIX: Removed overflow scroll completely. Reduced padding to keep elements tight and locked to 100% height.
+                        className={`w-full h-full py-4 sm:py-5 px-10 sm:px-14 lg:px-16 rounded-3xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
                       >
                         {/* Top Banner section */}
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
-                          <h4 className="font-semibold text-base sm:text-lg tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0">
+                          <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
                             {asset.name || asset.asset_name || asset.model || 'Generic Device'}
                           </h4>
-                          <span className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                          <span className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
                             asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
                             asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
                             asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
@@ -817,55 +817,55 @@ export default function StaffDashboardPage() {
                           </span>
                         </div>
 
-                        {/* 🌟 INNER GLASS GRID */}
-                        <div className={`flex flex-col gap-4 p-4 sm:p-5 rounded-3xl shrink-0 my-3 ${theme.glassInner}`}>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+                        {/* 🌟 COMPRESSED INNER GLASS GRID */}
+                        <div className={`flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-[1.25rem] shrink-0 my-2 ${theme.glassInner}`}>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="min-w-0">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span>
-                              <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">{asset.asset_tag || 'N/A'}</span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Tag ID</span>
+                              <span className="font-mono text-[11px] sm:text-xs font-bold text-slate-900 wrap-break-word block leading-tight">{asset.asset_tag || 'N/A'}</span>
                             </div>
                             <div className="min-w-0">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Serial S/N</span>
-                              <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">{asset.serial_number || 'N/A'}</span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Serial S/N</span>
+                              <span className="font-mono text-[11px] sm:text-xs font-bold text-slate-900 wrap-break-word block leading-tight">{asset.serial_number || 'N/A'}</span>
                             </div>
                             <div className="min-w-0">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Category</span>
-                              <span className="text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">{asset.category || 'N/A'}</span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Category</span>
+                              <span className="text-[11px] sm:text-xs font-bold text-slate-900 wrap-break-word block leading-tight">{asset.category || 'N/A'}</span>
                             </div>
                           </div>
 
-                          <div className="w-full border-t border-slate-300/30 dark:border-white/10 my-0.5"></div>
+                          <div className="w-full border-t border-slate-300/30 dark:border-white/10 my-0"></div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-5">
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                             <div className="min-w-0">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-2 text-slate-500">Status (Inspection)</span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Status (Inspection)</span>
                               <div className="flex items-center">
                                 <button 
                                   onClick={() => setViewInspectionAsset(asset)}
-                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shadow-sm transition-transform hover:scale-105 cursor-pointer ${getInspectionStatusColor(asset.live_inspection_status)}`}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-transform hover:scale-105 cursor-pointer leading-tight ${getInspectionStatusColor(asset.live_inspection_status)}`}
                                 >
                                   {asset.live_inspection_status || 'Approved'}
                                 </button>
                               </div>
                             </div>
                             <div className="min-w-0">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Updated</span>
-                              <span className="text-xs sm:text-sm font-bold text-slate-900 wrap-break-word block">
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Updated</span>
+                              <span className="text-[11px] sm:text-xs font-bold text-slate-900 wrap-break-word block leading-tight">
                                 {asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-GB') : 'N/A'}
                               </span>
                             </div>
                             <div className="min-w-0">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-1 text-slate-500">Next Due</span>
-                              <span className={`text-xs sm:text-sm font-bold wrap-break-word block ${asset.isOverdue ? 'text-rose-600 animate-pulse' : 'text-slate-900'}`}>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Next Due</span>
+                              <span className={`text-[11px] sm:text-xs font-bold wrap-break-word block leading-tight ${asset.isOverdue ? 'text-rose-600 animate-pulse' : 'text-slate-900'}`}>
                                 {asset.nextDue ? asset.nextDue.toLocaleDateString('en-GB') : 'N/A'}
                               </span>
                             </div>
                             {/* HANDOVER AGREEMENT ROW */}
                             <div className="min-w-0 flex flex-col justify-start">
-                              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block mb-2 text-slate-500">Handover</span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Handover</span>
                               <button 
                                 onClick={() => asset.status === 'Pending Handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit ${asset.status === 'Pending Handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${asset.status === 'Pending Handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
                               >
                                 <FileSignature size={14} />
                                 {asset.status === 'Pending Handover' ? 'Pending' : 'Signed'}
@@ -874,24 +874,24 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
                         
-                        {/* Admin Action Notice */}
+                        {/* Admin Action Notice - Made More Compact */}
                         { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
-                          <div className="p-3 sm:p-4 mt-2 mb-3 rounded-2xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-xs font-medium flex gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0">
-                            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                            <div>
-                              <span className="block text-[9px] sm:text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">Admin Response:</span>
+                          <div className="p-2.5 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-start">
+                            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                            <div className="leading-tight">
+                              <span className="inline-block text-[9px] font-bold uppercase tracking-widest opacity-80 mr-1">Admin Response:</span>
                               {extractAdminReason(asset.live_admin_remarks, asset.notes)}
                             </div>
                           </div>
                         )}
 
-                        {/* Action Bar Distributed Bottom */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 pt-4 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
+                        {/* Action Bar Distributed Bottom - Tighter Buttons */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
                           
                           {/* LEFT: RETURN */}
                           <div className="w-full sm:flex-1 flex justify-start">
                             {asset.isReturnPending ? (
-                              <button disabled className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
+                              <button disabled className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
                                 Waiting on Admin
                               </button>
                             ) : asset.isReturnRejected ? (
@@ -901,7 +901,7 @@ export default function StaffDashboardPage() {
                                   loadRealDatabase(false);
                                   setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
                                 }} 
-                                className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
+                                className="px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
                               >
                                 Return (Retry)
                               </button>
@@ -909,7 +909,7 @@ export default function StaffDashboardPage() {
                               <button 
                                 disabled={asset.isReplacePending || asset.isReplaceRejected}
                                 onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
-                                className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                                className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
                                   (asset.isReplacePending || asset.isReplaceRejected)
                                     ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
                                     : 'bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
@@ -923,7 +923,7 @@ export default function StaffDashboardPage() {
                           {/* CENTER: REPLACE */}
                           <div className="w-full sm:flex-1 flex justify-center">
                             {asset.isReplacePending ? (
-                              <button disabled className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
+                              <button disabled className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
                                 Waiting on Admin
                               </button>
                             ) : asset.isReplaceRejected ? (
@@ -934,7 +934,7 @@ export default function StaffDashboardPage() {
                                   setReplaceAssetId(asset.id); 
                                   setShowReplaceModal(true); 
                                 }} 
-                                className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
+                                className="px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
                               >
                                 Replace (Retry)
                               </button>
@@ -942,7 +942,7 @@ export default function StaffDashboardPage() {
                               <button 
                                 disabled={asset.isReturnPending || asset.isReturnRejected}
                                 onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
-                                className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                                className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
                                   (asset.isReturnPending || asset.isReturnRejected)
                                     ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
                                     : 'bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
@@ -958,7 +958,7 @@ export default function StaffDashboardPage() {
                             <button 
                               disabled={btnState.disabled}
                               onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                              className={`px-5 sm:px-6 py-2 sm:py-2.5 font-bold text-[11px] sm:text-xs rounded-2xl transition-all flex flex-col items-center justify-center shadow-sm ${
+                              className={`px-5 py-1.5 sm:py-2 font-bold text-[10px] sm:text-[11px] rounded-2xl transition-all flex flex-col items-center justify-center shadow-sm ${
                                 btnState.disabled && !btnState.text.includes('Opens') 
                                 ? 'bg-emerald-50/80 backdrop-blur-xl text-emerald-600 border border-emerald-200 cursor-not-allowed'
                                 : btnState.disabled && btnState.text.includes('Opens')
@@ -966,14 +966,14 @@ export default function StaffDashboardPage() {
                                 : 'bg-linear-to-r from-orange-500 to-orange-600 text-white cursor-pointer border border-orange-400 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]'
                               }`}
                             >
-                              <span className="flex items-center gap-1.5 sm:gap-2 leading-tight text-center">
-                                {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={14} className="shrink-0" />}
-                                {btnState.disabled && btnState.text.includes('Opens') && <Lock size={14} className="shrink-0" />}
+                              <span className="flex items-center gap-1.5 leading-tight text-center">
+                                {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={12} className="shrink-0" />}
+                                {btnState.disabled && btnState.text.includes('Opens') && <Lock size={12} className="shrink-0" />}
                                 <span>
                                   {btnState.text.includes('Opens') ? (
                                     <>
-                                      <span className="block text-[9px] sm:text-[10px] font-bold">Opens</span>
-                                      <span className="block text-[11px] sm:text-xs">{btnState.text.replace('Opens\n', '').replace('Opens ', '')}</span>
+                                      <span className="block text-[8px] font-bold">Opens</span>
+                                      <span className="block text-[10px]">{btnState.text.replace('Opens\n', '').replace('Opens ', '')}</span>
                                     </>
                                   ) : (
                                     btnState.text
