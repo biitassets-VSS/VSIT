@@ -149,7 +149,6 @@ export default function StaffDashboardPage() {
     return () => observer.disconnect();
   }, []);
 
-  // 🌟 DESKTOP NOTIFICATION SYSTEM
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
@@ -272,7 +271,6 @@ export default function StaffDashboardPage() {
         let isReturnPending = false;
         let isReplacePending = false;
         let isReplaceRejected = false;
-        let isInspectionRejected = false;
 
         const hasRejectionKeywords = ['reject', 'declin', 'missing', 'upload', 'resend', 'again'].some(kw => allAdminRemarks.includes(kw));
 
@@ -299,12 +297,6 @@ export default function StaffDashboardPage() {
             }
         }
 
-        if (!isReturnRejected && !isReturnPending && !isReturnApproved && !isReplacePending && !isReplaceRejected) {
-            if (inspStatus.includes('reject') || inspStatus.includes('fail') || inspStatus.includes('action required') || liveInspStatus.includes('reject') || liveInspStatus.includes('fail') || liveInspStatus.includes('re-inspection')) {
-                isInspectionRejected = true;
-            }
-        }
-
         return {
           ...asset,
           live_inspection_status: latestInsp?.status || asset.inspection_status || 'Pending',
@@ -318,8 +310,7 @@ export default function StaffDashboardPage() {
           isReturnRejected,
           isReturnApproved,
           isReplacePending,
-          isReplaceRejected,
-          isInspectionRejected
+          isReplaceRejected
         };
       });
 
@@ -341,13 +332,8 @@ export default function StaffDashboardPage() {
       setAssignedAssets(displayAssets);
       if (currentAssetIndex >= displayAssets.length) setCurrentAssetIndex(0);
       
-      const needsInspCount = displayAssets.filter(a => a.isInspectionRejected || a.isOverdue || a.isReturnRejected || a.isReplaceRejected).length;
-      
       const tix = ticketsRes.data || [];
       setMyTickets(tix);
-      const openTixCount = tix.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length;
-
-      setStats({ totalAssets: displayAssets.length, needsInspection: needsInspCount, openTickets: openTixCount });
 
     } catch (err) { console.error("Data sync failure:", err); } 
     finally { clearTimeout(safetyTimeoutId); setLoading(false); setIsRefreshing(false); }
@@ -376,6 +362,74 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(photoChannel); };
   }, [qrSessionId]);
 
+  // 🌟 CORE RULES FOR AUDIT STATE (RE-AUDIT, RE-INSPECTION, CYCLE LOCKING)
+  const getAssetAuditState = (asset: any) => {
+    const auditWindow = getAuditWindowInfo(asset.category);
+    const liveStatus = (asset.live_inspection_status || '').toLowerCase();
+    
+    if (asset.isReturnPending || asset.isReplacePending) {
+      return { disabled: true, text: "Locked", classes: "bg-white/40 backdrop-blur-xl text-slate-400 font-bold border border-white/60 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
+    }
+
+    if (liveStatus === 'pending review' || liveStatus === 'pending') {
+      return { disabled: true, text: "Under Review", classes: "bg-purple-50/80 backdrop-blur-xl text-purple-600 font-bold border border-purple-200 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]" };
+    }
+
+    // Explicit rejection rule (Admin rejects request)
+    if (liveStatus.includes('reject') || liveStatus.includes('fail')) {
+      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
+    }
+
+    // Explicit re-inspection rule (Admin requests new photos)
+    if (liveStatus.includes('re-inspection') || liveStatus.includes('action required')) {
+      return { disabled: false, text: "Re-Inspection Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
+    }
+
+    if (asset.isOverdue) {
+      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
+    }
+
+    // Check if an Approved inspection exists WITHIN this exact cycle
+    const hasAudited = allInspections.some(insp => {
+       const d = new Date(insp.created_at);
+       return insp.asset_id === asset.id && 
+              d.getFullYear() === auditWindow.year && 
+              d.getMonth() === auditWindow.month &&
+              !insp.notes?.toLowerCase().includes('return') &&
+              !insp.status?.toLowerCase().includes('return') &&
+              (insp.status === 'Approved'); 
+    });
+
+    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    
+    // Otherwise, check if window is open
+    const auditDateStr = auditWindow.windowStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens\n${auditDateStr}`, classes: "bg-white/40 backdrop-blur-xl text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    
+    // Window is open, active!
+    return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
+  };
+
+  // 🌟 STRICT GLOBAL BUTTON SYNC
+  const isGlobalAuditOpen = assignedAssets.some(a => {
+    const state = getAssetAuditState(a);
+    // If ANY asset has a button that is NOT disabled, and is NOT waiting to open, global is open.
+    return !state.disabled && !state.text.includes('Opens');
+  });
+
+  const needsInspCount = assignedAssets.filter(a => {
+    const state = getAssetAuditState(a);
+    return !state.disabled && !state.text.includes('Opens');
+  }).length;
+
+  // Use the synchronized count for the stats
+  useEffect(() => {
+    setStats(prev => ({...prev, needsInspection: needsInspCount}));
+  }, [assignedAssets, needsInspCount]);
+
+  const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
+
+
   const handleRateTicket = async (ticketId: string, rating: number) => {
     try {
       await supabase.from('tickets').update({ rating }).eq('id', ticketId);
@@ -390,7 +444,6 @@ export default function StaffDashboardPage() {
       try {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-        // 🌟 FIX: Ensuring manual local uploads correctly go to 'asset-photos'
         const { error } = await supabase.storage.from('asset-photos').upload(fileName, file);
         if (!error) {
           const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
@@ -527,55 +580,13 @@ export default function StaffDashboardPage() {
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
-    if (s.includes('approved') || s.includes('pass')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
     if (s.includes('return')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
     if (s.includes('replace')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
-    if (s.includes('rejected') || s.includes('fail')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    if (s.includes('reject') || s.includes('fail') || s.includes('re-audit') || s.includes('re-inspection')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
     if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
     return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
-
-  const getAssetAuditState = (asset: any) => {
-    const auditWindow = getAuditWindowInfo(asset.category);
-    
-    if (asset.isReturnPending || asset.isReplacePending) {
-      return { disabled: true, text: "Locked", classes: "bg-white/40 backdrop-blur-xl text-slate-400 font-bold border border-white/60 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
-    }
-
-    const liveStatus = (asset.live_inspection_status || '').toLowerCase();
-    if (liveStatus === 'pending review' || liveStatus === 'pending') {
-      return { disabled: true, text: "Under Review", classes: "bg-purple-50/80 backdrop-blur-xl text-purple-600 font-bold border border-purple-200 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]" };
-    }
-
-    if (asset.isInspectionRejected) {
-      return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
-    }
-
-    if (asset.isOverdue) {
-      return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
-    }
-
-    const hasAudited = allInspections.some(insp => {
-       const d = new Date(insp.created_at);
-       return insp.asset_id === asset.id && 
-              d.getFullYear() === auditWindow.year && 
-              d.getMonth() === auditWindow.month &&
-              !insp.notes?.toLowerCase().includes('return') &&
-              !insp.status?.toLowerCase().includes('return') &&
-              (insp.status === 'Approved'); 
-    });
-
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
-    
-    const auditDateStr = auditWindow.windowStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens\n${auditDateStr}`, classes: "bg-white/40 backdrop-blur-xl text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
-    
-    return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
-  };
-
-  const requiresGlobalReinspection = assignedAssets.some(a => a.isInspectionRejected || a.isOverdue);
-  const isGlobalAuditOpen = assignedAssets.some(a => getAuditWindowInfo(a.category).isOpen) || requiresGlobalReinspection;
-  const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
 
   // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME
   const theme = {
@@ -664,7 +675,7 @@ export default function StaffDashboardPage() {
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600', type: 'TICKET', isActionDisabled: false, path: null },
-            { name: 'Device Audit', desc: requiresGlobalReinspection ? 'Action Required' : (isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed'), icon: ClipboardCheck, color: requiresGlobalReinspection ? 'text-rose-600 animate-pulse' : (isGlobalAuditOpen ? 'text-amber-600' : 'text-slate-400'), type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
+            { name: 'Device Audit', desc: isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed', icon: ClipboardCheck, color: isGlobalAuditOpen ? 'text-amber-600' : 'text-slate-400', type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
             { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600', type: 'REQUEST', isActionDisabled: false, path: null },
             { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600', type: 'ROUTE', isActionDisabled: false, path: '/staff/dashboard/remote' },
           ].map((item) => (
@@ -808,7 +819,7 @@ export default function StaffDashboardPage() {
                             asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
                             asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
                             asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
-                            asset.isInspectionRejected ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
+                            btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
                             asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
                             'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
@@ -817,7 +828,8 @@ export default function StaffDashboardPage() {
                               asset.isReturnPending ? 'Pending Return' : 
                               asset.isReplaceRejected ? 'Replacement Declined' : 
                               asset.isReplacePending ? 'Replacement Pending' : 
-                              asset.isInspectionRejected ? 'Re-Inspection Req' : 
+                              btnState.text.includes('Re-Audit Required') ? 'Re-Audit Required' : 
+                              btnState.text.includes('Re-Inspection Required') ? 'Re-Inspection Required' : 
                               asset.isOverdue ? 'Overdue' : 'Assigned & Active'
                             }
                           </span>
@@ -879,7 +891,7 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
                         
-                        { (asset.isReturnRejected || asset.isReplaceRejected || asset.isInspectionRejected) && (
+                        { (asset.isReturnRejected || asset.isReplaceRejected || btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required')) && (
                           <div className="p-2.5 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-start">
                             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                             <div className="leading-tight">
@@ -961,7 +973,7 @@ export default function StaffDashboardPage() {
                               onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
                               className={`px-5 py-1.5 sm:py-2 font-bold text-[10px] sm:text-[11px] rounded-2xl transition-all flex flex-col items-center justify-center shadow-sm ${
                                 btnState.disabled && !btnState.text.includes('Opens') 
-                                ? 'bg-emerald-50/80 backdrop-blur-xl text-emerald-600 border border-emerald-200 cursor-not-allowed'
+                                ? 'bg-purple-50/80 backdrop-blur-xl text-purple-600 border border-purple-200 cursor-not-allowed'
                                 : btnState.disabled && btnState.text.includes('Opens')
                                 ? 'bg-white/40 backdrop-blur-xl text-slate-500 border border-white/60 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white cursor-pointer border border-orange-400 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]'

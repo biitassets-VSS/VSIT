@@ -3,18 +3,109 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, Lock, Loader2, ShieldCheck, CheckCircle2, AlertTriangle, MonitorSmartphone, Mouse } from 'lucide-react';
+import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan } from 'lucide-react';
+
+// 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
+const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
+  const cat = category.toLowerCase();
+
+  // LAPTOP SAMPLES
+  if (cat.includes('laptop')) {
+    if (stepIndex === 0) return ( // Screen & Keypad
+      <div className="w-40 h-32 flex flex-col items-center justify-end relative perspective-1000">
+        <div className="w-32 h-20 border-2 border-purple-400 rounded-t-xl bg-purple-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          <MonitorSmartphone size={24} className="text-purple-400 opacity-50" />
+        </div>
+        <div className="w-36 h-10 border-2 border-purple-400 rounded-b-xl bg-purple-500/20 transform rotate-x-45 -translate-y-2 flex flex-wrap gap-1 p-1 items-center justify-center">
+          {[...Array(12)].map((_, i) => <div key={i} className="w-2 h-1.5 bg-purple-400/40 rounded-sm"></div>)}
+        </div>
+      </div>
+    );
+    if (stepIndex === 1) return ( // Top Lid
+      <div className="w-40 h-32 flex items-center justify-center">
+        <div className="w-36 h-24 border-2 border-purple-400 rounded-xl bg-purple-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          <div className="w-6 h-6 rounded-full border border-purple-400/60 flex items-center justify-center"><div className="w-3 h-3 bg-purple-400/60 rounded-full"></div></div>
+        </div>
+      </div>
+    );
+    if (stepIndex === 2) return ( // Left Side
+      <div className="w-40 h-32 flex items-center justify-center relative">
+        <div className="w-4 h-32 border-2 border-purple-400 rounded-l-md bg-purple-500/10 flex flex-col items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          <div className="w-2 h-1 bg-purple-400/60"></div><div className="w-2 h-3 bg-purple-400/60"></div><div className="w-2 h-2 bg-purple-400/60 rounded-full"></div>
+        </div>
+        <div className="absolute right-10 text-[9px] font-black tracking-widest text-purple-400 uppercase flex items-center gap-1"><Scan size={12}/> Left Edge</div>
+      </div>
+    );
+    if (stepIndex === 3) return ( // Right Side
+      <div className="w-40 h-32 flex items-center justify-center relative">
+        <div className="absolute left-10 text-[9px] font-black tracking-widest text-purple-400 uppercase flex items-center gap-1">Right Edge <Scan size={12}/></div>
+        <div className="w-4 h-32 border-2 border-purple-400 rounded-r-md bg-purple-500/10 flex flex-col items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          <div className="w-2 h-4 bg-purple-400/60"></div><div className="w-2 h-2 bg-purple-400/60 rounded-full"></div>
+        </div>
+      </div>
+    );
+    if (stepIndex === 4) return ( // Bottom S/N
+      <div className="w-40 h-32 flex items-center justify-center">
+        <div className="w-36 h-24 border-2 border-purple-400 rounded-xl bg-purple-500/10 flex flex-col items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] gap-2">
+          <div className="w-16 h-4 bg-white/10 border border-purple-400/50 flex items-center justify-around px-1"><div className="w-0.5 h-2 bg-purple-400"></div><div className="w-1 h-2 bg-purple-400"></div><div className="w-0.5 h-2 bg-purple-400"></div><div className="w-1.5 h-2 bg-purple-400"></div></div>
+          <div className="text-[7px] text-purple-400 uppercase font-mono tracking-widest">S/N: 10293847</div>
+        </div>
+      </div>
+    );
+  }
+
+  // KEYBOARD SAMPLES
+  if (cat.includes('keyboard')) {
+    if (stepIndex === 0) return <div className="w-40 h-32 flex items-center justify-center"><Keyboard size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
+    if (stepIndex === 1) return <div className="w-40 h-32 flex flex-col items-center justify-center gap-2"><div className="w-32 h-12 border-2 border-purple-400 rounded-md bg-purple-500/10 flex items-center justify-center"><div className="w-12 h-3 bg-white/10 border border-purple-400/50 flex items-center justify-around"><div className="w-0.5 h-1.5 bg-purple-400"></div><div className="w-1 h-1.5 bg-purple-400"></div></div></div></div>;
+  }
+
+  // MOUSE SAMPLES
+  if (cat.includes('mouse')) {
+    if (stepIndex === 0) return <div className="w-40 h-32 flex items-center justify-center"><Mouse size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
+    if (stepIndex === 1) return <div className="w-40 h-32 flex items-center justify-center"><div className="w-16 h-24 border-2 border-purple-400 rounded-full bg-purple-500/10 flex flex-col items-center justify-center gap-2"><div className="w-4 h-4 rounded-full border border-purple-400"></div><div className="w-8 h-2 bg-white/10 border border-purple-400/50"></div></div></div>;
+  }
+
+  // HEADPHONE SAMPLES
+  if (cat.includes('headphone') || cat.includes('headset')) {
+    if (stepIndex === 0) return <div className="w-40 h-32 flex items-center justify-center"><Headphones size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
+    if (stepIndex === 1) return <div className="w-40 h-32 flex items-center justify-center"><div className="w-20 h-8 border-2 border-purple-400 rounded-full bg-purple-500/10 flex items-center justify-center"><div className="w-8 h-2 bg-white/10 border border-purple-400/50"></div></div></div>;
+  }
+
+  // GENERIC SAMPLES
+  return <div className="w-40 h-32 flex items-center justify-center"><MonitorSmartphone size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
+};
+
+// 🌟 POLYFILL FOR CROSS-BROWSER ROUNDED RECT
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+}
 
 function MobileVerifyContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session');
   const assetId = searchParams.get('assetId');
-  const requiredCount = parseInt(searchParams.get('req') || '2', 10);
   const staffName = searchParams.get('name') || 'Unknown Staff';
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
   const category = searchParams.get('cat') || 'Hardware';
   const notes = searchParams.get('notes') || '';
+  
   const isLaptop = category.toLowerCase().includes('laptop');
+  const isKeyboard = category.toLowerCase().includes('keyboard');
+  const isMouse = category.toLowerCase().includes('mouse');
+  const isHeadphone = category.toLowerCase().includes('headphone') || category.toLowerCase().includes('headset');
+
+  const requiredCount = isLaptop ? 5 : 2;
 
   const [isLocked, setIsLocked] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -24,7 +115,6 @@ function MobileVerifyContent() {
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 🌟 AI-Guided Step Instructions based on exact rules
   const laptopSteps = [
     { title: "Screen & Keypad", desc: "Open laptop, capture full display and keyboard.", icon: MonitorSmartphone },
     { title: "Top Lid Brand Logo", desc: "Close laptop, capture the top exterior brand logo.", icon: MonitorSmartphone },
@@ -34,8 +124,8 @@ function MobileVerifyContent() {
   ];
 
   const accessorySteps = [
-    { title: "Top / Front View", desc: "Capture the main visible surface of the device.", icon: Mouse },
-    { title: "Bottom / Asset Tag", desc: "Capture the bottom showing the Asset Tag or S/N.", icon: Mouse }
+    { title: "Clear Front / Top View", desc: "Capture the main visible surface of the device.", icon: isKeyboard ? Keyboard : isMouse ? Mouse : isHeadphone ? Headphones : MonitorSmartphone },
+    { title: "Bottom Asset Tag", desc: "Capture the bottom showing the Asset Tag or S/N.", icon: Scan }
   ];
 
   const activeSteps = isLaptop ? laptopSteps : accessorySteps;
@@ -61,6 +151,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
+  // 🌟 ULTRA PREMIUM MAC OS 2026 LIQUID GLASS WATERMARK ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -82,28 +173,95 @@ function MobileVerifyContent() {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
 
-        const fontSize = Math.max(16, Math.floor(canvas.width / 35));
-        const padding = fontSize;
-        const textX = padding;
-        const textY = canvas.height - (fontSize * 4.5);
-        
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-        ctx.fillRect(0, canvas.height - (fontSize * 6.5), canvas.width, fontSize * 6.5);
+        // 🌟 LIQUID GLASS INSET CARD OVERLAY (FLOATING - NOT GLUED TO BOTTOM EDGE)
+        const baseScale = canvas.width / 1600;
+        const fontSize = Math.max(18, Math.floor(22 * baseScale));
+        const padding = Math.floor(24 * baseScale);
+        const margin = Math.floor(36 * baseScale); // Floating gap from edge
 
+        const cardWidth = canvas.width - (margin * 2);
+        const cardHeight = Math.floor(fontSize * 7.2 + (padding * 2));
+        const cardX = margin;
+        const cardY = canvas.height - cardHeight - margin; // Floating card position
+        const cornerRadius = Math.floor(26 * baseScale);
+
+        // 1. Soft Backdrop Shadow
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+        ctx.shadowBlur = Math.floor(30 * baseScale);
+        ctx.shadowOffsetY = Math.floor(12 * baseScale);
+
+        // 2. Liquid Glass Backdrop Gradient
+        const glassGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
+        glassGrad.addColorStop(0, 'rgba(15, 23, 42, 0.85)');
+        glassGrad.addColorStop(0.5, 'rgba(24, 15, 38, 0.88)');
+        glassGrad.addColorStop(1, 'rgba(10, 10, 20, 0.92)');
+
+        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, cornerRadius);
+        ctx.fillStyle = glassGrad;
+        ctx.fill();
+        ctx.restore();
+
+        // 3. Specular Liquid Glass Top Reflection
+        const glossGrad = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardHeight * 0.45);
+        glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
+        glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+
+        drawRoundedRect(ctx, cardX + 1, cardY + 1, cardWidth - 2, cardHeight * 0.45, cornerRadius);
+        ctx.fillStyle = glossGrad;
+        ctx.fill();
+
+        // 4. Metallic Hologram Glass Border
+        const borderGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
+        borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+        borderGrad.addColorStop(0.5, 'rgba(249, 115, 22, 0.5)');
+        borderGrad.addColorStop(1, 'rgba(168, 85, 247, 0.6)');
+
+        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, cornerRadius);
+        ctx.strokeStyle = borderGrad;
+        ctx.lineWidth = Math.max(2, Math.floor(3.5 * baseScale));
+        ctx.stroke();
+
+        // 5. Watermark Content Rendering
+        const contentX = cardX + padding;
+        let contentY = cardY + padding + fontSize;
+
+        // Top Brand Header Badge
+        ctx.font = `900 ${Math.floor(fontSize * 0.8)}px sans-serif`;
+        ctx.fillStyle = '#f97316';
+        ctx.fillText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY);
+
+        ctx.font = `bold ${Math.floor(fontSize * 0.75)}px sans-serif`;
+        ctx.fillStyle = '#a855f7';
+        ctx.textAlign = 'right';
+        ctx.fillText(`VERIFIED AUDIT ✓`, cardX + cardWidth - padding, contentY);
+        ctx.textAlign = 'left';
+
+        // Separator Line
+        contentY += Math.floor(fontSize * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(contentX, contentY);
+        ctx.lineTo(cardX + cardWidth - padding, contentY);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        contentY += Math.floor(fontSize * 1.2);
+
+        // Audit Meta Data
         ctx.font = `bold ${fontSize}px sans-serif`;
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
         ctx.shadowBlur = 4;
-        
-        ctx.fillText(`👤 STAFF: ${staffName} (${empCode})`, textX, textY);
-        ctx.fillText(`📅 DATE/TIME: ${new Date().toLocaleString('en-IN')}`, textX, textY + fontSize * 1.5);
-        ctx.fillText(`📱 DEVICE: ${getDeviceName()}`, textX, textY + fontSize * 3);
-        ctx.fillText(`🔒 SECURE LIVE CAPTURE`, textX, textY + fontSize * 4.5);
+
+        ctx.fillText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY);
+        ctx.fillText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY + fontSize * 1.5);
+        ctx.fillText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY + fontSize * 3);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject("Blob conversion failed");
-        }, 'image/jpeg', 0.80);
+        }, 'image/jpeg', 0.85);
       };
       img.onerror = () => reject("Image load failed");
       img.src = URL.createObjectURL(file);
@@ -144,13 +302,11 @@ function MobileVerifyContent() {
       const fileExt = 'jpg';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
-      // 🌟 FIX: Updated bucket name to 'asset-photos' which exists in your Supabase DB
       const { error } = await supabase.storage
         .from('asset-photos')
         .upload(fileName, watermarkedBlob, { contentType: 'image/jpeg' });
       if (error) throw error;
       
-      // 🌟 FIX: Fetching public URL from the correct 'asset-photos' bucket
       const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
       const newUrls = [...uploadedUrls, data.publicUrl];
       setUploadedUrls(newUrls);
@@ -210,37 +366,39 @@ function MobileVerifyContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-start pt-12 p-6 text-center space-y-6 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#0d0914] text-white flex flex-col items-center justify-start pt-8 p-6 text-center space-y-5 font-sans relative overflow-hidden">
       <div className="absolute top-[-20%] right-[-10%] w-[70vw] h-[70vh] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none" />
       
       <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-800">
         <div className="h-full bg-purple-500 transition-all duration-500 shadow-[0_0_15px_rgba(168,85,247,0.8)]" style={{ width: `${(uploadedCount / requiredCount) * 100}%` }}></div>
       </div>
       
-      <div className="space-y-3 relative z-10 w-full max-w-sm">
+      <div className="space-y-1 relative z-10 w-full max-w-sm">
         <h1 className="text-xl font-black uppercase tracking-widest text-white">Live Hardware Audit</h1>
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Target: {category}</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target: {category}</p>
       </div>
 
-      {/* 🌟 AI Guided Photo Instruction Card */}
-      <div className="bg-[#1a1325] border border-purple-500/20 p-5 rounded-3xl w-full max-w-sm flex flex-col items-center gap-3 shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-10">
-        <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center border border-purple-500/40 shadow-inner">
-          <currentStepInfo.icon className="text-purple-400 w-7 h-7" />
+      {/* 🌟 AI Hologram Sample Visual Box */}
+      <div className="bg-[#1a1325] border border-purple-500/30 p-5 rounded-3xl w-full max-w-sm flex flex-col items-center shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-10 relative overflow-hidden">
+        
+        <div className="mb-3 text-[9px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/30">
+          <Scan size={12} /> AI Guide: Required Angle
         </div>
-        <div className="text-center">
-          <h2 className="text-sm font-black uppercase tracking-widest text-purple-300 mb-1">
-            Photo {uploadedCount + 1}: {currentStepInfo.title}
+        
+        <AiSampleWireframe category={category} stepIndex={uploadedCount} />
+
+        <div className="text-center mt-4 border-t border-purple-500/20 w-full pt-3">
+          <h2 className="text-sm font-black uppercase tracking-widest text-white mb-1">
+            Photo {uploadedCount + 1} of {requiredCount}
           </h2>
-          <p className="text-[11px] font-semibold text-slate-300 leading-relaxed px-2">
+          <h3 className="text-xs font-bold text-purple-300 mb-1">{currentStepInfo.title}</h3>
+          <p className="text-[10px] font-semibold text-slate-400 leading-relaxed">
             {currentStepInfo.desc}
           </p>
         </div>
       </div>
 
       <div className="bg-[#1a1325] border border-purple-500/20 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 z-10">
-        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-          <span>Staff Identity:</span> <span className="text-slate-200 truncate max-w-[150px] text-right">{staffName}</span>
-        </div>
         <div className="flex justify-between items-center border-b border-white/5 pb-2">
           <span>Upload Status:</span> <span className="text-purple-400">{uploadedCount} / {requiredCount} Complete</span>
         </div>
@@ -253,20 +411,16 @@ function MobileVerifyContent() {
         {uploading ? (
           <div className="flex flex-col items-center gap-3 py-4 bg-[#1a1325] rounded-full border border-purple-500/20">
             <Loader2 className="animate-spin text-purple-500 w-6 h-6" />
-            <span className="font-black tracking-widest uppercase text-[10px] text-purple-400">Processing...</span>
+            <span className="font-black tracking-widest uppercase text-[10px] text-purple-400">Processing & Watermarking...</span>
           </div>
         ) : (
           <button 
             onClick={() => fileInputRef.current?.click()}
             className="w-full py-4 rounded-full bg-[#a855f7] hover:bg-purple-500 text-white font-black uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.4)] flex items-center justify-center gap-3 active:scale-95 transition-all border border-purple-400"
           >
-            <Camera size={18} /> Capture {currentStepInfo.title}
+            <Camera size={18} /> Capture Photo {uploadedCount + 1}
           </button>
         )}
-      </div>
-
-      <div className="absolute bottom-6 left-0 w-full text-center pointer-events-none">
-        <p className="text-[10px] font-black tracking-widest text-[#a855f7]/50">Designed by AinodeArt</p>
       </div>
 
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
