@@ -88,10 +88,15 @@ export default function StaffDashboardPage() {
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({ isOpen: false, type: '' });
+  
+  // Replace Flow State
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
   const [replaceCondition, setReplaceCondition] = useState('Minor Wear');
+  const [isSubmittingReplace, setIsSubmittingReplace] = useState(false);
+  const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
+  const [localPhotos, setLocalPhotos] = useState<File[]>([]);
 
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -274,6 +279,121 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
+  // 🌟 GUARANTEED DESKTOP DB SYNC FOR REPLACEMENTS
+  const replaceStateRef = useRef({ replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets });
+  useEffect(() => { replaceStateRef.current = { replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets }; }, [replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets]);
+
+  useEffect(() => {
+    if (!qrSessionId) return;
+    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
+      .on('broadcast', { event: 'session_complete' }, async (payload) => {
+         const finalPhotos = payload.payload?.photos || [];
+         const state = replaceStateRef.current;
+         const activeAsset = state.assignedAssets.find(a => String(a.id) === state.replaceAssetId);
+         if (!activeAsset) return;
+
+         try {
+           await supabase.from('replacements').insert({
+              old_asset_id: activeAsset.id, asset_tag: activeAsset.asset_tag, serial_number: activeAsset.serial_number,
+              user_id: state.currentUser.id, staff_name: state.currentUser.name, user_email: state.currentUser.email, emp_code: state.currentUser.emp_id,
+              condition: state.replaceCondition, reason: state.replaceReason, photos: finalPhotos, status: 'Pending Approval'
+           });
+           
+           await supabase.from('assets').update({ status: 'Replacement Requested', photos: finalPhotos, admin_remarks: null }).eq('id', activeAsset.id);
+           
+           await supabase.from('inspections').insert({
+              asset_id: activeAsset.id, user_id: state.currentUser.id, user_name: state.currentUser.name, status: 'Pending Review', condition: state.replaceCondition,
+              notes: `[REPLACEMENT REQUEST] ${state.replaceReason}`, photos: finalPhotos, type: 'REPLACEMENT'
+           });
+           
+           await supabase.from('notifications').insert({
+              target_user: 'ADMIN_SYSTEM', target_role: 'admin', title: `New REPLACEMENT Submission`,
+              message: `${state.currentUser.name} (${state.currentUser.emp_id}) requested a replacement.`, type: 'info', is_read: false
+           });
+           
+           resetReplaceModal();
+           toast.success("Request successfully sent to Admin.", { icon: '✅', duration: 4000 });
+           loadRealDatabase(false);
+         } catch(e: any) { console.error("Replacement Sync Error:", e); }
+      }).subscribe();
+    return () => { supabase.removeChannel(photoChannel); };
+  }, [qrSessionId]);
+
+  // 🌟 MISSING RESTORED FUNCTIONS 🌟
+  const handleRateTicket = async (ticketId: string, rating: number) => {
+    try { 
+      await supabase.from('tickets').update({ rating }).eq('id', ticketId); 
+      setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, rating } : t)); 
+      toast.success("Thank you for rating our IT support!"); 
+    } catch (e) { console.error(e); }
+  };
+
+  const uploadMultiplePhotos = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const { error } = await supabase.storage.from('asset-photos').upload(`${fileName}`, file);
+        if (!error) {
+          const { data } = supabase.storage.from('asset-photos').getPublicUrl(`${fileName}`);
+          uploadedUrls.push(data.publicUrl);
+        }
+      } catch (error) { console.error("Upload failed", error); }
+    }
+    return uploadedUrls;
+  };
+
+  const resetReplaceModal = () => {
+    setShowReplaceModal(false); setReplaceAssetId(''); setReplaceReason(''); setReplaceCondition('Minor Wear'); setQrUrl(null); setQrSessionId(null); setRemotePhotos([]); setLocalPhotos([]);
+  };
+
+  const handleGenerateQR = (asset: any) => {
+    if (!replaceReason.trim()) return alert("Please provide a replacement reason.");
+    const sessionId = crypto.randomUUID(); setQrSessionId(sessionId);
+    const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${currentUser.id}&req=5&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&cond=${encodeURIComponent(replaceCondition)}&notes=${encodeURIComponent(replaceReason)}&auditType=REPLACEMENT`;
+    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
+  };
+
+  const handleReplaceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replaceAssetId) return;
+    setIsSubmittingReplace(true);
+    const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
+    if (!activeAsset) return;
+
+    try {
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
+
+      await supabase.from('replacements').insert({
+        old_asset_id: activeAsset.id, asset_tag: activeAsset.asset_tag, serial_number: activeAsset.serial_number,
+        user_id: currentUser.id, staff_name: currentUser.name, user_email: currentUser.email, emp_code: currentUser.emp_id,
+        condition: replaceCondition, reason: replaceReason, photos: allPhotos.length > 0 ? allPhotos : null, status: 'Pending Approval'
+      });
+
+      await supabase.from('assets').update({ status: 'Replacement Requested', photos: allPhotos, admin_remarks: null }).eq('id', activeAsset.id);
+
+      await supabase.from('inspections').insert({
+        asset_id: activeAsset.id, user_id: currentUser.id, user_name: currentUser.name, status: 'Pending Review', condition: replaceCondition,
+        notes: `[REPLACEMENT REQUEST] ${replaceReason}`, photos: allPhotos, type: 'REPLACEMENT'
+      });
+
+      await supabase.from('notifications').insert({
+        target_user: 'ADMIN_SYSTEM', target_role: 'admin', title: `New REPLACEMENT Submission`, message: `${currentUser.name} (${currentUser.emp_id}) requested a replacement.`, type: 'info', is_read: false
+      });
+
+      loadRealDatabase(false); 
+      resetReplaceModal();
+      toast.success(`Replacement request for ${activeAsset.asset_tag} sent successfully.`);
+    } catch (err: any) { 
+      console.error("Replace Submit Error:", err);
+      toast.error(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
+    } finally { 
+      setIsSubmittingReplace(false); 
+    }
+  };
+
   const handleDigitalSign = async () => {
     if (!handoverAsset) return; setIsSigning(true);
     try {
@@ -439,6 +559,8 @@ export default function StaffDashboardPage() {
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-5 min-h-0 w-full pt-1">
+        
+        {/* 🌟 MY HARDWARE CAROUSEL LIST */}
         <div className="w-full lg:w-2/3 flex flex-col min-h-112.5 lg:min-h-0">
           <div className={`${theme.glassPanel} rounded-4xl p-4 md:p-5 flex-1 flex flex-col min-h-0`}>
             <div className="flex items-center justify-between border-b pb-3 mb-3 border-white/40 shrink-0">
@@ -657,6 +779,154 @@ export default function StaffDashboardPage() {
           />
         )}
       </AnimatePresence>
+      
+      {/* 🌟 NEW REPLACEMENT MODAL */}
+      <AnimatePresence>
+        {showReplaceModal && activeAsset && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+            
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowReplaceModal(false)}
+              className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`}
+            />
+            
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className={`relative w-full max-w-[30rem] rounded-[2.5rem] flex flex-col overflow-hidden ${theme.glassCard}`}
+            >
+              <div className="px-8 pt-8 pb-5 flex justify-between items-center relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-3xl flex items-center justify-center ${
+                    isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_2px_8px_rgba(168,85,247,0.15)] text-[#a855f7]'
+                  }`}>
+                     <PackageOpen size={26} strokeWidth={2} />
+                  </div>
+                  <h2 className={`text-[16px] font-black uppercase tracking-widest ${theme.textMain}`}>
+                    Assets Replacement
+                  </h2>
+                </div>
+                <button 
+                  onClick={() => setShowReplaceModal(false)}
+                  className={`w-12 h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}
+                >
+                  <X size={20} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
+
+              <form id="replacement-form" onSubmit={handleReplaceSubmit} className="px-8 pt-6 pb-6 flex flex-col gap-6 relative z-10">
+                
+                <div className="flex flex-col gap-2.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                    Select Assigned Asset
+                  </label>
+                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-5 transition-all ${theme.glassInnerCard}`}>
+                    <select
+                      value={replaceAssetId}
+                      onChange={(e) => setReplaceAssetId(e.target.value)}
+                      required
+                      className={`w-full pl-5 pr-10 py-4.5 text-[15px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
+                    >
+                      <option value="" disabled className={isDarkMode ? 'text-black' : ''}>Choose Hardware...</option>
+                      {assignedAssets.map(asset => (
+                        <option key={asset.id} value={asset.id} className={isDarkMode ? 'text-black' : ''}>
+                          {asset.name || asset.asset_name} ({asset.asset_tag})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={20} className={`absolute right-5 pointer-events-none ${theme.textSub}`} />
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {replaceAssetId && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0, marginTop: -10 }} 
+                      animate={{ opacity: 1, height: 'auto', marginTop: -5 }} 
+                      exit={{ opacity: 0, height: 0, marginTop: -10 }}
+                      className="overflow-hidden"
+                    >
+                      <div className={`px-6 py-5 rounded-2xl flex gap-4 ${theme.glassInnerCard}`}>
+                        <div className="flex-1 space-y-1.5">
+                          <span className={`text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
+                          <span className={`text-[13px] font-bold ${theme.textMain}`}>
+                            {assignedAssets.find(a => String(a.id) === replaceAssetId)?.asset_tag}
+                          </span>
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <span className={`text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
+                          <span className={`text-[13px] font-bold ${theme.textMain}`}>
+                            {assignedAssets.find(a => String(a.id) === replaceAssetId)?.serial_number || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                <div className="flex flex-col gap-2.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                    Current Asset Condition
+                  </label>
+                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-5 transition-all ${theme.glassInnerCard}`}>
+                    <select 
+                      value={replaceCondition} 
+                      onChange={(e) => setReplaceCondition(e.target.value)} 
+                      className={`w-full pl-5 pr-10 py-4.5 text-[15px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
+                    >
+                      <option className={isDarkMode ? 'text-black' : ''} value="Minor Wear">Minor Hardware Issue</option>
+                      <option className={isDarkMode ? 'text-black' : ''} value="Minor Wear">Minor Wear (Scratches/Dents)</option>
+                      <option className={isDarkMode ? 'text-black' : ''} value="Damaged">Damaged / Broken Part</option>
+                      <option className={isDarkMode ? 'text-black' : ''} value="Not Working">Not Working / Won't Power On</option>
+                    </select>
+                    <ChevronDown size={20} className={`absolute right-5 pointer-events-none ${theme.textSub}`} />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
+                    Detailed Explanation
+                  </label>
+                  <textarea
+                    value={replaceReason}
+                    onChange={(e) => setReplaceReason(e.target.value)}
+                    required
+                    placeholder="Describe what happened..."
+                    className={`w-full px-6 py-5 rounded-2xl text-[15px] font-semibold transition-all outline-none min-h-[8.75rem] resize-none ${theme.glassInnerCard} ${
+                      isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'
+                    }`}
+                  />
+                </div>
+
+              </form>
+
+              <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
+
+              <div className="px-8 py-7 flex justify-center items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowReplaceModal(false)}
+                  className={`w-[8.75rem] py-3.5 rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateQR(activeAsset)}
+                  disabled={!replaceAssetId || !replaceReason.trim()}
+                  className="w-[8.75rem] py-3.5 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all shadow-[0_4px_20px_rgba(139,92,246,0.35)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
+                >
+                  Generate QR
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -671,6 +941,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
+  const [screenshot, setScreenshot] = useState<File | null>(null); 
   
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
@@ -705,37 +976,27 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
             // 2. CREATE INSPECTION LOG
             await supabase.from('inspections').insert({ 
               asset_id: targetAsset.id, 
-              inspected_by: state.user.id, 
+              user_id: state.user.id, 
+              user_name: state.user.name, 
               status: 'Pending Review', 
-              notes: auditType === 'INSPECTION' ? state.formText : `[${auditType} REQUEST] ${state.formText}` 
+              condition: state.formCondition, 
+              notes: auditType === 'INSPECTION' ? state.formText : `[${auditType} REQUEST] ${state.formText}`, 
+              photos: finalPhotos, 
+              type: auditType 
             });
 
-            // 3. CREATE REPLACEMENT IF NEEDED
-            if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') {
-               try {
-                 await supabase.from('replacements').insert({
-                    old_asset_id: targetAsset.id, asset_tag: targetAsset.asset_tag, serial_number: targetAsset.serial_number,
-                    user_id: state.user.id, staff_name: state.user.name, user_email: state.user.email, emp_code: state.user.emp_id,
-                    condition: state.formCondition, reason: state.formText, photos: finalPhotos, status: 'Pending Approval'
-                 });
-               } catch (err) { console.warn("Replacements table error", err); }
-            }
-
-            // 4. PING ADMIN DASHBOARD
+            // 3. PING ADMIN DASHBOARD
             await supabase.from('notifications').insert({ 
               target_user: 'ADMIN_SYSTEM', target_role: 'admin', title: `New ${auditType} Submission`, 
               message: `${state.user.name} (${state.user.emp_id}) completed a mobile ${auditType} scan.`, type: 'info', is_read: false 
             });
 
-            // 5. UPDATE UI
+            // 4. UPDATE UI
             setShowQR(false); 
             setSuccessDone(true); 
             toast.success("Database Updated Successfully!", { icon: '✅' });
             setTimeout(() => onClose(), 1500); 
-          } catch(e: any) { 
-            console.error("Desktop DB Error:", e); 
-            toast.error(`Sync error: ${e.message}`);
-          }
+          } catch(e) { console.error(e); }
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeQrSession]);
@@ -767,6 +1028,18 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
       setQrUrl(url); setShowQR(true);
       return; 
     }
+    
+    setIsTransmitting(true);
+    let submitError = null; 
+    try {
+      const cleanEmail = user.email.toLowerCase().trim(); const finalEmp = user.emp_id || 'STAFF'; let humanName = user.name || cleanEmail.split('@')[0]; humanName = humanName.split('.')[0].replace(/[_-]/g, ' '); humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
+      if (type === 'TICKET') {
+        const { error } = await supabase.from('tickets').insert({ title: formTitle || 'IT Support Ticket', category: formCategory, description: formText || 'No details given', status: 'Open', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName }); submitError = error;
+      } else if (type === 'REQUEST') {
+        const { error } = await supabase.from('tickets').insert({ title: `Asset Request: ${formCategory}`, category: `Request: ${formCategory}`, description: formText || `Staff requested ${formCategory}`, status: 'Pending', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName }); submitError = error;
+      }
+      if (submitError) throw submitError; setSuccessDone(true); setTimeout(() => onClose(), 1200);
+    } catch (e: any) { alert(`Database Error: ${e.message || JSON.stringify(e)}`); } finally { setIsTransmitting(false); }
   };
 
   const getHeaderIcon = () => {
@@ -840,6 +1113,16 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                     )}
                   </AnimatePresence>
                 </>
+              )}
+              {type === 'TICKET' && (
+                <>
+                  <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Issue Subject</label><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className="w-full px-4 py-3 rounded-2xl outline-none text-[12px] sm:text-[13px] font-semibold transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"/></div>
+                  <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Category</label><div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"><select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"><option>Hardware</option><option>Software</option><option>Network</option></select><ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" /></div></div>
+                  <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Attach Screenshot (Optional)</label><label className="w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer bg-white/40 backdrop-blur-xl border-white/80 hover:border-purple-400 hover:bg-white/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]"><input type="file" className="hidden" accept="image/*" onChange={(e) => setScreenshot(e.target.files?.[0] || null)} /><div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm border border-slate-100">{screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className="text-slate-400" />}</div><span className={`text-[11px] sm:text-[12px] font-semibold text-center ${screenshot ? 'text-purple-600' : 'text-slate-900'}`}>{screenshot ? screenshot.name : "Click to upload"}</span></label></div>
+                </>
+              )}
+              {type === 'REQUEST' && (
+                <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Equipment Category</label><div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-emerald-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"><select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"><option>Laptop / PC</option><option>Monitor</option><option>Keyboard / Mouse</option><option>Headset / Audio</option><option>Other Accessory</option></select><ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" /></div></div>
               )}
               {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
                 <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Current Asset Condition</label><div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] ${type === 'RETURN' ? 'hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]' : 'hover:border-amber-300 hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]'}`}><select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"><option>Pristine / Flawless</option><option>Good / Minor Scratches</option><option>Poor / Damaged (Requires Fix)</option><option>Non-Functional / Dead</option></select><ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" /></div></div>
