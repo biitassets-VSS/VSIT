@@ -149,6 +149,49 @@ export default function StaffDashboardPage() {
     return () => observer.disconnect();
   }, []);
 
+  // 🌟 DESKTOP NOTIFICATION SYSTEM
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const triggerDesktopAlert = (title: string, body: string) => {
+    try { const audio = new Audio('/alert.mp3'); audio.play().catch(() => {}); } catch (err) {}
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/logo.png' });
+    }
+    toast(
+      <div className="flex flex-col gap-1">
+        <strong className="text-sm font-bold text-slate-800">{title}</strong>
+        <span className="text-xs font-medium text-slate-600">{body}</span>
+      </div>,
+      { icon: '🔔', duration: 6000 }
+    );
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const notifChannel = supabase.channel('staff-notifications-feed')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        const notif = payload.new;
+        if (
+          notif.target_user === currentUser.id || 
+          notif.target_user === currentUser.email ||
+          notif.target_user === currentUser.emp_id ||
+          notif.target_user === 'ALL_STAFF' ||
+          notif.type === 'broadcast'
+        ) {
+          triggerDesktopAlert(notif.title || 'System Alert', notif.message || 'You have a new notification.');
+          loadRealDatabase(false); // Silent refresh to show any new ticket updates
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(notifChannel); };
+  }, [currentUser]);
+
   const loadRealDatabase = async (showSpin = false) => {
     if (showSpin) setIsRefreshing(true);
     const safetyTimeoutId = setTimeout(() => { setLoading(false); setIsRefreshing(false); }, 4000);
@@ -746,7 +789,8 @@ export default function StaffDashboardPage() {
                         animate={{ opacity: 1, scale: 1, x: 0 }}
                         exit={{ opacity: 0, scale: 0.98, x: -10 }}
                         transition={{ duration: 0.25 }}
-                        className={`w-full h-full py-5 sm:py-6 px-12 sm:px-16 lg:px-20 rounded-4xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
+                        // 🌟 FIX: Added overflow-y-auto, custom-scrollbar, and strict max-height boundary
+                        className={`w-full h-auto min-h-full max-h-full overflow-y-auto custom-scrollbar py-5 sm:py-6 px-12 sm:px-16 lg:px-20 rounded-4xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
                       >
                         {/* Top Banner section */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
@@ -1315,7 +1359,7 @@ export default function StaffDashboardPage() {
                     <div className="flex flex-col items-center mt-6 relative">
                       {isViewMode && (
                          <div className="absolute top-0 right-2 px-3 py-1 bg-emerald-100/80 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
-                           Document Locked
+                            Document Locked
                          </div>
                       )}
                       <div className={`relative w-32 h-32 sm:w-40 sm:h-40 mb-4 ${isViewMode ? 'opacity-100' : 'opacity-80'}`}>
