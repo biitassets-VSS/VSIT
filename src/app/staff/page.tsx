@@ -89,7 +89,6 @@ export default function StaffDashboardPage() {
 
   const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({ isOpen: false, type: '' });
   
-  // Replace Flow State
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [replaceAssetId, setReplaceAssetId] = useState('');
   const [replaceReason, setReplaceReason] = useState('');
@@ -279,7 +278,6 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
-  // 🌟 GUARANTEED DESKTOP DB SYNC FOR REPLACEMENTS
   const replaceStateRef = useRef({ replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets });
   useEffect(() => { replaceStateRef.current = { replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets }; }, [replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets]);
 
@@ -319,7 +317,6 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(photoChannel); };
   }, [qrSessionId]);
 
-  // 🌟 MISSING RESTORED FUNCTIONS 🌟
   const handleRateTicket = async (ticketId: string, rating: number) => {
     try { 
       await supabase.from('tickets').update({ rating }).eq('id', ticketId); 
@@ -449,7 +446,7 @@ export default function StaffDashboardPage() {
     glassPanel: 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.7)]',
     glassItem: 'bg-white/30 backdrop-blur-xl border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-500',
     glassButton: 'bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 hover:bg-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all cursor-pointer',
-    glassInner: 'bg-white/20 backdrop-blur-lg border border-white/40 shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]',
+    glassInnerCard: 'bg-white/20 backdrop-blur-lg border border-white/40 shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]',
     textMain: 'text-slate-900', textSub: 'text-slate-500',
   };
 
@@ -560,7 +557,6 @@ export default function StaffDashboardPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-5 min-h-0 w-full pt-1">
         
-        {/* 🌟 MY HARDWARE CAROUSEL LIST */}
         <div className="w-full lg:w-2/3 flex flex-col min-h-112.5 lg:min-h-0">
           <div className={`${theme.glassPanel} rounded-4xl p-4 md:p-5 flex-1 flex flex-col min-h-0`}>
             <div className="flex items-center justify-between border-b pb-3 mb-3 border-white/40 shrink-0">
@@ -601,7 +597,7 @@ export default function StaffDashboardPage() {
                           </span>
                         </div>
 
-                        <div className={`flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-[1.25rem] shrink-0 my-2 ${theme.glassInner}`}>
+                        <div className={`flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-[1.25rem] shrink-0 my-2 ${theme.glassInnerCard}`}>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="min-w-0"><span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Tag ID</span><span className="font-mono text-[11px] sm:text-xs font-bold text-slate-900 wrap-break-word block leading-tight">{asset.asset_tag || 'N/A'}</span></div>
                             <div className="min-w-0"><span className="text-[9px] font-bold uppercase tracking-widest block mb-0.5 text-slate-500">Serial S/N</span><span className="font-mono text-[11px] sm:text-xs font-bold text-slate-900 wrap-break-word block leading-tight">{asset.serial_number || 'N/A'}</span></div>
