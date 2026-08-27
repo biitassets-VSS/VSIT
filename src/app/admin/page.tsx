@@ -56,7 +56,6 @@ export default function AdminDashboardPage() {
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  // 🌟 THEME SYNC
   useEffect(() => {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -113,16 +112,12 @@ export default function AdminDashboardPage() {
       const emailStr = (s.email || '').toLowerCase().trim();
       
       if (roleStr === 'admin' || emailStr === 'lakhwinder.bi@outlook.com') return;
-      
       totalStaffCount++;
 
       const statusStr = (s.status || '').toLowerCase().trim();
       const isDeactivated = s.is_active === false || ['deactivat', 'suspend', 'ban', 'block', 'revoke', 'disabled'].some(k => statusStr.includes(k)) || ['deactivat', 'suspend', 'ban', 'block', 'revoke'].some(k => roleStr.includes(k));
 
-      if (isDeactivated) { 
-        deactivatedCount++; 
-        return; 
-      }
+      if (isDeactivated) { deactivatedCount++; return; }
 
       const isLive = onlineUsers.has(s.id) || (s.email && onlineUsers.has(s.email.toLowerCase()));
       if (isLive) liveCount++;
@@ -147,36 +142,15 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const adminChannel = supabase
       .channel('admin-live-feed')
-      // 1. Listen for explicit Notifications
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
-        triggerDesktopAlert(payload.new.title || 'System Alert', payload.new.message || 'New notification received.');
-      })
-      // 2. Listen for Return/Replace Requests in Inspections
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, (payload) => {
-        const notes = (payload.new.notes || '').toLowerCase();
-        const status = (payload.new.status || '').toLowerCase();
-        
-        if (notes.includes('return') || status.includes('return')) {
-           triggerDesktopAlert('New Return Request', 'A staff member has initiated an asset return.');
-        } else if (notes.includes('replace') || status.includes('replace')) {
-           triggerDesktopAlert('New Replacement Request', 'A staff member has requested an asset replacement.');
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        if (payload.new.target_role === 'admin' || payload.new.target_user === 'ADMIN_SYSTEM') {
+           triggerDesktopAlert(payload.new.title || 'System Alert', payload.new.message || 'New notification received.');
         }
         loadAdminData(false);
       })
-      // 3. Listen for direct Asset status changes
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, (payload) => {
-        const newStatus = (payload.new.status || '').toLowerCase();
-        
-        if (newStatus.includes('return') || newStatus.includes('replace')) {
-           triggerDesktopAlert('Asset Status Update', 'An asset was flagged for return or replacement.');
-        }
-        loadAdminData(false);
-      })
-      // 4. Standard refresh listeners
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => loadAdminData(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAdminData(false))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, () => loadAdminData(false))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, () => loadAdminData(false))
       .subscribe();
-
     return () => { supabase.removeChannel(adminChannel); };
   }, []);
 
@@ -221,7 +195,6 @@ export default function AdminDashboardPage() {
 
       setRawStaffList(staffData);
 
-      // Asset Calculations
       let usedAssetsCount = 0, inStockAssetsCount = 0, discardedAssetsCount = 0, returnRequestsCount = 0, replacementRequestsCount = 0;
       assetsData.forEach(a => {
         const s = (a.status || '').toLowerCase().trim();
@@ -232,7 +205,6 @@ export default function AdminDashboardPage() {
         else inStockAssetsCount++;
       });
 
-      // Inspection Calculations
       let pendingCount = 0, resolvedCount = 0, totalValidVerifications = 0;
       const processedAssetIds = new Set<string>();
 
@@ -270,7 +242,6 @@ export default function AdminDashboardPage() {
         }
       });
 
-      // Ticket Calculations
       let pendingTicketsCount = 0, inProcessTicketsCount = 0, resolvedTicketsCount = 0;
       tktData.forEach(t => {
         const s = (t.status || '').toLowerCase().trim();
@@ -374,9 +345,6 @@ export default function AdminDashboardPage() {
     });
   };
 
-  // ==========================================
-  // 🌟 TRUE GLASSMORPHISM THEME (PREMIUM 2026 - V4 CANONICAL)
-  // ==========================================
   const theme = {
     bg: 'bg-transparent font-sans',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
@@ -416,13 +384,11 @@ export default function AdminDashboardPage() {
 
   return (
     <div className={`absolute inset-0 w-full h-full lg:overflow-hidden overflow-y-auto flex flex-col ${theme.bg} font-sans antialiased z-0`}>
-      {/* 🌟 Premium Background Orbs */}
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-5 h-full lg:min-h-0 z-10">
         
-        {/* 🌟 Top Dashboard Header */}
         <div className={`${theme.glassCard} rounded-3xl p-4 flex items-center justify-between shrink-0 transition-all`}>
           <Link href="/admin" className="flex items-center gap-4 group">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg ${theme.glassItem} ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
@@ -445,7 +411,6 @@ export default function AdminDashboardPage() {
           </button>
         </div>
 
-        {/* 🌟 4 Main Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
           
           <div className={`${theme.glassCard} p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-purple-400/50 group`}>
@@ -529,7 +494,6 @@ export default function AdminDashboardPage() {
 
         <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 lg:overflow-hidden pt-2">
           
-          {/* 🌟 System Modules (Left Side) */}
           <div className="w-full lg:w-[72%] flex flex-col lg:min-h-0 lg:overflow-hidden">
             <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-1 shrink-0 mb-3 ${theme.textSub}`}>System Modules</h3>
             
@@ -554,7 +518,6 @@ export default function AdminDashboardPage() {
                     <div className="flex items-start justify-between w-full relative">
                       <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
                         <m.icon size={20} strokeWidth={2.2} />
-                        {/* 🌟 2026 Liquid Glass Translucent Badge */}
                         {m.badge > 0 && (
                           <span className="absolute -top-2.5 -right-2.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-linear-to-tr from-orange-500/80 to-purple-600/80 backdrop-blur-xl backdrop-saturate-150 text-white text-[10px] font-black rounded-full border border-white/50 dark:border-white/20 shadow-[0_4px_10px_rgba(249,115,22,0.3),inset_0_1px_3px_rgba(255,255,255,0.8)] drop-shadow-sm z-50 transition-all hover:scale-110">
                             {m.badge}
@@ -575,7 +538,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* 🌟 Live Activity Log (Right Side) */}
           <div className="w-full lg:w-[28%] flex flex-col lg:min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
             <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-1 shrink-0 mb-3 ${theme.textSub}`}>Live Activity Log</h3>
             <div className={`${theme.glassCard} rounded-3xl p-5 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden`}>
@@ -619,7 +581,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* 🌟 Broadcast Modal */}
       {isBroadcastModalOpen && (
         <div className={`fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-sm animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/60' : 'bg-black/20'}`}>
           <div className={`relative max-w-lg w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] flex-1 max-h-full rounded-4xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
@@ -667,7 +628,6 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* 🌟 Online Staff Modal */}
       {isOnlineStaffModalOpen && (
         <div className={`fixed inset-0 z-100 flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-sm animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/60' : 'bg-black/20'}`}>
           <div className={`relative max-w-md w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] flex-1 max-h-full rounded-4xl animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>

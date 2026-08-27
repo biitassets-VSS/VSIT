@@ -274,57 +274,6 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
-  // 🌟 REPLACEMENT DESKTOP DB SYNC (Authorized Insert)
-  const replaceStateRef = useRef({ replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets });
-  useEffect(() => { replaceStateRef.current = { replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets }; }, [replaceAssetId, replaceCondition, replaceReason, currentUser, assignedAssets]);
-
-  useEffect(() => {
-    if (!qrSessionId) return;
-    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
-      .on('broadcast', { event: 'session_complete' }, async (payload) => {
-         const finalPhotos = payload.payload?.photos || [];
-         const state = replaceStateRef.current;
-         const activeAsset = state.assignedAssets.find(a => String(a.id) === state.replaceAssetId);
-         if (!activeAsset) return;
-
-         try {
-           await supabase.from('replacements').insert({
-              old_asset_id: activeAsset.id, asset_tag: activeAsset.asset_tag, serial_number: activeAsset.serial_number,
-              user_id: state.currentUser.id, staff_name: state.currentUser.name, user_email: state.currentUser.email, emp_code: state.currentUser.emp_id,
-              condition: state.replaceCondition, reason: state.replaceReason, photos: finalPhotos, status: 'Pending Approval'
-           });
-           await supabase.from('assets').update({ status: 'Replacement Requested', photos: finalPhotos, admin_remarks: null }).eq('id', activeAsset.id);
-           await supabase.from('inspections').insert({
-              asset_id: activeAsset.id, user_id: state.currentUser.id, user_name: state.currentUser.name, status: 'Pending Review', condition: state.replaceCondition,
-              notes: `[REPLACEMENT REQUEST] ${state.replaceReason}`, photos: finalPhotos, type: 'REPLACEMENT'
-           });
-           await supabase.from('notifications').insert({
-              target_user: 'ADMIN_SYSTEM', target_role: 'admin', title: `New REPLACEMENT Submission`,
-              message: `${state.currentUser.name} (${state.currentUser.emp_id}) requested a replacement via mobile.`, type: 'info', is_read: false
-           });
-           resetReplaceModal();
-           toast.success("Photos uploaded successfully! Request sent to Admin.", { icon: '✅', duration: 4000 });
-           loadRealDatabase(false);
-         } catch(e: any) { console.error("Replacement Sync Error:", e); }
-      }).subscribe();
-    return () => { supabase.removeChannel(photoChannel); };
-  }, [qrSessionId]);
-
-  const handleRateTicket = async (ticketId: string, rating: number) => {
-    try { await supabase.from('tickets').update({ rating }).eq('id', ticketId); setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, rating } : t)); toast.success("Thank you for rating our IT support!"); } catch (e) { console.error(e); }
-  };
-
-  const resetReplaceModal = () => {
-    setShowReplaceModal(false); setReplaceAssetId(''); setReplaceReason(''); setReplaceCondition('Minor Wear'); setQrUrl(null); setQrSessionId(null);
-  };
-
-  const handleGenerateQR = (asset: any) => {
-    if (!replaceReason.trim()) return alert("Please provide a replacement reason.");
-    const sessionId = crypto.randomUUID(); setQrSessionId(sessionId);
-    const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${currentUser.id}&req=5&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&cond=${encodeURIComponent(replaceCondition)}&notes=${encodeURIComponent(replaceReason)}&auditType=REPLACEMENT`;
-    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
-  };
-
   const handleDigitalSign = async () => {
     if (!handoverAsset) return; setIsSigning(true);
     try {
@@ -406,10 +355,7 @@ export default function StaffDashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0 mt-2 sm:mt-0">
-          <button 
-            onClick={() => loadRealDatabase(true)} disabled={isRefreshing}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-orange-400 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
-          >
+          <button onClick={() => loadRealDatabase(true)} disabled={isRefreshing} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-orange-400 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50">
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Sync Feeds
           </button>
         </div>
@@ -493,11 +439,8 @@ export default function StaffDashboardPage() {
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-5 min-h-0 w-full pt-1">
-        
-        {/* 🌟 MY HARDWARE CAROUSEL LIST */}
         <div className="w-full lg:w-2/3 flex flex-col min-h-112.5 lg:min-h-0">
           <div className={`${theme.glassPanel} rounded-4xl p-4 md:p-5 flex-1 flex flex-col min-h-0`}>
-            
             <div className="flex items-center justify-between border-b pb-3 mb-3 border-white/40 shrink-0">
               <div className="flex items-center gap-2.5 font-bold text-sm uppercase tracking-wider text-slate-900"><Laptop className="text-purple-500 shrink-0" size={18}/> My Hardware Units</div>
               <div className="flex items-center gap-3">
@@ -728,7 +671,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
-  const [screenshot, setScreenshot] = useState<File | null>(null); 
+  
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [isTransmitting, setIsTransmitting] = useState(false);
@@ -738,23 +681,61 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const modalStateRef = useRef({ asset, type, formCondition, formText, user });
   useEffect(() => { modalStateRef.current = { asset, type, formCondition, formText, user }; }, [asset, type, formCondition, formText, user]);
 
+  // 🌟 DESKTOP DATABASE WRITER FOR ALL 3 AUDIT TYPES (Return, Inspection, Replace)
   useEffect(() => {
     if (!activeQrSession) return;
     const channel = supabase.channel(`qr_session_${activeQrSession}`)
       .on('broadcast', { event: 'session_complete' }, async (payload) => {
           const finalPhotos = payload.payload?.photos || [];
+          const auditType = payload.payload?.type || modalStateRef.current.type; 
           const state = modalStateRef.current;
-          if(!state.asset) return;
+          
+          let targetAsset = state.asset;
+          if (auditType === 'RETURN') targetAsset = assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId));
+          if (!targetAsset) return;
+
           try {
+            // 1. UPDATE ASSET TABLE (Clearing old admin remarks)
             const updatePayload: any = { photos: finalPhotos, last_inspection_date: new Date().toISOString(), admin_remarks: null };
-            if (state.type === 'INSPECTION') updatePayload.inspection_status = 'Pending Review';
-            if (state.type === 'RETURN') updatePayload.status = 'Pending Return';
+            if (auditType === 'INSPECTION') updatePayload.inspection_status = 'Pending Review';
+            if (auditType === 'RETURN') updatePayload.status = 'Pending Return';
+            if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') updatePayload.status = 'Replacement Requested';
+            await supabase.from('assets').update(updatePayload).eq('id', targetAsset.id);
             
-            await supabase.from('assets').update(updatePayload).eq('id', state.asset.id);
-            await supabase.from('inspections').insert({ asset_id: state.asset.id, user_id: state.user.id, user_name: state.user.name, status: 'Pending Review', condition: state.formCondition, notes: state.type === 'INSPECTION' ? state.formText : `[${state.type} REQUEST] ${state.formText}`, photos: finalPhotos, type: state.type });
-            await supabase.from('notifications').insert({ target_user: 'ADMIN_SYSTEM', target_role: 'admin', title: `New ${state.type} Submission`, message: `${state.user.name} (${state.user.emp_id}) completed a mobile ${state.type} scan.`, type: 'info', is_read: false });
-            setShowQR(false); setSuccessDone(true); setTimeout(() => onClose(), 1500); 
-          } catch(e) { console.error(e); }
+            // 2. CREATE INSPECTION LOG
+            await supabase.from('inspections').insert({ 
+              asset_id: targetAsset.id, 
+              inspected_by: state.user.id, 
+              status: 'Pending Review', 
+              notes: auditType === 'INSPECTION' ? state.formText : `[${auditType} REQUEST] ${state.formText}` 
+            });
+
+            // 3. CREATE REPLACEMENT IF NEEDED
+            if (auditType === 'REPLACEMENT' || auditType === 'REPLACE') {
+               try {
+                 await supabase.from('replacements').insert({
+                    old_asset_id: targetAsset.id, asset_tag: targetAsset.asset_tag, serial_number: targetAsset.serial_number,
+                    user_id: state.user.id, staff_name: state.user.name, user_email: state.user.email, emp_code: state.user.emp_id,
+                    condition: state.formCondition, reason: state.formText, photos: finalPhotos, status: 'Pending Approval'
+                 });
+               } catch (err) { console.warn("Replacements table error", err); }
+            }
+
+            // 4. PING ADMIN DASHBOARD
+            await supabase.from('notifications').insert({ 
+              target_user: 'ADMIN_SYSTEM', target_role: 'admin', title: `New ${auditType} Submission`, 
+              message: `${state.user.name} (${state.user.emp_id}) completed a mobile ${auditType} scan.`, type: 'info', is_read: false 
+            });
+
+            // 5. UPDATE UI
+            setShowQR(false); 
+            setSuccessDone(true); 
+            toast.success("Database Updated Successfully!", { icon: '✅' });
+            setTimeout(() => onClose(), 1500); 
+          } catch(e: any) { 
+            console.error("Desktop DB Error:", e); 
+            toast.error(`Sync error: ${e.message}`);
+          }
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeQrSession]);
@@ -766,38 +747,26 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
     if (typed === (asset.serial_number||'').toLowerCase() || typed === (asset.asset_tag||'').toLowerCase()) { setLockError(false); setIsUnlocked(true); } else setLockError(true);
   };
 
-  const generateMobileHandoff = () => {
-    const baseUrl = window.location.origin; const cat = asset?.category || formCategory; const sessionId = crypto.randomUUID(); setActiveQrSession(sessionId);
-    const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${user.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&req=5&tag=${encodeURIComponent(asset.asset_tag)}&sn=${encodeURIComponent(asset.serial_number || '')}&email=${encodeURIComponent(user.email)}`;
-    setQrUrl(url); setShowQR(true);
-  };
-
   const handleLivePostgresSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
     if (type === 'RETURN') {
       const targetAsset = assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId));
       if (!targetAsset) return;
       const confirmed = window.confirm(`WARNING: VERIFY SERIAL NUMBER\n\nAre you sure your physical asset's Serial Number matches this serial number?\n\nAsset: ${targetAsset.name || targetAsset.asset_name}\nTag ID: ${targetAsset.asset_tag}\nSerial Number: ${targetAsset.serial_number || 'N/A'}\n\nClick OK if it matches exactly.`);
-      if (!confirmed) { toast.error("Return aborted. Serial numbers must match."); return; }
+      if (!confirmed) { toast.error("Return aborted."); return; }
       try {
-        const baseUrl = window.location.origin; const cat = targetAsset.category; const finalNotes = formText; const sessionId = crypto.randomUUID(); setActiveQrSession(sessionId);
-        const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${targetAsset.id}&userId=${user.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}&req=5&tag=${encodeURIComponent(targetAsset.asset_tag)}&sn=${encodeURIComponent(targetAsset.serial_number || '')}&email=${encodeURIComponent(user.email)}`;
+        const baseUrl = window.location.origin; const cat = targetAsset.category; const sessionId = crypto.randomUUID(); setActiveQrSession(sessionId);
+        const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${targetAsset.id}&userId=${user.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&req=5&tag=${encodeURIComponent(targetAsset.asset_tag)}&sn=${encodeURIComponent(targetAsset.serial_number || '')}&email=${encodeURIComponent(user.email)}`;
         setQrUrl(url); setShowQR(true);
       } catch(e) { toast.error("Error submitting return request."); } return;
     }
-    if (type === 'INSPECTION') { generateMobileHandoff(); return; }
-    setIsTransmitting(true);
-    if (user.id === 'guest-mock-uuid') { setTimeout(() => { setIsTransmitting(false); setSuccessDone(true); setTimeout(() => onClose(), 1200); }, 800); return; }
-    let submitError = null; 
-    try {
-      const cleanEmail = user.email.toLowerCase().trim(); const finalEmp = user.emp_id || 'STAFF'; let humanName = user.name || cleanEmail.split('@')[0]; humanName = humanName.split('.')[0].replace(/[_-]/g, ' '); humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
-      if (type === 'TICKET') {
-        const { error } = await supabase.from('tickets').insert({ title: formTitle || 'IT Support Ticket', category: formCategory, description: formText || 'No details given', status: 'Open', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName }); submitError = error;
-      } else if (type === 'REQUEST') {
-        const { error } = await supabase.from('tickets').insert({ title: `Asset Request: ${formCategory}`, category: `Request: ${formCategory}`, description: formText || `Staff requested ${formCategory}`, status: 'Pending', created_by: cleanEmail, emp_code: finalEmp, staff_name: humanName }); submitError = error;
-      }
-      if (submitError) throw submitError; setSuccessDone(true); setTimeout(() => onClose(), 1200);
-    } catch (e: any) { alert(`Database Error: ${e.message || JSON.stringify(e)}`); } finally { setIsTransmitting(false); }
+    if (type === 'INSPECTION') { 
+      const baseUrl = window.location.origin; const cat = asset?.category || formCategory; const sessionId = crypto.randomUUID(); setActiveQrSession(sessionId);
+      const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${asset.id}&userId=${user.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&req=5&tag=${encodeURIComponent(asset.asset_tag)}&sn=${encodeURIComponent(asset.serial_number || '')}&email=${encodeURIComponent(user.email)}`;
+      setQrUrl(url); setShowQR(true);
+      return; 
+    }
   };
 
   const getHeaderIcon = () => {
@@ -871,16 +840,6 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                     )}
                   </AnimatePresence>
                 </>
-              )}
-              {type === 'TICKET' && (
-                <>
-                  <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Issue Subject</label><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className="w-full px-4 py-3 rounded-2xl outline-none text-[12px] sm:text-[13px] font-semibold transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"/></div>
-                  <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Category</label><div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"><select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"><option>Hardware</option><option>Software</option><option>Network</option></select><ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" /></div></div>
-                  <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Attach Screenshot (Optional)</label><label className="w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer bg-white/40 backdrop-blur-xl border-white/80 hover:border-purple-400 hover:bg-white/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]"><input type="file" className="hidden" accept="image/*" onChange={(e) => setScreenshot(e.target.files?.[0] || null)} /><div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm border border-slate-100">{screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className="text-slate-400" />}</div><span className={`text-[11px] sm:text-[12px] font-semibold text-center ${screenshot ? 'text-purple-600' : 'text-slate-900'}`}>{screenshot ? screenshot.name : "Click to upload"}</span></label></div>
-                </>
-              )}
-              {type === 'REQUEST' && (
-                <div className="flex flex-col gap-1.5 sm:gap-2"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Equipment Category</label><div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-emerald-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"><select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"><option>Laptop / PC</option><option>Monitor</option><option>Keyboard / Mouse</option><option>Headset / Audio</option><option>Other Accessory</option></select><ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" /></div></div>
               )}
               {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
                 <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300"><label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Current Asset Condition</label><div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] ${type === 'RETURN' ? 'hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]' : 'hover:border-amber-300 hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]'}`}><select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"><option>Pristine / Flawless</option><option>Good / Minor Scratches</option><option>Poor / Damaged (Requires Fix)</option><option>Non-Functional / Dead</option></select><ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" /></div></div>

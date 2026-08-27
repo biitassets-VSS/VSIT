@@ -16,7 +16,6 @@ function MobileVerifyContent() {
   const staffName = searchParams.get('name') || 'Unknown Staff';
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
   
-  const isLaptop = (searchParams.get('cat') || '').toLowerCase().includes('laptop');
   const auditType = searchParams.get('auditType')?.toUpperCase() || '';
   
   let pageTitle = "SECURE HANDOFF";
@@ -31,12 +30,23 @@ function MobileVerifyContent() {
   const [capturedUrls, setCapturedUrls] = useState<string[]>([]);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     if (!sessionId) { setLoading(false); return; }
     const locked = localStorage.getItem(`locked_session_${sessionId}`);
     if (locked) setIsLocked(true);
+    
+    const channel = supabase.channel(`qr_session_${sessionId}`, {
+      config: { broadcast: { ack: true } }
+    });
+    
+    channel.subscribe();
+    channelRef.current = channel;
     setLoading(false);
+
+    return () => { supabase.removeChannel(channel); }
   }, [sessionId]);
 
   const getDeviceName = () => {
@@ -49,6 +59,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
+  // 🌟 EXACT AI PHOTO MAPPING (Keyboard, Lid, Left, Right, Bottom Tag)
   const laptopGuides = [
     { title: "Screen & Keyboard", desc: "Capture the display and keyboard area fully.", icon: MonitorPlay, sampleImg: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?q=80&w=800&auto=format&fit=crop" },
     { title: "Top Lid", desc: "Capture the outer lid showing the brand logo.", icon: Laptop, sampleImg: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800&auto=format&fit=crop" },
@@ -57,17 +68,7 @@ function MobileVerifyContent() {
     { title: "Bottom & Tag", desc: "Capture the bottom casing showing the serial number / asset tag.", icon: ScanBarcode, sampleImg: "https://images.unsplash.com/photo-1601524909162-ae8725290836?q=80&w=800&auto=format&fit=crop" }
   ];
   
-  const accessoryGuides = [
-    { title: "Front / Top View", desc: "Capture a clear overall photo of the device.", icon: Camera, sampleImg: "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?q=80&w=800&auto=format&fit=crop" },
-    { title: "Left View", desc: "Capture the left side profile.", icon: PanelLeft, sampleImg: "https://images.unsplash.com/photo-1585155770447-2f66e2a397b5?q=80&w=800&auto=format&fit=crop" },
-    { title: "Right View", desc: "Capture the right side profile.", icon: PanelRight, sampleImg: "https://images.unsplash.com/photo-1585155770447-2f66e2a397b5?q=80&w=800&auto=format&fit=crop" },
-    { title: "Close-up", desc: "Capture a close-up of any buttons or identifying marks.", icon: Camera, sampleImg: "https://images.unsplash.com/photo-1592209148011-8fc4d101d293?q=80&w=800&auto=format&fit=crop" },
-    { title: "Bottom / Tag View", desc: "Capture the bottom or back showing the asset tag.", icon: ScanBarcode, sampleImg: "https://images.unsplash.com/photo-1625842268584-8f3296236761?q=80&w=800&auto=format&fit=crop" }
-  ];
-
-  const currentGuide = isLaptop 
-    ? laptopGuides[Math.min(uploadedCount, laptopGuides.length - 1)] 
-    : accessoryGuides[Math.min(uploadedCount, accessoryGuides.length - 1)];
+  const currentGuide = laptopGuides[Math.min(uploadedCount, laptopGuides.length - 1)];
 
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -156,7 +157,7 @@ function MobileVerifyContent() {
       
       if (error) {
         console.error("Supabase Storage Error Details:", error);
-        throw new Error(`Upload rejected. Please check your Supabase Storage RLS policies for 'asset-photos'.`);
+        throw new Error(`Upload rejected. Check Supabase Storage RLS.`);
       }
       
       const { data } = supabase.storage.from('asset-photos').getPublicUrl(`${fileName}`);
@@ -171,17 +172,16 @@ function MobileVerifyContent() {
         if (sessionId) localStorage.setItem(`locked_session_${sessionId}`, 'true');
         setIsLocked(true);
 
-        // 🌟 SHIFT POWER TO DESKTOP: We just send the photos over the channel!
-        if (sessionId) {
-          await supabase.channel(`qr_session_${sessionId}`).send({
+        if (channelRef.current) {
+          await channelRef.current.send({
             type: 'broadcast',
             event: 'session_complete',
-            payload: { success: true, photos: newCapturedUrls }
+            payload: { success: true, photos: newCapturedUrls, type: auditType }
           });
         }
       } else {
-        if (sessionId) {
-          await supabase.channel(`qr_session_${sessionId}`).send({
+        if (channelRef.current) {
+          await channelRef.current.send({
             type: 'broadcast',
             event: 'photo_uploaded',
             payload: { url: data.publicUrl }
@@ -256,6 +256,21 @@ function MobileVerifyContent() {
             <h3 className="text-sm font-bold text-white leading-tight mb-0.5">{currentGuide.title}</h3>
             <p className="text-[10px] font-medium text-zinc-400 leading-snug">{currentGuide.desc}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-zinc-900/50 border border-white/5 p-4 rounded-3xl text-left w-full max-w-sm space-y-2.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 shadow-inner">
+        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+          <span>Staff Identity:</span> 
+          <span className="text-zinc-200 truncate max-w-36 text-right">{staffName}</span>
+        </div>
+        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+          <span>Employee Code:</span> 
+          <span className="text-zinc-200">{empCode}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span>Upload Status:</span> 
+          <span className="text-purple-400">{uploadedCount} / {requiredCount} Completed</span>
         </div>
       </div>
 
