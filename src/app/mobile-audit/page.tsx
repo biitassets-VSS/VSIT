@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
 const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
