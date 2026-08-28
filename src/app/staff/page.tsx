@@ -187,6 +187,23 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(notifChannel); };
   }, [currentUser]);
 
+  // 🌟 ONCE-PER-DAY OVERDUE NOTIFICATION
+  useEffect(() => {
+    const overdueList = assignedAssets.filter(a => a.isOverdue && !a.isReturnPending && !a.isReplacePending && !a.true_inspection_state?.includes('pending'));
+    if (overdueList.length > 0) {
+      const todayDate = new Date().toDateString();
+      const lastAlertDate = localStorage.getItem('vsit_last_overdue_alert');
+      
+      if (lastAlertDate !== todayDate) {
+        triggerDesktopAlert(
+          '🚨 Inspection Overdue', 
+          `You have ${overdueList.length} device(s) with an overdue inspection. Please complete your audit immediately.`
+        );
+        localStorage.setItem('vsit_last_overdue_alert', todayDate);
+      }
+    }
+  }, [assignedAssets]);
+
   const loadRealDatabase = async (showSpin = false) => {
     if (showSpin) setIsRefreshing(true);
     const safetyTimeoutId = setTimeout(() => { setLoading(false); setIsRefreshing(false); }, 4000);
@@ -456,12 +473,12 @@ export default function StaffDashboardPage() {
     return !state.disabled && !state.text.includes('Opens');
   }).length;
 
-  useEffect(() => {
-    setStats(prev => ({...prev, needsInspection: needsInspCount}));
-  }, [assignedAssets, needsInspCount]);
-
   const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
+  const overdueAssetsList = assignedAssets.filter(a => a.isOverdue && !a.isReturnPending && !a.isReplacePending && !a.true_inspection_state?.includes('pending'));
 
+  useEffect(() => {
+    setStats(prev => ({...prev, needsInspection: needsInspCount + pendingHandovers.length + overdueAssetsList.length}));
+  }, [assignedAssets, needsInspCount, pendingHandovers.length, overdueAssetsList.length]);
 
   const handleRateTicket = async (ticketId: string, rating: number) => {
     try {
@@ -687,7 +704,7 @@ export default function StaffDashboardPage() {
               </div>
               <div>
                 <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                  Action Required <span className="px-2 py-0.5 bg-orange-500 text-white rounded-md text-[9px] animate-pulse shadow-sm">1 Pending</span>
+                  Action Required <span className="px-2 py-0.5 bg-orange-500 text-white rounded-md text-[9px] animate-pulse shadow-sm">{pendingHandovers.length} Pending</span>
                 </h3>
                 <p className="text-[11px] font-semibold text-slate-600 mt-0.5">
                   You have new hardware assigned to you. Please review and sign the Handover Agreement.
@@ -699,6 +716,42 @@ export default function StaffDashboardPage() {
               className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.3)] transition-all cursor-pointer hover:scale-105 hover:shadow-[0_0_30px_rgba(249,115,22,0.5)] active:scale-95 whitespace-nowrap border border-orange-400 shrink-0 relative z-10"
             >
               Review & Sign
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 🌟 OVERDUE ALERT BANNER */}
+      <AnimatePresence>
+        {overdueAssetsList.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`shrink-0 ${theme.glassCard} bg-rose-50/50 border-rose-200/50 rounded-3xl p-4 shadow-[0_8px_30px_rgba(225,29,72,0.1)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden mt-1`}
+          >
+            <div className="absolute top-[-50%] left-[-10%] w-64 h-64 bg-rose-400/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="flex items-start gap-3 relative z-10">
+              <div className="p-2.5 bg-white/80 backdrop-blur-md border border-rose-100 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] text-rose-600 rounded-xl shrink-0">
+                <AlertTriangle size={20} className="animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                  Action Required <span className="px-2 py-0.5 bg-rose-500 text-white rounded-md text-[9px] animate-pulse shadow-sm">{overdueAssetsList.length} Overdue</span>
+                </h3>
+                <p className="text-[11px] font-semibold text-slate-600 mt-0.5">
+                  You have hardware inspections that are currently overdue. Please complete them immediately.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const idx = assignedAssets.findIndex(a => a.id === overdueAssetsList[0].id);
+                if (idx !== -1) setCurrentAssetIndex(idx);
+              }}
+              className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(225,29,72,0.3)] transition-all cursor-pointer hover:scale-105 hover:shadow-[0_0_30px_rgba(225,29,72,0.5)] active:scale-95 whitespace-nowrap border border-rose-400 shrink-0 relative z-10"
+            >
+              View Overdue Asset
             </button>
           </motion.div>
         )}
@@ -836,13 +889,7 @@ export default function StaffDashboardPage() {
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
 
                     // Compute clean inspection state exclusively
-                    let baseAuditStatus = 'Approved';
-                    if (asset.live_inspection_status === 'Inspection Sent to Admin') baseAuditStatus = 'Pending Review';
-                    else if (btnState.text.includes('Re-Audit')) baseAuditStatus = 'Re-Audit Required';
-                    else if (btnState.text.includes('Re-Inspection')) baseAuditStatus = 'Re-Inspection Required';
-                    else if (asset.isOverdue || btnState.text.includes('Overdue')) baseAuditStatus = 'Overdue';
-                    else if ((asset.inspection_status || '').toLowerCase() === 'approved') baseAuditStatus = 'Approved';
-                    else baseAuditStatus = 'Approved';
+                    let baseAuditStatus = asset.true_inspection_state === 'Approved' && asset.isOverdue ? 'Overdue' : asset.true_inspection_state;
 
                     return (
                       <motion.div 
@@ -937,6 +984,16 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
                         
+                        {/* 🌟 OVERDUE SPECIFIC WARNING ON CARD */}
+                        {asset.isOverdue && !asset.isReturnPending && !asset.isReplacePending && !asset.true_inspection_state?.includes('pending') && (
+                          <div className="p-3 mt-1 mb-2 rounded-xl border border-rose-400/60 bg-rose-500/15 backdrop-blur-md text-rose-700 text-[11px] font-bold flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
+                            <AlertTriangle size={16} className="shrink-0 animate-pulse text-rose-600" />
+                            <div className="leading-tight">
+                              WARNING: Inspection Over Due! Please complete this device audit immediately to maintain compliance.
+                            </div>
+                          </div>
+                        )}
+
                         {/* Status/Rejection Reason Banner */}
                         { (asset.isReturnRejected || asset.isReplaceRejected || btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required')) && (
                           <div className="p-2.5 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-start">
@@ -958,70 +1015,56 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
-                        {/* 🌟 ACTION BAR */}
+                        {/* 🌟 ACTION BAR (Buttons NEVER get fully disabled unless system rule applies) */}
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
                           
                           <div className="w-full sm:flex-1 flex justify-start">
-                            {asset.isReturnRejected ? (
-                              <button 
-                                onClick={async () => { 
+                            <button 
+                              onClick={async () => { 
+                                if (asset.isReturnRejected || asset.isReturnPending) {
                                   await supabase.from('assets').update({ status: 'Assigned', inspection_status: null, admin_remarks: null }).eq('id', asset.id);
                                   loadRealDatabase(false);
-                                  setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
-                                }} 
-                                className="px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
-                              >
-                                Return (Retry)
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
-                                className={`px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm border bg-white/40 backdrop-blur-xl border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer`}
-                              >
-                                Return
-                              </button>
-                            )}
+                                }
+                                setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
+                              }} 
+                              className="px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
+                            >
+                              {asset.isReturnRejected ? 'Return (Retry)' : 'Return'}
+                            </button>
                           </div>
                           
                           <div className="w-full sm:flex-1 flex justify-center">
-                            {asset.isReplaceRejected ? (
-                              <button 
-                                onClick={async () => {
+                            <button 
+                              onClick={async () => {
+                                if (asset.isReplaceRejected || asset.isReplacePending) {
                                   await supabase.from('assets').update({ status: 'Assigned', admin_remarks: null }).eq('id', asset.id);
                                   loadRealDatabase(false);
-                                  setReplaceAssetId(asset.id); 
-                                  setShowReplaceModal(true); 
-                                }} 
-                                className="px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
-                              >
-                                Replace (Retry)
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
-                                className={`px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm border bg-white/40 backdrop-blur-xl border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer`}
-                              >
-                                Replace
-                              </button>
-                            )}
+                                }
+                                setReplaceAssetId(asset.id); 
+                                setShowReplaceModal(true); 
+                              }} 
+                              className="px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
+                            >
+                              {asset.isReplaceRejected ? 'Replace (Retry)' : 'Replace'}
+                            </button>
                           </div>
 
                           <div className="w-full sm:flex-1 flex justify-end">
                             <button 
-                              disabled={btnState.disabled}
+                              disabled={btnState.disabled && !isActionLocked} // Still disabled if not in time window
                               onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
                               className={`px-6 py-2 font-bold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 shadow-sm ${
-                                btnState.disabled 
+                                btnState.disabled && !isActionLocked
                                 ? 'bg-slate-200/70 border border-slate-300 text-slate-500 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white cursor-pointer hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] border border-orange-400'
                               }`}
                             >
-                              {btnState.disabled && <Lock size={14} className="shrink-0" />}
+                              {btnState.disabled && !isActionLocked && <Lock size={14} className="shrink-0" />}
                               <span>
-                                {btnState.text.includes('Opens') ? (
+                                {btnState.disabled && !isActionLocked ? (
                                   `Audit Opens ${btnState.text.replace('Opens\n', '').replace('Opens ', '')}`
                                 ) : (
-                                  btnState.text === 'Under Review' ? 'Audit Device Now' : btnState.text
+                                  isActionLocked ? 'Audit Device Now' : btnState.text
                                 )}
                               </span>
                             </button>
