@@ -8,7 +8,7 @@ import {
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
   Laptop, ShieldAlert, Search, RefreshCw, 
   X, History as HistoryIcon, FilterX, Settings2,
-  Send, AlertTriangle, List, ZoomIn, ChevronLeft, ChevronRight, Archive,
+  Send, AlertTriangle, List, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Archive,
   ShieldCheck, Cpu, User, Monitor, Keyboard, RectangleHorizontal, Mouse, Headphones, Sparkles, Package, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -120,9 +120,16 @@ function AdminInspectionReviewContent() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [sendingAlertId, setSendingAlertId] = useState<string | null>(null);
   
-  // MODAL & ZOOM STATES
-  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
-  const [zoomProps, setZoomProps] = useState({ isZoomed: false, originX: '50%', originY: '50%' });
+  // MODAL STATES - Updated to track click coordinates (originX, originY) for targeted zoom
+  const [gallery, setGallery] = useState({ 
+    isOpen: false, 
+    images: [] as string[], 
+    index: 0, 
+    scale: 1, 
+    originX: 50, 
+    originY: 50 
+  });
+  
   const [assetDetailModal, setAssetDetailModal] = useState<any>(null);
   const [assetHistory, setAssetHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -160,17 +167,12 @@ function AdminInspectionReviewContent() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!gallery.isOpen) return;
-      if (e.key === 'Escape') {
-        setGallery(g => ({ ...g, isOpen: false }));
-        setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-      }
+      if (e.key === 'Escape') setGallery(g => ({ ...g, isOpen: false, scale: 1, originX: 50, originY: 50 }));
       if (e.key === 'ArrowRight' && gallery.index < gallery.images.length - 1) {
-        setGallery(g => ({ ...g, index: g.index + 1 }));
-        setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+        setGallery(g => ({ ...g, index: g.index + 1, scale: 1, originX: 50, originY: 50 }));
       }
       if (e.key === 'ArrowLeft' && gallery.index > 0) {
-        setGallery(g => ({ ...g, index: g.index - 1 }));
-        setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+        setGallery(g => ({ ...g, index: g.index - 1, scale: 1, originX: 50, originY: 50 }));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -178,29 +180,7 @@ function AdminInspectionReviewContent() {
   }, [gallery]);
 
   const openGallery = (images: string[], startIndex: number) => {
-    setGallery({ isOpen: true, images, index: startIndex });
-    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-  };
-
-  // CLICK-TO-ZOOM HANDLERS
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (zoomProps.isZoomed) {
-      setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-    } else {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setZoomProps({ isZoomed: true, originX: `${Math.max(0, Math.min(x, 100))}%`, originY: `${Math.max(0, Math.min(y, 100))}%` });
-    }
-  };
-
-  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (zoomProps.isZoomed) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setZoomProps(prev => ({ ...prev, originX: `${Math.max(0, Math.min(x, 100))}%`, originY: `${Math.max(0, Math.min(y, 100))}%` }));
-    }
+    setGallery({ isOpen: true, images, index: startIndex, scale: 1, originX: 50, originY: 50 });
   };
 
   const loadAssetHistory = async (assetId: string, currentAssigneeId: string) => {
@@ -656,10 +636,8 @@ function AdminInspectionReviewContent() {
       let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
       
       if (isTemporaryId) {
-        // Fallback for missing UUID mappings
         query = query.eq('asset_id', assetId).ilike('status', '%Pending%');
       } else {
-        // FIX: Target exclusively by Primary Key to prevent silent 0-row updates
         query = query.eq('id', inspectionId);
       }
 
@@ -781,79 +759,86 @@ function AdminInspectionReviewContent() {
   return (
     <div className="min-h-[calc(100vh-6rem)] bg-linear-to-br from-rose-50/40 via-orange-50/30 to-indigo-50/30 p-4 sm:p-6 lg:p-8 relative z-10 font-sans text-slate-900">
       
-      {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
+      {/* 📸 GALLERY MODAL WITH POINT-BASED ZOOM */}
       {gallery.isOpen && (
-        <div className="fixed inset-0 z-[99999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center overflow-hidden">
+        <div style={{ zIndex: 100 }} className="fixed inset-0 flex items-center justify-center bg-black/90 backdrop-blur-3xl">
           
-          {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
-          <button 
-            onClick={() => {
-              setGallery({ isOpen: false, images: [], index: 0 });
-              setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-            }}
-            className="fixed top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[100000] transition-transform active:scale-95"
-            style={{ zIndex: 100000 }} // Absolute guarantee it sits on top
-          >
-            <X size={24} strokeWidth={2.5} />
-          </button>
-
-          {/* Header Info */}
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 z-[99999] flex flex-col pointer-events-none">
-            <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10 w-fit">
-              Photo {gallery.index + 1} of {gallery.images.length}
-            </span>
-            <span className="text-[8px] md:text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit">
-              {zoomProps.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
-            </span>
-          </div>
-          
-          {/* Interactive Magnifier Viewport */}
-          <div 
-            className="w-full h-full relative flex items-center justify-center overflow-hidden p-0"
-            onMouseMove={handleImageMouseMove}
-            onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
-            onClick={handleImageClick}
-          >
-            <img 
-              src={gallery.images[gallery.index]} 
-              alt="Expanded capture" 
-              style={{ 
-                transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
-                transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
-                transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+          {/* Top Action Buttons (Zoom & Close) */}
+          <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setGallery(g => ({ ...g, scale: g.scale === 1 ? 2.5 : 1, originX: 50, originY: 50 }));
               }}
-              className={`max-w-full max-h-[100vh] object-contain shadow-[0_0_40px_rgba(168,85,247,0.15)] transition-transform ${zoomProps.isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`} 
-              draggable={false}
-            />
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-all cursor-pointer text-sm font-semibold"
+            >
+              {gallery.scale === 1 ? (
+                <><ZoomIn size={18} /> Zoom Image</>
+              ) : (
+                <><ZoomOut size={18} /> Reset Zoom</>
+              )}
+            </button>
+            <button
+              onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1, originX: 50, originY: 50 })}
+              className="flex items-center gap-2 bg-rose-500 hover:bg-rose-600 text-white px-5 py-2.5 rounded-full shadow-lg transition-all cursor-pointer text-sm font-semibold"
+            >
+              <X size={18} />
+              Close Gallery
+            </button>
           </div>
-          
-          {/* Navigation Controls */}
-          {gallery.images.length > 1 && (
-             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[99999]">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) }));
-                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-                  }}
-                  disabled={gallery.index === 0}
-                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
-                >
-                  <ChevronLeft size={28} />
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1) }));
-                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-                  }}
-                  disabled={gallery.index === gallery.images.length - 1}
-                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
-                >
-                  <ChevronRight size={28} />
-                </button>
-             </div>
-          )}
+
+          <div className="relative w-full max-w-6xl h-[85vh] flex items-center justify-between px-4 z-40">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index - 1, scale: 1, originX: 50, originY: 50 }); }} 
+                disabled={gallery.index === 0}
+                className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white cursor-pointer disabled:opacity-30 backdrop-blur-xl transition-all"
+              >
+                 <ChevronLeft size={32} />
+              </button>
+              
+              <div 
+                className="flex-1 h-full flex items-center justify-center relative px-8 overflow-hidden cursor-zoom-in"
+                onClick={() => {
+                   // Click background to reset zoom if currently zoomed
+                   if (gallery.scale > 1) {
+                     setGallery({ ...gallery, scale: 1, originX: 50, originY: 50 });
+                   }
+                }}
+              >
+                <img 
+                   src={gallery.images[gallery.index]} 
+                   style={{ 
+                     transform: `scale(${gallery.scale})`,
+                     transformOrigin: `${gallery.originX}% ${gallery.originY}%`,
+                     cursor: gallery.scale === 1 ? 'zoom-in' : 'zoom-out',
+                     transition: 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                   }}
+                   onClick={(e) => { 
+                     e.stopPropagation(); 
+                     if (gallery.scale === 1) {
+                        // Calculate exact point clicked to set origin
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 100;
+                        const y = ((e.clientY - rect.top) / rect.height) * 100;
+                        setGallery({ ...gallery, scale: 2.5, originX: x, originY: y });
+                     } else {
+                        // Zoom out
+                        setGallery({ ...gallery, scale: 1, originX: 50, originY: 50 });
+                     }
+                   }}
+                   className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" 
+                   alt="Inspection Capture"
+                />
+              </div>
+
+              <button 
+                onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index + 1, scale: 1, originX: 50, originY: 50 }); }} 
+                disabled={gallery.index === gallery.images.length - 1}
+                className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white cursor-pointer disabled:opacity-30 backdrop-blur-xl transition-all"
+              >
+                 <ChevronRight size={32} />
+              </button>
+          </div>
         </div>
       )}
 
