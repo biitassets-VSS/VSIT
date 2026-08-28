@@ -96,7 +96,7 @@ function MobileVerifyContent() {
   
   // Gallery & Interactive Zoom State
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
-  const [zoomProps, setZoomProps] = useState({ isZoomed: false, originX: '50%', originY: '50%' });
+  const [zoomProps, setZoomProps] = useState({ isZoomed: false });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,28 +136,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 CLICK-TO-ZOOM HANDLER (Calculates exact click position for zoom origin)
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (zoomProps.isZoomed) {
-      setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-    } else {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setZoomProps({ isZoomed: true, originX: `${x}%`, originY: `${y}%` });
-    }
-  };
-
-  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (zoomProps.isZoomed) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setZoomProps(prev => ({ ...prev, originX: `${x}%`, originY: `${y}%` }));
-    }
-  };
-
-  // 🌟 EMBOSSED CLEAR GLASS WATERMARK ENGINE
+  // 🌟 BLUR GLASS WATERMARK ENGINE (Highly Readable, No Harsh Outlines)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -181,64 +160,52 @@ function MobileVerifyContent() {
 
         const baseScale = canvas.width / 1600; 
         
-        // Normal, readable font size
-        const fontSize = Math.max(22, Math.floor(26 * baseScale));
-        const lineHeight = Math.floor(fontSize * 1.5);
+        // 🌟 Normal, balanced font size
+        const fontSize = Math.max(18, Math.floor(22 * baseScale));
+        const lineHeight = Math.floor(fontSize * 1.6);
         
-        const contentX = Math.floor(40 * baseScale);
-        let contentY = canvas.height - (lineHeight * 4.5); 
+        // 🌟 Lifted higher so it's fully ON the photo and away from edges
+        const contentX = Math.floor(50 * baseScale);
+        let contentY = canvas.height - (lineHeight * 6); 
 
-        // 🌟 EMBOSSED CLEAR GLASS TEXT FUNCTION
-        const drawClearGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left', customColor: string | null = null) => {
-          ctx.font = `800 ${size}px "Arial Black", "Segoe UI Black", Arial, sans-serif`;
+        // 🌟 BLUR GLASS TEXT FUNCTION
+        const drawBlurGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left', customColor: string | null = null) => {
+          ctx.font = `800 ${size}px "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
           ctx.textAlign = align;
-          ctx.lineJoin = 'round';
-          ctx.lineCap = 'round';
 
-          // 1. Soft Outer Drop Shadow for readability on complex backgrounds
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-          ctx.shadowBlur = Math.max(4, size * 0.2);
-          ctx.shadowOffsetX = Math.max(2, size * 0.05);
-          ctx.shadowOffsetY = Math.max(2, size * 0.05);
+          // 1. Heavy Blurred Shadow Halo (Provides the "glass edge" without hard strokes)
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+          ctx.shadowBlur = Math.max(10, size * 0.5);
+          ctx.shadowOffsetX = 2;
+          ctx.shadowOffsetY = 2;
           
-          // Transparent/Tinted Fill
-          ctx.fillStyle = customColor || 'rgba(255, 255, 255, 0.15)'; 
+          // 2. Translucent Bright Fill (Reads clearly but lets slight background through)
+          ctx.fillStyle = customColor || 'rgba(255, 255, 255, 0.9)'; 
           ctx.fillText(text, x, y);
 
-          // Reset Shadow
+          // 3. Second Pass: Draw text again to crisp up the letters over the heavy blur
           ctx.shadowColor = 'transparent';
           ctx.shadowBlur = 0;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
-
-          const offset = Math.max(1, size * 0.04);
-
-          // 2. Dark Inner Bottom/Right Edge (Shadow)
-          ctx.lineWidth = Math.max(1, size * 0.04);
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.strokeText(text, x + offset, y + offset);
-
-          // 3. Bright Inner Top/Left Edge (Specular Highlight)
-          ctx.lineWidth = Math.max(1.5, size * 0.05);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.strokeText(text, x - offset, y - offset);
+          ctx.fillText(text, x, y);
 
           ctx.textAlign = 'left'; // Reset
         };
 
         // Header 
-        drawClearGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left', 'rgba(249, 115, 22, 0.3)');
-        drawClearGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right', 'rgba(168, 85, 247, 0.3)');
+        drawBlurGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left', 'rgba(249, 115, 22, 0.95)');
+        drawBlurGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right', 'rgba(168, 85, 247, 0.95)');
 
         // Body Lines
         contentY += lineHeight;
-        drawClearGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize);
+        drawBlurGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize);
         
         contentY += lineHeight;
-        drawClearGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize);
+        drawBlurGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize);
         
         contentY += lineHeight;
-        drawClearGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize);
+        drawBlurGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -423,73 +390,68 @@ function MobileVerifyContent() {
         </div>
       )}
 
-      {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
+      {/* 🌟 NATIVE SCROLL ZOOM GALLERY MODAL */}
       {gallery.isOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center">
+        <div className="fixed inset-0 z-[9999] bg-black/98 backdrop-blur-md flex flex-col overflow-hidden">
           
-          {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
-          <button 
-            onClick={() => {
-              setGallery({ isOpen: false, images: [], index: 0 });
-              setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-            }}
-            className="fixed top-6 right-6 w-12 h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[10000] transition-transform active:scale-95"
-            style={{ zIndex: 10000 }} // Absolute guarantee it sits on top
-          >
-            <X size={24} strokeWidth={2.5} />
-          </button>
-
-          {/* Header Info */}
-          <div className="absolute top-6 left-6 z-[9999] flex flex-col pointer-events-none">
-            <span className="text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10 w-fit">
-              Photo {gallery.index + 1} of {gallery.images.length}
-            </span>
-            <span className="text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit">
-              {zoomProps.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
-            </span>
-          </div>
-          
-          {/* Interactive Magnifier Viewport */}
-          <div 
-            className="w-full h-full relative flex items-center justify-center overflow-hidden p-4"
-            onMouseMove={handleImageMouseMove}
-            onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
-          >
-            <img 
-              src={gallery.images[gallery.index]} 
-              alt="Expanded capture" 
-              onClick={handleImageClick}
-              style={{ 
-                transform: zoomProps.isZoomed ? `scale(3)` : `scale(1)`, 
-                transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
-                transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+          {/* Top Info Bar & Close Button */}
+          <div className="flex justify-between items-start p-4 md:p-6 w-full shrink-0 z-[10000]">
+            <div className="flex flex-col gap-2 pointer-events-none">
+              <span className="text-[12px] font-black uppercase tracking-widest text-purple-400 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 w-fit pointer-events-auto shadow-sm">
+                Photo {gallery.index + 1} of {gallery.images.length}
+              </span>
+              <span className="text-[10px] text-slate-300 uppercase tracking-widest font-bold bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full w-fit pointer-events-auto shadow-sm">
+                {zoomProps.isZoomed ? "Scroll to Pan • Click to Zoom Out" : "Click image to Zoom In"}
+              </span>
+            </div>
+            
+            {/* Highly Visible Close Button */}
+            <button 
+              onClick={() => {
+                setGallery({ isOpen: false, images: [], index: 0 });
+                setZoomProps({ isZoomed: false });
               }}
-              className={`max-w-full max-h-[85vh] object-contain rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5 ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
-            />
+              className="w-12 h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer transition-transform active:scale-95 shrink-0 pointer-events-auto"
+            >
+              <X size={24} strokeWidth={2.5} />
+            </button>
           </div>
           
-          {/* Navigation Controls */}
-          {gallery.images.length > 1 && (
-             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[9999]">
+          {/* Scrollable Image Viewport */}
+          <div className={`flex-1 w-full relative overflow-auto flex ${zoomProps.isZoomed ? 'items-start justify-start' : 'items-center justify-center'}`}>
+            <div className="p-4 min-w-full min-h-full flex items-center justify-center">
+              <img 
+                src={gallery.images[gallery.index]} 
+                alt="Expanded capture" 
+                onClick={() => setZoomProps(p => ({ isZoomed: !p.isZoomed }))}
+                className={`transition-all duration-300 rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5 ${zoomProps.isZoomed ? 'w-auto max-w-none h-auto cursor-zoom-out' : 'max-w-full max-h-[70vh] object-contain cursor-zoom-in'}`} 
+                style={zoomProps.isZoomed ? { minWidth: '200vw' } : {}}
+              />
+            </div>
+          </div>
+          
+          {/* Bottom Navigation */}
+          {gallery.images.length > 1 && !zoomProps.isZoomed && (
+             <div className="flex justify-between items-center w-full max-w-sm mx-auto z-[10000] p-6 shrink-0">
                 <button 
                   onClick={() => {
                     setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) }));
-                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+                    setZoomProps({ isZoomed: false });
                   }}
                   disabled={gallery.index === 0}
-                  className="w-14 h-14 flex items-center justify-center bg-white/10 border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
+                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-full text-white font-black text-[12px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20"
                 >
-                  <ChevronLeft size={28} />
+                  Previous
                 </button>
                 <button 
                   onClick={() => {
                     setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1) }));
-                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+                    setZoomProps({ isZoomed: false });
                   }}
                   disabled={gallery.index === gallery.images.length - 1}
-                  className="w-14 h-14 flex items-center justify-center bg-white/10 border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
+                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-full text-white font-black text-[12px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20"
                 >
-                  <ChevronRight size={28} />
+                  Next
                 </button>
              </div>
           )}
