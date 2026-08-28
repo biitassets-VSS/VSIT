@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan } from 'lucide-react';
+import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X } from 'lucide-react';
 
 // 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
 const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
@@ -11,7 +11,7 @@ const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepInde
 
   // LAPTOP SAMPLES
   if (cat.includes('laptop')) {
-    if (stepIndex === 0) return ( // Screen & Keypad
+    if (stepIndex === 0) return (
       <div className="w-40 h-32 flex flex-col items-center justify-end relative perspective-1000">
         <div className="w-32 h-20 border-2 border-purple-400 rounded-t-xl bg-purple-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
           <MonitorSmartphone size={24} className="text-purple-400 opacity-50" />
@@ -21,14 +21,14 @@ const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepInde
         </div>
       </div>
     );
-    if (stepIndex === 1) return ( // Top Lid
+    if (stepIndex === 1) return (
       <div className="w-40 h-32 flex items-center justify-center">
         <div className="w-36 h-24 border-2 border-purple-400 rounded-xl bg-purple-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
           <div className="w-6 h-6 rounded-full border border-purple-400/60 flex items-center justify-center"><div className="w-3 h-3 bg-purple-400/60 rounded-full"></div></div>
         </div>
       </div>
     );
-    if (stepIndex === 2) return ( // Left Side
+    if (stepIndex === 2) return (
       <div className="w-40 h-32 flex items-center justify-center relative">
         <div className="w-4 h-32 border-2 border-purple-400 rounded-l-md bg-purple-500/10 flex flex-col items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
           <div className="w-2 h-1 bg-purple-400/60"></div><div className="w-2 h-3 bg-purple-400/60"></div><div className="w-2 h-2 bg-purple-400/60 rounded-full"></div>
@@ -36,7 +36,7 @@ const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepInde
         <div className="absolute right-10 text-[9px] font-black tracking-widest text-purple-400 uppercase flex items-center gap-1"><Scan size={12}/> Left Edge</div>
       </div>
     );
-    if (stepIndex === 3) return ( // Right Side
+    if (stepIndex === 3) return (
       <div className="w-40 h-32 flex items-center justify-center relative">
         <div className="absolute left-10 text-[9px] font-black tracking-widest text-purple-400 uppercase flex items-center gap-1">Right Edge <Scan size={12}/></div>
         <div className="w-4 h-32 border-2 border-purple-400 rounded-r-md bg-purple-500/10 flex flex-col items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
@@ -44,7 +44,7 @@ const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepInde
         </div>
       </div>
     );
-    if (stepIndex === 4) return ( // Bottom S/N
+    if (stepIndex === 4) return (
       <div className="w-40 h-32 flex items-center justify-center">
         <div className="w-36 h-24 border-2 border-purple-400 rounded-xl bg-purple-500/10 flex flex-col items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] gap-2">
           <div className="w-16 h-4 bg-white/10 border border-purple-400/50 flex items-center justify-around px-1"><div className="w-0.5 h-2 bg-purple-400"></div><div className="w-1 h-2 bg-purple-400"></div><div className="w-0.5 h-2 bg-purple-400"></div><div className="w-1.5 h-2 bg-purple-400"></div></div>
@@ -113,6 +113,7 @@ function MobileVerifyContent() {
   const [uploadedCount, setUploadedCount] = useState(0);
   const [success, setSuccess] = useState(false);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [viewImage, setViewImage] = useState<string | null>(null); // State for the Gallery Modal
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const laptopSteps = [
@@ -151,7 +152,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 ULTRA PREMIUM MAC OS 2026 LIQUID GLASS WATERMARK ENGINE
+  // 🌟 ULTRA PREMIUM MAC OS 2026 LIQUID GLASS WATERMARK ENGINE (CENTERED & BIGGER)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -173,53 +174,56 @@ function MobileVerifyContent() {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 🌟 LIQUID GLASS INSET CARD OVERLAY (FLOATING - NOT GLUED TO BOTTOM EDGE)
-        const baseScale = canvas.width / 1600;
-        const fontSize = Math.max(18, Math.floor(22 * baseScale));
-        const padding = Math.floor(24 * baseScale);
-        const margin = Math.floor(36 * baseScale); // Floating gap from edge
-
-        const cardWidth = canvas.width - (margin * 2);
-        const cardHeight = Math.floor(fontSize * 7.2 + (padding * 2));
-        const cardX = margin;
-        const cardY = canvas.height - cardHeight - margin; // Floating card position
-        const cornerRadius = Math.floor(26 * baseScale);
+        // 🌟 LIQUID GLASS INSET CARD OVERLAY (CENTERED & INCREASED SIZE)
+        // Scaled up by 1.6x for better visibility
+        const baseScale = (canvas.width / 1600) * 1.6; 
+        const fontSize = Math.max(28, Math.floor(32 * baseScale));
+        const padding = Math.floor(40 * baseScale);
+        
+        // Make the card take up 85% of the image width
+        const cardWidth = Math.floor(canvas.width * 0.85); 
+        const cardHeight = Math.floor(fontSize * 7.5 + (padding * 2));
+        
+        // CENTER ALIGNMENT MATH
+        const cardX = Math.floor((canvas.width - cardWidth) / 2);
+        const cardY = Math.floor((canvas.height - cardHeight) / 2); 
+        const cornerRadius = Math.floor(36 * baseScale);
 
         // 1. Soft Backdrop Shadow
         ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-        ctx.shadowBlur = Math.floor(30 * baseScale);
-        ctx.shadowOffsetY = Math.floor(12 * baseScale);
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = Math.floor(50 * baseScale);
+        ctx.shadowOffsetY = Math.floor(15 * baseScale);
 
-        // 2. Liquid Glass Backdrop Gradient
+        // 2. Transparent Liquid Glass Backdrop Gradient
         const glassGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
-        glassGrad.addColorStop(0, 'rgba(15, 23, 42, 0.85)');
-        glassGrad.addColorStop(0.5, 'rgba(24, 15, 38, 0.88)');
-        glassGrad.addColorStop(1, 'rgba(10, 10, 20, 0.92)');
+        glassGrad.addColorStop(0, 'rgba(15, 20, 35, 0.45)');  // More transparent dark tint
+        glassGrad.addColorStop(0.5, 'rgba(25, 20, 45, 0.35)');
+        glassGrad.addColorStop(1, 'rgba(10, 10, 20, 0.55)');
 
         drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, cornerRadius);
         ctx.fillStyle = glassGrad;
         ctx.fill();
         ctx.restore();
 
-        // 3. Specular Liquid Glass Top Reflection
-        const glossGrad = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardHeight * 0.45);
-        glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
+        // 3. Specular Liquid Glass Top Reflection (Enhanced for glass feel)
+        const glossGrad = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardHeight * 0.5);
+        glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
         glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
 
-        drawRoundedRect(ctx, cardX + 1, cardY + 1, cardWidth - 2, cardHeight * 0.45, cornerRadius);
+        drawRoundedRect(ctx, cardX + 2, cardY + 2, cardWidth - 4, cardHeight * 0.45, cornerRadius);
         ctx.fillStyle = glossGrad;
         ctx.fill();
 
         // 4. Metallic Hologram Glass Border
         const borderGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
-        borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
-        borderGrad.addColorStop(0.5, 'rgba(249, 115, 22, 0.5)');
-        borderGrad.addColorStop(1, 'rgba(168, 85, 247, 0.6)');
+        borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+        borderGrad.addColorStop(0.5, 'rgba(249, 115, 22, 0.6)');
+        borderGrad.addColorStop(1, 'rgba(168, 85, 247, 0.7)');
 
         drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, cornerRadius);
         ctx.strokeStyle = borderGrad;
-        ctx.lineWidth = Math.max(2, Math.floor(3.5 * baseScale));
+        ctx.lineWidth = Math.max(3, Math.floor(4 * baseScale));
         ctx.stroke();
 
         // 5. Watermark Content Rendering
@@ -229,6 +233,10 @@ function MobileVerifyContent() {
         // Top Brand Header Badge
         ctx.font = `900 ${Math.floor(fontSize * 0.8)}px sans-serif`;
         ctx.fillStyle = '#f97316';
+        
+        // Apply heavy text shadow to ensure it's readable over any background due to glass transparency
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        ctx.shadowBlur = Math.floor(10 * baseScale);
         ctx.fillText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY);
 
         ctx.font = `bold ${Math.floor(fontSize * 0.75)}px sans-serif`;
@@ -238,25 +246,23 @@ function MobileVerifyContent() {
         ctx.textAlign = 'left';
 
         // Separator Line
-        contentY += Math.floor(fontSize * 0.6);
+        contentY += Math.floor(fontSize * 0.8);
         ctx.beginPath();
         ctx.moveTo(contentX, contentY);
         ctx.lineTo(cardX + cardWidth - padding, contentY);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        contentY += Math.floor(fontSize * 1.2);
+        contentY += Math.floor(fontSize * 1.5);
 
         // Audit Meta Data
         ctx.font = `bold ${fontSize}px sans-serif`;
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
 
         ctx.fillText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY);
-        ctx.fillText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY + fontSize * 1.5);
-        ctx.fillText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY + fontSize * 3);
+        ctx.fillText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY + fontSize * 1.6);
+        ctx.fillText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY + fontSize * 3.2);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -422,6 +428,48 @@ function MobileVerifyContent() {
           </button>
         )}
       </div>
+
+      {/* 🌟 NEW: PHOTO GALLERY THUMBNAILS */}
+      {uploadedUrls.length > 0 && (
+        <div className="w-full max-w-sm z-10 mt-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-left mb-2 pl-2">Captured Gallery</div>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+            {uploadedUrls.map((url, idx) => (
+              <div 
+                key={idx} 
+                onClick={() => setViewImage(url)}
+                className="min-w-[64px] w-16 h-16 rounded-xl border-2 border-purple-500/40 overflow-hidden cursor-pointer snap-start relative shadow-[0_0_10px_rgba(168,85,247,0.2)] hover:border-purple-400 transition-all shrink-0"
+              >
+                <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                  <Scan size={16} className="text-white" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 NEW: FULL-SCREEN GALLERY MODAL WITH CLOSE BUTTON */}
+      {viewImage && (
+        <div className="fixed inset-0 z-50 bg-[#0d0914]/95 backdrop-blur-md flex flex-col items-center justify-center p-4">
+          <button 
+            onClick={() => setViewImage(null)}
+            className="absolute top-6 right-6 w-12 h-12 bg-white/10 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95 z-50"
+          >
+            <X size={24} />
+          </button>
+          
+          <img 
+            src={viewImage} 
+            alt="Expanded capture" 
+            className="max-w-full max-h-[85vh] rounded-2xl border border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.3)] object-contain" 
+          />
+          <div className="mt-6 text-[10px] font-black uppercase tracking-widest text-purple-400">
+            Watermarked Preview
+          </div>
+        </div>
+      )}
 
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
     </div>

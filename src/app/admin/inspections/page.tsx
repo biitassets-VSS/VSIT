@@ -620,12 +620,15 @@ function AdminInspectionReviewContent() {
     setUpdatingId(inspectionId);
     try {
       const isTemporaryId = String(inspectionId).startsWith('synthetic-') || String(inspectionId).startsWith('missing-') || String(inspectionId).startsWith('insp-');
+      
       let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
       
       if (isTemporaryId) {
-        query = query.eq('asset_id', assetId).eq('status', 'Pending');
+        // Fallback for missing UUID mappings
+        query = query.eq('asset_id', assetId).ilike('status', '%Pending%');
       } else {
-        query = query.eq('id', inspectionId).eq('asset_id', assetId);
+        // FIX: Target exclusively by Primary Key to prevent silent 0-row updates
+        query = query.eq('id', inspectionId);
       }
 
       const { error: inspErr } = await query;
