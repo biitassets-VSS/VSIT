@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn } from 'lucide-react';
 
 // 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
 const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
@@ -94,8 +94,10 @@ function MobileVerifyContent() {
   const [success, setSuccess] = useState(false);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   
-  // Gallery State with Zoom tracking
-  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, scale: 1 });
+  // Gallery & Interactive Zoom State
+  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
+  const [zoomState, setZoomState] = useState({ isZoomed: false, x: 50, y: 50 });
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const laptopSteps = [
@@ -134,7 +136,28 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 TEXT-ONLY LIQUID GLASS WATERMARK ENGINE (NO BACKGROUND BOX)
+  // 🌟 INTERACTIVE ZOOM HANDLERS
+  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!zoomState.isZoomed) {
+      const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - left) / width) * 100;
+      const y = ((e.clientY - top) / height) * 100;
+      setZoomState({ isZoomed: true, x, y });
+    } else {
+      setZoomState({ isZoomed: false, x: 50, y: 50 });
+    }
+  };
+
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (zoomState.isZoomed) {
+      const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - left) / width) * 100;
+      const y = ((e.clientY - top) / height) * 100;
+      setZoomState(prev => ({ ...prev, x, y }));
+    }
+  };
+
+  // 🌟 TRANSPARENT LIQUID GLASS WATERMARK ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -159,49 +182,59 @@ function MobileVerifyContent() {
         const baseScale = (canvas.width / 1600) * 1.5; 
         const fontSize = Math.max(28, Math.floor(32 * baseScale));
         
-        // Start text block near the bottom left
         const contentX = Math.floor(40 * baseScale);
         let contentY = canvas.height - Math.floor(fontSize * 5.5); 
 
-        // Helper function for glassy, borderless text
-        const drawGlassText = (text: string, x: number, y: number, size: number, color: string, align: 'left' | 'right' = 'left') => {
+        // Refractive Transparent Glass Text Function
+        const drawGlassText = (text: string, x: number, y: number, size: number, color: string, align: 'left' | 'right' = 'left', isOutlineOnly = false) => {
           ctx.font = `900 ${size}px sans-serif`;
           ctx.textAlign = align;
           
-          // Outer black shadow guarantees contrast over ANY hardware color/scratch
+          // Deep drop shadow to separate from background scratches/colors
           ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
           ctx.shadowBlur = Math.floor(16 * baseScale);
           ctx.shadowOffsetX = Math.floor(3 * baseScale);
           ctx.shadowOffsetY = Math.floor(3 * baseScale);
           
-          // Fill text
-          ctx.fillStyle = color;
-          ctx.fillText(text, x, y);
-
-          // Specular glass stroke for a premium transparent edge
-          ctx.shadowColor = 'transparent';
-          ctx.lineWidth = Math.max(1.5, Math.floor(2 * baseScale));
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-          ctx.strokeText(text, x, y);
+          if (isOutlineOnly) {
+             // Transparent glass fill
+             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'; 
+             ctx.fillText(text, x, y);
+             
+             // Crisp specular white refractive stroke
+             ctx.shadowColor = 'transparent'; 
+             ctx.lineWidth = Math.max(2.5, Math.floor(3 * baseScale));
+             ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+             ctx.strokeText(text, x, y);
+          } else {
+             ctx.fillStyle = color;
+             ctx.fillText(text, x, y);
+             
+             // Give colored headers a light glassy rim too
+             ctx.shadowColor = 'transparent';
+             ctx.lineWidth = Math.max(1, Math.floor(1.5 * baseScale));
+             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+             ctx.strokeText(text, x, y);
+          }
           
-          ctx.textAlign = 'left'; // reset
+          ctx.textAlign = 'left'; 
         };
 
-        // 1. Top Brand Header Badge
-        drawGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 0.9), 'rgba(249, 115, 22, 0.95)');
+        // 1. Top Brand Header Badge (Solid colored)
+        drawGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 0.9), 'rgba(249, 115, 22, 0.95)', 'left', false);
         
-        // 2. Verified Audit Tag (Aligned Right)
-        drawGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 0.8), 'rgba(168, 85, 247, 0.95)', 'right');
+        // 2. Verified Audit Tag (Solid colored - Aligned Right)
+        drawGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 0.8), 'rgba(168, 85, 247, 0.95)', 'right', false);
 
-        // 3. User & Audit Details
+        // 3. User & Audit Details (Liquid Glass Outlines)
         contentY += Math.floor(fontSize * 1.5);
-        drawGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize, 'rgba(255, 255, 255, 0.95)');
+        drawGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize, '', 'left', true);
         
         contentY += Math.floor(fontSize * 1.5);
-        drawGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize, 'rgba(255, 255, 255, 0.95)');
+        drawGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize, '', 'left', true);
         
         contentY += Math.floor(fontSize * 1.5);
-        drawGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize, 'rgba(255, 255, 255, 0.95)');
+        drawGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize, '', 'left', true);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -373,7 +406,7 @@ function MobileVerifyContent() {
             {uploadedUrls.map((url, idx) => (
               <div 
                 key={idx} 
-                onClick={() => setGallery({ isOpen: true, images: uploadedUrls, index: idx, scale: 1 })}
+                onClick={() => setGallery({ isOpen: true, images: uploadedUrls, index: idx })}
                 className="min-w-[64px] w-16 h-16 rounded-xl border-2 border-purple-500/40 overflow-hidden cursor-pointer snap-start relative shadow-[0_0_10px_rgba(168,85,247,0.2)] hover:border-purple-400 transition-all shrink-0"
               >
                 <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
@@ -386,69 +419,72 @@ function MobileVerifyContent() {
         </div>
       )}
 
-      {/* 🌟 FULL-SCREEN GALLERY MODAL WITH PAN & ZOOM CONTROLS */}
+      {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
       {gallery.isOpen && (
         <div className="fixed inset-0 z-50 bg-[#0d0914]/95 backdrop-blur-md flex flex-col p-4">
           
           {/* Header Controls */}
-          <div className="flex justify-between items-center w-full z-50 mb-4 bg-black/40 p-3 rounded-2xl border border-white/10">
-            <div className="text-[10px] font-black uppercase tracking-widest text-purple-400">
-              {gallery.index + 1} / {gallery.images.length}
+          <div className="flex justify-between items-center w-full z-[60] mb-4 bg-black/40 p-3 rounded-2xl border border-white/10">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-400">
+                Photo {gallery.index + 1} of {gallery.images.length}
+              </span>
+              <span className="text-[8px] text-slate-400 uppercase tracking-widest">
+                {zoomState.isZoomed ? "Move to Pan" : "Click to Zoom"}
+              </span>
             </div>
             
-            {/* Magnify / Zoom Controls */}
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setGallery(g => ({ ...g, scale: Math.max(g.scale - 0.5, 1) }))}
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all shadow-sm"
-              >
-                <ZoomOut size={18} />
-              </button>
-              <button 
-                onClick={() => setGallery(g => ({ ...g, scale: Math.min(g.scale + 0.5, 4) }))}
-                className="w-10 h-10 bg-purple-500/20 border border-purple-500/50 rounded-full flex items-center justify-center text-purple-300 hover:bg-purple-500/40 active:scale-95 transition-all shadow-sm"
-              >
-                <ZoomIn size={18} />
-              </button>
-            </div>
-
-            {/* Dedicated Close Button */}
+            {/* Absolute High-Z Close Button */}
             <button 
-              onClick={() => setGallery(g => ({ ...g, isOpen: false, scale: 1 }))}
-              className="w-10 h-10 bg-rose-500/20 border border-rose-500/50 rounded-full flex items-center justify-center text-rose-300 hover:bg-rose-500/40 active:scale-95 transition-all shadow-sm"
+              onClick={() => {
+                setGallery(g => ({ ...g, isOpen: false }));
+                setZoomState({ isZoomed: false, x: 50, y: 50 });
+              }}
+              className="w-10 h-10 bg-rose-500/20 border border-rose-500/50 rounded-full flex items-center justify-center text-rose-300 hover:bg-rose-500/40 active:scale-95 transition-all shadow-sm z-[70] cursor-pointer"
             >
               <X size={18} />
             </button>
           </div>
           
-          {/* Zoomable / Pannable Viewport */}
-          <div className="flex-1 overflow-auto rounded-2xl border border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)] relative bg-black/20 touch-pan-x touch-pan-y">
-            <div className="min-h-full min-w-full flex items-center justify-center p-4">
+          {/* Interactive Magnifier Viewport */}
+          <div className="flex-1 w-full h-full rounded-2xl border border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)] relative bg-black/20 overflow-hidden">
+            <div 
+              className={`relative w-full h-full flex items-center justify-center ${zoomState.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`}
+              onClick={handleImageClick}
+              onMouseMove={handleImageMouseMove}
+              onMouseLeave={() => setZoomState({ isZoomed: false, x: 50, y: 50 })}
+            >
               <img 
                 src={gallery.images[gallery.index]} 
                 alt="Expanded capture" 
                 style={{ 
-                  transform: `scale(${gallery.scale})`, 
-                  transformOrigin: 'center center',
-                  transition: 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                  transform: zoomState.isZoomed ? `scale(3)` : `scale(1)`, 
+                  transformOrigin: `${zoomState.x}% ${zoomState.y}%`,
+                  transition: zoomState.isZoomed ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
                 }}
-                className="max-w-full max-h-[75vh] object-contain rounded-xl" 
+                className="max-w-full max-h-full object-contain pointer-events-none" 
               />
             </div>
           </div>
           
           {/* Navigation Controls */}
           {gallery.images.length > 1 && (
-             <div className="flex justify-between items-center w-full z-50 mt-4 px-2">
+             <div className="flex justify-between items-center w-full z-[60] mt-4 px-2">
                 <button 
-                  onClick={() => setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0), scale: 1 }))}
+                  onClick={() => {
+                    setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) }));
+                    setZoomState({ isZoomed: false, x: 50, y: 50 });
+                  }}
                   disabled={gallery.index === 0}
                   className="px-6 py-3 bg-white/10 border border-white/20 rounded-full text-white font-black text-[10px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all"
                 >
                   Previous
                 </button>
                 <button 
-                  onClick={() => setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1), scale: 1 }))}
+                  onClick={() => {
+                    setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1) }));
+                    setZoomState({ isZoomed: false, x: 50, y: 50 });
+                  }}
                   disabled={gallery.index === gallery.images.length - 1}
                   className="px-6 py-3 bg-white/10 border border-white/20 rounded-full text-white font-black text-[10px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all"
                 >

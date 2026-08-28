@@ -599,7 +599,7 @@ export default function StaffDashboardPage() {
     if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
     if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
     if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
-    if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection') || s.includes('overdue')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
     if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
     return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
@@ -816,7 +816,15 @@ export default function StaffDashboardPage() {
                     const asset = visibleAsset;
                     const btnState = getAssetAuditState(asset);
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
-                    const lockReasonDate = asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+
+                    // Compute clean inspection state exclusively
+                    let baseAuditStatus = 'Approved';
+                    if (asset.live_inspection_status === 'Inspection Sent to Admin') baseAuditStatus = 'Pending Review';
+                    else if (btnState.text.includes('Re-Audit')) baseAuditStatus = 'Re-Audit Required';
+                    else if (btnState.text.includes('Re-Inspection')) baseAuditStatus = 'Re-Inspection Required';
+                    else if (asset.isOverdue || btnState.text.includes('Overdue')) baseAuditStatus = 'Overdue';
+                    else if ((asset.inspection_status || '').toLowerCase() === 'approved') baseAuditStatus = 'Approved';
+                    else baseAuditStatus = 'Approved';
 
                     return (
                       <motion.div 
@@ -833,34 +841,25 @@ export default function StaffDashboardPage() {
                             <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
                               {asset.name || asset.asset_name || asset.model || 'Generic Device'}
                             </h4>
+                          </div>
+                          
+                          <div className="flex flex-col items-end gap-1.5">
                             <button 
                               onClick={() => setViewInspectionAsset(asset)}
-                              className={`px-3 py-1.5 mt-1 rounded-xl text-[9px] font-bold uppercase tracking-widest border inline-flex items-center shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-pointer hover:scale-105 transition-transform ${
-                              asset.live_inspection_status === 'Return Declined' ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                              asset.live_inspection_status === 'Return Pending' ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
-                              asset.live_inspection_status === 'Replace Declined' ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                              asset.live_inspection_status === 'Replace Pending' ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
-                              asset.live_inspection_status === 'Inspection Sent to Admin' ? 'bg-purple-100/80 text-purple-700 border-purple-200 animate-pulse' :
-                              btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
-                              asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
-                              'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
+                              className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest border inline-flex items-center shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-pointer hover:scale-105 transition-transform ${
+                                asset.live_inspection_status === 'Return Declined' ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                                asset.live_inspection_status === 'Return Pending' ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                                asset.live_inspection_status === 'Replace Declined' ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                                asset.live_inspection_status === 'Replace Pending' ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
+                                asset.live_inspection_status === 'Inspection Sent to Admin' ? 'bg-purple-100/80 text-purple-700 border-purple-200 animate-pulse' :
+                                btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
+                                asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
+                                'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}>
                               <span className="opacity-70 mr-1.5">Last Request:</span>
                               {asset.live_inspection_status}
                             </button>
                           </div>
-                          
-                          {/* 🌟 NEW BADGE FOR IN REVIEW */}
-                          {asset.isReturnPending && (
-                              <div className="px-3 py-1.5 bg-rose-100/80 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
-                                  <Clock size={14} /> Return Request - In Review
-                              </div>
-                          )}
-                          {!asset.isReturnPending && btnState.text === 'Under Review' && (
-                              <div className="px-3 py-1.5 bg-purple-100/80 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
-                                  <Clock size={14} /> Audit Request - In Review
-                              </div>
-                          )}
                         </div>
 
                         {/* 🌟 COMPRESSED INNER GLASS GRID */}
@@ -884,13 +883,13 @@ export default function StaffDashboardPage() {
 
                           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                             <div className="min-w-0">
-                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Status (Inspection)</span>
+                              <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Inspection Status</span>
                               <div className="flex items-center">
                                 <button 
                                   onClick={() => setViewInspectionAsset(asset)}
-                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-transform hover:scale-105 cursor-pointer leading-tight ${getInspectionStatusColor(asset.live_inspection_status)}`}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-transform hover:scale-105 cursor-pointer leading-tight ${getInspectionStatusColor(baseAuditStatus)}`}
                                 >
-                                  {asset.live_inspection_status || 'Approved'}
+                                  {baseAuditStatus}
                                 </button>
                               </div>
                             </div>
@@ -926,16 +925,6 @@ export default function StaffDashboardPage() {
                             <div className="leading-tight">
                               <span className="inline-block text-[9px] font-bold uppercase tracking-widest opacity-80 mr-1">Admin Response:</span>
                               {extractAdminReason(asset.live_admin_remarks, asset.notes)}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 🌟 ACTION LOCKED WARNING BANNER */}
-                        { (asset.isReturnPending || btnState.text === 'Under Review' || asset.isReplacePending) && (
-                          <div className="p-3 mt-1 mb-2 rounded-xl border border-purple-200/50 bg-purple-50/50 backdrop-blur-md text-purple-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
-                            <Clock size={14} className="shrink-0" />
-                            <div className="leading-tight">
-                              Photos and request submitted for verification on {lockReasonDate}. Actions are temporarily locked.
                             </div>
                           </div>
                         )}
