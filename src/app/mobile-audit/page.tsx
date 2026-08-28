@@ -141,7 +141,6 @@ function MobileVerifyContent() {
     if (zoomProps.isZoomed) {
       setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
     } else {
-      // Find image element to get true relative dimensions
       const img = e.currentTarget.querySelector('img');
       if (!img) return;
       const rect = img.getBoundingClientRect();
@@ -153,7 +152,6 @@ function MobileVerifyContent() {
 
   const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (zoomProps.isZoomed) {
-      // Map mouse position on screen to image panning coordinates
       const rect = e.currentTarget.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -161,7 +159,7 @@ function MobileVerifyContent() {
     }
   };
 
-  // 🌟 EMBOSSED CLEAR GLASS TEXT ENGINE (Matching the reference)
+  // 🌟 GLASS CARD WATERMARK ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -184,65 +182,95 @@ function MobileVerifyContent() {
         ctx.drawImage(img, 0, 0, width, height);
 
         const baseScale = canvas.width / 1600; 
+        const fontSize = Math.max(20, Math.floor(26 * baseScale));
+        const padding = Math.floor(35 * baseScale);
+        const lineHeight = Math.floor(fontSize * 1.6);
         
-        // Normal, readable font size
-        const fontSize = Math.max(20, Math.floor(24 * baseScale));
-        const lineHeight = Math.floor(fontSize * 1.5);
+        ctx.font = `500 ${fontSize}px "Segoe UI", Roboto, Helvetica, sans-serif`;
         
-        const contentX = Math.floor(40 * baseScale);
-        let contentY = canvas.height - (lineHeight * 5.5); 
+        // Watermark Text Elements
+        const t1 = `VERIFIED AUDIT ✓`;
+        const t2 = `${staffName} (${empCode})`;
+        const t3 = `HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`; 
+        const t4 = `TIMESTAMP: ${new Date().toLocaleString('en-IN')}`;
 
-        // 🌟 EXACT TRANSPARENT GLASS EFFECT PROVIDED
-        const drawClearGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left', customColor: string | null = null) => {
-          ctx.font = `800 ${size}px "Arial Black", "Segoe UI Black", Arial, sans-serif`;
-          ctx.textAlign = align;
-          ctx.lineJoin = 'round';
-          ctx.lineCap = 'round';
+        // Calculate card dimensions dynamically based on longest text
+        const maxWidth = Math.max(
+          ctx.measureText(t1).width,
+          ctx.measureText(t2).width,
+          ctx.measureText(t3).width,
+          ctx.measureText(t4).width
+        ) + (padding * 3); 
 
-          // 1. Soft Outer Drop Shadow for readability
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-          ctx.shadowBlur = Math.max(4, size * 0.2);
-          ctx.shadowOffsetX = Math.max(2, size * 0.05);
-          ctx.shadowOffsetY = Math.max(2, size * 0.05);
+        const cardWidth = maxWidth;
+        const cardHeight = padding * 2 + (lineHeight * 3.5);
+        
+        // 🌟 PLACEMENT: Bottom Right Corner
+        const cardX = canvas.width - cardWidth - padding;
+        const cardY = canvas.height - cardHeight - padding;
+
+        // 1. Draw Frosted Glass Card Shape
+        const cornerRadius = 16 * baseScale;
+        ctx.beginPath();
+        ctx.moveTo(cardX + cornerRadius, cardY);
+        ctx.lineTo(cardX + cardWidth - cornerRadius, cardY);
+        ctx.quadraticCurveTo(cardX + cardWidth, cardY, cardX + cardWidth, cardY + cornerRadius);
+        ctx.lineTo(cardX + cardWidth, cardY + cardHeight - cornerRadius);
+        ctx.quadraticCurveTo(cardX + cardWidth, cardY + cardHeight, cardX + cardWidth - cornerRadius, cardY + cardHeight);
+        ctx.lineTo(cardX + cornerRadius, cardY + cardHeight);
+        ctx.quadraticCurveTo(cardX, cardY + cardHeight, cardX, cardY + cardHeight - cornerRadius);
+        ctx.lineTo(cardX, cardY + cornerRadius);
+        ctx.quadraticCurveTo(cardX, cardY, cardX + cornerRadius, cardY);
+        ctx.closePath();
+
+        // Card Drop Shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 25 * baseScale;
+        ctx.shadowOffsetX = 10 * baseScale;
+        ctx.shadowOffsetY = 10 * baseScale;
+        
+        // Card Fill (Glassy transparent white)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'; 
+        ctx.fill();
+
+        // Card Border (Soft Specular Edge highlight)
+        ctx.shadowColor = 'transparent';
+        ctx.lineWidth = 1.5 * baseScale;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.stroke();
+
+        // 2. Draw Text (No strokes/outlines, just soft blur shadow for readability)
+        const textX = cardX + padding;
+        let textY = cardY + padding + fontSize;
+
+        const drawGlassText = (text: string, x: number, y: number, isBullet = true) => {
+          ctx.font = `500 ${fontSize}px "Segoe UI", Roboto, Helvetica, sans-serif`;
+          ctx.textAlign = 'left';
           
-          // Transparent Fill
-          ctx.fillStyle = customColor || 'rgba(255, 255, 255, 0.15)'; 
-          ctx.fillText(text, x, y);
-
-          // Reset Shadow
+          // 🌟 Soft blur shadow to make text pop without ugly strokes
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+          ctx.shadowBlur = Math.max(4, fontSize * 0.2);
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+          
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+          
+          if (isBullet) {
+             ctx.fillText(`○  ${text}`, x, y);
+          } else {
+             ctx.fillText(`    ${text}`, x, y); // Indent to align with bullet text
+          }
           ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
-
-          const offset = Math.max(1, size * 0.04);
-
-          // 2. Dark Inner Bottom/Right Edge (Shadow)
-          ctx.lineWidth = Math.max(1, size * 0.04);
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.strokeText(text, x + offset, y + offset);
-
-          // 3. Bright Inner Top/Left Edge (Specular Highlight)
-          ctx.lineWidth = Math.max(1.5, size * 0.05);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.strokeText(text, x - offset, y - offset);
-
-          ctx.textAlign = 'left'; // Reset
         };
 
-        // Header (No emojis)
-        drawClearGlassText(`VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left', 'rgba(249, 115, 22, 0.3)');
-        drawClearGlassText(`VERIFIED AUDIT`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right', 'rgba(168, 85, 247, 0.3)');
-
-        // Body Lines (No emojis)
-        contentY += lineHeight;
-        drawClearGlassText(`CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize);
-        
-        contentY += lineHeight;
-        drawClearGlassText(`TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize);
-        
-        contentY += lineHeight;
-        drawClearGlassText(`HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize);
+        // Render Lines
+        drawGlassText(t1, textX, textY, true);
+        textY += lineHeight;
+        drawGlassText(t2, textX, textY, true);
+        textY += lineHeight * 0.8;
+        drawGlassText(t3, textX, textY, false); 
+        textY += lineHeight;
+        drawGlassText(t4, textX, textY, true);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
