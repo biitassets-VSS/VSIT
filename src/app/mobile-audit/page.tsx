@@ -96,7 +96,7 @@ function MobileVerifyContent() {
   
   // Gallery & Interactive Zoom State
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
-  const [zoomState, setZoomState] = useState({ isZoomed: false, x: 50, y: 50 });
+  const [zoomProps, setZoomProps] = useState({ isZoomed: false, originX: '50%', originY: '50%' });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,28 +136,19 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 INTERACTIVE ZOOM HANDLERS
-  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!zoomState.isZoomed) {
-      const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - left) / width) * 100;
-      const y = ((e.clientY - top) / height) * 100;
-      setZoomState({ isZoomed: true, x, y });
+  // 🌟 CLICK-TO-ZOOM HANDLER (Calculates exact click position for zoom origin)
+  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (zoomProps.isZoomed) {
+      setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
     } else {
-      setZoomState({ isZoomed: false, x: 50, y: 50 });
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setZoomProps({ isZoomed: true, originX: `${x}%`, originY: `${y}%` });
     }
   };
 
-  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (zoomState.isZoomed) {
-      const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - left) / width) * 100;
-      const y = ((e.clientY - top) / height) * 100;
-      setZoomState(prev => ({ ...prev, x, y }));
-    }
-  };
-
-  // 🌟 3D LIQUID GLASS (ONYX STYLE) WATERMARK ENGINE
+  // 🌟 CLEAR EMBOSSED GLASS WATERMARK ENGINE (Matching the references)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -180,69 +171,65 @@ function MobileVerifyContent() {
         ctx.drawImage(img, 0, 0, width, height);
 
         const baseScale = canvas.width / 1600; 
-        // 🌟 NORMAL FONT SIZE (Readable, not massive)
-        const fontSize = Math.max(16, Math.floor(22 * baseScale));
-        const lineHeight = Math.floor(fontSize * 1.6);
         
-        const contentX = Math.floor(30 * baseScale);
+        // Normal, readable font size
+        const fontSize = Math.max(22, Math.floor(28 * baseScale));
+        const lineHeight = Math.floor(fontSize * 1.5);
+        
+        const contentX = Math.floor(40 * baseScale);
         let contentY = canvas.height - (lineHeight * 4.5); 
 
-        // 🌟 THE "ONYX" LIQUID GLASS RENDERING FUNCTION
-        const drawLiquidGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left') => {
-          ctx.font = `900 ${size}px "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+        // 🌟 EMBOSSED CLEAR GLASS TEXT FUNCTION
+        const drawClearGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left', customColor: string | null = null) => {
+          ctx.font = `800 ${size}px "Arial Black", "Segoe UI Black", Arial, sans-serif`;
           ctx.textAlign = align;
           ctx.lineJoin = 'round';
           ctx.lineCap = 'round';
 
-          // 1. Deep Drop Shadow (Makes it readable against ANY background)
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-          ctx.shadowBlur = size * 0.4;
-          ctx.shadowOffsetX = size * 0.15;
-          ctx.shadowOffsetY = size * 0.15;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Barely visible fill just to hold the shadow
+          // 1. Soft Outer Drop Shadow for readability on complex backgrounds
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+          ctx.shadowBlur = Math.max(4, size * 0.2);
+          ctx.shadowOffsetX = Math.max(2, size * 0.05);
+          ctx.shadowOffsetY = Math.max(2, size * 0.05);
+          
+          // Transparent/Tinted Fill
+          ctx.fillStyle = customColor || 'rgba(255, 255, 255, 0.15)'; 
           ctx.fillText(text, x, y);
 
-          // Reset shadow
+          // Reset Shadow
           ctx.shadowColor = 'transparent';
           ctx.shadowBlur = 0;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
 
-          // 2. Thick Translucent Dark Outline (The outer glass edge)
-          ctx.lineWidth = size * 0.12;
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-          ctx.strokeText(text, x, y);
+          const offset = Math.max(1, size * 0.04);
 
-          // 3. Thick Translucent Light Outline (The inner glass body)
-          ctx.lineWidth = size * 0.08;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-          ctx.strokeText(text, x, y);
+          // 2. Dark Inner Bottom/Right Edge (Shadow)
+          ctx.lineWidth = Math.max(1, size * 0.04);
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.strokeText(text, x + offset, y + offset);
 
-          // 4. Sharp Bright Highlight (The Specular Glass Reflection)
-          ctx.lineWidth = size * 0.025;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-          // Offset slightly up and left to simulate a top-left light source
-          ctx.strokeText(text, x - (size * 0.02), y - (size * 0.02));
+          // 3. Bright Inner Top/Left Edge (Specular Highlight)
+          ctx.lineWidth = Math.max(1.5, size * 0.05);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.strokeText(text, x - offset, y - offset);
 
-          // 5. Clear center (Fill with very faint white to complete the glass look)
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-          ctx.fillText(text, x, y);
-          
           ctx.textAlign = 'left'; // Reset
         };
 
-        // Render Watermark Content using the Liquid Glass effect
-        drawLiquidGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left');
-        drawLiquidGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right');
+        // Header 
+        drawClearGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left', 'rgba(249, 115, 22, 0.4)');
+        drawClearGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right', 'rgba(168, 85, 247, 0.4)');
 
+        // Body Lines
         contentY += lineHeight;
-        drawLiquidGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize, 'left');
+        drawClearGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize);
         
         contentY += lineHeight;
-        drawLiquidGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize, 'left');
+        drawClearGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize);
         
         contentY += lineHeight;
-        drawLiquidGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize, 'left');
+        drawClearGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -429,72 +416,67 @@ function MobileVerifyContent() {
 
       {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
       {gallery.isOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center">
           
-          {/* 🌟 PROMINENT ABSOLUTE CLOSE BUTTON (TOP RIGHT) */}
+          {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
           <button 
             onClick={() => {
-              setGallery(g => ({ ...g, isOpen: false }));
-              setZoomState({ isZoomed: false, x: 50, y: 50 });
+              setGallery({ isOpen: false, images: [], index: 0 });
+              setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
             }}
-            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/30 rounded-full flex items-center justify-center text-white shadow-xl cursor-pointer z-[110] transition-all active:scale-95"
+            className="fixed top-6 right-6 w-12 h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[10000] transition-transform active:scale-95"
+            style={{ zIndex: 10000 }} // Absolute guarantee it sits on top
           >
-            <X size={24} />
+            <X size={24} strokeWidth={2.5} />
           </button>
 
           {/* Header Info */}
-          <div className="flex flex-col items-center justify-center w-full z-[60] mt-4 mb-2 pointer-events-none">
-            <span className="text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10">
+          <div className="absolute top-6 left-6 z-[9999] flex flex-col pointer-events-none">
+            <span className="text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10 w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
             </span>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full">
-              {zoomState.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
+            <span className="text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit">
+              {zoomProps.isZoomed ? "Click again to Zoom Out" : "Click image to Zoom In"}
             </span>
           </div>
           
           {/* Interactive Magnifier Viewport */}
-          <div className="flex-1 w-full h-full relative overflow-hidden mt-4 mb-4">
-            <div 
-              className={`relative w-full h-full flex items-center justify-center ${zoomState.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`}
+          <div className="w-full h-full relative flex items-center justify-center overflow-hidden p-4">
+            <img 
+              src={gallery.images[gallery.index]} 
+              alt="Expanded capture" 
               onClick={handleImageClick}
-              onMouseMove={handleImageMouseMove}
-              onMouseLeave={() => setZoomState({ isZoomed: false, x: 50, y: 50 })}
-            >
-              <img 
-                src={gallery.images[gallery.index]} 
-                alt="Expanded capture" 
-                style={{ 
-                  transform: zoomState.isZoomed ? `scale(3)` : `scale(1)`, 
-                  transformOrigin: `${zoomState.x}% ${zoomState.y}%`,
-                  transition: zoomState.isZoomed ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
-                }}
-                className="max-w-full max-h-[75vh] object-contain rounded-xl pointer-events-none shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5" 
-              />
-            </div>
+              style={{ 
+                transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
+                transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
+                transition: 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+              }}
+              className={`max-w-full max-h-[85vh] object-contain rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5 transition-transform ${zoomProps.isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`} 
+            />
           </div>
           
           {/* Navigation Controls */}
           {gallery.images.length > 1 && (
-             <div className="flex justify-between items-center w-full max-w-sm mx-auto z-[60] mb-6">
+             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[9999]">
                 <button 
                   onClick={() => {
                     setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) }));
-                    setZoomState({ isZoomed: false, x: 50, y: 50 });
+                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
                   }}
                   disabled={gallery.index === 0}
-                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-full text-white font-black text-[12px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20"
+                  className="w-14 h-14 flex items-center justify-center bg-white/10 border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
                 >
-                  Previous
+                  <ChevronLeft size={28} />
                 </button>
                 <button 
                   onClick={() => {
                     setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1) }));
-                    setZoomState({ isZoomed: false, x: 50, y: 50 });
+                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
                   }}
                   disabled={gallery.index === gallery.images.length - 1}
-                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-full text-white font-black text-[12px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20"
+                  className="w-14 h-14 flex items-center justify-center bg-white/10 border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
                 >
-                  Next
+                  <ChevronRight size={28} />
                 </button>
              </div>
           )}
