@@ -3,13 +3,12 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X } from 'lucide-react';
+import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut } from 'lucide-react';
 
 // 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
 const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
   const cat = category.toLowerCase();
 
-  // LAPTOP SAMPLES
   if (cat.includes('laptop')) {
     if (stepIndex === 0) return (
       <div className="w-40 h-32 flex flex-col items-center justify-end relative perspective-1000">
@@ -54,42 +53,23 @@ const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepInde
     );
   }
 
-  // KEYBOARD SAMPLES
   if (cat.includes('keyboard')) {
     if (stepIndex === 0) return <div className="w-40 h-32 flex items-center justify-center"><Keyboard size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
     if (stepIndex === 1) return <div className="w-40 h-32 flex flex-col items-center justify-center gap-2"><div className="w-32 h-12 border-2 border-purple-400 rounded-md bg-purple-500/10 flex items-center justify-center"><div className="w-12 h-3 bg-white/10 border border-purple-400/50 flex items-center justify-around"><div className="w-0.5 h-1.5 bg-purple-400"></div><div className="w-1 h-1.5 bg-purple-400"></div></div></div></div>;
   }
 
-  // MOUSE SAMPLES
   if (cat.includes('mouse')) {
     if (stepIndex === 0) return <div className="w-40 h-32 flex items-center justify-center"><Mouse size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
     if (stepIndex === 1) return <div className="w-40 h-32 flex items-center justify-center"><div className="w-16 h-24 border-2 border-purple-400 rounded-full bg-purple-500/10 flex flex-col items-center justify-center gap-2"><div className="w-4 h-4 rounded-full border border-purple-400"></div><div className="w-8 h-2 bg-white/10 border border-purple-400/50"></div></div></div>;
   }
 
-  // HEADPHONE SAMPLES
   if (cat.includes('headphone') || cat.includes('headset')) {
     if (stepIndex === 0) return <div className="w-40 h-32 flex items-center justify-center"><Headphones size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
     if (stepIndex === 1) return <div className="w-40 h-32 flex items-center justify-center"><div className="w-20 h-8 border-2 border-purple-400 rounded-full bg-purple-500/10 flex items-center justify-center"><div className="w-8 h-2 bg-white/10 border border-purple-400/50"></div></div></div>;
   }
 
-  // GENERIC SAMPLES
   return <div className="w-40 h-32 flex items-center justify-center"><MonitorSmartphone size={64} strokeWidth={1} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" /></div>;
 };
-
-// 🌟 POLYFILL FOR CROSS-BROWSER ROUNDED RECT
-function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(x, y, w, h, r);
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-}
 
 function MobileVerifyContent() {
   const searchParams = useSearchParams();
@@ -113,7 +93,9 @@ function MobileVerifyContent() {
   const [uploadedCount, setUploadedCount] = useState(0);
   const [success, setSuccess] = useState(false);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
-  const [viewImage, setViewImage] = useState<string | null>(null); // State for the Gallery Modal
+  
+  // Gallery State with Zoom tracking
+  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, scale: 1 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const laptopSteps = [
@@ -152,7 +134,7 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 ULTRA PREMIUM MAC OS 2026 LIQUID GLASS WATERMARK ENGINE (CENTERED & BIGGER)
+  // 🌟 TEXT-ONLY LIQUID GLASS WATERMARK ENGINE (NO BACKGROUND BOX)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -174,95 +156,52 @@ function MobileVerifyContent() {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 🌟 LIQUID GLASS INSET CARD OVERLAY (CENTERED & INCREASED SIZE)
-        // Scaled up by 1.6x for better visibility
-        const baseScale = (canvas.width / 1600) * 1.6; 
+        const baseScale = (canvas.width / 1600) * 1.5; 
         const fontSize = Math.max(28, Math.floor(32 * baseScale));
-        const padding = Math.floor(40 * baseScale);
         
-        // Make the card take up 85% of the image width
-        const cardWidth = Math.floor(canvas.width * 0.85); 
-        const cardHeight = Math.floor(fontSize * 7.5 + (padding * 2));
+        // Start text block near the bottom left
+        const contentX = Math.floor(40 * baseScale);
+        let contentY = canvas.height - Math.floor(fontSize * 5.5); 
+
+        // Helper function for glassy, borderless text
+        const drawGlassText = (text: string, x: number, y: number, size: number, color: string, align: 'left' | 'right' = 'left') => {
+          ctx.font = `900 ${size}px sans-serif`;
+          ctx.textAlign = align;
+          
+          // Outer black shadow guarantees contrast over ANY hardware color/scratch
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+          ctx.shadowBlur = Math.floor(16 * baseScale);
+          ctx.shadowOffsetX = Math.floor(3 * baseScale);
+          ctx.shadowOffsetY = Math.floor(3 * baseScale);
+          
+          // Fill text
+          ctx.fillStyle = color;
+          ctx.fillText(text, x, y);
+
+          // Specular glass stroke for a premium transparent edge
+          ctx.shadowColor = 'transparent';
+          ctx.lineWidth = Math.max(1.5, Math.floor(2 * baseScale));
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.strokeText(text, x, y);
+          
+          ctx.textAlign = 'left'; // reset
+        };
+
+        // 1. Top Brand Header Badge
+        drawGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 0.9), 'rgba(249, 115, 22, 0.95)');
         
-        // CENTER ALIGNMENT MATH
-        const cardX = Math.floor((canvas.width - cardWidth) / 2);
-        const cardY = Math.floor((canvas.height - cardHeight) / 2); 
-        const cornerRadius = Math.floor(36 * baseScale);
+        // 2. Verified Audit Tag (Aligned Right)
+        drawGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 0.8), 'rgba(168, 85, 247, 0.95)', 'right');
 
-        // 1. Soft Backdrop Shadow
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-        ctx.shadowBlur = Math.floor(50 * baseScale);
-        ctx.shadowOffsetY = Math.floor(15 * baseScale);
-
-        // 2. Transparent Liquid Glass Backdrop Gradient
-        const glassGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
-        glassGrad.addColorStop(0, 'rgba(15, 20, 35, 0.45)');  // More transparent dark tint
-        glassGrad.addColorStop(0.5, 'rgba(25, 20, 45, 0.35)');
-        glassGrad.addColorStop(1, 'rgba(10, 10, 20, 0.55)');
-
-        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, cornerRadius);
-        ctx.fillStyle = glassGrad;
-        ctx.fill();
-        ctx.restore();
-
-        // 3. Specular Liquid Glass Top Reflection (Enhanced for glass feel)
-        const glossGrad = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardHeight * 0.5);
-        glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
-        glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
-
-        drawRoundedRect(ctx, cardX + 2, cardY + 2, cardWidth - 4, cardHeight * 0.45, cornerRadius);
-        ctx.fillStyle = glossGrad;
-        ctx.fill();
-
-        // 4. Metallic Hologram Glass Border
-        const borderGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
-        borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
-        borderGrad.addColorStop(0.5, 'rgba(249, 115, 22, 0.6)');
-        borderGrad.addColorStop(1, 'rgba(168, 85, 247, 0.7)');
-
-        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, cornerRadius);
-        ctx.strokeStyle = borderGrad;
-        ctx.lineWidth = Math.max(3, Math.floor(4 * baseScale));
-        ctx.stroke();
-
-        // 5. Watermark Content Rendering
-        const contentX = cardX + padding;
-        let contentY = cardY + padding + fontSize;
-
-        // Top Brand Header Badge
-        ctx.font = `900 ${Math.floor(fontSize * 0.8)}px sans-serif`;
-        ctx.fillStyle = '#f97316';
-        
-        // Apply heavy text shadow to ensure it's readable over any background due to glass transparency
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = Math.floor(10 * baseScale);
-        ctx.fillText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY);
-
-        ctx.font = `bold ${Math.floor(fontSize * 0.75)}px sans-serif`;
-        ctx.fillStyle = '#a855f7';
-        ctx.textAlign = 'right';
-        ctx.fillText(`VERIFIED AUDIT ✓`, cardX + cardWidth - padding, contentY);
-        ctx.textAlign = 'left';
-
-        // Separator Line
-        contentY += Math.floor(fontSize * 0.8);
-        ctx.beginPath();
-        ctx.moveTo(contentX, contentY);
-        ctx.lineTo(cardX + cardWidth - padding, contentY);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
+        // 3. User & Audit Details
         contentY += Math.floor(fontSize * 1.5);
-
-        // Audit Meta Data
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillStyle = '#ffffff';
-
-        ctx.fillText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY);
-        ctx.fillText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY + fontSize * 1.6);
-        ctx.fillText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY + fontSize * 3.2);
+        drawGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize, 'rgba(255, 255, 255, 0.95)');
+        
+        contentY += Math.floor(fontSize * 1.5);
+        drawGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize, 'rgba(255, 255, 255, 0.95)');
+        
+        contentY += Math.floor(fontSize * 1.5);
+        drawGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize, 'rgba(255, 255, 255, 0.95)');
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -384,9 +323,7 @@ function MobileVerifyContent() {
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target: {category}</p>
       </div>
 
-      {/* 🌟 AI Hologram Sample Visual Box */}
       <div className="bg-[#1a1325] border border-purple-500/30 p-5 rounded-3xl w-full max-w-sm flex flex-col items-center shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-10 relative overflow-hidden">
-        
         <div className="mb-3 text-[9px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/30">
           <Scan size={12} /> AI Guide: Required Angle
         </div>
@@ -429,7 +366,6 @@ function MobileVerifyContent() {
         )}
       </div>
 
-      {/* 🌟 NEW: PHOTO GALLERY THUMBNAILS */}
       {uploadedUrls.length > 0 && (
         <div className="w-full max-w-sm z-10 mt-2">
           <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-left mb-2 pl-2">Captured Gallery</div>
@@ -437,12 +373,12 @@ function MobileVerifyContent() {
             {uploadedUrls.map((url, idx) => (
               <div 
                 key={idx} 
-                onClick={() => setViewImage(url)}
+                onClick={() => setGallery({ isOpen: true, images: uploadedUrls, index: idx, scale: 1 })}
                 className="min-w-[64px] w-16 h-16 rounded-xl border-2 border-purple-500/40 overflow-hidden cursor-pointer snap-start relative shadow-[0_0_10px_rgba(168,85,247,0.2)] hover:border-purple-400 transition-all shrink-0"
               >
                 <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  <Scan size={16} className="text-white" />
+                  <ZoomIn size={16} className="text-white" />
                 </div>
               </div>
             ))}
@@ -450,24 +386,76 @@ function MobileVerifyContent() {
         </div>
       )}
 
-      {/* 🌟 NEW: FULL-SCREEN GALLERY MODAL WITH CLOSE BUTTON */}
-      {viewImage && (
-        <div className="fixed inset-0 z-50 bg-[#0d0914]/95 backdrop-blur-md flex flex-col items-center justify-center p-4">
-          <button 
-            onClick={() => setViewImage(null)}
-            className="absolute top-6 right-6 w-12 h-12 bg-white/10 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95 z-50"
-          >
-            <X size={24} />
-          </button>
+      {/* 🌟 FULL-SCREEN GALLERY MODAL WITH PAN & ZOOM CONTROLS */}
+      {gallery.isOpen && (
+        <div className="fixed inset-0 z-50 bg-[#0d0914]/95 backdrop-blur-md flex flex-col p-4">
           
-          <img 
-            src={viewImage} 
-            alt="Expanded capture" 
-            className="max-w-full max-h-[85vh] rounded-2xl border border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.3)] object-contain" 
-          />
-          <div className="mt-6 text-[10px] font-black uppercase tracking-widest text-purple-400">
-            Watermarked Preview
+          {/* Header Controls */}
+          <div className="flex justify-between items-center w-full z-50 mb-4 bg-black/40 p-3 rounded-2xl border border-white/10">
+            <div className="text-[10px] font-black uppercase tracking-widest text-purple-400">
+              {gallery.index + 1} / {gallery.images.length}
+            </div>
+            
+            {/* Magnify / Zoom Controls */}
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setGallery(g => ({ ...g, scale: Math.max(g.scale - 0.5, 1) }))}
+                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all shadow-sm"
+              >
+                <ZoomOut size={18} />
+              </button>
+              <button 
+                onClick={() => setGallery(g => ({ ...g, scale: Math.min(g.scale + 0.5, 4) }))}
+                className="w-10 h-10 bg-purple-500/20 border border-purple-500/50 rounded-full flex items-center justify-center text-purple-300 hover:bg-purple-500/40 active:scale-95 transition-all shadow-sm"
+              >
+                <ZoomIn size={18} />
+              </button>
+            </div>
+
+            {/* Dedicated Close Button */}
+            <button 
+              onClick={() => setGallery(g => ({ ...g, isOpen: false, scale: 1 }))}
+              className="w-10 h-10 bg-rose-500/20 border border-rose-500/50 rounded-full flex items-center justify-center text-rose-300 hover:bg-rose-500/40 active:scale-95 transition-all shadow-sm"
+            >
+              <X size={18} />
+            </button>
           </div>
+          
+          {/* Zoomable / Pannable Viewport */}
+          <div className="flex-1 overflow-auto rounded-2xl border border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)] relative bg-black/20 touch-pan-x touch-pan-y">
+            <div className="min-h-full min-w-full flex items-center justify-center p-4">
+              <img 
+                src={gallery.images[gallery.index]} 
+                alt="Expanded capture" 
+                style={{ 
+                  transform: `scale(${gallery.scale})`, 
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                }}
+                className="max-w-full max-h-[75vh] object-contain rounded-xl" 
+              />
+            </div>
+          </div>
+          
+          {/* Navigation Controls */}
+          {gallery.images.length > 1 && (
+             <div className="flex justify-between items-center w-full z-50 mt-4 px-2">
+                <button 
+                  onClick={() => setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0), scale: 1 }))}
+                  disabled={gallery.index === 0}
+                  className="px-6 py-3 bg-white/10 border border-white/20 rounded-full text-white font-black text-[10px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all"
+                >
+                  Previous
+                </button>
+                <button 
+                  onClick={() => setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1), scale: 1 }))}
+                  disabled={gallery.index === gallery.images.length - 1}
+                  className="px-6 py-3 bg-white/10 border border-white/20 rounded-full text-white font-black text-[10px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all"
+                >
+                  Next
+                </button>
+             </div>
+          )}
         </div>
       )}
 

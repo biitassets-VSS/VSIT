@@ -300,8 +300,6 @@ export default function StaffDashboardPage() {
             }
         }
 
-        // 🌟 EXPLICIT STATUS OVERRIDE FIX
-        // This ensures the badge correctly shows the rejected status even if the DB row says 'Pending'
         let finalDisplayStatus = latestInsp?.status || asset.inspection_status || 'Pending';
         if (isReturnRejected) finalDisplayStatus = 'Return Declined';
         else if (isReplaceRejected) finalDisplayStatus = 'Replace Declined';
@@ -376,14 +374,13 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(photoChannel); };
   }, [qrSessionId]);
 
-  // 🌟 CORE RULES FOR AUDIT STATE (RE-AUDIT, RE-INSPECTION, CYCLE LOCKING)
   const getAssetAuditState = (asset: any) => {
     const auditWindow = getAuditWindowInfo(asset.category);
     const liveStatus = (asset.live_inspection_status || '').toLowerCase();
     
     // 1. Lock if waiting on a Return or Replacement to be approved
     if (asset.isReturnPending || asset.isReplacePending) {
-      return { disabled: true, text: "Locked", classes: "bg-white/40 backdrop-blur-xl text-slate-400 font-bold border border-white/60 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]" };
+      return { disabled: true, text: "Under Review", classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     }
 
     // 2. Explicit Rejection Rules
@@ -398,7 +395,7 @@ export default function StaffDashboardPage() {
 
     // 4. Pending standard inspection. Notice we explicitly check that it isn't a declined return.
     if (liveStatus === 'pending review' || liveStatus === 'pending') {
-      return { disabled: true, text: "Under Review", classes: "bg-purple-50/80 backdrop-blur-xl text-purple-600 font-bold border border-purple-200 cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.05)]" };
+      return { disabled: true, text: "Under Review", classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     }
 
     // 5. Normal Audit Cycle evaluation
@@ -419,12 +416,11 @@ export default function StaffDashboardPage() {
     if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
     
     const auditDateStr = auditWindow.windowStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens\n${auditDateStr}`, classes: "bg-white/40 backdrop-blur-xl text-slate-500 font-bold border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditDateStr}`, classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     
-    return { disabled: false, text: "Audit Device", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
+    return { disabled: false, text: "Audit Device Now", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
   };
 
-  // 🌟 STRICT GLOBAL BUTTON SYNC
   const isGlobalAuditOpen = assignedAssets.some(a => {
     const state = getAssetAuditState(a);
     return !state.disabled && !state.text.includes('Opens');
@@ -600,7 +596,6 @@ export default function StaffDashboardPage() {
     return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
 
-  // 🌟 MAC OS 2026 ULTRA PREMIUM LIQUID GLASS THEME
   const theme = {
     glassCard: 'bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60', 
     glassPanel: 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_20px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.7)]',
@@ -812,6 +807,9 @@ export default function StaffDashboardPage() {
                   {visibleAsset && (() => {
                     const asset = visibleAsset;
                     const btnState = getAssetAuditState(asset);
+                    const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
+                    const lockReasonDate = asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+
                     return (
                       <motion.div 
                         key={asset.id}
@@ -822,30 +820,44 @@ export default function StaffDashboardPage() {
                         className={`w-full h-full py-4 sm:py-5 px-10 sm:px-14 lg:px-16 rounded-3xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60`}
                       >
                         {/* Top Banner section */}
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0">
-                          <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
-                            {asset.name || asset.asset_name || asset.model || 'Generic Device'}
-                          </h4>
-                          <span className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest border shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                            asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                            asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
-                            asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                            asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
-                            btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
-                            asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
-                            asset.live_inspection_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                            'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}>
-                            {
-                              asset.isReturnRejected ? 'Return Declined' : 
-                              asset.isReturnPending ? 'Pending Return' : 
-                              asset.isReplaceRejected ? 'Replacement Declined' : 
-                              asset.isReplacePending ? 'Replacement Pending' : 
-                              btnState.text.includes('Re-Audit Required') ? 'Re-Audit Required' : 
-                              btnState.text.includes('Re-Inspection Required') ? 'Re-Inspection Required' : 
-                              asset.isOverdue ? 'Overdue' : 'Assigned & Active'
-                            }
-                          </span>
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-2 shrink-0">
+                          <div>
+                            <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
+                              {asset.name || asset.asset_name || asset.model || 'Generic Device'}
+                            </h4>
+                            <span className={`px-3 py-1.5 mt-1 rounded-xl text-[9px] font-bold uppercase tracking-widest border inline-block shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+                              asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                              asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                              asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                              asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
+                              btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
+                              asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
+                              asset.live_inspection_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                              'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}>
+                              {
+                                asset.isReturnRejected ? 'Return Declined' : 
+                                asset.isReturnPending ? 'Pending Return' : 
+                                asset.isReplaceRejected ? 'Replacement Declined' : 
+                                asset.isReplacePending ? 'Replacement Pending' : 
+                                btnState.text.includes('Re-Audit Required') ? 'Re-Audit Required' : 
+                                btnState.text.includes('Re-Inspection Required') ? 'Re-Inspection Required' : 
+                                asset.isOverdue ? 'Overdue' : 'Assigned & Active'
+                              }
+                            </span>
+                          </div>
+                          
+                          {/* 🌟 NEW BADGE FOR IN REVIEW */}
+                          {asset.isReturnPending && (
+                              <div className="px-3 py-1.5 bg-rose-100/80 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                                  <Clock size={14} /> Return Request - In Review
+                              </div>
+                          )}
+                          {!asset.isReturnPending && btnState.text === 'Under Review' && (
+                              <div className="px-3 py-1.5 bg-purple-100/80 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                                  <Clock size={14} /> Audit Request - In Review
+                              </div>
+                          )}
                         </div>
 
                         {/* 🌟 COMPRESSED INNER GLASS GRID */}
@@ -904,6 +916,7 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
                         
+                        {/* Status/Rejection Reason Banner */}
                         { (asset.isReturnRejected || asset.isReplaceRejected || btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required')) && (
                           <div className="p-2.5 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-start">
                             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
@@ -914,13 +927,23 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
+                        {/* 🌟 ACTION LOCKED WARNING BANNER */}
+                        { (asset.isReturnPending || btnState.text === 'Under Review' || asset.isReplacePending) && (
+                          <div className="p-3 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
+                            <AlertTriangle size={14} className="shrink-0" />
+                            <div className="leading-tight">
+                              Photos and request submitted for verification on {lockReasonDate}. Buttons are locked.
+                            </div>
+                          </div>
+                        )}
+
                         {/* 🌟 ACTION BAR */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
                           
                           <div className="w-full sm:flex-1 flex justify-start">
-                            {asset.isReturnPending ? (
-                              <button disabled className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
-                                Waiting on Admin
+                            {asset.isReturnPending || btnState.text === 'Under Review' ? (
+                              <button disabled className="px-6 py-2 rounded-full text-[11px] font-bold transition-all bg-slate-200/70 border border-slate-300 text-slate-500 cursor-not-allowed flex items-center gap-1.5">
+                                Return
                               </button>
                             ) : asset.isReturnRejected ? (
                               <button 
@@ -929,18 +952,18 @@ export default function StaffDashboardPage() {
                                   loadRealDatabase(false);
                                   setModal({ isOpen: true, type: 'RETURN', targetAsset: asset });
                                 }} 
-                                className="px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
+                                className="px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer"
                               >
                                 Return (Retry)
                               </button>
                             ) : (
                               <button 
-                                disabled={asset.isReplacePending} 
+                                disabled={isActionLocked} 
                                 onClick={() => { setModal({ isOpen: true, type: 'RETURN', targetAsset: asset }); }} 
-                                className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                                  (asset.isReplacePending)
-                                    ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
-                                    : 'bg-white/40 backdrop-blur-xl border border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
+                                className={`px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm border ${
+                                  isActionLocked
+                                    ? 'bg-slate-200/70 border-slate-300 text-slate-500 cursor-not-allowed'
+                                    : 'bg-white/40 backdrop-blur-xl border-orange-300/60 text-orange-600 hover:bg-orange-50/60 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] cursor-pointer'
                                 }`}
                               >
                                 Return
@@ -950,8 +973,8 @@ export default function StaffDashboardPage() {
                           
                           <div className="w-full sm:flex-1 flex justify-center">
                             {asset.isReplacePending ? (
-                              <button disabled className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 opacity-60 cursor-not-allowed`}>
-                                Waiting on Admin
+                              <button disabled className="px-6 py-2 rounded-full text-[11px] font-bold transition-all bg-slate-200/70 border border-slate-300 text-slate-500 cursor-not-allowed flex items-center gap-1.5">
+                                Replace
                               </button>
                             ) : asset.isReplaceRejected ? (
                               <button 
@@ -961,18 +984,18 @@ export default function StaffDashboardPage() {
                                   setReplaceAssetId(asset.id); 
                                   setShowReplaceModal(true); 
                                 }} 
-                                className="px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
+                                className="px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer"
                               >
                                 Replace (Retry)
                               </button>
                             ) : (
                               <button 
-                                disabled={asset.isReturnPending}
+                                disabled={isActionLocked}
                                 onClick={() => { setReplaceAssetId(asset.id); setShowReplaceModal(true); }} 
-                                className={`px-5 py-1.5 sm:py-2 rounded-2xl text-[10px] sm:text-[11px] font-bold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                                  (asset.isReturnPending)
-                                    ? 'bg-white/30 backdrop-blur-xl border border-white/40 text-slate-400 cursor-not-allowed opacity-60'
-                                    : 'bg-white/40 backdrop-blur-xl border border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
+                                className={`px-6 py-2 rounded-full text-[11px] font-bold transition-all shadow-sm border ${
+                                  isActionLocked
+                                    ? 'bg-slate-200/70 border-slate-300 text-slate-500 cursor-not-allowed'
+                                    : 'bg-white/40 backdrop-blur-xl border-purple-300/60 text-purple-600 hover:bg-purple-50/60 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer'
                                 }`}
                               >
                                 Replace
@@ -984,27 +1007,19 @@ export default function StaffDashboardPage() {
                             <button 
                               disabled={btnState.disabled}
                               onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
-                              className={`px-5 py-1.5 sm:py-2 font-bold text-[10px] sm:text-[11px] rounded-2xl transition-all flex flex-col items-center justify-center shadow-sm ${
-                                btnState.disabled && !btnState.text.includes('Opens') 
-                                ? 'bg-purple-50/80 backdrop-blur-xl text-purple-600 border border-purple-200 cursor-not-allowed'
-                                : btnState.disabled && btnState.text.includes('Opens')
-                                ? 'bg-white/40 backdrop-blur-xl text-slate-500 border border-white/60 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white cursor-pointer border border-orange-400 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]'
+                              className={`px-6 py-2 font-bold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+                                btnState.disabled 
+                                ? 'bg-slate-200/70 border border-slate-300 text-slate-500 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white cursor-pointer hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] border border-orange-400'
                               }`}
                             >
-                              <span className="flex items-center gap-1.5 leading-tight text-center">
-                                {btnState.disabled && !btnState.text.includes('Opens') && <CheckCircle size={12} className="shrink-0" />}
-                                {btnState.disabled && btnState.text.includes('Opens') && <Lock size={12} className="shrink-0" />}
-                                <span>
-                                  {btnState.text.includes('Opens') ? (
-                                    <>
-                                      <span className="block text-[8px] font-bold">Opens</span>
-                                      <span className="block text-[10px]">{btnState.text.replace('Opens\n', '').replace('Opens ', '')}</span>
-                                    </>
-                                  ) : (
-                                    btnState.text
-                                  )}
-                                </span>
+                              {btnState.disabled && <Lock size={14} className="shrink-0" />}
+                              <span>
+                                {btnState.text.includes('Opens') ? (
+                                  `Audit Opens ${btnState.text.replace('Opens\n', '').replace('Opens ', '')}`
+                                ) : (
+                                  btnState.text === 'Under Review' ? 'Audit Device Now' : btnState.text
+                                )}
                               </span>
                             </button>
                           </div>
@@ -1651,7 +1666,6 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
               </div>
               
-              {/* 🌟 Updated Staff Modal Requirements to match mobile-audit explicitly */}
               <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
                 <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
                 <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
