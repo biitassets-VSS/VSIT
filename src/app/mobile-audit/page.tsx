@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn } from 'lucide-react';
+import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut } from 'lucide-react';
 
 // 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
 const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
@@ -157,7 +157,7 @@ function MobileVerifyContent() {
     }
   };
 
-  // 🌟 TRANSPARENT LIQUID GLASS WATERMARK ENGINE
+  // 🌟 3D LIQUID GLASS (ONYX STYLE) WATERMARK ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -179,62 +179,70 @@ function MobileVerifyContent() {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
 
-        const baseScale = (canvas.width / 1600) * 1.5; 
-        const fontSize = Math.max(28, Math.floor(32 * baseScale));
+        const baseScale = canvas.width / 1600; 
+        // 🌟 NORMAL FONT SIZE (Readable, not massive)
+        const fontSize = Math.max(16, Math.floor(22 * baseScale));
+        const lineHeight = Math.floor(fontSize * 1.6);
         
-        const contentX = Math.floor(40 * baseScale);
-        let contentY = canvas.height - Math.floor(fontSize * 5.5); 
+        const contentX = Math.floor(30 * baseScale);
+        let contentY = canvas.height - (lineHeight * 4.5); 
 
-        // Refractive Transparent Glass Text Function
-        const drawGlassText = (text: string, x: number, y: number, size: number, color: string, align: 'left' | 'right' = 'left', isOutlineOnly = false) => {
-          ctx.font = `900 ${size}px sans-serif`;
+        // 🌟 THE "ONYX" LIQUID GLASS RENDERING FUNCTION
+        const drawLiquidGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left') => {
+          ctx.font = `900 ${size}px "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
           ctx.textAlign = align;
-          
-          // Deep drop shadow to separate from background scratches/colors
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+
+          // 1. Deep Drop Shadow (Makes it readable against ANY background)
           ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-          ctx.shadowBlur = Math.floor(16 * baseScale);
-          ctx.shadowOffsetX = Math.floor(3 * baseScale);
-          ctx.shadowOffsetY = Math.floor(3 * baseScale);
+          ctx.shadowBlur = size * 0.4;
+          ctx.shadowOffsetX = size * 0.15;
+          ctx.shadowOffsetY = size * 0.15;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Barely visible fill just to hold the shadow
+          ctx.fillText(text, x, y);
+
+          // Reset shadow
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+
+          // 2. Thick Translucent Dark Outline (The outer glass edge)
+          ctx.lineWidth = size * 0.12;
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+          ctx.strokeText(text, x, y);
+
+          // 3. Thick Translucent Light Outline (The inner glass body)
+          ctx.lineWidth = size * 0.08;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.strokeText(text, x, y);
+
+          // 4. Sharp Bright Highlight (The Specular Glass Reflection)
+          ctx.lineWidth = size * 0.025;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+          // Offset slightly up and left to simulate a top-left light source
+          ctx.strokeText(text, x - (size * 0.02), y - (size * 0.02));
+
+          // 5. Clear center (Fill with very faint white to complete the glass look)
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.fillText(text, x, y);
           
-          if (isOutlineOnly) {
-             // Transparent glass fill
-             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'; 
-             ctx.fillText(text, x, y);
-             
-             // Crisp specular white refractive stroke
-             ctx.shadowColor = 'transparent'; 
-             ctx.lineWidth = Math.max(2.5, Math.floor(3 * baseScale));
-             ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-             ctx.strokeText(text, x, y);
-          } else {
-             ctx.fillStyle = color;
-             ctx.fillText(text, x, y);
-             
-             // Give colored headers a light glassy rim too
-             ctx.shadowColor = 'transparent';
-             ctx.lineWidth = Math.max(1, Math.floor(1.5 * baseScale));
-             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-             ctx.strokeText(text, x, y);
-          }
-          
-          ctx.textAlign = 'left'; 
+          ctx.textAlign = 'left'; // Reset
         };
 
-        // 1. Top Brand Header Badge (Solid colored)
-        drawGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 0.9), 'rgba(249, 115, 22, 0.95)', 'left', false);
-        
-        // 2. Verified Audit Tag (Solid colored - Aligned Right)
-        drawGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 0.8), 'rgba(168, 85, 247, 0.95)', 'right', false);
+        // Render Watermark Content using the Liquid Glass effect
+        drawLiquidGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left');
+        drawLiquidGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right');
 
-        // 3. User & Audit Details (Liquid Glass Outlines)
-        contentY += Math.floor(fontSize * 1.5);
-        drawGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize, '', 'left', true);
+        contentY += lineHeight;
+        drawLiquidGlassText(`👤 CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize, 'left');
         
-        contentY += Math.floor(fontSize * 1.5);
-        drawGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize, '', 'left', true);
+        contentY += lineHeight;
+        drawLiquidGlassText(`📅 TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize, 'left');
         
-        contentY += Math.floor(fontSize * 1.5);
-        drawGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize, '', 'left', true);
+        contentY += lineHeight;
+        drawLiquidGlassText(`📱 HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize, 'left');
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -421,33 +429,31 @@ function MobileVerifyContent() {
 
       {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
       {gallery.isOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0d0914]/95 backdrop-blur-md flex flex-col p-4">
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col p-4">
           
-          {/* Header Controls */}
-          <div className="flex justify-between items-center w-full z-[60] mb-4 bg-black/40 p-3 rounded-2xl border border-white/10">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-widest text-purple-400">
-                Photo {gallery.index + 1} of {gallery.images.length}
-              </span>
-              <span className="text-[8px] text-slate-400 uppercase tracking-widest">
-                {zoomState.isZoomed ? "Move to Pan" : "Click to Zoom"}
-              </span>
-            </div>
-            
-            {/* Absolute High-Z Close Button */}
-            <button 
-              onClick={() => {
-                setGallery(g => ({ ...g, isOpen: false }));
-                setZoomState({ isZoomed: false, x: 50, y: 50 });
-              }}
-              className="w-10 h-10 bg-rose-500/20 border border-rose-500/50 rounded-full flex items-center justify-center text-rose-300 hover:bg-rose-500/40 active:scale-95 transition-all shadow-sm z-[70] cursor-pointer"
-            >
-              <X size={18} />
-            </button>
+          {/* 🌟 PROMINENT ABSOLUTE CLOSE BUTTON (TOP RIGHT) */}
+          <button 
+            onClick={() => {
+              setGallery(g => ({ ...g, isOpen: false }));
+              setZoomState({ isZoomed: false, x: 50, y: 50 });
+            }}
+            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/30 rounded-full flex items-center justify-center text-white shadow-xl cursor-pointer z-[110] transition-all active:scale-95"
+          >
+            <X size={24} />
+          </button>
+
+          {/* Header Info */}
+          <div className="flex flex-col items-center justify-center w-full z-[60] mt-4 mb-2 pointer-events-none">
+            <span className="text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10">
+              Photo {gallery.index + 1} of {gallery.images.length}
+            </span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full">
+              {zoomState.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
+            </span>
           </div>
           
           {/* Interactive Magnifier Viewport */}
-          <div className="flex-1 w-full h-full rounded-2xl border border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.1)] relative bg-black/20 overflow-hidden">
+          <div className="flex-1 w-full h-full relative overflow-hidden mt-4 mb-4">
             <div 
               className={`relative w-full h-full flex items-center justify-center ${zoomState.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`}
               onClick={handleImageClick}
@@ -462,21 +468,21 @@ function MobileVerifyContent() {
                   transformOrigin: `${zoomState.x}% ${zoomState.y}%`,
                   transition: zoomState.isZoomed ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
                 }}
-                className="max-w-full max-h-full object-contain pointer-events-none" 
+                className="max-w-full max-h-[75vh] object-contain rounded-xl pointer-events-none shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5" 
               />
             </div>
           </div>
           
           {/* Navigation Controls */}
           {gallery.images.length > 1 && (
-             <div className="flex justify-between items-center w-full z-[60] mt-4 px-2">
+             <div className="flex justify-between items-center w-full max-w-sm mx-auto z-[60] mb-6">
                 <button 
                   onClick={() => {
                     setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) }));
                     setZoomState({ isZoomed: false, x: 50, y: 50 });
                   }}
                   disabled={gallery.index === 0}
-                  className="px-6 py-3 bg-white/10 border border-white/20 rounded-full text-white font-black text-[10px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all"
+                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-full text-white font-black text-[12px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20"
                 >
                   Previous
                 </button>
@@ -486,7 +492,7 @@ function MobileVerifyContent() {
                     setZoomState({ isZoomed: false, x: 50, y: 50 });
                   }}
                   disabled={gallery.index === gallery.images.length - 1}
-                  className="px-6 py-3 bg-white/10 border border-white/20 rounded-full text-white font-black text-[10px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all"
+                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-full text-white font-black text-[12px] uppercase tracking-widest disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20"
                 >
                   Next
                 </button>
