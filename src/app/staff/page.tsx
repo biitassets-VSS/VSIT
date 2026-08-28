@@ -300,13 +300,24 @@ export default function StaffDashboardPage() {
             }
         }
 
+        // 🌟 STRICT PRECEDENCE OVERRIDE FOR PENDING STATUS
         let finalDisplayStatus = latestInsp?.status || asset.inspection_status || 'Pending';
-        if (isReturnRejected) finalDisplayStatus = 'Return Declined';
-        else if (isReplaceRejected) finalDisplayStatus = 'Replace Declined';
-        else if (isInspectionRejected) finalDisplayStatus = 'Audit Rejected';
-        else if (isReturnPending) finalDisplayStatus = 'Return Pending';
-        else if (isReplacePending) finalDisplayStatus = 'Replace Pending';
-        else if (latestInsp?.status === 'Approved') finalDisplayStatus = 'Approved';
+
+        if (liveInspStatus === 'pending review' || liveInspStatus === 'pending' || liveInspStatus === 'in review') {
+            finalDisplayStatus = 'Inspection Sent to Admin';
+        } else if (isReturnPending) {
+            finalDisplayStatus = 'Return Pending';
+        } else if (isReplacePending) {
+            finalDisplayStatus = 'Replace Pending';
+        } else if (latestInsp?.status === 'Approved' || latestInsp?.status === 'Pass') {
+            finalDisplayStatus = 'Approved'; 
+        } else if (isReturnRejected) {
+            finalDisplayStatus = 'Return Declined';
+        } else if (isReplaceRejected) {
+            finalDisplayStatus = 'Replace Declined';
+        } else if (isInspectionRejected) {
+            finalDisplayStatus = 'Audit Rejected';
+        }
 
         return {
           ...asset,
@@ -328,6 +339,7 @@ export default function StaffDashboardPage() {
 
       const displayAssets = [];
       for (const asset of compiledAssets) {
+        // Automatically unassign and remove returned assets from dashboard
         if (asset.isReturnApproved) {
           if (asset.status !== 'In Stock' || asset.assigned_to !== null) {
               supabase.from('assets').update({ 
@@ -378,8 +390,8 @@ export default function StaffDashboardPage() {
     const auditWindow = getAuditWindowInfo(asset.category);
     const liveStatus = (asset.live_inspection_status || '').toLowerCase();
     
-    // 1. Lock if waiting on a Return or Replacement to be approved
-    if (asset.isReturnPending || asset.isReplacePending) {
+    // 1. Lock if waiting on a Return/Replacement or if an Audit request is actively pending
+    if (asset.isReturnPending || asset.isReplacePending || liveStatus.includes('sent to admin') || liveStatus.includes('pending')) {
       return { disabled: true, text: "Under Review", classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     }
 
@@ -393,12 +405,7 @@ export default function StaffDashboardPage() {
       return { disabled: false, text: "Re-Inspection Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
-    // 4. Pending standard inspection. Notice we explicitly check that it isn't a declined return.
-    if (liveStatus === 'pending review' || liveStatus === 'pending') {
-      return { disabled: true, text: "Under Review", classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
-    }
-
-    // 5. Normal Audit Cycle evaluation
+    // 4. Normal Audit Cycle evaluation
     if (asset.isOverdue) {
       return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
@@ -588,6 +595,7 @@ export default function StaffDashboardPage() {
 
   const getInspectionStatusColor = (status: string) => {
     const s = safeString(status).toLowerCase().trim();
+    if (s.includes('sent to admin') || s.includes('pending')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
     if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
     if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
     if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
@@ -825,26 +833,21 @@ export default function StaffDashboardPage() {
                             <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto">
                               {asset.name || asset.asset_name || asset.model || 'Generic Device'}
                             </h4>
-                            <span className={`px-3 py-1.5 mt-1 rounded-xl text-[9px] font-bold uppercase tracking-widest border inline-block shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-                              asset.isReturnRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                              asset.isReturnPending ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
-                              asset.isReplaceRejected ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
-                              asset.isReplacePending ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
+                            <button 
+                              onClick={() => setViewInspectionAsset(asset)}
+                              className={`px-3 py-1.5 mt-1 rounded-xl text-[9px] font-bold uppercase tracking-widest border inline-flex items-center shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-pointer hover:scale-105 transition-transform ${
+                              asset.live_inspection_status === 'Return Declined' ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                              asset.live_inspection_status === 'Return Pending' ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                              asset.live_inspection_status === 'Replace Declined' ? 'bg-rose-100/80 text-rose-700 border-rose-200' :
+                              asset.live_inspection_status === 'Replace Pending' ? 'bg-purple-100/80 text-purple-700 border-purple-200' :
+                              asset.live_inspection_status === 'Inspection Sent to Admin' ? 'bg-purple-100/80 text-purple-700 border-purple-200 animate-pulse' :
                               btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required') ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' :
                               asset.isOverdue ? 'bg-rose-100/80 text-rose-700 border-rose-200 animate-pulse' :
-                              asset.live_inspection_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                               'bg-emerald-50 text-emerald-700 border-emerald-200'
                             }`}>
-                              {
-                                asset.isReturnRejected ? 'Return Declined' : 
-                                asset.isReturnPending ? 'Pending Return' : 
-                                asset.isReplaceRejected ? 'Replacement Declined' : 
-                                asset.isReplacePending ? 'Replacement Pending' : 
-                                btnState.text.includes('Re-Audit Required') ? 'Re-Audit Required' : 
-                                btnState.text.includes('Re-Inspection Required') ? 'Re-Inspection Required' : 
-                                asset.isOverdue ? 'Overdue' : 'Assigned & Active'
-                              }
-                            </span>
+                              <span className="opacity-70 mr-1.5">Last Request:</span>
+                              {asset.live_inspection_status}
+                            </button>
                           </div>
                           
                           {/* 🌟 NEW BADGE FOR IN REVIEW */}
@@ -929,10 +932,10 @@ export default function StaffDashboardPage() {
 
                         {/* 🌟 ACTION LOCKED WARNING BANNER */}
                         { (asset.isReturnPending || btnState.text === 'Under Review' || asset.isReplacePending) && (
-                          <div className="p-3 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
-                            <AlertTriangle size={14} className="shrink-0" />
+                          <div className="p-3 mt-1 mb-2 rounded-xl border border-purple-200/50 bg-purple-50/50 backdrop-blur-md text-purple-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
+                            <Clock size={14} className="shrink-0" />
                             <div className="leading-tight">
-                              Photos and request submitted for verification on {lockReasonDate}. Buttons are locked.
+                              Photos and request submitted for verification on {lockReasonDate}. Actions are temporarily locked.
                             </div>
                           </div>
                         )}
@@ -1666,6 +1669,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
               </div>
               
+              {/* 🌟 Updated Staff Modal Requirements to match mobile-audit explicitly */}
               <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
                 <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
                 <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
