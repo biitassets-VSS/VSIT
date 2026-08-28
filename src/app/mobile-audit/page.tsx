@@ -148,7 +148,16 @@ function MobileVerifyContent() {
     }
   };
 
-  // 🌟 CLEAR EMBOSSED GLASS WATERMARK ENGINE (Matching the references)
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (zoomProps.isZoomed) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setZoomProps(prev => ({ ...prev, originX: `${x}%`, originY: `${y}%` }));
+    }
+  };
+
+  // 🌟 EMBOSSED CLEAR GLASS WATERMARK ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -173,7 +182,7 @@ function MobileVerifyContent() {
         const baseScale = canvas.width / 1600; 
         
         // Normal, readable font size
-        const fontSize = Math.max(22, Math.floor(28 * baseScale));
+        const fontSize = Math.max(22, Math.floor(26 * baseScale));
         const lineHeight = Math.floor(fontSize * 1.5);
         
         const contentX = Math.floor(40 * baseScale);
@@ -218,8 +227,8 @@ function MobileVerifyContent() {
         };
 
         // Header 
-        drawClearGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left', 'rgba(249, 115, 22, 0.4)');
-        drawClearGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right', 'rgba(168, 85, 247, 0.4)');
+        drawClearGlassText(`● VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left', 'rgba(249, 115, 22, 0.3)');
+        drawClearGlassText(`VERIFIED AUDIT ✓`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right', 'rgba(168, 85, 247, 0.3)');
 
         // Body Lines
         contentY += lineHeight;
@@ -436,22 +445,26 @@ function MobileVerifyContent() {
               Photo {gallery.index + 1} of {gallery.images.length}
             </span>
             <span className="text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit">
-              {zoomProps.isZoomed ? "Click again to Zoom Out" : "Click image to Zoom In"}
+              {zoomProps.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
             </span>
           </div>
           
           {/* Interactive Magnifier Viewport */}
-          <div className="w-full h-full relative flex items-center justify-center overflow-hidden p-4">
+          <div 
+            className="w-full h-full relative flex items-center justify-center overflow-hidden p-4"
+            onMouseMove={handleImageMouseMove}
+            onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
+          >
             <img 
               src={gallery.images[gallery.index]} 
               alt="Expanded capture" 
               onClick={handleImageClick}
               style={{ 
-                transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
+                transform: zoomProps.isZoomed ? `scale(3)` : `scale(1)`, 
                 transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
-                transition: 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
               }}
-              className={`max-w-full max-h-[85vh] object-contain rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5 transition-transform ${zoomProps.isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`} 
+              className={`max-w-full max-h-[85vh] object-contain rounded-xl shadow-[0_0_40px_rgba(168,85,247,0.15)] border border-white/5 ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
             />
           </div>
           
