@@ -8,7 +8,7 @@ import {
   ArrowLeft, ClipboardCheck, CheckCircle2, XCircle, Clock, 
   Laptop, ShieldAlert, Search, RefreshCw, 
   X, History as HistoryIcon, FilterX, Settings2,
-  Send, AlertTriangle, List, ZoomIn, ChevronLeft, ChevronRight, Archive,
+  Send, AlertTriangle, List, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Archive,
   ShieldCheck, Cpu, User, Monitor, Keyboard, RectangleHorizontal, Mouse, Headphones, Sparkles, Package, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -182,7 +182,7 @@ function AdminInspectionReviewContent() {
     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
   };
 
-  // CLICK-TO-ZOOM HANDLERS
+  // 🌟 CLICK-TO-ZOOM HANDLERS (Calculates exact click position on image)
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (zoomProps.isZoomed) {
       setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
@@ -196,7 +196,9 @@ function AdminInspectionReviewContent() {
 
   const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (zoomProps.isZoomed) {
-      const rect = e.currentTarget.getBoundingClientRect();
+      const img = e.currentTarget.querySelector('img');
+      if (!img) return;
+      const rect = img.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
       setZoomProps(prev => ({ ...prev, originX: `${Math.max(0, Math.min(x, 100))}%`, originY: `${Math.max(0, Math.min(y, 100))}%` }));
@@ -763,11 +765,12 @@ function AdminInspectionReviewContent() {
     }).length;
   };
 
-  // 🌟 TRUE LIQUID GLASS THEME TOKENS 
+  // 🌟 TRUE LIQUID GLASS THEME TOKENS EVERYWHERE
   const liquidGlass = {
-    card: "bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.04)] rounded-[2rem]",
-    pill: "bg-white/50 backdrop-blur-xl border border-white/80 shadow-sm rounded-full",
-    inner: "bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl",
+    card: "bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-[2rem]",
+    pill: "bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-full",
+    inner: "bg-white/30 backdrop-blur-xl border border-white/50 shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)] rounded-2xl",
+    buttonHover: "hover:bg-white/60 hover:shadow-[0_0_20px_rgba(255,255,255,0.5)] transition-all",
   };
 
   const TABS = [
@@ -791,7 +794,7 @@ function AdminInspectionReviewContent() {
               setGallery({ isOpen: false, images: [], index: 0 });
               setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
             }}
-            className="fixed top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[100000] transition-transform active:scale-95"
+            className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer transition-transform active:scale-95"
             style={{ zIndex: 100000 }} // Absolute guarantee it sits on top
           >
             <X size={24} strokeWidth={2.5} />
@@ -861,7 +864,7 @@ function AdminInspectionReviewContent() {
       {mounted && assetDetailModal && createPortal(
         <div style={{ zIndex: 100 }} className="fixed inset-0 flex flex-col items-center justify-start pt-20 pb-6 px-4 backdrop-blur-2xl bg-slate-900/30">
           <div className="absolute inset-0" onClick={() => setAssetDetailModal(null)}></div>
-          <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden flex-1 ${liquidGlass.card} border-white shadow-2xl bg-white/70`}>
+          <div className={`relative max-w-2xl w-full flex flex-col overflow-hidden flex-1 ${liquidGlass.card} bg-white/50`}>
             
             <div className="w-full p-6 border-b border-white/60 flex justify-between items-center bg-white/40">
               <div className="flex items-center gap-3">
@@ -873,7 +876,7 @@ function AdminInspectionReviewContent() {
                   <p className="text-xs text-slate-500 font-medium">{assetDetailModal.asset_name}</p>
                 </div>
               </div>
-              <button onClick={() => setAssetDetailModal(null)} className="p-2.5 rounded-full bg-white border border-slate-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 shadow-sm transition-all"><X size={18}/></button>
+              <button onClick={() => setAssetDetailModal(null)} className={`p-2.5 rounded-full bg-white border border-slate-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 shadow-sm transition-all ${liquidGlass.buttonHover}`}><X size={18}/></button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -882,7 +885,7 @@ function AdminInspectionReviewContent() {
                   <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Active Assignee</p>
                   <p className="text-sm font-bold mt-0.5 text-slate-900">{assetDetailModal.historical_staff_name || 'Unassigned (In Stock)'}</p>
                 </div>
-                <span className="font-mono text-xs px-3 py-1 bg-white border border-purple-100 text-purple-700 shadow-sm rounded-xl font-bold">
+                <span className="font-mono text-xs px-3 py-1 bg-white/50 backdrop-blur-md border border-purple-200/50 text-purple-700 shadow-sm rounded-xl font-bold">
                   {assetDetailModal.historical_emp_code || 'N/A'}
                 </span>
               </div>
@@ -900,15 +903,15 @@ function AdminInspectionReviewContent() {
                 ) : (
                   <div className="space-y-3">
                     {assetHistory.map((log, idx) => (
-                      <div key={idx} className="p-4 rounded-2xl bg-white/80 border border-white shadow-xs space-y-2">
+                      <div key={idx} className="p-4 rounded-2xl bg-white/40 backdrop-blur-md border border-white/60 shadow-xs space-y-2">
                         <div className="flex justify-between items-start">
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-slate-900">{log.historical_staff_name}</span>
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border backdrop-blur-md ${
                                 log.user_sequence_tag === 'Current Holder' 
-                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                                  ? 'bg-emerald-100/50 text-emerald-700 border-emerald-200/60' 
+                                  : 'bg-slate-100/50 text-slate-600 border-slate-200/60'
                               }`}>
                                 {log.user_sequence_tag}
                               </span>
@@ -916,18 +919,18 @@ function AdminInspectionReviewContent() {
                             <p className="text-[10px] font-mono text-purple-600 font-semibold">{log.historical_emp_code}</p>
                           </div>
                           <div className="text-right">
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                              log.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
-                              log.status === 'Re-Inspection' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md backdrop-blur-md border ${
+                              log.status === 'Approved' ? 'bg-emerald-100/50 text-emerald-700 border-emerald-200/60' :
+                              log.status === 'Re-Inspection' ? 'bg-orange-100/50 text-orange-700 border-orange-200/60' : 'bg-slate-100/50 text-slate-700 border-slate-200/60'
                             }`}>
                               {log.status}
                             </span>
-                            <p className="text-[10px] text-slate-400 mt-1">{safeDate(log.created_at)}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">{safeDate(log.created_at)}</p>
                           </div>
                         </div>
 
                         {log.notes && (
-                          <p className="text-xs italic text-slate-600 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                          <p className="text-xs italic text-slate-700 bg-white/50 backdrop-blur-sm p-2.5 rounded-xl border border-white/60">
                             "{log.notes}"
                           </p>
                         )}
@@ -939,7 +942,7 @@ function AdminInspectionReviewContent() {
             </div>
 
             <div className="p-4 border-t border-white/60 bg-white/40">
-              <button type="button" onClick={() => setAssetDetailModal(null)} className="w-full py-3 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all cursor-pointer shadow-sm">
+              <button type="button" onClick={() => setAssetDetailModal(null)} className={`w-full py-3 rounded-2xl bg-white/50 backdrop-blur-xl border border-white/80 text-slate-900 font-black text-xs uppercase tracking-widest cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${liquidGlass.buttonHover}`}>
                 Close Modal
               </button>
             </div>
@@ -953,20 +956,20 @@ function AdminInspectionReviewContent() {
         {/* iOS LIGHT LIQUID GLASS HEADER */}
         <div className={`${liquidGlass.pill} p-4 flex justify-between items-center`}>
           <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/admin')} className="p-3 rounded-full bg-white hover:bg-slate-50 transition-all border border-slate-200 shadow-sm"><ArrowLeft size={18} /></button>
+            <button onClick={() => router.push('/admin')} className={`p-3 rounded-full bg-white/40 backdrop-blur-md transition-all border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${liquidGlass.buttonHover}`}><ArrowLeft size={18} /></button>
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2 text-slate-900"><ShieldCheck className="text-orange-500"/> Inspection Review Center</h1>
               <p className="text-xs text-slate-500 font-medium">Verify visual audits or request re-inspections from staff.</p>
             </div>
           </div>
-          <button onClick={() => fetchVerificationLedger(true)} className="bg-white hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-sm border border-slate-200 transition-all cursor-pointer active:scale-95">
+          <button onClick={() => fetchVerificationLedger(true)} className="bg-white/50 backdrop-blur-xl hover:bg-white/80 text-slate-800 px-5 py-2.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-[0_2px_10px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] border border-white/60 transition-all cursor-pointer active:scale-95">
             <RefreshCw size={14} className={loading ? 'animate-spin text-orange-500' : 'text-orange-500'} /> Sync Feeds
           </button>
         </div>
 
         {/* ASSET TIMELINE FILTER BANNER */}
         {assetFilter && (
-          <div className="p-4 rounded-2xl bg-orange-50/80 border border-orange-200 flex justify-between items-center text-orange-700 shadow-sm backdrop-blur-md">
+          <div className="p-4 rounded-2xl bg-orange-100/50 backdrop-blur-md border border-orange-200/60 flex justify-between items-center text-orange-700 shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]">
             <div className="flex items-center gap-2 text-xs font-bold">
               <HistoryIcon size={16}/> Filter Active for Asset ID: {assetFilter}
             </div>
@@ -984,13 +987,13 @@ function AdminInspectionReviewContent() {
               onClick={() => setFilterTab(tab.id)}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 filterTab === tab.id 
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' 
+                  ? 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] text-slate-900' 
                   : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
               }`}
             >
               <tab.icon size={16} className={tab.color} />
               <span>{tab.label}</span>
-              <span className="bg-white border border-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-xs">{tab.count}</span>
+              <span className="bg-white/50 backdrop-blur-sm border border-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-xs">{tab.count}</span>
             </button>
           ))}
         </div>
@@ -1012,7 +1015,7 @@ function AdminInspectionReviewContent() {
           <div className="w-full py-32 flex flex-col items-center justify-center gap-2 text-slate-500 font-medium"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /> Fetching Staff Records...</div>
         ) : filteredList.length === 0 ? (
           <div className={`w-full py-20 text-center flex flex-col items-center justify-center gap-2 ${liquidGlass.card}`}>
-            <ClipboardCheck size={40} className="text-slate-300" />
+            <ClipboardCheck size={40} className="text-slate-400" />
             <h3 className="text-base font-bold uppercase text-slate-800">No Inspection Logs Found</h3>
             <p className="text-xs text-slate-500">There are no matching periodic inspection entries under "{filterTab}".</p>
           </div>
@@ -1029,13 +1032,13 @@ function AdminInspectionReviewContent() {
                     key={insp.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`${liquidGlass.card} p-6 flex flex-col justify-between hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300`}
+                    className={`${liquidGlass.card} p-6 flex flex-col justify-between hover:-translate-y-1 transition-all duration-300`}
                   >
                     <div>
                       {/* STAFF HEADER */}
                       <div className="flex justify-between items-start mb-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-white border border-slate-200 flex items-center justify-center font-extrabold text-slate-800 shadow-sm">
+                          <div className="w-12 h-12 rounded-full bg-white/50 backdrop-blur-md border border-white/80 flex items-center justify-center font-extrabold text-slate-800 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)]">
                             {String(insp.historical_staff_name || 'U').charAt(0).toUpperCase()}
                           </div>
                           <div>
@@ -1043,7 +1046,7 @@ function AdminInspectionReviewContent() {
                               <h3 className="text-sm font-bold text-slate-900">{insp.historical_staff_name}</h3>
                               {/* 🟢 OLD USER BADGE */}
                               {insp.is_old_user && (
-                                <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-xs">
+                                <span className="bg-slate-100/50 backdrop-blur-md text-slate-600 border border-slate-200/60 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]">
                                   Old User
                                 </span>
                               )}
@@ -1054,18 +1057,18 @@ function AdminInspectionReviewContent() {
                           </div>
                         </div>
 
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide shadow-xs border ${
-                          isPending ? 'bg-purple-50 text-purple-700 border-purple-200' : 
-                          isReInspect ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                          insp.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide shadow-xs border backdrop-blur-md ${
+                          isPending ? 'bg-purple-100/50 text-purple-700 border-purple-200/60' : 
+                          isReInspect ? 'bg-orange-100/50 text-orange-700 border-orange-200/60' :
+                          insp.status === 'Approved' ? 'bg-emerald-100/50 text-emerald-700 border-emerald-200/60' : 'bg-rose-100/50 text-rose-700 border-rose-200/60'
                         }`}>
                           {insp.status}
                         </span>
                       </div>
 
                       {/* ASSET DATA PILL */}
-                      <div className={`${liquidGlass.inner} p-4 mb-4 space-y-2.5 text-xs bg-slate-50/50`}>
-                        <div className="flex items-center gap-2 mb-2 pb-2.5 border-b border-white/60">
+                      <div className={`${liquidGlass.inner} p-4 mb-4 space-y-2.5 text-xs`}>
+                        <div className="flex items-center gap-2 mb-2 pb-2.5 border-b border-white/50">
                           <Laptop size={14} className="text-slate-500" />
                           <button 
                             onClick={() => {
@@ -1077,17 +1080,17 @@ function AdminInspectionReviewContent() {
                             INSPECTION REQUEST: {insp.asset_name}
                           </button>
                         </div>
-                        <div className="flex justify-between items-center text-slate-500">
-                          <span>Tag ID: <span className="font-mono text-slate-800 font-bold ml-1">{insp.asset_tag}</span></span>
+                        <div className="flex justify-between items-center text-slate-600">
+                          <span>Tag ID: <span className="font-mono text-slate-900 font-bold ml-1">{insp.asset_tag}</span></span>
                         </div>
-                        <div className="flex justify-between items-center text-slate-500">
+                        <div className="flex justify-between items-center text-slate-600">
                           <span className="flex items-center gap-1.5"><Clock size={12}/> Submitted:</span>
-                          <span className="text-slate-700 font-semibold">{formatDate(insp.created_at)}</span>
+                          <span className="text-slate-800 font-semibold">{formatDate(insp.created_at)}</span>
                         </div>
                         
                         {/* 🌟 NOW ASSIGNED TO (FOR OLD USERS) */}
                         {insp.is_old_user && (
-                          <div className="flex justify-between items-center pt-2.5 mt-2.5 border-t border-white/60 text-rose-500">
+                          <div className="flex justify-between items-center pt-2.5 mt-2.5 border-t border-white/50 text-rose-500">
                             <span className="font-bold uppercase tracking-wider text-[10px]">Now Assigned To</span>
                             <span className="font-bold">
                               {insp.current_assignee_name} <span className="font-mono">({insp.current_assignee_code})</span>
@@ -1098,29 +1101,29 @@ function AdminInspectionReviewContent() {
 
                       {/* PHOTOS PREVIEW */}
                       {photosArray.length > 0 ? (
-                        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+                        <div className="flex gap-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
                           {photosArray.map((url: string, i: number) => (
-                            <button key={i} type="button" onClick={() => openGallery(photosArray, i)} className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:border-orange-400 hover:shadow-md transition-all cursor-zoom-in shrink-0 bg-white">
-                              <img src={url} alt="Capture" className="w-full h-full object-cover"/>
+                            <button key={i} type="button" onClick={() => openGallery(photosArray, i)} className="w-14 h-14 rounded-2xl overflow-hidden border border-white/60 shadow-sm hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all cursor-zoom-in shrink-0 bg-white/20 backdrop-blur-md">
+                              <img src={url} alt="Capture" className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity"/>
                             </button>
                           ))}
                         </div>
                       ) : (
-                        <div className="p-3 rounded-2xl border border-amber-200 bg-amber-50/80 text-amber-700 text-xs font-semibold mb-4 flex items-center gap-2 shadow-xs">
+                        <div className="p-3 rounded-2xl border border-amber-200/50 bg-amber-50/50 backdrop-blur-md text-amber-700 text-xs font-semibold mb-4 flex items-center gap-2 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]">
                           <AlertTriangle size={14}/> Missing inspection photos
                         </div>
                       )}
 
                       {/* NOTES */}
                       {insp.notes && (
-                        <div className="p-3.5 rounded-2xl bg-white/80 text-slate-600 text-xs italic mb-4 border border-white shadow-xs">
+                        <div className="p-3.5 rounded-2xl bg-white/40 backdrop-blur-md text-slate-700 text-xs italic mb-4 border border-white/60 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]">
                           "{insp.notes}"
                         </div>
                       )}
                       
                       {/* ADMIN REMARKS IF RETURNED */}
                       {insp.admin_remarks && (
-                        <div className="p-3.5 rounded-2xl bg-orange-50 text-orange-800 text-xs font-bold mb-4 border border-orange-100 shadow-xs">
+                        <div className="p-3.5 rounded-2xl bg-orange-50/50 backdrop-blur-md text-orange-800 text-xs font-bold mb-4 border border-orange-200/60 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]">
                           Admin Note: "{insp.admin_remarks}"
                         </div>
                       )}
@@ -1128,31 +1131,31 @@ function AdminInspectionReviewContent() {
 
                     {/* ACTIONS */}
                     {isPending ? (
-                      <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/60 mt-2">
+                      <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/40 mt-2">
                         <button 
                           disabled={updatingId === insp.id}
                           onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user)} 
-                          className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-emerald-500/20"
+                          className="py-2.5 bg-emerald-500/80 backdrop-blur-xl border border-emerald-400/50 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(16,185,129,0.3)]"
                         >
                           Approve
                         </button>
                         <button 
                           disabled={updatingId === insp.id}
                           onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user)} 
-                          className="py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-orange-500/20"
+                          className="py-2.5 bg-orange-500/80 backdrop-blur-xl border border-orange-400/50 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(249,115,22,0.3)]"
                         >
                           Retry
                         </button>
                         <button 
                           disabled={updatingId === insp.id}
                           onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user)} 
-                          className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-rose-500/20"
+                          className="py-2.5 bg-rose-500/80 backdrop-blur-xl border border-rose-400/50 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(244,63,94,0.3)]"
                         >
                           Reject
                         </button>
                       </div>
                     ) : (
-                      <div className="text-center pt-4 text-xs font-bold text-slate-400 border-t border-white/60 mt-2 flex items-center justify-center gap-1">
+                      <div className="text-center pt-4 text-xs font-bold text-slate-500 border-t border-white/40 mt-2 flex items-center justify-center gap-1">
                         <CheckCircle2 size={12}/> Saved in Record
                       </div>
                     )}
