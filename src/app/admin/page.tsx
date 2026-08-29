@@ -60,12 +60,14 @@ export default function AdminDashboardPage() {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
       setIsDarkMode(isDark);
+      if (isDark) document.documentElement.classList.add('dark');
     };
     syncTheme();
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     
     loadAdminData();
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 
     const handleOpenBroadcast = () => setIsBroadcastModalOpen(true);
     window.addEventListener('open-broadcast-modal', handleOpenBroadcast);
@@ -264,7 +266,8 @@ export default function AdminDashboardPage() {
         else pendingTicketsCount++;
       });
 
-      const formattedRecentLogs = inspData.slice(0, 6).map(log => {
+      // 🌟 STRICT LIMIT TO 4 MOST RECENT LOGS
+      const formattedRecentLogs = inspData.slice(0, 4).map(log => {
         const assetObj = log.assets || {};
         const assetOwnerId = assetObj.assigned_to;
         const assetName = assetObj.name || assetObj.asset_name || 'an asset';
@@ -360,27 +363,27 @@ export default function AdminDashboardPage() {
   };
 
   // ==========================================
-  // 🌟 PURE TRANSPARENT LIQUID GLASS THEME
+  // 🌟 TRUE TRANSPARENT LIQUID GLASS THEME (Refined for less white, more blur)
   // ==========================================
   const theme = {
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
-    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
+    textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
     
     glassCard: isDarkMode 
-      ? 'bg-zinc-900/30 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
+      ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]',
     
     glassInnerCard: isDarkMode 
-      ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/30 backdrop-blur-lg border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.03)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]',
+      ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+      : 'bg-white/30 backdrop-blur-xl border border-white/50 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
     
     glassItem: isDarkMode
-      ? 'bg-white/5 backdrop-blur-xl border border-white/10 transition-all duration-300 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
-      : 'bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)] transition-all duration-300',
+      ? 'bg-white/5 backdrop-blur-2xl border border-white/10 transition-all duration-300 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
+      : 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.03)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-300',
     
     inputBg: isDarkMode 
       ? 'bg-black/40 border border-white/20 text-white shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 placeholder-zinc-500' 
-      : 'bg-white/40 backdrop-blur-md border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)] text-slate-800 focus:bg-white/60 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-500',
+      : 'bg-white/30 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)] text-slate-800 focus:bg-white/50 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-500',
   };
 
   if (authError) return (
@@ -401,17 +404,22 @@ export default function AdminDashboardPage() {
     // 🌟 FULL SCREEN EXACT FIT (h-full overflow-hidden) ensures no page scrollbar
     <div className="w-full h-full flex flex-col font-sans antialiased overflow-hidden bg-transparent">
       
-      <div className="flex-1 flex flex-col w-full max-w-[1600px] mx-auto min-h-0">
+      {/* 🌟 Premium Background Orbs */}
+      <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10" />
+
+      {/* 🌟 FLEX-1 MIN-H-0 ensures layout perfectly scales inside window boundaries */}
+      <div className="flex-1 flex flex-col w-full max-w-[1600px] mx-auto p-4 lg:p-6 gap-5 lg:gap-6 z-10 min-h-0">
         
         {/* 🌟 Top Dashboard Header */}
-        <div className={`${theme.glassCard} rounded-[1.5rem] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shrink-0 transition-all relative z-40 gap-4 sm:gap-0 mb-4`}>
+        <div className={`${theme.glassCard} rounded-3xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shrink-0 transition-all relative z-40 gap-4 sm:gap-0`}>
           <div className="flex items-center gap-4 cursor-default">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${theme.glassItem} ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
-              <Cpu className="w-5 h-5" strokeWidth={2.5} />
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${theme.glassItem} ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
+              <Cpu className="w-6 h-6" strokeWidth={2.5} />
             </div>
             <div className="flex flex-col justify-center">
               <h1 className={`text-lg font-bold tracking-tight leading-none ${theme.textMain}`}>IT Asset & Service Management</h1>
-              <p className={`text-[11px] font-medium mt-1 ${theme.textSub}`}>Welcome back, <span className="font-bold">{adminName}</span>. Here is your live IT infrastructure status.</p>
+              <p className={`text-xs font-medium mt-1.5 ${theme.textSub}`}>Welcome back, <span className="font-bold">{adminName}</span>. Here is your live IT infrastructure status.</p>
             </div>
           </div>
 
@@ -419,7 +427,7 @@ export default function AdminDashboardPage() {
             <button 
               onClick={() => loadAdminData(true)} 
               disabled={isRefreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-[0_4px_15px_rgba(249,115,22,0.4)] disabled:opacity-50 shrink-0 border border-white/20 active:scale-95"
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-[0_4px_15px_rgba(249,115,22,0.4)] disabled:opacity-50 shrink-0 border border-white/20 active:scale-95"
             >
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">Sync Feeds</span>
@@ -427,64 +435,64 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 4 Main Stat Cards (Reduced Padding & Sizes for cleaner look) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0 relative z-30 mb-4">
+        {/* 🌟 4 Main Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 shrink-0 relative z-30">
           
-          <div className={`${theme.glassCard} p-4 rounded-[1.5rem] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-purple-400/50 group`}>
+          <div className={`${theme.glassCard} p-4 lg:p-5 rounded-3xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-purple-400/50 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}><Laptop size={16} /></div>
+              <div className={`p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}><Laptop size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Inventory</span>
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-purple-600 dark:text-purple-400 leading-none mb-1">{stats.totalAssets}</h2>
-              <p className={`text-[10px] font-semibold ${theme.textSub}`}>Total Assets</p>
+              <h2 className="text-3xl lg:text-4xl font-bold text-purple-600 dark:text-purple-400 leading-none mb-1.5">{stats.totalAssets}</h2>
+              <p className={`text-[11px] font-medium ${theme.textSub}`}>Total Assets</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Used</span><span className={`text-sm font-bold ${theme.textMain}`}>{stats.usedAssets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Stock</span><span className="text-sm font-bold text-emerald-500">{stats.inStockAssets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Discard</span><span className="text-sm font-bold text-orange-500">{stats.discardedAssets}</span></div>
+              <div className="flex flex-col"><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Used</span><span className={`text-[13px] font-bold ${theme.textMain}`}>{stats.usedAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Stock</span><span className="text-[13px] font-bold text-emerald-500">{stats.inStockAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Discard</span><span className="text-[13px] font-bold text-orange-500">{stats.discardedAssets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} p-4 rounded-[1.5rem] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-orange-400/50 group`}>
+          <div className={`${theme.glassCard} p-4 lg:p-5 rounded-3xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-orange-400/50 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={16} /> : <ClipboardCheck size={16} />}</div>
+              <div className={`p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>{stats.pendingInspections > 0 ? <AlertCircle size={18} /> : <ClipboardCheck size={18} />}</div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Verifications</span>
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-orange-600 dark:text-orange-400 leading-none mb-1">{stats.totalVerifications}</h2>
-              <p className={`text-[10px] font-semibold ${theme.textSub}`}>Total Requests</p>
+              <h2 className="text-3xl lg:text-4xl font-bold text-orange-600 dark:text-orange-400 leading-none mb-1.5">{stats.totalVerifications}</h2>
+              <p className={`text-[11px] font-medium ${theme.textSub}`}>Total Requests</p>
             </div>
             <div className={`grid grid-cols-2 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
-              <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingInspections}</span></div>
+              <div className="flex flex-col"><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-[13px] font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
+              <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-[13px] font-bold ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} p-4 rounded-[1.5rem] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-purple-400/50 group`}>
+          <div className={`${theme.glassCard} p-4 lg:p-5 rounded-3xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-purple-400/50 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}><Ticket size={16} /></div>
+              <div className={`p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}><Ticket size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Helpdesk</span>
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-purple-600 dark:text-purple-400 leading-none mb-1">{stats.totalTickets}</h2>
-              <p className={`text-[10px] font-semibold ${theme.textSub}`}>Total Tickets</p>
+              <h2 className="text-3xl lg:text-4xl font-bold text-purple-600 dark:text-purple-400 leading-none mb-1.5">{stats.totalTickets}</h2>
+              <p className={`text-[11px] font-medium ${theme.textSub}`}>Total Tickets</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Process</span><span className="text-sm font-bold text-purple-600 dark:text-purple-400">{stats.inProcessTickets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingTickets > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingTickets}</span></div>
+              <div className="flex flex-col"><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-[13px] font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Process</span><span className="text-[13px] font-bold text-purple-600 dark:text-purple-400">{stats.inProcessTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-[13px] font-bold ${stats.pendingTickets > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
-          <div className={`${theme.glassCard} p-4 rounded-[1.5rem] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-orange-400/50 group`}>
+          <div className={`${theme.glassCard} p-4 lg:p-5 rounded-3xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-orange-400/50 group`}>
             <div className="flex justify-between items-start mb-2">
-              <div className={`p-2 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}><Users size={16} /></div>
+              <div className={`p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}><Users size={18} /></div>
               <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textSub}`}>Network</span>
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-orange-600 dark:text-orange-400 leading-none mb-1">{stats.totalStaff}</h2>
-              <p className={`text-[10px] font-semibold ${theme.textSub}`}>Total Staff</p>
+              <h2 className="text-3xl lg:text-4xl font-bold text-orange-600 dark:text-orange-400 leading-none mb-1.5">{stats.totalStaff}</h2>
+              <p className={`text-[11px] font-medium ${theme.textSub}`}>Total Staff</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
               <button 
@@ -492,31 +500,31 @@ export default function AdminDashboardPage() {
                 title="View Online Staff"
                 className={`flex flex-col text-left cursor-pointer group/live p-1 -m-1 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-white/30'}`}
               >
-                <span className={`text-[9px] uppercase font-bold flex items-center gap-1 transition-colors ${theme.textSub} group-hover/live:text-emerald-600 dark:group-hover/live:text-emerald-400`}>
+                <span className={`text-[10px] uppercase font-bold flex items-center gap-1 transition-colors ${theme.textSub} group-hover/live:text-emerald-600 dark:group-hover/live:text-emerald-400`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
                 </span>
-                <span className="text-sm font-bold text-emerald-500 group-hover/live:scale-110 origin-left transition-transform">{stats.onlineStaff}</span>
+                <span className="text-[13px] font-bold text-emerald-500 group-hover/live:scale-110 origin-left transition-transform">{stats.onlineStaff}</span>
               </button>
 
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Off</span>
-                <span className={`text-sm font-bold ${theme.textMain}`}>{stats.offlineStaff}</span>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Off</span>
+                <span className={`text-[13px] font-bold ${theme.textMain}`}>{stats.offlineStaff}</span>
               </div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Deact</span>
-                <span className="text-sm font-bold text-rose-500">{stats.deactivatedStaff}</span>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[10px] uppercase font-bold ${theme.textSub}`}>Deact</span>
+                <span className="text-[13px] font-bold text-rose-500">{stats.deactivatedStaff}</span>
               </div>
             </div>
           </div>
 
         </div>
 
-        {/* 🌟 System Modules & Live Activity Container (Flex-1 ensures it fills exact remaining screen height) */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-5 relative z-30 min-h-0">
+        {/* 🌟 System Modules & Live Activity Container */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-5 relative z-30 min-h-0 mt-2">
           
-          {/* 🌟 System Modules (Left Side) - Flex layout dynamically sizes rows */}
+          {/* 🌟 System Modules (Left Side) - Visiting Card Proportions, No Scroll */}
           <div className="w-full lg:w-[72%] flex flex-col min-h-0">
-            <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-1 mb-2 shrink-0 ${theme.textSub}`}>System Modules</h3>
+            <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-2 mb-3 shrink-0 ${theme.textSub}`}>System Modules</h3>
             
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 flex-1 p-2 w-full">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-6 flex-1 p-2 w-full content-start">
               {[
                 { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
@@ -532,14 +540,16 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    // 🌟 Retained the full-card hover outline ring, ensuring top border isn't hidden
-                    className={`text-left cursor-pointer p-5 rounded-[1.5rem] flex flex-col justify-between ease-out group w-full h-full ${theme.glassItem} hover:-translate-y-1 hover:shadow-xl transition-all duration-300 ${isOrange ? 'hover:border-orange-400 hover:ring-1 hover:ring-orange-400 hover:shadow-orange-500/20' : 'hover:border-purple-400 hover:ring-1 hover:ring-purple-400 hover:shadow-purple-500/20'}`}
+                    // 🌟 aspect-[1.7/1] forces the exact proportions of a Visiting Card. 
+                    // 🌟 hover:ring-1 ensures the glass outline stays visible on hover and isn't clipped.
+                    className={`text-left cursor-pointer p-4 rounded-3xl flex flex-col justify-between ease-out group w-full aspect-[1.7/1] ${theme.glassItem} hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 ${isOrange ? 'hover:border-orange-400 hover:ring-1 hover:ring-orange-400 hover:shadow-orange-500/20' : 'hover:border-purple-400 hover:ring-1 hover:ring-purple-400 hover:shadow-purple-500/20'}`}
                   >
                     <div className="flex items-start justify-between w-full relative">
-                      <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
-                        <m.icon size={20} strokeWidth={2.2} />
+                      <div className={`relative w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
+                        <m.icon size={26} strokeWidth={2} />
+                        {/* Badge */}
                         {m.badge > 0 && (
-                          <span className="absolute -top-2.5 -right-2.5 min-w-[20px] h-5 px-1 flex items-center justify-center bg-gradient-to-tr from-orange-500 to-purple-600 text-white text-[10px] font-black rounded-full border border-white/40 shadow-[0_4px_10px_rgba(249,115,22,0.4)] z-50 transition-transform hover:scale-110">
+                          <span className="absolute -top-2.5 -right-2.5 min-w-[22px] h-5 px-1 flex items-center justify-center bg-gradient-to-tr from-orange-500 to-purple-600 text-white text-[10px] font-black rounded-full border border-white/40 shadow-[0_4px_10px_rgba(249,115,22,0.4)] z-50 transition-transform hover:scale-110">
                             {m.badge}
                           </span>
                         )}
@@ -548,8 +558,8 @@ export default function AdminDashboardPage() {
                         <ArrowRight size={14} strokeWidth={2.5} />
                       </div>
                     </div>
-                    <div>
-                      <h4 className={`text-[13px] font-bold tracking-tight leading-tight ${theme.textMain}`}>{m.title}</h4>
+                    <div className="mt-auto pt-2">
+                      <h4 className={`text-[14px] font-bold tracking-tight leading-tight ${theme.textMain}`}>{m.title}</h4>
                       <p className={`text-[11px] font-medium mt-1 leading-snug line-clamp-2 ${theme.textSub}`}>{m.desc}</p>
                     </div>
                   </button>
@@ -558,24 +568,24 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* 🌟 Live Activity Log (Right Side) */}
+          {/* 🌟 Live Activity Log (Right Side) - Strictly Limited to 4 Items */}
           <div className="w-full lg:w-[28%] flex flex-col min-h-0 pb-2">
-            <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-1 shrink-0 mb-2 ${theme.textSub}`}>Live Activity Log</h3>
-            <div className={`${theme.glassCard} rounded-[1.5rem] p-5 flex-1 flex flex-col min-h-0`}>
+            <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-2 shrink-0 mb-3 ${theme.textSub}`}>Live Activity Log</h3>
+            <div className={`${theme.glassCard} rounded-3xl p-5 flex flex-col h-full`}>
               {recentActivity.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70">
-                  <Activity size={24} className={`${theme.textSub} mb-3`} />
-                  <p className={`text-[12px] font-bold ${theme.textSub}`}>Waiting for live events...</p>
+                  <Activity size={28} className={`${theme.textSub} mb-3`} />
+                  <p className={`text-[13px] font-bold ${theme.textSub}`}>Waiting for live events...</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar flex flex-col justify-start gap-4">
+                <div className="flex flex-col space-y-4 flex-1">
                   {recentActivity.map((log: any, i: number) => (
                     <div key={i} className={`flex gap-3 relative pb-4 border-b last:border-0 last:pb-0 shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-                      <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all ${theme.glassInnerCard} ${log.logTheme.split(' ')[0]}`}>
+                      <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center transition-all ${theme.glassInnerCard} ${log.logTheme.split(' ')[0]}`}>
                         <Clock size={14} strokeWidth={2.5} />
                       </div>
                       <div className="pt-0.5 min-w-0 flex-1">
-                        <p className={`text-[12px] font-bold leading-tight flex items-center gap-2 truncate ${theme.textMain}`}>
+                        <p className={`text-[13px] font-bold leading-tight flex items-center gap-2 truncate ${theme.textMain}`}>
                           <span className="truncate">{log.displayName}</span>
                           {log.empCode && (
                             <span className={`shrink-0 text-[8px] px-1.5 py-0.5 rounded flex items-center font-bold uppercase tracking-widest ${
@@ -593,7 +603,7 @@ export default function AdminDashboardPage() {
                   ))}
                 </div>
               )}
-              <button onClick={() => router.push('/admin/inspections')} className={`mt-4 shrink-0 w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all hover:bg-white/60 active:scale-95 ${theme.glassItem} ${theme.textMain}`}>
+              <button onClick={() => router.push('/admin/inspections')} className={`mt-auto shrink-0 w-full py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all hover:bg-white/60 active:scale-95 ${theme.glassItem} ${theme.textMain}`}>
                 View Entire Log
               </button>
             </div>
@@ -642,7 +652,7 @@ export default function AdminDashboardPage() {
                   Cancel
                 </button>
                 <button disabled={isBroadcasting} type="submit" className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:opacity-90 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer active:scale-95 border border-transparent">
-                  {isBroadcasting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Broadcast
+                  {isBroadcasting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} Broadcast
                 </button>
               </div>
             </form>
@@ -654,39 +664,39 @@ export default function AdminDashboardPage() {
       {isOnlineStaffModalOpen && (
         <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-start pt-24 sm:pt-28 pb-6 px-4 backdrop-blur-sm animate-in fade-in duration-200 ${isDarkMode ? 'bg-black/60' : 'bg-black/20'}`}>
           <div className={`relative max-w-md w-full flex flex-col overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.15)] flex-1 max-h-full rounded-[2rem] animate-in zoom-in-95 duration-200 ${theme.glassCard}`}>
-            <div className={`p-4 sm:p-5 border-b flex justify-between items-center relative z-30 shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <h3 className={`text-sm font-bold flex items-center gap-2 uppercase tracking-widest ${theme.textMain}`}>
+            <div className={`p-5 sm:p-6 border-b flex justify-between items-center relative z-30 shrink-0 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
+              <h3 className={`text-base font-bold flex items-center gap-2.5 uppercase tracking-widest ${theme.textMain}`}>
                 <span className="relative flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                 </span>
                 Live Network ({stats.onlineStaff})
               </h3>
-              <button onClick={() => setIsOnlineStaffModalOpen(false)} className={`absolute top-4 right-4 p-2 rounded-full cursor-pointer transition-all hover:scale-110 active:scale-90 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 z-40`}>
-                <X size={16} />
+              <button onClick={() => setIsOnlineStaffModalOpen(false)} className={`absolute top-5 right-5 p-2 rounded-full cursor-pointer transition-all hover:scale-110 active:scale-90 ${theme.glassInnerCard} ${theme.textMain} hover:bg-rose-500 hover:text-white hover:border-rose-400 z-40`}>
+                <X size={18} />
               </button>
             </div>
             
             <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-3">
               {getLiveStaffDetails().length === 0 ? (
                 <div className="p-8 text-center flex flex-col items-center justify-center opacity-70 h-full">
-                  <Users size={32} className={`${theme.textSub} mb-3`} />
-                  <p className={`text-[12px] font-bold ${theme.textSub}`}>No staff members are currently online.</p>
+                  <Users size={36} className={`${theme.textSub} mb-4`} />
+                  <p className={`text-sm font-bold ${theme.textSub}`}>No staff members are currently online.</p>
                 </div>
               ) : (
                 getLiveStaffDetails().map((staff, idx) => (
-                  <div key={idx} className={`p-3 rounded-2xl flex items-center justify-between transition-colors ${theme.glassItem}`}>
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-emerald-500 ${theme.glassInnerCard}`}>
-                        <Users size={18} />
+                  <div key={idx} className={`p-4 rounded-2xl flex items-center justify-between transition-colors ${theme.glassItem}`}>
+                    <div className="flex items-center gap-4 overflow-hidden">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-emerald-500 ${theme.glassInnerCard}`}>
+                        <Users size={20} />
                       </div>
                       <div className="min-w-0">
-                        <p className={`text-[13px] font-bold truncate ${theme.textMain}`}>{staff.full_name || staff.name || staff.email?.split('@')[0] || 'Staff Member'}</p>
-                        <p className={`text-[10px] font-medium truncate ${theme.textSub}`}>{staff.email}</p>
+                        <p className={`text-[15px] font-bold truncate ${theme.textMain}`}>{staff.full_name || staff.name || staff.email?.split('@')[0] || 'Staff Member'}</p>
+                        <p className={`text-[11px] font-medium truncate ${theme.textSub}`}>{staff.email}</p>
                       </div>
                     </div>
                     {staff.emp_code && (
-                      <span className={`shrink-0 text-[9px] px-2 py-1 rounded-md font-bold uppercase tracking-widest ${theme.glassInnerCard}`}>
+                      <span className={`shrink-0 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-widest ${theme.glassInnerCard}`}>
                         {staff.emp_code}
                       </span>
                     )}
