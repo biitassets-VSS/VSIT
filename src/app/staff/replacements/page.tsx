@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   RefreshCw, Loader2, History, PackageOpen, CheckCircle2, 
   AlertCircle, ArrowRight, Laptop, Wrench, ArrowLeft, 
-  Clock, X, Plus, ChevronDown, Camera
+  Clock, X, Plus, ChevronDown, Camera, ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -296,7 +296,7 @@ export default function StaffTicketsPage() {
             </button>
             <button 
               onClick={() => setShowModal(true)}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-linear-to-r from-[#b388ff] to-[#9955ff] hover:opacity-90 text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-[0_4px_15px_rgba(168,85,247,0.35)] active:scale-95"
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#b388ff] to-[#9955ff] hover:opacity-90 text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-[0_4px_15px_rgba(168,85,247,0.35)] active:scale-95"
             >
               <Plus size={16} /> New Request
             </button>
@@ -377,7 +377,7 @@ export default function StaffTicketsPage() {
                         </div>
                         <div className={`p-4 rounded-[1.25rem] flex flex-col gap-1.5 ${isDarkMode ? 'bg-black/40 border border-white/5' : 'bg-white/50 backdrop-blur-md border border-white/60 shadow-sm'}`}>
                           <span className={`text-[10px] font-black uppercase tracking-widest ${theme.textSub}`}>Reason for Request</span>
-                          <p className={`text-[13px] font-semibold leading-relaxed ${theme.textMain}`}>{record.reason || record.description}</p>
+                          <p className={`text-[13px] font-semibold leading-relaxed ${theme.textMain}`}>{record.reason || record.description || 'No reason provided.'}</p>
                         </div>
                       </div>
                     </div>
@@ -444,17 +444,19 @@ export default function StaffTicketsPage() {
         )}
       </div>
 
-      {/* 🌟 REPLACEMENT REQUEST MODAL */}
+      {/* 🌟 2026 MACOS PURE LIQUID GLASS REPLACEMENT REQUEST MODAL */}
       <AnimatePresence>
         {showModal && (
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
             
+            {/* Backdrop Blur overlay */}
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowModal(false)}
               className={`absolute inset-0 ${isDarkMode ? 'bg-black/40' : 'bg-slate-900/20'} backdrop-blur-md`}
             />
             
+            {/* Modal Glass Container - Uses the EXACT portal glassCard theme */}
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 20 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
@@ -481,10 +483,13 @@ export default function StaffTicketsPage() {
                 </button>
               </div>
 
+              {/* Top Divider */}
               <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
 
               {!qrUrl ? (
-                <div className="px-8 pt-6 pb-6 flex flex-col gap-6 relative z-10">
+                <form id="replacement-form" className="px-8 pt-6 pb-6 flex flex-col gap-6 relative z-10">
+                  
+                  {/* Select Asset - Uses inner glass theme */}
                   <div className="flex flex-col gap-2.5">
                     <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
                       Select Assigned Asset
@@ -507,6 +512,7 @@ export default function StaffTicketsPage() {
                     </div>
                   </div>
 
+                  {/* Auto-populated details - Uses inner glass theme */}
                   <AnimatePresence>
                     {selectedAssetId && (
                       <motion.div 
@@ -519,37 +525,19 @@ export default function StaffTicketsPage() {
                           <div className="flex-1 space-y-1.5">
                             <span className={`text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Tag ID</span>
                             <span className={`text-[13px] font-bold ${theme.textMain}`}>
-                              {activeAsset?.asset_tag}
+                              {myAssets.find(a => String(a.id) === selectedAssetId)?.asset_tag}
                             </span>
                           </div>
                           <div className="flex-1 space-y-1.5">
                             <span className={`text-[10px] font-black uppercase tracking-widest block ${theme.textSub}`}>Serial Number</span>
                             <span className={`text-[13px] font-bold ${theme.textMain}`}>
-                              {activeAsset?.serial_number || 'N/A'}
+                              {myAssets.find(a => String(a.id) === selectedAssetId)?.serial_number || 'N/A'}
                             </span>
                           </div>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
-
-                  <div className="flex flex-col gap-2.5">
-                    <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
-                      Current Asset Condition
-                    </label>
-                    <div className={`relative rounded-2xl overflow-hidden flex items-center pr-5 transition-all ${theme.glassInnerCard}`}>
-                      <select
-                        value={formCondition}
-                        onChange={(e) => setFormCondition(e.target.value)}
-                        className={`w-full pl-5 pr-10 py-4.5 text-[15px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent ${theme.textMain}`}
-                      >
-                        <option value="Minor Wear" className={isDarkMode ? 'text-black' : ''}>Minor Hardware Issue</option>
-                        <option value="Damaged" className={isDarkMode ? 'text-black' : ''}>Damaged / Broken Part</option>
-                        <option value="Not Working" className={isDarkMode ? 'text-black' : ''}>Not Working / Won't Power On</option>
-                      </select>
-                      <ChevronDown size={20} className={`absolute right-5 pointer-events-none ${theme.textSub}`} />
-                    </div>
-                  </div>
 
                   <div className="flex flex-col gap-2.5">
                     <label className={`text-[11px] font-bold uppercase tracking-widest ${theme.textSub}`}>
@@ -560,21 +548,34 @@ export default function StaffTicketsPage() {
                       onChange={(e) => setReason(e.target.value)}
                       required
                       placeholder="Describe what happened..."
-                      className={`w-full px-6 py-5 rounded-2xl text-[14px] font-medium transition-all outline-none min-h-[8.75rem] resize-none ${theme.glassInnerCard} ${
+                      className={`w-full px-6 py-5 rounded-2xl text-[15px] font-semibold transition-all outline-none min-h-[8.75rem] resize-none ${theme.glassInnerCard} ${
                         isDarkMode ? 'placeholder-zinc-500 text-white' : 'placeholder-[#818b9c] text-[#0f172a]'
                       }`}
                     />
                   </div>
 
-                  <div className="flex justify-center items-center gap-4 pt-4">
-                    <button type="button" onClick={() => setShowModal(false)} className={`w-[8.75rem] py-3.5 rounded-[1.25rem] text-[11px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+                  {/* Bottom Divider */}
+                  <div className={`h-px w-full ${isDarkMode ? 'bg-white/10' : 'bg-white/60'}`} />
+
+                  {/* Footer Buttons */}
+                  <div className="pt-2 flex justify-center items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowModal(false)}
+                      className={`w-[8.75rem] py-3.5 rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}
+                    >
                       Cancel
                     </button>
-                    <button type="button" onClick={() => handleGenerateQR(activeAsset)} disabled={!selectedAssetId || !reason.trim()} className="w-[8.75rem] py-3.5 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white rounded-[1.25rem] text-[11px] font-black uppercase tracking-widest transition-all shadow-[0_4px_20px_rgba(139,92,246,0.35)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95">
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateQR(activeAsset)}
+                      disabled={!selectedAssetId || !reason.trim()}
+                      className="w-[8.75rem] py-3.5 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white rounded-[1.25rem] text-[12px] font-black uppercase tracking-widest transition-all shadow-[0_4px_20px_rgba(139,92,246,0.35)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
+                    >
                       Generate QR
                     </button>
                   </div>
-                </div>
+                </form>
               ) : (
                 <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5 flex flex-col animate-in slide-in-from-right-4">
                   <div className={`rounded-2xl p-6 shadow-sm border flex flex-col items-center text-center ${theme.glassInnerCard} ${isDarkMode ? 'border-white/10' : 'border-white/80'}`}>
@@ -624,7 +625,6 @@ export default function StaffTicketsPage() {
                   </div>
                 </div>
               )}
-
             </motion.div>
           </div>
         )}
