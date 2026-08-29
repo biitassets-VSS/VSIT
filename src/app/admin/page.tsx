@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Users, Laptop, ClipboardCheck, Ticket, 
   Activity, ArrowRight, AlertCircle, Clock,
   AlertTriangle, Monitor, Megaphone, 
   Send, Loader2, ImagePlus, X, RefreshCw, 
-  BarChart3, Cpu, LogOut, Bell, Check 
+  BarChart3, Cpu, LogOut
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -44,11 +43,6 @@ export default function AdminDashboardPage() {
   
   const [isOnlineStaffModalOpen, setIsOnlineStaffModalOpen] = useState(false);
   
-  // 🌟 NOTIFICATIONS STATE
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [rawStaffList, setRawStaffList] = useState<any[]>([]);
 
@@ -62,7 +56,7 @@ export default function AdminDashboardPage() {
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  // 🌟 THEME SYNC
+  // 🌟 THEME SYNC & BROADCAST LISTENER
   useEffect(() => {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -76,12 +70,16 @@ export default function AdminDashboardPage() {
     loadAdminData();
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 
+    // 🌟 ROBUST EVENT LISTENER FOR ANNOUNCEMENT BUTTON IN LAYOUT
     const handleOpenBroadcast = () => setIsBroadcastModalOpen(true);
     window.addEventListener('open-broadcast-modal', handleOpenBroadcast);
+    // Fallback attachment directly to window object if CustomEvent fails
+    (window as any).openBroadcastModal = handleOpenBroadcast; 
 
     return () => {
       observer.disconnect();
       window.removeEventListener('open-broadcast-modal', handleOpenBroadcast);
+      delete (window as any).openBroadcastModal;
     };
   }, []);
 
@@ -156,7 +154,7 @@ export default function AdminDashboardPage() {
       // 1. Listen for explicit Notifications
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
         triggerDesktopAlert(payload.new.title || 'System Alert', payload.new.message || 'New notification received.');
-        loadAdminData(false); // Refresh data to update badge count
+        loadAdminData(false);
       })
       // 2. Listen for Return/Replace Requests in Inspections
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inspections' }, (payload) => {
@@ -213,21 +211,18 @@ export default function AdminDashboardPage() {
       setAdminName(currentAdminName);
 
       const [
-        { data: assets }, { data: inspections }, { data: tickets }, { data: staffDataRes }, { data: notifsRes }
+        { data: assets }, { data: inspections }, { data: tickets }, { data: staffDataRes }
       ] = await Promise.all([
         supabase.from('assets').select('id, status, assigned_to, inspection_status'),
         supabase.from('inspections').select('*, assets(*)').order('created_at', { ascending: false }),
         supabase.from('tickets').select('*'),
-        supabase.from('profiles').select('*'),
-        supabase.from('notifications').select('*').eq('target_role', 'admin').order('created_at', { ascending: false }).limit(20)
+        supabase.from('profiles').select('*')
       ]);
 
       const staffData = staffDataRes || [];
       const inspData = inspections || [];
       const tktData = tickets || [];
       const assetsData = assets || [];
-      
-      if (notifsRes) setNotifications(notifsRes);
 
       setRawStaffList(staffData);
 
@@ -385,20 +380,20 @@ export default function AdminDashboardPage() {
   };
 
   // ==========================================
-  // 🌟 TRUE GLASSMORPHISM THEME (PREMIUM 2026 - V4 CANONICAL)
+  // 🌟 PURE TRANSPARENT LIQUID GLASS THEME
   // ==========================================
   const theme = {
     bg: 'bg-transparent font-sans',
-    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
+    textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-600',
     
     glassCard: isDarkMode 
       ? 'bg-zinc-900/30 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
+      : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
     
     glassInnerCard: isDarkMode 
       ? 'bg-black/20 backdrop-blur-xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-      : 'bg-white/20 backdrop-blur-lg border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.03)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.7)]',
+      : 'bg-white/30 backdrop-blur-lg border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.03)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]',
     
     glassItem: isDarkMode
       ? 'bg-white/5 backdrop-blur-xl border border-white/10 transition-all duration-300 hover:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
@@ -432,70 +427,19 @@ export default function AdminDashboardPage() {
 
       <div className="flex-1 flex flex-col max-w-400 mx-auto w-full p-4 lg:p-6 gap-5 h-full lg:min-h-0 z-10">
         
-        {/* 🌟 Top Dashboard Header */}
+        {/* 🌟 Top Dashboard Header (Non-clickable Title & Cleaned up Buttons) */}
         <div className={`${theme.glassCard} rounded-3xl p-4 flex items-center justify-between shrink-0 transition-all relative z-40`}>
-          <Link href="/admin" className="flex items-center gap-4 group">
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg ${theme.glassItem} ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
+          <div className="flex items-center gap-4 cursor-default">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${theme.glassItem} ${isDarkMode ? 'text-orange-500' : 'text-orange-600'}`}>
               <Cpu className="w-5 h-5" strokeWidth={2.5} />
             </div>
             <div className="flex flex-col justify-center">
               <h1 className={`text-base lg:text-lg font-bold tracking-tight leading-none ${theme.textMain}`}>IT Asset & Service Management</h1>
               <p className={`text-[11px] font-semibold mt-1.5 ${theme.textSub}`}>Welcome back, <span className="font-bold">{adminName}</span>. Here is your live IT infrastructure status.</p>
             </div>
-          </Link>
+          </div>
 
           <div className="flex items-center gap-3">
-            {/* 🌟 NOTIFICATIONS BELL */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all cursor-pointer ${theme.glassItem} hover:shadow-lg ${isNotificationsOpen ? 'bg-orange-500/10 border-orange-500/50 text-orange-600' : theme.textMain}`}
-              >
-                <Bell size={18} strokeWidth={2.5} className={unreadCount > 0 ? 'animate-pulse text-orange-500' : ''} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-rose-500 text-white text-[10px] font-black rounded-full border-2 border-white dark:border-zinc-900 shadow-sm z-10">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* NOTIFICATIONS DROPDOWN */}
-              <AnimatePresence>
-                {isNotificationsOpen && (
-                  <div className={`absolute top-14 right-0 w-80 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden flex flex-col z-50 ${theme.glassCard} border-white/60`}>
-                    <div className="p-4 border-b border-white/20 bg-white/40 flex justify-between items-center">
-                      <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Alerts & Updates</h3>
-                      <button onClick={async () => {
-                        await supabase.from('notifications').update({ is_read: true }).eq('target_role', 'admin').eq('is_read', false);
-                        setNotifications(prev => prev.map(n => ({...n, is_read: true})));
-                      }} className="text-[9px] font-bold text-orange-600 uppercase tracking-widest cursor-pointer hover:underline">Mark all read</button>
-                    </div>
-                    <div className="max-h-72 overflow-y-auto custom-scrollbar flex flex-col bg-white/20">
-                      {notifications.length === 0 ? (
-                        <div className="p-6 text-center text-xs font-semibold text-slate-500">No recent alerts.</div>
-                      ) : (
-                        notifications.map(notif => (
-                          <div key={notif.id} className={`p-4 border-b border-white/20 transition-all hover:bg-white/40 cursor-pointer ${notif.is_read ? 'opacity-60' : 'bg-orange-50/30'}`} onClick={async () => {
-                             if (!notif.is_read) {
-                               await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
-                               setNotifications(prev => prev.map(n => n.id === notif.id ? {...n, is_read: true} : n));
-                             }
-                          }}>
-                            <div className="flex justify-between items-start mb-1">
-                              <span className={`text-[11px] font-bold uppercase tracking-widest ${notif.is_read ? theme.textMain : 'text-orange-600'}`}>{notif.title}</span>
-                              {!notif.is_read && <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />}
-                            </div>
-                            <p className={`text-xs font-medium leading-snug ${theme.textSub}`}>{notif.message}</p>
-                            <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-widest">{timeAgo(notif.created_at)}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </AnimatePresence>
-            </div>
-
             <button 
               onClick={() => loadAdminData(true)} 
               disabled={isRefreshing}
@@ -508,7 +452,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 4 Main Stat Cards */}
+        {/* 🌟 4 Main Stat Cards (Increased sub-stat font sizes) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0 relative z-30">
           
           <div className={`${theme.glassCard} p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-purple-400/50 group`}>
@@ -521,9 +465,9 @@ export default function AdminDashboardPage() {
               <p className={`text-[10px] font-bold ${theme.textSub}`}>Total Assets</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Used</span><span className={`text-xs font-bold ${theme.textMain}`}>{stats.usedAssets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Stock</span><span className="text-xs font-bold text-emerald-500">{stats.inStockAssets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Discard</span><span className="text-xs font-bold text-orange-500">{stats.discardedAssets}</span></div>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Used</span><span className={`text-sm font-bold ${theme.textMain}`}>{stats.usedAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Stock</span><span className="text-sm font-bold text-emerald-500">{stats.inStockAssets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Discard</span><span className="text-sm font-bold text-orange-500">{stats.discardedAssets}</span></div>
             </div>
           </div>
 
@@ -537,8 +481,8 @@ export default function AdminDashboardPage() {
               <p className={`text-[10px] font-bold ${theme.textSub}`}>Total Requests</p>
             </div>
             <div className={`grid grid-cols-2 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-xs font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
-              <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingInspections}</span></div>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedInspections}</span></div>
+              <div className={`flex flex-col border-l pl-3 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingInspections > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingInspections}</span></div>
             </div>
           </div>
 
@@ -552,9 +496,9 @@ export default function AdminDashboardPage() {
               <p className={`text-[10px] font-bold ${theme.textSub}`}>Total Tickets</p>
             </div>
             <div className={`grid grid-cols-3 gap-2 mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}>
-              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-xs font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Process</span><span className="text-xs font-bold text-purple-600 dark:text-purple-400">{stats.inProcessTickets}</span></div>
-              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-xs font-bold ${stats.pendingTickets > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingTickets}</span></div>
+              <div className="flex flex-col"><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Resolved</span><span className="text-sm font-bold text-emerald-500">{stats.resolvedTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Process</span><span className="text-sm font-bold text-purple-600 dark:text-purple-400">{stats.inProcessTickets}</span></div>
+              <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Pending</span><span className={`text-sm font-bold ${stats.pendingTickets > 0 ? 'text-orange-500' : theme.textMain}`}>{stats.pendingTickets}</span></div>
             </div>
           </div>
 
@@ -576,14 +520,14 @@ export default function AdminDashboardPage() {
                 <span className={`text-[9px] uppercase font-bold flex items-center gap-1 transition-colors ${theme.textSub} group-hover/live:text-emerald-600 dark:group-hover/live:text-emerald-400`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
                 </span>
-                <span className="text-xs font-bold text-emerald-500 group-hover/live:scale-110 origin-left transition-transform">{stats.onlineStaff}</span>
+                <span className="text-sm font-bold text-emerald-500 group-hover/live:scale-110 origin-left transition-transform">{stats.onlineStaff}</span>
               </button>
 
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Off</span>
-                <span className={`text-xs font-bold ${theme.textMain}`}>{stats.offlineStaff}</span>
+                <span className={`text-sm font-bold ${theme.textMain}`}>{stats.offlineStaff}</span>
               </div>
               <div className={`flex flex-col border-l pl-2 ${isDarkMode ? 'border-white/10' : 'border-white/40'}`}><span className={`text-[9px] uppercase font-bold ${theme.textSub}`}>Deact</span>
-                <span className="text-xs font-bold text-rose-500">{stats.deactivatedStaff}</span>
+                <span className="text-sm font-bold text-rose-500">{stats.deactivatedStaff}</span>
               </div>
             </div>
           </div>
@@ -592,11 +536,11 @@ export default function AdminDashboardPage() {
 
         <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 lg:overflow-hidden pt-2 relative z-30">
           
-          {/* 🌟 System Modules (Left Side) */}
+          {/* 🌟 System Modules (Left Side) - Adjusted to cover bottom space */}
           <div className="w-full lg:w-[72%] flex flex-col lg:min-h-0 lg:overflow-hidden">
             <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-1 shrink-0 mb-3 ${theme.textSub}`}>System Modules</h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 lg:min-h-0 lg:overflow-y-auto custom-scrollbar content-start pb-6 pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 lg:min-h-0 lg:overflow-y-auto custom-scrollbar pb-6">
               {[
                 { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
@@ -612,25 +556,25 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    className={`text-left cursor-pointer p-4 rounded-3xl flex flex-col justify-between ease-out group ${theme.glassItem} hover:-translate-y-1 hover:shadow-xl min-h-35 ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-400' : 'hover:shadow-purple-500/10 hover:border-purple-400'}`}
+                    className={`text-left cursor-pointer p-5 rounded-[2rem] flex flex-col justify-between ease-out group h-full w-full ${theme.glassItem} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-400' : 'hover:shadow-purple-500/10 hover:border-purple-400'}`}
                   >
                     <div className="flex items-start justify-between w-full relative">
-                      <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
-                        <m.icon size={20} strokeWidth={2.2} />
+                      <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
+                        <m.icon size={24} strokeWidth={2.2} />
                         {/* 🌟 2026 Liquid Glass Translucent Badge */}
                         {m.badge > 0 && (
-                          <span className="absolute -top-2.5 -right-2.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-gradient-to-tr from-orange-500/80 to-purple-600/80 backdrop-blur-xl backdrop-saturate-150 text-white text-[10px] font-black rounded-full border border-white/50 dark:border-white/20 shadow-[0_4px_10px_rgba(249,115,22,0.3),inset_0_1px_3px_rgba(255,255,255,0.8)] drop-shadow-sm z-50 transition-all hover:scale-110">
+                          <span className="absolute -top-3 -right-3 min-w-[24px] h-6 px-1.5 flex items-center justify-center bg-gradient-to-tr from-orange-500/90 to-purple-600/90 backdrop-blur-xl backdrop-saturate-150 text-white text-[11px] font-black rounded-full border border-white/50 dark:border-white/20 shadow-[0_4px_10px_rgba(249,115,22,0.3),inset_0_1px_3px_rgba(255,255,255,0.8)] drop-shadow-sm z-50 transition-all hover:scale-110">
                             {m.badge}
                           </span>
                         )}
                       </div>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 group-hover:translate-x-1 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500 group-hover:bg-orange-500 group-hover:text-white' : 'text-purple-500 group-hover:bg-purple-500 group-hover:text-white'}`}>
-                        <ArrowRight size={14} strokeWidth={2.5} />
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group-hover:translate-x-1 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500 group-hover:bg-orange-500 group-hover:text-white' : 'text-purple-500 group-hover:bg-purple-500 group-hover:text-white'}`}>
+                        <ArrowRight size={16} strokeWidth={2.5} />
                       </div>
                     </div>
-                    <div>
-                      <h4 className={`text-[14px] font-bold tracking-tight leading-tight ${theme.textMain}`}>{m.title}</h4>
-                      <p className={`text-[11px] font-semibold mt-1.5 leading-snug line-clamp-2 ${theme.textSub}`}>{m.desc}</p>
+                    <div className="mt-4">
+                      <h4 className={`text-[15px] font-bold tracking-tight leading-tight ${theme.textMain}`}>{m.title}</h4>
+                      <p className={`text-[12px] font-semibold mt-1.5 leading-snug line-clamp-2 ${theme.textSub}`}>{m.desc}</p>
                     </div>
                   </button>
                 );
