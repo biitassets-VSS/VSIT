@@ -430,6 +430,11 @@ export default function StaffDashboardPage() {
       return { disabled: true, text: "Under Review", classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     }
 
+    // 🌟 FIX: Instantly lock the button if it is already approved
+    if (trueInspStatus === 'approved') {
+      return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    }
+
     // 2. Explicit Rejection Rules
     if (trueInspStatus.includes('audit rejected') || trueInspStatus.includes('fail')) {
       return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
@@ -1051,18 +1056,18 @@ export default function StaffDashboardPage() {
 
                           <div className="w-full sm:flex-1 flex justify-end">
                             <button 
-                              disabled={btnState.disabled && !isActionLocked} // Still disabled if not in time window
+                              disabled={btnState.disabled}
                               onClick={() => setModal({ isOpen: true, type: 'INSPECTION', targetAsset: asset })} 
                               className={`px-6 py-2 font-bold text-[11px] rounded-full transition-all flex items-center justify-center gap-1.5 shadow-sm ${
-                                btnState.disabled && !isActionLocked
+                                btnState.disabled 
                                 ? 'bg-slate-200/70 border border-slate-300 text-slate-500 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white cursor-pointer hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] border border-orange-400'
                               }`}
                             >
-                              {btnState.disabled && !isActionLocked && <Lock size={14} className="shrink-0" />}
+                              {btnState.disabled && <Lock size={14} className="shrink-0" />}
                               <span>
-                                {btnState.disabled && !isActionLocked ? (
-                                  `Audit Opens ${btnState.text.replace('Opens\n', '').replace('Opens ', '')}`
+                                {btnState.disabled ? (
+                                  btnState.text.includes('Opens') ? `Audit Opens ${btnState.text.replace('Opens\n', '').replace('Opens ', '')}` : btnState.text
                                 ) : (
                                   isActionLocked ? 'Audit Device Now' : btnState.text
                                 )}
