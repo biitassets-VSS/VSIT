@@ -6,7 +6,6 @@ import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// 🌟 AI WIREFRAME GENERATOR FOR SAMPLE ANGLES
 const AiSampleWireframe = ({ category, stepIndex }: { category: string, stepIndex: number }) => {
   const cat = category.toLowerCase();
 
@@ -82,6 +81,7 @@ function MobileVerifyContent() {
   
   // 🌟 Routing Parameters
   const auditType = searchParams.get('auditType') || 'INSPECTION';
+  const mode = searchParams.get('mode') || ''; // 'upload_only' bypasses DB insertion
   const cond = searchParams.get('cond') || 'Not Specified';
   const notes = searchParams.get('notes') || '';
   
@@ -100,26 +100,22 @@ function MobileVerifyContent() {
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
   
-  // Gallery & Interactive Zoom State
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
   const [zoomProps, setZoomProps] = useState({ isZoomed: false, originX: '50%', originY: '50%' });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const laptopSteps = [
+  const activeSteps = isLaptop ? [
     { title: "Screen & Keypad", desc: "Open laptop, capture full display and keyboard.", icon: MonitorSmartphone },
     { title: "Top Lid Brand Logo", desc: "Close laptop, capture the top exterior brand logo.", icon: MonitorSmartphone },
     { title: "Left Side Ports", desc: "Capture all ports on the left edge clearly.", icon: MonitorSmartphone },
     { title: "Right Side Ports", desc: "Capture all ports on the right edge clearly.", icon: MonitorSmartphone },
     { title: "Bottom S/N & Tag", desc: "Flip over, capture the bottom showing Asset Tag & Serial Number fully.", icon: MonitorSmartphone }
-  ];
-
-  const accessorySteps = [
+  ] : [
     { title: "Clear Front / Top View", desc: "Capture the main visible surface of the device.", icon: isKeyboard ? Keyboard : isMouse ? Mouse : isHeadphone ? Headphones : MonitorSmartphone },
     { title: "Bottom Asset Tag", desc: "Capture the bottom showing the Asset Tag or S/N.", icon: Scan }
   ];
-
-  const activeSteps = isLaptop ? laptopSteps : accessorySteps;
+  
   const currentStepInfo = activeSteps[Math.min(uploadedCount, activeSteps.length - 1)] || activeSteps[0];
 
   useEffect(() => {
@@ -143,7 +139,6 @@ function MobileVerifyContent() {
     return "Mobile Device";
   };
 
-  // 🌟 GOOGLE-STYLE CLICK-TO-ZOOM MAGNIFIER HANDLERS
   const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (zoomProps.isZoomed) {
       setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
@@ -164,7 +159,6 @@ function MobileVerifyContent() {
     }
   };
 
-  // 🌟 PERFECTED PURE TRANSPARENT GLASS ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -187,14 +181,11 @@ function MobileVerifyContent() {
         ctx.drawImage(img, 0, 0, width, height);
 
         const baseScale = canvas.width / 1600; 
-        
         const fontSize = Math.max(20, Math.floor(26 * baseScale));
         const lineHeight = Math.floor(fontSize * 1.5);
-        
         const contentX = Math.floor(40 * baseScale);
         let contentY = canvas.height - (lineHeight * 5.5); 
 
-        // 🌟 EMBOSSED CLEAR GLASS TEXT FUNCTION
         const drawClearGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left') => {
           ctx.font = `800 ${size}px "Arial Black", "Segoe UI Black", Arial, sans-serif`;
           ctx.textAlign = align;
@@ -203,21 +194,17 @@ function MobileVerifyContent() {
 
           const offset = Math.max(1, size * 0.03);
 
-          // 1. Bottom-Right Dark Edge (Inner Shadow for depth)
           ctx.lineWidth = Math.max(1, size * 0.04);
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
           ctx.strokeText(text, x + offset, y + offset);
 
-          // 2. Top-Left Bright Edge (Specular highlight for glass reflection)
           ctx.lineWidth = Math.max(1.5, size * 0.05);
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
           ctx.strokeText(text, x - offset, y - offset);
 
-          // 3. Very faint white fill to give it physical substance without covering the image
           ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; 
           ctx.fillText(text, x, y);
 
-          // 4. Outer Drop Shadow
           ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
           ctx.shadowBlur = Math.max(4, size * 0.15);
           ctx.shadowOffsetX = Math.max(2, size * 0.05);
@@ -228,7 +215,6 @@ function MobileVerifyContent() {
           ctx.textAlign = 'left'; 
         };
 
-        // Header Check based on auditType
         const headerText = auditType === 'RETURN' ? `VERIFIED RETURN ✓` : `VERIFIED AUDIT ✓`;
 
         drawClearGlassText(`VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left');
@@ -254,14 +240,14 @@ function MobileVerifyContent() {
   };
 
   const finalizeInspection = async (finalUrls: string[]) => {
+    // 🌟 BYPASS DATABASE IF MODE IS UPLOAD_ONLY (Desktop dashboard handles the DB logic)
+    if (mode === 'upload_only') return;
+    
     if (!assetId) return;
     try {
-      
-      // 🌟 SMART ROUTING: IF RETURN, SEND TO REPLACEMENTS TABLE
       if (auditType === 'RETURN') {
         const { data: assetData } = await supabase.from('assets').select('*').eq('id', assetId).single();
         
-        // Insert directly to replacements
         await supabase.from('replacements').insert({
           old_asset_id: assetId,
           asset_tag: assetData?.asset_tag || 'UNKNOWN',
@@ -275,14 +261,12 @@ function MobileVerifyContent() {
           status: 'Pending Return'
         });
 
-        // Update the asset to stop overdue warnings and set to return requested
         await supabase.from('assets').update({ 
           status: 'Return Requested', 
-          inspection_status: 'Approved', // Clear pending flags so it doesn't trigger inspection alerts
+          inspection_status: 'Approved', 
           last_inspection_date: new Date().toISOString()
         }).eq('id', assetId);
 
-        // Notify admin
         await supabase.from('notifications').insert({
           target_role: 'admin',
           title: '📦 Return Request',
@@ -292,7 +276,6 @@ function MobileVerifyContent() {
         });
 
       } else {
-        // 🌟 STANDARD INSPECTION ROUTING
         await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', assetId);
         
         await supabase.from('inspections').insert({
@@ -360,13 +343,7 @@ function MobileVerifyContent() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0d0914] flex items-center justify-center p-6 text-center">
-        <Loader2 className="animate-spin text-purple-500 w-10 h-10"/>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-[#0d0914] flex items-center justify-center p-6"><Loader2 className="animate-spin text-purple-500 w-10 h-10"/></div>;
 
   if (isLocked || success) {
     return (
@@ -375,11 +352,9 @@ function MobileVerifyContent() {
         <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/50 shadow-[0_0_40px_rgba(16,185,129,0.3)] z-10">
           <CheckCircle2 className="text-emerald-400 w-12 h-12" />
         </div>
-        <h1 className="text-2xl font-black uppercase tracking-widest text-white z-10">
-          Upload Complete
-        </h1>
+        <h1 className="text-2xl font-black uppercase tracking-widest text-white z-10">Upload Complete</h1>
         <p className="text-slate-300 font-semibold text-sm leading-relaxed max-w-xs z-10">
-          The hardware photos have been securely transmitted to the admin dashboard. Your staff portal is now updated.
+          {mode === 'upload_only' ? 'Photos successfully transmitted to your desktop dashboard.' : 'The hardware photos have been securely transmitted to the admin dashboard.'}
         </p>
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-8 px-4 py-2 bg-white/10 rounded-full border border-white/20 z-10">
           You may safely close this window
@@ -398,7 +373,7 @@ function MobileVerifyContent() {
       
       <div className="space-y-1 relative z-10 w-full max-w-sm">
         <h1 className="text-xl font-black uppercase tracking-widest text-white">
-          {auditType === 'RETURN' ? 'Hardware Return Audit' : 'Live Hardware Audit'}
+          {mode === 'upload_only' ? 'Secure Photo Upload' : auditType === 'RETURN' ? 'Hardware Return Audit' : 'Live Hardware Audit'}
         </h1>
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target: {category}</p>
       </div>
@@ -466,11 +441,8 @@ function MobileVerifyContent() {
         </div>
       )}
 
-      {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
       {mounted && gallery.isOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center overflow-hidden">
-          
-          {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
           <button 
             onClick={() => {
               setGallery({ isOpen: false, images: [], index: 0 });
@@ -481,17 +453,15 @@ function MobileVerifyContent() {
             <X size={24} strokeWidth={2.5} />
           </button>
 
-          {/* Header Info */}
           <div className="absolute top-6 left-6 z-[1000000] flex flex-col pointer-events-none">
             <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10 w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
             </span>
-            <span className="text-[8px] md:text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit">
+            <span className="text-[8px] md:text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit shadow-sm">
               {zoomProps.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
             </span>
           </div>
           
-          {/* 🌟 GLASS FRAME FOR IMAGE */}
           <div className="relative w-full max-w-5xl h-full max-h-[80vh] flex-1 flex flex-col items-center justify-center p-3 sm:p-4 rounded-[2rem] bg-white/10 backdrop-blur-3xl border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.3)] mt-8">
             <div 
               className="w-full h-full relative flex items-center justify-center overflow-hidden rounded-2xl bg-black/50"
@@ -513,7 +483,6 @@ function MobileVerifyContent() {
             </div>
           </div>
           
-          {/* Navigation Controls */}
           {gallery.images.length > 1 && (
              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
                 <button 
