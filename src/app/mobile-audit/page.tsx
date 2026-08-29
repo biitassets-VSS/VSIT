@@ -99,6 +99,7 @@ function MobileVerifyContent() {
   const [success, setSuccess] = useState(false);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [broadcastChannel, setBroadcastChannel] = useState<any>(null);
   
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
   const [zoomProps, setZoomProps] = useState({ isZoomed: false, originX: '50%', originY: '50%' });
@@ -118,15 +119,25 @@ function MobileVerifyContent() {
   
   const currentStepInfo = activeSteps[Math.min(uploadedCount, activeSteps.length - 1)] || activeSteps[0];
 
+  // 🌟 FIX: Instantly establish and subscribe to the WebSocket channel on load
   useEffect(() => {
     setMounted(true);
     if (!sessionId) {
       setLoading(false);
       return;
     }
+    
+    const channel = supabase.channel(`qr_session_${sessionId}`);
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') console.log("Broadcast channel secured.");
+    });
+    setBroadcastChannel(channel);
+
     const locked = localStorage.getItem(`locked_session_${sessionId}`);
     if (locked) setIsLocked(true);
     setLoading(false);
+
+    return () => { supabase.removeChannel(channel); };
   }, [sessionId]);
 
   const getDeviceName = () => {
@@ -240,7 +251,6 @@ function MobileVerifyContent() {
   };
 
   const finalizeInspection = async (finalUrls: string[]) => {
-    // 🌟 BYPASS DATABASE IF MODE IS UPLOAD_ONLY (Desktop dashboard handles the DB logic)
     if (mode === 'upload_only') return;
     
     if (!assetId) return;
@@ -261,7 +271,6 @@ function MobileVerifyContent() {
           status: 'Pending Return'
         });
 
-        // 🌟 Sets asset status to Pending Return so Staff Dashboard recognizes it
         await supabase.from('assets').update({ 
           status: 'Pending Return', 
           inspection_status: 'Pending Review', 
@@ -318,8 +327,9 @@ function MobileVerifyContent() {
       const newUrls = [...uploadedUrls, data.publicUrl];
       setUploadedUrls(newUrls);
       
-      if (sessionId) {
-        await supabase.channel(`qr_session_${sessionId}`).send({
+      // 🌟 FIX: Safely broadcast the image URL back to the desktop
+      if (broadcastChannel && sessionId) {
+        await broadcastChannel.send({
           type: 'broadcast',
           event: 'photo_uploaded',
           payload: { url: data.publicUrl }

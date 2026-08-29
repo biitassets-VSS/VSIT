@@ -404,6 +404,7 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
+  // 🌟 Desktop WebSocket Receiver for Mobile Photos
   useEffect(() => {
     if (!qrSessionId) return;
     const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
@@ -480,6 +481,161 @@ export default function StaffDashboardPage() {
       setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, rating } : t));
       toast.success("Thank you for rating our IT support!");
     } catch (e) { console.error(e); }
+  };
+
+  const uploadMultiplePhotos = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const { error } = await supabase.storage.from('asset-photos').upload(fileName, file);
+        if (!error) {
+          const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
+          uploadedUrls.push(data.publicUrl);
+        }
+      } catch (error) { console.error("Upload failed", error); }
+    }
+    return uploadedUrls;
+  };
+
+  const resetReplaceModal = () => {
+    setShowReplaceModal(false);
+    setReplaceAssetId('');
+    setReplaceReason('');
+    setReplaceCondition('Minor Wear');
+    setQrUrl(null);
+    setQrSessionId(null);
+    setRemotePhotos([]);
+    setLocalPhotos([]);
+  };
+
+  const handleGenerateQR = (asset: any) => {
+    if (!asset || !replaceReason.trim()) {
+      toast.error("Please ensure asset and reason are provided.");
+      return;
+    }
+
+    const requiredPhotos = (asset?.category || '').toLowerCase().includes('laptop') ? 5 : 2;
+    const sessionId = crypto.randomUUID();
+    setQrSessionId(sessionId);
+    
+    // 🌟 mode=upload_only forces the mobile device to just act as a camera, skipping DB insertion
+    const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&mode=upload_only`;
+    
+    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
+  };
+
+  const handleReplaceSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!replaceAssetId) return;
+    setIsSubmittingReplace(true);
+
+    const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
+    if (!activeAsset) return;
+
+    try {
+      const newUrls = await uploadMultiplePhotos(localPhotos);
+      const allPhotos = [...remotePhotos, ...newUrls];
+
+      const { error: insertError } = await supabase.from('replacements').insert({
+        old_asset_id: activeAsset.id,
+        asset_tag: activeAsset.asset_tag,
+        serial_number: activeAsset.serial_number,
+        user_id: currentUser.id,
+        staff_name: currentUser.name,
+        user_email: currentUser.email, 
+        emp_code: currentUser.emp_id,
+        condition: replaceCondition,
+        reason: replaceReason,
+        photos: allPhotos.length > 0 ? allPhotos : null,
+        status: 'Pending Approval'
+      });
+      if (insertError) throw insertError;
+
+      const { error: updateError } = await supabase.from('assets').update({ 
+        status: 'Replacement Requested', 
+        inspection_status: 'Pending Review', 
+        admin_remarks: null 
+      }).eq('id', activeAsset.id);
+      if (updateError) throw updateError;
+
+      loadRealDatabase(false); 
+      resetReplaceModal();
+      toast.success(`Replacement request for ${activeAsset.asset_tag} sent successfully.`);
+    } catch (err: any) { 
+      console.error("Replace Submit Error:", err);
+      toast.error(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
+    } finally { 
+      setIsSubmittingReplace(false); 
+    }
+  };
+
+  const handleDigitalSign = async () => {
+    if (!handoverAsset) return;
+    setIsSigning(true);
+
+    try {
+      const timestamp = new Date().toLocaleString('en-IN');
+      const staffName = currentUser.full_name || currentUser.name;
+      const empCode = currentUser.emp_code || currentUser.emp_id;
+      const officialNote = `Digitally Signed Handover Agreement by ${staffName} on ${timestamp}`;
+
+      await supabase
+        .from('assets')
+        .update({ 
+          status: 'Assigned', 
+          inspection_status: 'Approved',
+          last_inspection_date: new Date().toISOString()
+        })
+        .eq('id', handoverAsset.id);
+
+      await supabase
+        .from('inspections')
+        .insert({
+          asset_id: handoverAsset.id,
+          inspected_by: currentUser.id,
+          status: 'Approved',
+          notes: officialNote
+        });
+
+      await supabase
+        .from('notifications')
+        .insert({
+          target_role: 'admin',
+          title: '📝 Agreement Signed',
+          message: `${staffName} (${empCode}) has digitally signed the handover agreement for ${handoverAsset.name || handoverAsset.asset_name} (${handoverAsset.asset_tag}).`,
+          type: 'success',
+          is_read: false
+        });
+
+      toast.success("Handover Agreement Successfully Signed!");
+      setHandoverAsset(null);
+      loadRealDatabase(false); 
+    } catch (error: any) {
+      toast.error(`Error signing agreement: ${error.message}`);
+    } finally {
+      setIsSigning(false);
+    }
+  };
+  
+  const getStatusBadge = (status: string) => {
+    const s = (status || '').toLowerCase().trim();
+    if (s === 'open' || s === 'pending') return 'bg-orange-100/80 text-orange-600 font-bold border border-orange-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (s === 'in progress') return 'bg-purple-100/80 text-purple-600 font-bold border border-purple-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (s === 'resolved' || s === 'closed') return 'bg-emerald-100/80 text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    return 'bg-slate-100/80 text-slate-600 font-bold border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+  };
+
+  const getInspectionStatusColor = (status: string) => {
+    const s = safeString(status).toLowerCase().trim();
+    if (s.includes('sent to admin') || s.includes('pending review') || s.includes('pending')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+    if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+    if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+    if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
+    if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection') || s.includes('overdue')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+    if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
 
   const theme = {
@@ -628,10 +784,8 @@ export default function StaffDashboardPage() {
               </div>
             </div>
             
-            {/* Carousel Item Container */}
             <div className="flex-1 relative w-full flex flex-col justify-center min-h-0">
               
-              {/* Overlay Navigation Buttons */}
               {assignedAssets.length > 1 && (
                 <>
                   <div className="absolute inset-y-0 -left-2 sm:-left-4 flex items-center z-20 pointer-events-none">
@@ -662,7 +816,6 @@ export default function StaffDashboardPage() {
                     const btnState = getAssetAuditState(asset);
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
 
-                    // Compute clean inspection state exclusively
                     let baseAuditStatus = asset.true_inspection_state === 'Approved' && asset.isOverdue ? 'Overdue' : asset.true_inspection_state;
 
                     return (
@@ -674,7 +827,6 @@ export default function StaffDashboardPage() {
                         transition={{ duration: 0.25 }}
                         className={`w-full h-full py-4 sm:py-5 px-10 sm:px-14 lg:px-16 rounded-3xl flex flex-col justify-between transition-all duration-500 bg-white/20 backdrop-blur-3xl border border-white/40 shadow-xl hover:shadow-[0_12px_40px_rgba(249,115,22,0.15)] hover:border-orange-300/60 relative`}
                       >
-                        {/* 🌟 NEW CORNER LAST REQUEST BADGE */}
                         <div className="absolute top-4 sm:top-5 right-4 sm:right-6">
                             <button 
                               onClick={() => setViewInspectionAsset(asset)}
@@ -693,7 +845,6 @@ export default function StaffDashboardPage() {
                             </button>
                         </div>
 
-                        {/* Top Banner section */}
                         <div className="flex flex-col sm:flex-row justify-start items-start gap-2 shrink-0 pt-2 sm:pt-0">
                           <div>
                             <h4 className="font-semibold text-base tracking-tight leading-tight text-slate-800 truncate w-full sm:w-auto pr-32">
@@ -702,7 +853,6 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
 
-                        {/* 🌟 COMPRESSED INNER GLASS GRID */}
                         <div className={`flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-[1.25rem] shrink-0 my-2 ${theme.glassInner}`}>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="min-w-0">
@@ -758,7 +908,6 @@ export default function StaffDashboardPage() {
                           </div>
                         </div>
                         
-                        {/* 🌟 OVERDUE SPECIFIC WARNING ON CARD */}
                         {asset.isOverdue && !asset.isReturnPending && !asset.isReplacePending && !asset.true_inspection_state?.includes('pending') && (
                           <div className="p-3 mt-1 mb-2 rounded-xl border border-rose-400/60 bg-rose-500/15 backdrop-blur-md text-rose-700 text-[11px] font-bold flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
                             <AlertTriangle size={16} className="shrink-0 animate-pulse text-rose-600" />
@@ -768,7 +917,6 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
-                        {/* Status/Rejection Reason Banner */}
                         { (asset.isReturnRejected || asset.isReplaceRejected || btnState.text.includes('Re-Audit Required') || btnState.text.includes('Re-Inspection Required')) && (
                           <div className="p-2.5 mt-1 mb-2 rounded-xl border border-rose-200/50 bg-rose-50/50 backdrop-blur-md text-rose-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-start">
                             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
@@ -793,7 +941,6 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
-                        {/* 🌟 ACTION BAR (Buttons NEVER get fully disabled unless system rule applies) */}
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 mt-auto border-t border-slate-300/40 shrink-0 w-full relative z-30">
                           
                           <div className="w-full sm:flex-1 flex justify-start">
@@ -859,7 +1006,6 @@ export default function StaffDashboardPage() {
           </div>
         </div>
 
-        {/* MY TICKETS */}
         <div className="w-full xl:w-1/3 flex flex-col min-h-[400px] lg:min-h-0 pb-4 lg:pb-0">
           <div className={`${theme.glassPanel} rounded-[2rem] p-5 md:p-6 flex-1 flex flex-col min-h-0 group/panel`}>
             <div className="flex items-center justify-between border-b pb-4 mb-4 border-white/40 group-hover/panel:border-purple-300 transition-colors duration-500 shrink-0">
@@ -925,8 +1071,85 @@ export default function StaffDashboardPage() {
         </div>
 
       </div>
-      
-      {/* Modals omitted for brevity, logic remains identical to previous snippet */}
+
+      <AnimatePresence>
+        {viewInspectionAsset && (() => {
+          const asset = viewInspectionAsset;
+          let photosArray: string[] = [];
+          try {
+            if (Array.isArray(asset.latest_photos)) photosArray = asset.latest_photos;
+            else if (typeof asset.latest_photos === 'string' && asset.latest_photos.startsWith('[')) {
+              const parsed = JSON.parse(asset.latest_photos);
+              if (Array.isArray(parsed)) photosArray = parsed;
+            } else if (asset.latest_photos && typeof asset.latest_photos === 'object') {
+              photosArray = Object.values(asset.latest_photos);
+            }
+          } catch(e){}
+
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/40">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                animate={{ scale: 1, opacity: 1, y: 0 }} 
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className={`w-full max-w-3xl shadow-2xl overflow-hidden font-sans flex flex-col relative transition-all duration-300 rounded-4xl bg-[#e9e9ec] border border-white max-h-[85vh]`}
+              >
+                <div className="p-5 sm:p-6 flex justify-between items-center shrink-0 border-b border-slate-200/60 bg-white/40">
+                   <div className="flex items-center gap-3.5">
+                     <div className={`w-12 h-12 rounded-3xl flex items-center justify-center shadow-sm bg-white border border-slate-200 ${getInspectionStatusColor(asset.live_inspection_status).split(' ')[2]}`}>
+                        <ClipboardCheck size={20} strokeWidth={2.5} />
+                     </div>
+                     <div>
+                       <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                         Inspection Details
+                       </h3>
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                         {asset.name || asset.asset_tag}
+                       </p>
+                     </div>
+                   </div>
+                   <button onClick={() => setViewInspectionAsset(null)} className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
+                </div>
+
+                <div className="p-5 sm:p-6 overflow-y-auto flex-1 flex flex-col gap-5 custom-scrollbar bg-white/20">
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 sm:p-5 rounded-3xl bg-white shadow-sm border border-slate-100">
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Status</span><span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm ${getInspectionStatusColor(asset.live_inspection_status)}`}>{asset.live_inspection_status || 'Approved'}</span></div>
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Date</span><span className="font-bold text-slate-900 text-xs sm:text-sm">{asset.live_inspection_date ? new Date(asset.live_inspection_date).toLocaleDateString('en-GB') : 'N/A'}</span></div>
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Category</span><span className="font-bold text-slate-900 text-xs sm:text-sm break-words block">{asset.category}</span></div>
+                      <div><span className="text-[9px] font-black uppercase tracking-widest block mb-1 text-slate-500">Tag ID</span><span className="font-mono font-bold text-purple-600 text-xs sm:text-sm">{asset.asset_tag}</span></div>
+                   </div>
+
+                   {asset.latest_notes && (
+                     <div className="space-y-2 bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-100">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Custodian Notes</h4>
+                       <p className="text-xs sm:text-sm font-semibold text-slate-700 whitespace-pre-wrap leading-relaxed">{asset.latest_notes}</p>
+                     </div>
+                   )}
+
+                   {asset.live_admin_remarks && (
+                     <div className="space-y-2 bg-rose-50/80 p-4 sm:p-5 rounded-3xl shadow-sm border border-rose-100">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-1.5">Admin Remarks</h4>
+                       <p className="text-xs sm:text-sm font-semibold text-rose-700 whitespace-pre-wrap leading-relaxed">{asset.live_admin_remarks}</p>
+                     </div>
+                   )}
+
+                   {photosArray.length > 0 && (
+                     <div className="space-y-3 bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-100">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Uploaded Evidence</h4>
+                       <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-2">
+                         {photosArray.map((url, i) => (
+                           <img key={`insp-photo-${i}`} src={url} alt="Evidence" className="h-28 w-28 sm:h-36 sm:w-36 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0 hover:scale-105 transition-transform" />
+                         ))}
+                       </div>
+                     </div>
+                   )}
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
       <AnimatePresence>
         {modal.isOpen && (
           <LiveDatabaseModal 
@@ -938,6 +1161,154 @@ export default function StaffDashboardPage() {
             onClose={() => { setModal({ isOpen: false, type: '' }); loadRealDatabase(false); }} 
             theme={theme}
           />
+        )}
+      </AnimatePresence>
+
+      {/* 🌟 REPLACEMENT REQUEST MODAL */}
+      <AnimatePresence>
+        {showReplaceModal && activeAsset && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowReplaceModal(false)}
+              className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm`}
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-[#e9e9ec] rounded-[2rem] w-full max-w-[420px] shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300 z-10"
+            >
+              <div className="p-5 sm:p-6 flex justify-between items-center shrink-0 bg-white/40 border-b border-white/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200">
+                    <RefreshCcw className="text-purple-600" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-[15px] sm:text-[16px] font-black text-slate-900 uppercase tracking-wider leading-tight">
+                      Asset Replace Request
+                    </h3>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                      Initiate Hardware Swap
+                    </p>
+                  </div>
+                </div>
+                <button onClick={resetReplaceModal} className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
+              </div>
+
+              {!qrUrl ? (
+                <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">Select Assigned Asset</label>
+                    <div className="w-full px-4 py-3 bg-white rounded-2xl text-[13px] font-bold text-slate-800 shadow-sm opacity-90 cursor-not-allowed flex justify-between items-center border border-slate-100">
+                      <span className="truncate">{activeAsset.name || activeAsset.category} ({activeAsset.asset_tag})</span>
+                      <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 bg-white rounded-2xl p-4 shadow-sm gap-4 border border-slate-100">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tag ID</p>
+                      <p className="text-sm font-black text-slate-900">{activeAsset.asset_tag}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Serial Number</p>
+                      <p className="text-sm font-black text-slate-900 truncate">{activeAsset.serial_number}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">Current Asset Condition</label>
+                    <div className="relative">
+                      <select 
+                        value={replaceCondition} 
+                        onChange={(e) => setReplaceCondition(e.target.value)} 
+                        className="w-full px-4 py-3 bg-white rounded-2xl text-[13px] font-bold text-slate-800 shadow-sm outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-[#ff7300]/20 border border-slate-100"
+                      >
+                        <option value="Minor Wear">Minor Hardware Issue</option>
+                        <option value="Minor Wear">Minor Wear (Scratches/Dents)</option>
+                        <option value="Damaged">Damaged / Broken Part</option>
+                        <option value="Not Working">Not Working / Won't Power On</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">
+                      Replace Reason & Notes
+                    </label>
+                    <textarea 
+                      required 
+                      value={replaceReason} 
+                      onChange={(e) => setReplaceReason(e.target.value)} 
+                      placeholder={`Provide reason for this request...`}
+                      className="w-full px-4 py-3.5 bg-white/70 rounded-2xl text-[13px] font-bold text-slate-700 outline-none resize-none h-24 shadow-inner placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-purple-500/20 border border-transparent" 
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-3">
+                    <button type="button" onClick={resetReplaceModal} className="flex-1 py-3 bg-white rounded-xl text-[10px] font-black text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors cursor-pointer border border-slate-200">
+                      Cancel
+                    </button>
+                    <button type="button" onClick={() => handleGenerateQR(activeAsset)} className={`flex-1 py-3 rounded-xl text-[10px] font-black text-white uppercase tracking-widest shadow-md transition-all cursor-pointer bg-purple-600 hover:bg-purple-700 border border-purple-500`}>
+                      Generate QR
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5 flex flex-col animate-in slide-in-from-right-4">
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">
+                      {isLaptopObj ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
+                    </p>
+                    
+                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-5">
+                      <img src={qrUrl} alt="Upload QR Code" className="w-40 h-40 sm:w-48 sm:h-48 object-contain" />
+                    </div>
+                    
+                    <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden border border-slate-200">
+                      <div 
+                        className={`h-full transition-all duration-500 bg-purple-500`} 
+                        style={{ width: `${Math.min((currentPhotoCount / REQUIRED_PHOTOS) * 100, 100)}%` }} 
+                      />
+                    </div>
+                    
+                    <p className={`text-[11px] sm:text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
+                      {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${REQUIRED_PHOTOS - currentPhotoCount} more photo(s)...`}
+                    </p>
+
+                    <div className="mt-5 pt-5 border-t border-slate-100 w-full">
+                      <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer uppercase tracking-widest transition-colors">
+                        Or upload directly from computer
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
+                          if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setQrUrl(null)} className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
+                      <ChevronLeft size={20} strokeWidth={2.5} />
+                    </button>
+                    {/* 🌟 DIV ONCLICK EXPLICITLY CALLS DB INSERTION LOGIC */}
+                    <div 
+                      onClick={(e) => {
+                        if (hasEnoughPhotos && !isSubmittingReplace) handleReplaceSubmit(e);
+                      }} 
+                      className={`flex-1 h-12 rounded-xl text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${(!hasEnoughPhotos || isSubmittingReplace) ? 'opacity-50 cursor-not-allowed bg-purple-600/50' : 'bg-purple-600 hover:bg-purple-700 hover:scale-[1.02] active:scale-95'}`}
+                    >
+                      {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -963,8 +1334,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const generateMobileHandoff = () => {
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
-    // 🌟 1. HANDSHAKE: ADD MODE=UPLOAD_ONLY SO DATABASE ISNT HIT TWICE
-    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&mode=upload_only`;
+    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}`;
     setQrUrl(url); setShowQR(true);
   };
 
@@ -991,7 +1361,6 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
         const baseUrl = window.location.origin;
         const cat = targetAsset.category;
         const finalNotes = `[RETURN REQUEST] ${formText}`;
-        // 🌟 Passing auditType=RETURN so mobile-audit handles the rest
         const url = `${baseUrl}/mobile-audit?assetId=${targetAsset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
         setQrUrl(url); setShowQR(true);
       } catch(e) {
@@ -1005,10 +1374,192 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
     }
   };
 
-  // ... (Rest of Modal rendering omitted for brevity, identical to previous snippet)
+  const getHeaderIcon = () => {
+    if (type === 'RETURN') return <LogOut size={24} strokeWidth={2} />;
+    if (type === 'REQUEST') return <PlusCircle size={24} strokeWidth={2} />;
+    if (type === 'INSPECTION') return <ClipboardCheck size={24} strokeWidth={2} />;
+    return <Ticket size={24} strokeWidth={2} />;
+  };
+
+  const getHeaderColors = () => {
+    if (type === 'RETURN') return 'bg-white border border-slate-200 text-orange-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (type === 'REQUEST') return 'bg-white border border-slate-200 text-emerald-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    if (type === 'INSPECTION') return 'bg-white border border-slate-200 text-amber-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+    return 'bg-white border border-slate-200 text-purple-500 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+  };
+
+  const getTitle = () => {
+    if (type === 'RETURN') return 'Asset Return Request';
+    if (type === 'REQUEST') return 'Request New Gear';
+    if (type === 'INSPECTION') return 'Device Compliance Audit';
+    return 'Raise Support Ticket';
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pt-24 pb-8">
-      {/* Renders properly via the modal component */}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10">
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/20 backdrop-blur-md"
+      />
+      
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }} 
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        className="relative w-full max-w-2xl max-h-[80vh] sm:max-h-[85vh] rounded-[2rem] flex flex-col overflow-hidden bg-white/80 backdrop-blur-3xl border border-white shadow-[0_32px_80px_rgba(0,0,0,0.15)]"
+      >
+        <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-4 flex justify-between items-center shrink-0 border-b border-slate-200/60">
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-3xl flex items-center justify-center ${getHeaderColors()}`}>
+               {getHeaderIcon()}
+            </div>
+            <div>
+              <h2 className="text-[14px] sm:text-[16px] font-bold uppercase tracking-widest text-slate-900">{getTitle()}</h2>
+              {type !== 'RETURN' && <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 text-slate-500">{type === 'INSPECTION' ? 'Visual verification' : 'Portal Submission'}</p>}
+              {type === 'RETURN' && <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 text-slate-500">Initiate IT Handover</p>}
+            </div>
+          </div>
+          <button onClick={onClose} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-105 active:scale-95 ${theme.glassButton}`}>
+            <X size={18} strokeWidth={2.5} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 sm:px-6 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-4 custom-scrollbar">
+          {showQR ? (
+            <div className="py-4 text-center space-y-5 animate-in zoom-in-95 duration-300">
+              <div>
+                <h4 className="text-base sm:text-lg font-bold uppercase tracking-widest text-slate-900">Mobile Device Handoff</h4>
+                <p className="text-[11px] sm:text-xs font-medium mt-1.5 text-slate-500">Scan this code with your phone camera to take certified watermark photos of the asset.</p>
+              </div>
+              <div className="p-4 sm:p-5 rounded-[2rem] inline-block shadow-2xl mx-auto border bg-white border-slate-200">
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
+              </div>
+              
+              <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
+                <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
+                <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
+                  <p>Follow the instructions on your mobile device to complete this process.</p>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <form id="genericModalForm" onSubmit={handleLivePostgresSubmit} className="space-y-4">
+              
+              {needsLock && (
+                <div className="p-4 sm:p-5 rounded-3xl space-y-3 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)]">
+                  <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-rose-600">🔒 Security Verification Required</p>
+                  <div className="flex gap-2 sm:gap-3">
+                    <input disabled={isUnlocked} value={serialInput} onChange={e=>setSerialInput(e.target.value)} placeholder={user.id === 'guest-mock-uuid' ? 'Type anything for Guest...' : 'Type exact Tag ID or S/N...'} className="flex-1 px-4 py-3 rounded-2xl text-[12px] sm:text-[13px] font-semibold outline-none transition-all bg-white/60 border border-slate-200 text-[#0f172a] placeholder-[#818b9c] focus:ring-2 focus:ring-orange-500/20"/>
+                    {!isUnlocked && <button type="button" onClick={handleAttemptUnlock} className="px-5 sm:px-6 bg-rose-500 hover:bg-rose-600 text-white font-bold uppercase tracking-widest text-[10px] sm:text-[11px] rounded-2xl cursor-pointer transition-all shadow-[0_4px_15px_rgba(244,63,94,0.4)] border border-rose-400">Verify</button>}
+                  </div>
+                  {lockError && <p className="text-[10px] sm:text-[11px] text-rose-500 font-bold px-1">Incorrect device code.</p>}
+                </div>
+              )}
+
+              {type === 'RETURN' && (
+                <>
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                      Select Assigned Asset
+                    </label>
+                    <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]">
+                      <select
+                        value={selectedReturnId}
+                        onChange={(e) => setSelectedReturnId(e.target.value)}
+                        required
+                        className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900"
+                      >
+                        <option value="" disabled>Choose Hardware...</option>
+                        {assignedAssets?.map((a: any) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name || a.asset_name} ({a.asset_tag})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {selectedReturnId && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0, marginTop: -5 }} 
+                        animate={{ opacity: 1, height: 'auto', marginTop: 0 }} 
+                        exit={{ opacity: 0, height: 0, marginTop: -5 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-4 py-3 rounded-2xl flex gap-4 bg-white/40 backdrop-blur-xl border border-white/60 shadow-sm">
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Tag ID</span>
+                            <span className="text-[11px] sm:text-[12px] font-semibold break-words text-slate-900">
+                              {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.asset_tag}
+                            </span>
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest block text-slate-500">Serial Number</span>
+                            <span className="text-[11px] sm:text-[12px] font-semibold break-words text-slate-900">
+                              {assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId))?.serial_number || 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
+
+              {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
+                <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300">
+                  <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Current Asset Condition</label>
+                  <div className={`relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] ${type === 'RETURN' ? 'hover:border-orange-300 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]' : 'hover:border-amber-300 hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]'}`}>
+                    <select value={formCondition} onChange={e=>setFormCondition(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                      <option>Pristine / Flawless</option>
+                      <option>Good / Minor Scratches</option>
+                      <option>Poor / Damaged (Requires Fix)</option>
+                      <option>Non-Functional / Dead</option>
+                    </select>
+                    <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5 sm:gap-2">
+                <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                  {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}
+                </label>
+                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 py-3 rounded-2xl text-[12px] sm:text-[13px] font-semibold transition-all outline-none resize-none min-h-[80px] bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 ${type === 'RETURN' ? 'focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300' : 'focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300'}`}/>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <div className="px-5 py-4 sm:px-6 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60">
+          {showQR ? (
+            <button onClick={onClose} className={`w-full py-3 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+              Close Portal
+            </button>
+          ) : (
+            <>
+              <button onClick={onClose} className={`flex-1 py-3 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                form="genericModalForm"
+                disabled={needsLock && !isUnlocked} 
+                className={`flex-1 py-3 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
+                  type === 'RETURN' 
+                    ? 'bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]' 
+                    : 'bg-amber-500 shadow-[0_4px_15px_rgba(245,158,11,0.4)] border border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]'
+                }`}
+              >
+                Generate QR
+              </button>
+            </>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
