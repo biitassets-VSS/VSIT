@@ -126,6 +126,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
            setNotifications(prev => [payload.new, ...prev].slice(0, 20));
         })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
+           setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new : n));
+        })
         .subscribe();
       
       return () => { supabase.removeChannel(adminChannel); };
@@ -203,14 +206,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </>
           )}
 
+          {/* 🌟 NOTIFICATIONS BELL */}
           <div className="relative">
             <button 
               onClick={() => setIsNotifOpen(!isNotifOpen)} 
               className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer active:scale-95 ${isNotifOpen ? 'bg-orange-500/10 border border-orange-500/50 text-orange-600 shadow-inner' : theme.buttonGlass}`}
             >
               <Bell size={18} strokeWidth={2.5} className={unreadCount > 0 ? 'animate-pulse text-orange-500' : ''} />
+              
+              {/* 🌟 FIXED BADGE COLOR: Orange Gradient instead of harsh Red/Black */}
               {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-rose-500 text-white text-[10px] font-black rounded-full border-2 border-white dark:border-zinc-900 shadow-sm z-10">
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-gradient-to-tr from-orange-500 to-purple-600 text-white text-[10px] font-black rounded-full border border-white/40 shadow-[0_2px_8px_rgba(249,115,22,0.6)] z-10">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -221,10 +227,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div className={`absolute top-14 right-0 w-80 sm:w-96 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col z-50 backdrop-blur-3xl border ${isDarkMode ? 'bg-zinc-900/80 border-white/10' : 'bg-white/60 border-white/80'}`}>
                   <div className="p-5 border-b border-white/20 bg-white/40 flex justify-between items-center">
                     <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Alerts & Updates</h3>
-                    <button onClick={async () => {
-                      await supabase.from('notifications').update({ is_read: true }).eq('target_role', 'admin').eq('is_read', false);
-                      setNotifications(prev => prev.map(n => ({...n, is_read: true})));
-                    }} className="text-[9px] font-bold text-orange-600 uppercase tracking-widest cursor-pointer hover:underline">Mark all read</button>
+                    <button 
+                      onClick={async () => {
+                        // Gather IDs so the update firmly writes to the DB without silently failing on RLS scopes
+                        const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+                        if (unreadIds.length > 0) {
+                          const { error } = await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
+                          if (!error) {
+                            setNotifications(prev => prev.map(n => ({...n, is_read: true})));
+                          }
+                        }
+                      }} 
+                      className="text-[9px] font-bold text-orange-600 uppercase tracking-widest cursor-pointer hover:underline"
+                    >
+                      Mark all read
+                    </button>
                   </div>
                   <div className="max-h-80 overflow-y-auto custom-scrollbar flex flex-col bg-white/20">
                     {notifications.length === 0 ? (
@@ -233,15 +250,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       notifications.map(notif => (
                         <div key={notif.id} className={`p-5 border-b border-white/20 transition-all hover:bg-white/50 cursor-pointer ${notif.is_read ? 'opacity-60' : 'bg-orange-50/40'}`} onClick={async () => {
                            if (!notif.is_read) {
-                             await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
-                             setNotifications(prev => prev.map(n => n.id === notif.id ? {...n, is_read: true} : n));
+                             const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
+                             if (!error) {
+                               setNotifications(prev => prev.map(n => n.id === notif.id ? {...n, is_read: true} : n));
+                             }
                            }
                         }}>
                           <div className="flex justify-between items-start mb-1.5">
                             <span className={`text-[11px] font-bold uppercase tracking-widest ${notif.is_read ? theme.textMain : 'text-orange-600'}`}>{notif.title}</span>
                             {!notif.is_read && <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />}
                           </div>
-                          {/* 🌟 Fixed theme.textSub to theme.textMuted */}
                           <p className={`text-[13px] font-medium leading-snug ${theme.textMuted}`}>{notif.message}</p>
                           <p className="text-[9px] font-bold text-slate-400 mt-2.5 uppercase tracking-widest">{timeAgo(notif.created_at)}</p>
                         </div>
