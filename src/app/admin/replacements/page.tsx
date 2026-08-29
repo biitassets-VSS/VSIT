@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, RefreshCw, CheckCircle2, Clock, 
-  Laptop, User, Search, XCircle, AlertCircle, Wrench, X, Image as ImageIcon
+  Laptop, User, Search, XCircle, AlertCircle, Wrench, X, Image as ImageIcon, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
