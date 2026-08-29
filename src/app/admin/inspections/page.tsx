@@ -182,7 +182,7 @@ function AdminInspectionReviewContent() {
     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
   };
 
-  // 🌟 CLICK-TO-ZOOM HANDLERS (Calculates exact click position on image)
+  // CLICK-TO-ZOOM HANDLERS
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (zoomProps.isZoomed) {
       setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
@@ -767,7 +767,7 @@ function AdminInspectionReviewContent() {
 
   // 🌟 TRUE LIQUID GLASS THEME TOKENS EVERYWHERE
   const liquidGlass = {
-    card: "bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-[2rem]",
+    card: "bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-[2rem]",
     pill: "bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-full",
     inner: "bg-white/30 backdrop-blur-xl border border-white/50 shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)] rounded-2xl",
     buttonHover: "hover:bg-white/60 hover:shadow-[0_0_20px_rgba(255,255,255,0.5)] transition-all",
@@ -785,8 +785,8 @@ function AdminInspectionReviewContent() {
     <div className="min-h-[calc(100vh-6rem)] bg-linear-to-br from-rose-50/40 via-orange-50/30 to-indigo-50/30 p-4 sm:p-6 lg:p-8 relative z-10 font-sans text-slate-900">
       
       {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
-      {gallery.isOpen && (
-        <div className="fixed inset-0 z-[99999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center overflow-hidden">
+      {mounted && gallery.isOpen && createPortal(
+        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 sm:p-12 overflow-hidden">
           
           {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
           <button 
@@ -794,45 +794,46 @@ function AdminInspectionReviewContent() {
               setGallery({ isOpen: false, images: [], index: 0 });
               setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
             }}
-            className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer transition-transform active:scale-95"
-            style={{ zIndex: 100000 }} // Absolute guarantee it sits on top
+            className="absolute top-6 right-6 w-12 h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[1000000] transition-transform active:scale-95"
           >
             <X size={24} strokeWidth={2.5} />
           </button>
 
           {/* Header Info */}
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 z-[99999] flex flex-col pointer-events-none">
-            <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10 w-fit">
+          <div className="absolute top-6 left-6 z-[1000000] flex flex-col pointer-events-none">
+            <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-white bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
             </span>
-            <span className="text-[8px] md:text-[10px] text-slate-300 uppercase tracking-widest mt-2 font-bold bg-black/50 px-3 py-1 rounded-full w-fit">
+            <span className="text-[8px] md:text-[10px] text-white uppercase tracking-widest mt-2 font-bold bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 w-fit shadow-sm">
               {zoomProps.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
             </span>
           </div>
           
-          {/* Interactive Magnifier Viewport */}
-          <div 
-            className="w-full h-full relative flex items-center justify-center overflow-hidden p-0"
-            onMouseMove={handleImageMouseMove}
-            onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
-            onClick={handleImageClick}
-          >
-            <img 
-              src={gallery.images[gallery.index]} 
-              alt="Expanded capture" 
-              style={{ 
-                transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
-                transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
-                transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
-              }}
-              className={`max-w-full max-h-[100vh] object-contain shadow-[0_0_40px_rgba(168,85,247,0.15)] transition-transform ${zoomProps.isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`} 
-              draggable={false}
-            />
+          {/* 🌟 GLASS FRAME FOR IMAGE */}
+          <div className="relative w-full max-w-5xl h-full max-h-[80vh] flex-1 flex flex-col items-center justify-center p-3 sm:p-4 rounded-[2rem] bg-white/10 backdrop-blur-3xl border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.3)] mt-8">
+            <div 
+              className="w-full h-full relative flex items-center justify-center overflow-hidden rounded-2xl bg-black/50"
+              onMouseMove={handleImageMouseMove}
+              onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
+              onClick={handleImageClick}
+            >
+              <img 
+                src={gallery.images[gallery.index]} 
+                alt="Expanded capture" 
+                style={{ 
+                  transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
+                  transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
+                  transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                }}
+                className={`max-w-full max-h-full object-contain shadow-2xl transition-transform ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
+                draggable={false}
+              />
+            </div>
           </div>
           
           {/* Navigation Controls */}
           {gallery.images.length > 1 && (
-             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[99999]">
+             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -840,7 +841,7 @@ function AdminInspectionReviewContent() {
                     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
                   }}
                   disabled={gallery.index === 0}
-                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
+                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-white/20 backdrop-blur-xl border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] rounded-full text-white disabled:opacity-20 active:scale-95 transition-all hover:bg-white/30 cursor-pointer"
                 >
                   <ChevronLeft size={28} />
                 </button>
@@ -851,13 +852,14 @@ function AdminInspectionReviewContent() {
                     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
                   }}
                   disabled={gallery.index === gallery.images.length - 1}
-                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
+                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-white/20 backdrop-blur-xl border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] rounded-full text-white disabled:opacity-20 active:scale-95 transition-all hover:bg-white/30 cursor-pointer"
                 >
                   <ChevronRight size={28} />
                 </button>
              </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ASSET LIFECYCLE MODAL */}

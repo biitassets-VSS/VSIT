@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Camera, Lock, Loader2, MonitorSmartphone, Mouse, Keyboard, Headphones, CheckCircle2, Scan, X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -93,6 +94,7 @@ function MobileVerifyContent() {
   const [uploadedCount, setUploadedCount] = useState(0);
   const [success, setSuccess] = useState(false);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
   
   // Gallery & Interactive Zoom State
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
@@ -117,6 +119,7 @@ function MobileVerifyContent() {
   const currentStepInfo = activeSteps[Math.min(uploadedCount, activeSteps.length - 1)] || activeSteps[0];
 
   useEffect(() => {
+    setMounted(true);
     if (!sessionId) {
       setLoading(false);
       return;
@@ -141,9 +144,7 @@ function MobileVerifyContent() {
     if (zoomProps.isZoomed) {
       setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
     } else {
-      const img = e.currentTarget.querySelector('img');
-      if (!img) return;
-      const rect = img.getBoundingClientRect();
+      const rect = e.currentTarget.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
       setZoomProps({ isZoomed: true, originX: `${Math.max(0, Math.min(x, 100))}%`, originY: `${Math.max(0, Math.min(y, 100))}%` });
@@ -159,7 +160,7 @@ function MobileVerifyContent() {
     }
   };
 
-  // 🌟 GLASS CARD WATERMARK ENGINE
+  // 🌟 PERFECTED PURE TRANSPARENT GLASS ENGINE (NO EMOJIS, NO BACKGROUND)
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -182,95 +183,61 @@ function MobileVerifyContent() {
         ctx.drawImage(img, 0, 0, width, height);
 
         const baseScale = canvas.width / 1600; 
+        
+        // Normal, readable font size
         const fontSize = Math.max(20, Math.floor(26 * baseScale));
-        const padding = Math.floor(35 * baseScale);
-        const lineHeight = Math.floor(fontSize * 1.6);
+        const lineHeight = Math.floor(fontSize * 1.5);
         
-        ctx.font = `500 ${fontSize}px "Segoe UI", Roboto, Helvetica, sans-serif`;
-        
-        // Watermark Text Elements
-        const t1 = `VERIFIED AUDIT ✓`;
-        const t2 = `${staffName} (${empCode})`;
-        const t3 = `HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`; 
-        const t4 = `TIMESTAMP: ${new Date().toLocaleString('en-IN')}`;
+        const contentX = Math.floor(40 * baseScale);
+        let contentY = canvas.height - (lineHeight * 5.5); 
 
-        // Calculate card dimensions dynamically based on longest text
-        const maxWidth = Math.max(
-          ctx.measureText(t1).width,
-          ctx.measureText(t2).width,
-          ctx.measureText(t3).width,
-          ctx.measureText(t4).width
-        ) + (padding * 3); 
+        // 🌟 EMBOSSED CLEAR GLASS TEXT FUNCTION
+        const drawClearGlassText = (text: string, x: number, y: number, size: number, align: 'left' | 'right' = 'left') => {
+          ctx.font = `800 ${size}px "Arial Black", "Segoe UI Black", Arial, sans-serif`;
+          ctx.textAlign = align;
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
 
-        const cardWidth = maxWidth;
-        const cardHeight = padding * 2 + (lineHeight * 3.5);
-        
-        // 🌟 PLACEMENT: Bottom Right Corner
-        const cardX = canvas.width - cardWidth - padding;
-        const cardY = canvas.height - cardHeight - padding;
+          const offset = Math.max(1, size * 0.03);
 
-        // 1. Draw Frosted Glass Card Shape
-        const cornerRadius = 16 * baseScale;
-        ctx.beginPath();
-        ctx.moveTo(cardX + cornerRadius, cardY);
-        ctx.lineTo(cardX + cardWidth - cornerRadius, cardY);
-        ctx.quadraticCurveTo(cardX + cardWidth, cardY, cardX + cardWidth, cardY + cornerRadius);
-        ctx.lineTo(cardX + cardWidth, cardY + cardHeight - cornerRadius);
-        ctx.quadraticCurveTo(cardX + cardWidth, cardY + cardHeight, cardX + cardWidth - cornerRadius, cardY + cardHeight);
-        ctx.lineTo(cardX + cornerRadius, cardY + cardHeight);
-        ctx.quadraticCurveTo(cardX, cardY + cardHeight, cardX, cardY + cardHeight - cornerRadius);
-        ctx.lineTo(cardX, cardY + cornerRadius);
-        ctx.quadraticCurveTo(cardX, cardY, cardX + cornerRadius, cardY);
-        ctx.closePath();
+          // 1. Bottom-Right Dark Edge (Inner Shadow for depth)
+          ctx.lineWidth = Math.max(1, size * 0.04);
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.strokeText(text, x + offset, y + offset);
 
-        // Card Drop Shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-        ctx.shadowBlur = 25 * baseScale;
-        ctx.shadowOffsetX = 10 * baseScale;
-        ctx.shadowOffsetY = 10 * baseScale;
-        
-        // Card Fill (Glassy transparent white)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'; 
-        ctx.fill();
+          // 2. Top-Left Bright Edge (Specular highlight for glass reflection)
+          ctx.lineWidth = Math.max(1.5, size * 0.05);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.strokeText(text, x - offset, y - offset);
 
-        // Card Border (Soft Specular Edge highlight)
-        ctx.shadowColor = 'transparent';
-        ctx.lineWidth = 1.5 * baseScale;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.stroke();
+          // 3. Very faint white fill to give it physical substance without covering the image
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; 
+          ctx.fillText(text, x, y);
 
-        // 2. Draw Text (No strokes/outlines, just soft blur shadow for readability)
-        const textX = cardX + padding;
-        let textY = cardY + padding + fontSize;
+          // 4. Outer Drop Shadow (Helps readability over busy background textures)
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+          ctx.shadowBlur = Math.max(4, size * 0.15);
+          ctx.shadowOffsetX = Math.max(2, size * 0.05);
+          ctx.shadowOffsetY = Math.max(2, size * 0.05);
+          ctx.fillText(text, x, y);
 
-        const drawGlassText = (text: string, x: number, y: number, isBullet = true) => {
-          ctx.font = `500 ${fontSize}px "Segoe UI", Roboto, Helvetica, sans-serif`;
-          ctx.textAlign = 'left';
-          
-          // 🌟 Soft blur shadow to make text pop without ugly strokes
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-          ctx.shadowBlur = Math.max(4, fontSize * 0.2);
-          ctx.shadowOffsetX = 1;
-          ctx.shadowOffsetY = 1;
-          
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
-          
-          if (isBullet) {
-             ctx.fillText(`○  ${text}`, x, y);
-          } else {
-             ctx.fillText(`    ${text}`, x, y); // Indent to align with bullet text
-          }
-          ctx.shadowColor = 'transparent';
+          ctx.shadowColor = 'transparent'; // Reset
+          ctx.textAlign = 'left'; // Reset
         };
 
-        // Render Lines
-        drawGlassText(t1, textX, textY, true);
-        textY += lineHeight;
-        drawGlassText(t2, textX, textY, true);
-        textY += lineHeight * 0.8;
-        drawGlassText(t3, textX, textY, false); 
-        textY += lineHeight;
-        drawGlassText(t4, textX, textY, true);
+        // Header (No emojis)
+        drawClearGlassText(`VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left');
+        drawClearGlassText(`VERIFIED AUDIT`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right');
+
+        // Body Lines (No emojis)
+        contentY += lineHeight;
+        drawClearGlassText(`CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize);
+        
+        contentY += lineHeight;
+        drawClearGlassText(`TIMESTAMP: ${new Date().toLocaleString('en-IN')}`, contentX, contentY, fontSize);
+        
+        contentY += lineHeight;
+        drawClearGlassText(`HARDWARE: ${category.toUpperCase()} | ${getDeviceName()}`, contentX, contentY, fontSize);
 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -456,8 +423,8 @@ function MobileVerifyContent() {
       )}
 
       {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
-      {gallery.isOpen && (
-        <div className="fixed inset-0 z-[99999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center overflow-hidden">
+      {mounted && gallery.isOpen && createPortal(
+        <div className="fixed inset-0 z-[999999] bg-black/98 backdrop-blur-md flex flex-col items-center justify-center overflow-hidden">
           
           {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
           <button 
@@ -465,14 +432,13 @@ function MobileVerifyContent() {
               setGallery({ isOpen: false, images: [], index: 0 });
               setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
             }}
-            className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer transition-transform active:scale-95"
-            style={{ zIndex: 100000 }} // Absolute guarantee it sits on top
+            className="absolute top-4 right-4 md:top-6 md:right-6 w-12 h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[1000000] transition-transform active:scale-95"
           >
             <X size={24} strokeWidth={2.5} />
           </button>
 
           {/* Header Info */}
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 z-[99999] flex flex-col pointer-events-none">
+          <div className="absolute top-6 left-6 z-[1000000] flex flex-col pointer-events-none">
             <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-purple-400 bg-black/50 px-4 py-1.5 rounded-full border border-white/10 w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
             </span>
@@ -492,18 +458,18 @@ function MobileVerifyContent() {
               src={gallery.images[gallery.index]} 
               alt="Expanded capture" 
               style={{ 
-                transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
+                transform: zoomProps.isZoomed ? `scale(3)` : `scale(1)`, 
                 transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
                 transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
               }}
-              className={`max-w-full max-h-[100vh] object-contain shadow-[0_0_40px_rgba(168,85,247,0.15)] transition-transform ${zoomProps.isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`} 
+              className={`max-w-full max-h-[100vh] object-contain shadow-[0_0_40px_rgba(168,85,247,0.15)] transition-transform ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
               draggable={false}
             />
           </div>
           
           {/* Navigation Controls */}
           {gallery.images.length > 1 && (
-             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[99999]">
+             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -528,7 +494,8 @@ function MobileVerifyContent() {
                 </button>
              </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
