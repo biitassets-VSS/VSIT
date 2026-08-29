@@ -79,7 +79,7 @@ function MobileVerifyContent() {
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
   const category = searchParams.get('cat') || 'Hardware';
   
-  // 🌟 Routing Parameters
+  // Routing Parameters
   const auditType = searchParams.get('auditType') || 'INSPECTION';
   const mode = searchParams.get('mode') || ''; // 'upload_only' bypasses DB insertion
   const cond = searchParams.get('cond') || 'Not Specified';
@@ -261,9 +261,10 @@ function MobileVerifyContent() {
           status: 'Pending Return'
         });
 
+        // 🌟 Sets asset status to Pending Return so Staff Dashboard recognizes it
         await supabase.from('assets').update({ 
-          status: 'Return Requested', 
-          inspection_status: 'Approved', 
+          status: 'Pending Return', 
+          inspection_status: 'Pending Review', 
           last_inspection_date: new Date().toISOString()
         }).eq('id', assetId);
 

@@ -18,7 +18,6 @@ function AdminReplacementsContent() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // 🌟 THEME SYNC
   useEffect(() => {
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('vsit_theme') === 'dark';
@@ -31,7 +30,6 @@ function AdminReplacementsContent() {
     
     fetchReplacements(true);
 
-    // 🌟 REALTIME SYNC (Targeting the replacements table)
     const realtimeChannel = supabase
       .channel('admin_replacements_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'replacements' }, () => fetchReplacements(false))
@@ -48,7 +46,6 @@ function AdminReplacementsContent() {
     else setIsRefreshing(true);
 
     try {
-      // Fetch directly from the dedicated replacements table
       const { data: replData, error } = await supabase
         .from('replacements')
         .select('*')
@@ -70,25 +67,44 @@ function AdminReplacementsContent() {
 
     setUpdatingId(item.id);
     try {
-      // 1. Update the replacement record
       await supabase.from('replacements').update({ 
         status: action, 
         admin_remarks: remarks 
       }).eq('id', item.id);
 
-      // 2. If Resolved or Rejected, update the original asset to remove the "Replacement Requested" block
-      if (action === 'Resolved' || action === 'Rejected') {
+      // 🌟 IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
+      if (action === 'Resolved') {
         await supabase.from('assets').update({
-          status: 'Assigned',
-          admin_remarks: `Replacement Request ${action}: ${remarks}`
+          status: 'In Stock',
+          assigned_to: null, // Unassigns the asset
+          inspection_status: null,
+          admin_remarks: `Approved: ${remarks}`
         }).eq('id', item.old_asset_id);
 
-        // 3. Send Notification back to the staff member
         await supabase.from('notifications').insert({
           target_user: item.user_id || item.user_email,
-          title: action === 'Resolved' ? '✅ Replacement Approved' : '❌ Replacement Denied',
-          message: `Your replacement request for ${item.asset_tag} was marked as ${action}. Notes: ${remarks}`,
-          type: action === 'Resolved' ? 'success' : 'error',
+          target_role: 'staff',
+          title: '✅ Request Approved',
+          message: `Request received and admin will assign new assets. Notes: ${remarks}`,
+          type: 'success',
+          is_read: false
+        });
+
+      // 🌟 IF REJECTED: LEAVE ASSIGNED, UPDATE STATUS SO STAFF SEES "REJECTED"
+      } else if (action === 'Rejected') {
+        const isReturn = (item.status || '').toLowerCase().includes('return') || (item.reason || '').toLowerCase().includes('return');
+        
+        await supabase.from('assets').update({
+          status: isReturn ? 'Return Rejected' : 'Replacement Rejected',
+          admin_remarks: `Denied: ${remarks}`
+        }).eq('id', item.old_asset_id);
+
+        await supabase.from('notifications').insert({
+          target_user: item.user_id || item.user_email,
+          target_role: 'staff',
+          title: '❌ Request Denied',
+          message: `Your request for ${item.asset_tag} was rejected. Notes: ${remarks}`,
+          type: 'error',
           is_read: false
         });
       }
@@ -110,24 +126,19 @@ function AdminReplacementsContent() {
 
   const pendingCount = replacementRequests.filter(r => (r.status || '').toLowerCase().includes('pending')).length;
 
-  // 🎨 PURE MAC OS 2026 FROSTED GLASS THEME (Matched exactly to admin dashboard)
   const theme = {
     bg: 'bg-transparent',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-900',
     textSub: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
-    
     glassCard: isDarkMode 
       ? 'bg-zinc-900/30 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
       : 'bg-white/20 backdrop-blur-3xl border border-white/40 shadow-[0_8px_32px_rgba(31,38,135,0.05)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]',
-    
     glassInnerCard: isDarkMode 
       ? 'bg-black/20 backdrop-blur-2xl border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
       : 'bg-white/30 backdrop-blur-xl border border-white/50 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)]',
-    
     glassItem: isDarkMode
       ? 'bg-white/5 backdrop-blur-2xl border border-white/10 transition-all duration-300 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
       : 'bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_4px_16px_rgba(0,0,0,0.03)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-300',
-    
     inputBg: isDarkMode 
       ? 'bg-black/40 border border-white/20 text-white shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 placeholder-zinc-500' 
       : 'bg-white/30 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.8)] text-slate-800 focus:bg-white/50 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 placeholder-slate-500',
@@ -135,13 +146,11 @@ function AdminReplacementsContent() {
 
   return (
     <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden font-sans antialiased pb-12 transition-colors duration-1000`}>
-      {/* 🌟 GLOBAL BACKGROUND ORBS */}
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
       <div className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
-        {/* BRAND HEADER */}
         <div className={`${theme.glassCard} rounded-[1.5rem] p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6`}>
           <div className="flex items-center gap-3.5 sm:gap-5">
             <button onClick={() => router.push('/admin')} className={`p-2.5 sm:p-3 ${theme.glassItem} rounded-2xl ${theme.textSub} transition-all cursor-pointer hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] dark:hover:border-orange-500`}>
@@ -173,7 +182,6 @@ function AdminReplacementsContent() {
           </button>
         </div>
 
-        {/* SEARCH BAR */}
         <div className={`p-2 rounded-2xl transition-all shadow-sm flex items-center focus-within:ring-4 focus-within:ring-orange-500/20 ${theme.inputBg}`}>
           <div className="relative w-full flex items-center">
             <Search size={18} className={`absolute left-4 ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'}`} />
@@ -187,7 +195,6 @@ function AdminReplacementsContent() {
           </div>
         </div>
 
-        {/* REPLACEMENTS FEED */}
         {loading ? (
           <div className="w-full py-32 flex flex-col items-center justify-center gap-4">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500"></div>
@@ -206,6 +213,7 @@ function AdminReplacementsContent() {
               const isPending = status.includes('pending');
               const isResolved = status === 'approved' || status === 'replaced' || status === 'resolved' || status === 'closed';
               const isRejected = status === 'rejected' || status === 'declined';
+              const isReturn = status.includes('return') || (item.reason || '').toLowerCase().includes('return');
 
               return (
                 <motion.div 
@@ -245,11 +253,10 @@ function AdminReplacementsContent() {
 
                   <div className="flex flex-col lg:flex-row gap-6 items-stretch">
                     
-                    {/* LEFT: FAULTY ASSET DETAILS */}
                     <div className={`flex-1 rounded-3xl p-5 relative overflow-hidden ${theme.glassInnerCard}`}>
                       <div className="absolute top-0 left-0 w-1.5 h-full bg-[#fb7185]"></div>
                       <h4 className={`text-[11px] font-bold uppercase tracking-widest mb-4 flex items-center gap-2 ${isDarkMode ? 'text-rose-400' : 'text-[#e11d48]'}`}>
-                        <AlertCircle size={16}/> Reported Faulty Hardware
+                        <AlertCircle size={16}/> {isReturn ? 'Return Hardware' : 'Original Faulty Hardware'}
                       </h4>
                       
                       <div className="space-y-3">
@@ -272,7 +279,6 @@ function AdminReplacementsContent() {
                           <p className={`text-[13px] font-medium leading-relaxed whitespace-pre-wrap ${theme.textMain}`}>{item.reason || 'No description provided.'}</p>
                         </div>
 
-                        {/* PHOTO EVIDENCE */}
                         {item.photos && item.photos.length > 0 && (
                           <div className={`p-4 rounded-[1rem] flex flex-col gap-2 ${theme.glassItem}`}>
                             <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14}/> Photo Evidence Provided</span>
@@ -292,7 +298,6 @@ function AdminReplacementsContent() {
                       <ArrowRight size={28} />
                     </div>
 
-                    {/* RIGHT: ADMIN RESOLUTION ACTIONS */}
                     <div className={`flex-1 rounded-3xl p-5 relative overflow-hidden transition-all ${theme.glassInnerCard}`}>
                       <div className={`absolute top-0 left-0 w-1.5 h-full ${isResolved ? 'bg-[#34d399]' : isRejected ? 'bg-[#fb7185]' : 'bg-[#fb923c]'}`}></div>
                       
@@ -324,7 +329,7 @@ function AdminReplacementsContent() {
                                   <Laptop size={16} />
                                 </div>
                                 <p className={`text-xs font-semibold leading-snug ${theme.textSub}`}>
-                                  Staff dashboard has been updated. If swapping, ensure the old device is recovered.
+                                  Staff dashboard has been updated. The hardware is unassigned from the profile.
                                 </p>
                               </div>
                             )}
@@ -337,7 +342,7 @@ function AdminReplacementsContent() {
                               <Wrench size={24} className={theme.textSub}/>
                             </div>
                             <p className={`text-[12px] font-medium max-w-[200px] leading-relaxed ${theme.textSub}`}>
-                              Review the provided evidence and determine if a hardware replacement is warranted.
+                              Review the provided evidence and determine if a hardware action is warranted.
                             </p>
                           </div>
 
