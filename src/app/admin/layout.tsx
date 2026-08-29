@@ -9,6 +9,7 @@ import {
   Megaphone, Settings
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { AnimatePresence } from 'framer-motion';
 
 interface AdminProfile {
   name: string;
@@ -16,6 +17,22 @@ interface AdminProfile {
   initials: string;
   role?: string;
 }
+
+const timeAgo = (dateString: string) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return `Yesterday`;
+  return `${days}d ago`;
+};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -27,10 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [activeAlert, setActiveAlert] = useState<any>(null);
-  
-  const [liveTicketCount, setLiveTicketCount] = useState(0);
-  const [liveInspCount, setLiveInspCount] = useState(0);
+  const unreadCount = notifications.filter(n => !n.is_read).length;
   
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
     name: 'Loading...', email: '...', initials: 'AD', role: 'admin'
@@ -94,23 +108,55 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => observer.disconnect();
   }, []);
 
+  // 🌟 REAL-TIME NOTIFICATIONS SYNC
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const { data } = await supabase.from('notifications')
+        .select('*')
+        .eq('target_role', 'admin')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (data) setNotifications(data);
+    };
+
+    if (!isCheckingAuth && !layoutCrash) {
+      fetchNotifications();
+      
+      const adminChannel = supabase.channel('admin-layout-feed')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `target_role=eq.admin` }, (payload) => {
+           setNotifications(prev => [payload.new, ...prev].slice(0, 20));
+        })
+        .subscribe();
+      
+      return () => { supabase.removeChannel(adminChannel); };
+    }
+  }, [isCheckingAuth, layoutCrash]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});
     localStorage.clear();
     router.replace('/');
   };
 
+  const handleTriggerAnnouncement = () => {
+    // Triggers the modal located inside the dashboard page.tsx
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('open-broadcast-modal');
+      window.dispatchEvent(event);
+      if ((window as any).openBroadcastModal) {
+        (window as any).openBroadcastModal();
+      }
+    }
+  };
+
   const theme = {
-    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]',
+    bg: isDarkMode ? 'bg-[#0a0a0a]' : 'bg-[#FFF9F2]', // Assuming underlying app background handles color
     glassHeader: isDarkMode 
-      ? 'bg-zinc-900/40 backdrop-blur-[40px] border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]' 
-      : 'bg-white/40 backdrop-blur-[40px] backdrop-saturate-[1.5] border-b border-white/70 shadow-[0_4px_30px_rgba(31,38,135,0.05)]',
-    glassPanel: isDarkMode 
-      ? 'bg-zinc-900/85 backdrop-blur-3xl border border-zinc-700/80 shadow-2xl shadow-black' 
-      : 'bg-white/85 backdrop-blur-3xl border border-slate-200/90 shadow-2xl shadow-slate-300/50',
+      ? 'bg-zinc-900/30 backdrop-blur-3xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]' 
+      : 'bg-white/40 backdrop-blur-2xl border-b border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)]',
     buttonGlass: isDarkMode
-      ? 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 hover:bg-zinc-700/80'
-      : 'bg-white/60 border border-slate-200 text-slate-700 hover:bg-white',
+      ? 'bg-white/5 backdrop-blur-xl border border-white/10 text-zinc-300 hover:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all'
+      : 'bg-white/40 backdrop-blur-xl border border-white/60 text-slate-700 hover:bg-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),0_4px_16px_rgba(0,0,0,0.02)] transition-all',
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800', 
     textMuted: isDarkMode ? 'text-zinc-400' : 'text-slate-500',
   };
@@ -135,38 +181,105 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="fixed top-[-5%] left-[-5%] w-[45vw] h-[45vh] bg-orange-500/20 dark:bg-orange-600/10 blur-[120px] rounded-full pointer-events-none z-0 transition-all duration-1000" />
       <div className="fixed bottom-[-5%] right-[-5%] w-[45vw] h-[45vh] bg-purple-500/20 dark:bg-purple-700/10 blur-[120px] rounded-full pointer-events-none z-0 transition-all duration-1000" />
 
-      <header className={`h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-40 transition-colors duration-500 ${theme.glassHeader}`}>
+      <header className={`h-20 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-40 transition-colors duration-500 ${theme.glassHeader}`}>
         <div className="flex items-center gap-4">
-          <Link href="/admin" className="flex items-center cursor-pointer transition-transform hover:scale-105 active:scale-95">
-            <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain drop-shadow-sm" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <Link href="/admin" className="flex items-center cursor-pointer transition-transform duration-300 hover:scale-[1.03] active:scale-95">
+            {/* 🌟 ENLARGED LOGO */}
+            <img src="/logo.png" alt="Logo" className="h-10 sm:h-12 w-auto object-contain drop-shadow-md" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </Link>
         </div>
 
-        <div className="flex items-center gap-2.5 sm:gap-3 ml-auto relative">
+        <div className="flex items-center gap-3 sm:gap-4 ml-auto relative">
           
           {/* 🌟 HIDE SETTINGS & ANNOUNCEMENT ON HR PORTAL */}
           {!isHRPortal && adminProfile.role !== 'hr_admin' && (
             <>
-              <button className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-linear-to-r from-orange-500 to-orange-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider shadow-sm cursor-pointer active:scale-95 border border-orange-400">
-                <Megaphone size={14} /> <span>Announcement</span>
+              {/* 🌟 FULLY FUNCTIONAL ANNOUNCEMENT BUTTON */}
+              <button 
+                onClick={handleTriggerAnnouncement}
+                className="hidden sm:flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer active:scale-95 border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-all"
+              >
+                <Megaphone size={16} /> <span>Announcement</span>
               </button>
-              <Link href="/admin/settings" className={`hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer active:scale-95 ${theme.buttonGlass}`}>
-                <Settings size={14} /> <span>Settings</span>
+              <Link href="/admin/settings" className={`hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest cursor-pointer active:scale-95 ${theme.buttonGlass}`}>
+                <Settings size={16} /> <span>Settings</span>
               </Link>
             </>
           )}
 
+          {/* 🌟 NOTIFICATIONS BELL */}
           <div className="relative">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`p-2 rounded-xl transition-all cursor-pointer ${isNotifOpen ? 'bg-purple-500/10 text-purple-500' : theme.buttonGlass}`}>
-              <Bell size={18} />
+            <button 
+              onClick={() => setIsNotifOpen(!isNotifOpen)} 
+              className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer active:scale-95 ${isNotifOpen ? 'bg-orange-500/10 border border-orange-500/50 text-orange-600 shadow-inner' : theme.buttonGlass}`}
+            >
+              <Bell size={18} strokeWidth={2.5} className={unreadCount > 0 ? 'animate-pulse text-orange-500' : ''} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-rose-500 text-white text-[10px] font-black rounded-full border-2 border-white dark:border-zinc-900 shadow-sm z-10">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
+
+            {/* NOTIFICATIONS DROPDOWN */}
+            <AnimatePresence>
+              {isNotifOpen && (
+                <div className={`absolute top-14 right-0 w-80 sm:w-96 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col z-50 backdrop-blur-3xl border ${isDarkMode ? 'bg-zinc-900/80 border-white/10' : 'bg-white/60 border-white/80'}`}>
+                  <div className="p-5 border-b border-white/20 bg-white/40 flex justify-between items-center">
+                    <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Alerts & Updates</h3>
+                    <button onClick={async () => {
+                      await supabase.from('notifications').update({ is_read: true }).eq('target_role', 'admin').eq('is_read', false);
+                      setNotifications(prev => prev.map(n => ({...n, is_read: true})));
+                    }} className="text-[9px] font-bold text-orange-600 uppercase tracking-widest cursor-pointer hover:underline">Mark all read</button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto custom-scrollbar flex flex-col bg-white/20">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-xs font-semibold text-slate-500">No recent alerts.</div>
+                    ) : (
+                      notifications.map(notif => (
+                        <div key={notif.id} className={`p-5 border-b border-white/20 transition-all hover:bg-white/50 cursor-pointer ${notif.is_read ? 'opacity-60' : 'bg-orange-50/40'}`} onClick={async () => {
+                           if (!notif.is_read) {
+                             await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
+                             setNotifications(prev => prev.map(n => n.id === notif.id ? {...n, is_read: true} : n));
+                           }
+                        }}>
+                          <div className="flex justify-between items-start mb-1.5">
+                            <span className={`text-[11px] font-bold uppercase tracking-widest ${notif.is_read ? theme.textMain : 'text-orange-600'}`}>{notif.title}</span>
+                            {!notif.is_read && <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />}
+                          </div>
+                          <p className={`text-[13px] font-medium leading-snug ${theme.textSub}`}>{notif.message}</p>
+                          <p className="text-[9px] font-bold text-slate-400 mt-2.5 uppercase tracking-widest">{timeAgo(notif.created_at)}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </AnimatePresence>
           </div>
 
-          <div className="relative group">
-            <button onClick={handleLogout} className={`p-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer border ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100 shadow-sm'}`}>
-              <LogOut size={18} className="translate-x-px" />
+          {/* 🌟 LOGOUT HOVER MENU */}
+          <div className="relative group/logout flex items-center">
+            <button onClick={handleLogout} className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] border ${isDarkMode ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20' : 'bg-white/40 border-white/60 text-rose-600 hover:bg-rose-50 backdrop-blur-md hover:border-rose-200'}`}>
+              <LogOut size={18} strokeWidth={2.5} className="translate-x-px" />
             </button>
+            
+            {/* 🌟 Admin Profile Tooltip */}
+            <div className={`absolute top-full right-0 mt-3 p-4 rounded-3xl w-64 opacity-0 invisible group-hover/logout:opacity-100 group-hover/logout:visible transition-all duration-300 transform origin-top-right scale-95 group-hover/logout:scale-100 shadow-[0_12px_40px_rgba(0,0,0,0.15)] border ${isDarkMode ? 'bg-zinc-900/90 border-white/10' : 'bg-white/80 backdrop-blur-2xl border-white/60'} z-50`}>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-orange-500 to-purple-600 flex items-center justify-center text-white text-lg font-black shadow-md shrink-0">
+                  {adminProfile.initials}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-[13px] font-black uppercase tracking-widest truncate ${theme.textMain}`}>{adminProfile.name}</p>
+                  <p className={`text-[10px] font-bold truncate mt-0.5 ${theme.textMuted}`}>{adminProfile.email}</p>
+                </div>
+              </div>
+              <div className={`w-full border-t my-3 ${isDarkMode ? 'border-white/10' : 'border-slate-200/60'}`}></div>
+              <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest text-center flex items-center justify-center gap-1.5"><LogOut size={14} strokeWidth={2.5}/> Click to Log Out</p>
+            </div>
           </div>
+
         </div>
       </header>
 
