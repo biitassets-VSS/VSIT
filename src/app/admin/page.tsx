@@ -536,11 +536,11 @@ export default function AdminDashboardPage() {
 
         <div className="flex-1 flex flex-col lg:flex-row gap-5 lg:min-h-0 lg:overflow-hidden pt-2 relative z-30">
           
-          {/* 🌟 System Modules (Left Side) - Adjusted to cover bottom space */}
-          <div className="w-full lg:w-[72%] flex flex-col lg:min-h-0 lg:overflow-hidden">
+          {/* 🌟 System Modules (Left Side) - Removed Scrollbar, Gap Increased, Hover Border Top Hidden */}
+          <div className="w-full lg:w-[72%] flex flex-col lg:min-h-0 lg:overflow-visible">
             <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-1 shrink-0 mb-3 ${theme.textSub}`}>System Modules</h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 lg:min-h-0 lg:overflow-y-auto custom-scrollbar pb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1 w-full pb-6">
               {[
                 { title: 'Review Inspections', desc: 'Audit visual submissions & approve hardware.', icon: ClipboardCheck, path: '/admin/inspections', color: '#F97316', badge: stats.pendingInspections },
                 { title: 'Asset Registry', desc: 'Manage hardware lifecycle and serial tags.', icon: Laptop, path: '/admin/assets', color: '#8B5CF6', badge: 0 },
@@ -556,7 +556,7 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    className={`text-left cursor-pointer p-5 rounded-[2rem] flex flex-col justify-between ease-out group h-full w-full ${theme.glassItem} hover:-translate-y-1 hover:shadow-xl ${isOrange ? 'hover:shadow-orange-500/10 hover:border-orange-400' : 'hover:shadow-purple-500/10 hover:border-purple-400'}`}
+                    className={`text-left cursor-pointer p-6 rounded-[2rem] flex flex-col justify-between ease-out group h-full w-full ${theme.glassItem} hover:-translate-y-1 hover:shadow-2xl hover:border-t-transparent transition-all duration-300 ${isOrange ? 'hover:shadow-orange-500/20 hover:border-orange-400' : 'hover:shadow-purple-500/20 hover:border-purple-400'}`}
                   >
                     <div className="flex items-start justify-between w-full relative">
                       <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
