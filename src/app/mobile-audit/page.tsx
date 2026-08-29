@@ -79,6 +79,10 @@ function MobileVerifyContent() {
   const staffName = searchParams.get('name') || 'Unknown Staff';
   const empCode = searchParams.get('empCode') || searchParams.get('emp') || 'UNKNOWN';
   const category = searchParams.get('cat') || 'Hardware';
+  
+  // 🌟 Routing Parameters
+  const auditType = searchParams.get('auditType') || 'INSPECTION';
+  const cond = searchParams.get('cond') || 'Not Specified';
   const notes = searchParams.get('notes') || '';
   
   const isLaptop = category.toLowerCase().includes('laptop');
@@ -160,7 +164,7 @@ function MobileVerifyContent() {
     }
   };
 
-  // 🌟 PERFECTED PURE TRANSPARENT GLASS ENGINE (NO EMOJIS, NO BACKGROUND)
+  // 🌟 PERFECTED PURE TRANSPARENT GLASS ENGINE
   const processWatermark = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -184,7 +188,6 @@ function MobileVerifyContent() {
 
         const baseScale = canvas.width / 1600; 
         
-        // Normal, readable font size
         const fontSize = Math.max(20, Math.floor(26 * baseScale));
         const lineHeight = Math.floor(fontSize * 1.5);
         
@@ -214,22 +217,23 @@ function MobileVerifyContent() {
           ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; 
           ctx.fillText(text, x, y);
 
-          // 4. Outer Drop Shadow (Helps readability over busy background textures)
+          // 4. Outer Drop Shadow
           ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
           ctx.shadowBlur = Math.max(4, size * 0.15);
           ctx.shadowOffsetX = Math.max(2, size * 0.05);
           ctx.shadowOffsetY = Math.max(2, size * 0.05);
           ctx.fillText(text, x, y);
 
-          ctx.shadowColor = 'transparent'; // Reset
-          ctx.textAlign = 'left'; // Reset
+          ctx.shadowColor = 'transparent'; 
+          ctx.textAlign = 'left'; 
         };
 
-        // Header (No emojis)
-        drawClearGlassText(`VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left');
-        drawClearGlassText(`VERIFIED AUDIT`, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right');
+        // Header Check based on auditType
+        const headerText = auditType === 'RETURN' ? `VERIFIED RETURN ✓` : `VERIFIED AUDIT ✓`;
 
-        // Body Lines (No emojis)
+        drawClearGlassText(`VIRTUAL STAFFING SOLUTIONS`, contentX, contentY, Math.floor(fontSize * 1.1), 'left');
+        drawClearGlassText(headerText, canvas.width - contentX, contentY, Math.floor(fontSize * 1.1), 'right');
+
         contentY += lineHeight;
         drawClearGlassText(`CUSTODIAN: ${staffName} (${empCode})`, contentX, contentY, fontSize);
         
@@ -252,22 +256,60 @@ function MobileVerifyContent() {
   const finalizeInspection = async (finalUrls: string[]) => {
     if (!assetId) return;
     try {
-      await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', assetId);
       
-      await supabase.from('inspections').insert({
-        asset_id: assetId,
-        status: 'Pending Review',
-        notes: notes || 'Mobile Device Audit Complete',
-        photos: finalUrls
-      });
+      // 🌟 SMART ROUTING: IF RETURN, SEND TO REPLACEMENTS TABLE
+      if (auditType === 'RETURN') {
+        const { data: assetData } = await supabase.from('assets').select('*').eq('id', assetId).single();
+        
+        // Insert directly to replacements
+        await supabase.from('replacements').insert({
+          old_asset_id: assetId,
+          asset_tag: assetData?.asset_tag || 'UNKNOWN',
+          serial_number: assetData?.serial_number || '',
+          user_id: assetData?.assigned_to || null,
+          staff_name: staffName,
+          emp_code: empCode,
+          condition: cond,
+          reason: notes || 'Hardware Return Request',
+          photos: finalUrls,
+          status: 'Pending Return'
+        });
 
-      await supabase.from('notifications').insert({
-        target_role: 'admin',
-        title: 'New Hardware Audit',
-        message: `${staffName} submitted a new audit for ${category}. Awaiting your review.`,
-        type: 'inspection',
-        is_read: false
-      });
+        // Update the asset to stop overdue warnings and set to return requested
+        await supabase.from('assets').update({ 
+          status: 'Return Requested', 
+          inspection_status: 'Approved', // Clear pending flags so it doesn't trigger inspection alerts
+          last_inspection_date: new Date().toISOString()
+        }).eq('id', assetId);
+
+        // Notify admin
+        await supabase.from('notifications').insert({
+          target_role: 'admin',
+          title: '📦 Return Request',
+          message: `${staffName} submitted a return request for ${assetData?.asset_tag || category}.`,
+          type: 'warning',
+          is_read: false
+        });
+
+      } else {
+        // 🌟 STANDARD INSPECTION ROUTING
+        await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', assetId);
+        
+        await supabase.from('inspections').insert({
+          asset_id: assetId,
+          status: 'Pending Review',
+          notes: notes || 'Mobile Device Audit Complete',
+          photos: finalUrls
+        });
+
+        await supabase.from('notifications').insert({
+          target_role: 'admin',
+          title: 'New Hardware Audit',
+          message: `${staffName} submitted a new audit for ${category}. Awaiting your review.`,
+          type: 'inspection',
+          is_read: false
+        });
+      }
     } catch (e) {
       console.error("Failed to finalize in DB", e);
     }
@@ -355,7 +397,9 @@ function MobileVerifyContent() {
       </div>
       
       <div className="space-y-1 relative z-10 w-full max-w-sm">
-        <h1 className="text-xl font-black uppercase tracking-widest text-white">Live Hardware Audit</h1>
+        <h1 className="text-xl font-black uppercase tracking-widest text-white">
+          {auditType === 'RETURN' ? 'Hardware Return Audit' : 'Live Hardware Audit'}
+        </h1>
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target: {category}</p>
       </div>
 
@@ -447,29 +491,31 @@ function MobileVerifyContent() {
             </span>
           </div>
           
-          {/* Interactive Magnifier Viewport */}
-          <div 
-            className="w-full h-full relative flex items-center justify-center overflow-hidden p-0"
-            onMouseMove={handleImageMouseMove}
-            onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
-            onClick={handleImageClick}
-          >
-            <img 
-              src={gallery.images[gallery.index]} 
-              alt="Expanded capture" 
-              style={{ 
-                transform: zoomProps.isZoomed ? `scale(3)` : `scale(1)`, 
-                transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
-                transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
-              }}
-              className={`max-w-full max-h-[100vh] object-contain shadow-[0_0_40px_rgba(168,85,247,0.15)] transition-transform ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
-              draggable={false}
-            />
+          {/* 🌟 GLASS FRAME FOR IMAGE */}
+          <div className="relative w-full max-w-5xl h-full max-h-[80vh] flex-1 flex flex-col items-center justify-center p-3 sm:p-4 rounded-[2rem] bg-white/10 backdrop-blur-3xl border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.3)] mt-8">
+            <div 
+              className="w-full h-full relative flex items-center justify-center overflow-hidden rounded-2xl bg-black/50"
+              onMouseMove={handleImageMouseMove}
+              onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
+              onClick={handleImageClick}
+            >
+              <img 
+                src={gallery.images[gallery.index]} 
+                alt="Expanded capture" 
+                style={{ 
+                  transform: zoomProps.isZoomed ? `scale(3)` : `scale(1)`, 
+                  transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
+                  transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                }}
+                className={`max-w-full max-h-full object-contain shadow-2xl transition-transform ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
+                draggable={false}
+              />
+            </div>
           </div>
           
           {/* Navigation Controls */}
           {gallery.images.length > 1 && (
-             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
+             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -477,7 +523,7 @@ function MobileVerifyContent() {
                     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
                   }}
                   disabled={gallery.index === 0}
-                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
+                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-white/20 backdrop-blur-xl border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] rounded-full text-white disabled:opacity-20 active:scale-95 transition-all hover:bg-white/30 cursor-pointer"
                 >
                   <ChevronLeft size={28} />
                 </button>
@@ -488,7 +534,7 @@ function MobileVerifyContent() {
                     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
                   }}
                   disabled={gallery.index === gallery.images.length - 1}
-                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-white disabled:opacity-20 active:scale-95 transition-all shadow-lg hover:bg-white/20 cursor-pointer"
+                  className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-white/20 backdrop-blur-xl border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] rounded-full text-white disabled:opacity-20 active:scale-95 transition-all hover:bg-white/30 cursor-pointer"
                 >
                   <ChevronRight size={28} />
                 </button>
