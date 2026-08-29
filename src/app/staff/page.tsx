@@ -13,6 +13,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
+// --- Utility Functions ---
+
 function safeString(val: any) {
   if (val === null || val === undefined) return '';
   return String(val);
@@ -404,7 +406,6 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
-  // 🌟 Desktop WebSocket Receiver for Mobile Photos
   useEffect(() => {
     if (!qrSessionId) return;
     const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
@@ -929,7 +930,6 @@ export default function StaffDashboardPage() {
                           </div>
                         )}
 
-                        {/* 🌟 ACTION LOCKED WARNING BANNER (Accurate Status Text) */}
                         { (asset.isReturnPending || btnState.text === 'Under Review' || asset.isReplacePending) && (
                           <div className="p-3 mt-1 mb-2 rounded-xl border border-purple-200/50 bg-purple-50/50 backdrop-blur-md text-purple-700 text-[11px] font-medium flex gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.5)] shrink-0 items-center">
                             <Clock size={14} className="shrink-0" />
@@ -1164,7 +1164,6 @@ export default function StaffDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* 🌟 REPLACEMENT REQUEST MODAL */}
       <AnimatePresence>
         {showReplaceModal && activeAsset && (
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -1259,7 +1258,9 @@ export default function StaffDashboardPage() {
                   </div>
                 </div>
               ) : (
+                
                 <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5 flex flex-col animate-in slide-in-from-right-4">
+                  
                   <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
                     <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
                     <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">
@@ -1328,13 +1329,26 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const [formText, setFormText] = useState('');
   const [formCategory, setFormCategory] = useState(type === 'REQUEST' ? 'Laptop' : 'Hardware');
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
+  const [screenshot, setScreenshot] = useState<File | null>(null); 
+  
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
+  const [isTransmitting, setIsTransmitting] = useState(false);
+  const [successDone, setSuccessDone] = useState(false);
+
+  const handleAttemptUnlock = () => {
+    if (!asset) { alert("No hardware assigned to test against!"); return; }
+    if (user.id === 'guest-mock-uuid') { setLockError(false); setIsUnlocked(true); return; }
+    const typed = serialInput.trim().toLowerCase();
+    if (typed === (asset.serial_number||'').toLowerCase() || typed === (asset.asset_tag||'').toLowerCase()) { 
+        setLockError(false); setIsUnlocked(true); 
+    } else setLockError(true);
+  };
 
   const generateMobileHandoff = () => {
     const baseUrl = window.location.origin;
     const cat = asset?.category || formCategory;
-    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}`;
+    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&mode=upload_only`;
     setQrUrl(url); setShowQR(true);
   };
 
@@ -1372,6 +1386,44 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
     if (type === 'INSPECTION') {
       generateMobileHandoff(); return;
     }
+
+    setIsTransmitting(true);
+    if (user.id === 'guest-mock-uuid') { setTimeout(() => { setIsTransmitting(false); setSuccessDone(true); setTimeout(() => onClose(), 1200); }, 800); return; }
+
+    let submitError = null; 
+    try {
+      const cleanEmail = user.email.toLowerCase().trim();
+      const finalEmp = user.emp_id || 'STAFF';
+      let humanName = user.name || cleanEmail.split('@')[0];
+      humanName = humanName.split('.')[0].replace(/[_-]/g, ' ');
+      humanName = humanName.charAt(0).toUpperCase() + humanName.slice(1);
+
+      if (type === 'TICKET') {
+        const { error } = await supabase.from('tickets').insert({ 
+          title: formTitle || 'IT Support Ticket', 
+          category: formCategory, 
+          description: formText || 'No details given', 
+          status: 'Open', 
+          created_by: cleanEmail, 
+          emp_code: finalEmp, 
+          staff_name: humanName 
+        });
+        submitError = error;
+      } else if (type === 'REQUEST') {
+        const { error } = await supabase.from('tickets').insert({ 
+          title: `Asset Request: ${formCategory}`, 
+          category: `Request: ${formCategory}`, 
+          description: formText || `Staff requested ${formCategory}`, 
+          status: 'Pending', 
+          created_by: cleanEmail, 
+          emp_code: finalEmp, 
+          staff_name: humanName 
+        });
+        submitError = error;
+      }
+      if (submitError) throw submitError;
+      setSuccessDone(true); setTimeout(() => onClose(), 1200);
+    } catch (e: any) { alert(`Database Error: ${e.message || JSON.stringify(e)}`); } finally { setIsTransmitting(false); }
   };
 
   const getHeaderIcon = () => {
@@ -1426,7 +1478,12 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
         </div>
 
         <div className="px-5 py-4 sm:px-6 sm:py-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-4 custom-scrollbar">
-          {showQR ? (
+          {successDone ? (
+            <div className="py-10 text-center space-y-4">
+              <CheckCircle2 size={72} className="text-emerald-500 mx-auto animate-bounce"/>
+              <h4 className="text-xl sm:text-2xl font-bold text-slate-900">Database Updated!</h4>
+            </div>
+          ) : showQR ? (
             <div className="py-4 text-center space-y-5 animate-in zoom-in-95 duration-300">
               <div>
                 <h4 className="text-base sm:text-lg font-bold uppercase tracking-widest text-slate-900">Mobile Device Handoff</h4>
@@ -1509,6 +1566,56 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
                 </>
               )}
 
+              {type === 'TICKET' && (
+                <>
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Issue Subject</label>
+                    <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} required placeholder="E.g. Monitor display flickering" className="w-full px-4 py-3 rounded-2xl outline-none text-[12px] sm:text-[13px] font-semibold transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"/>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Category</label>
+                    <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-purple-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                      <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                        <option>Hardware</option>
+                        <option>Software</option>
+                        <option>Network</option>
+                      </select>
+                      <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 sm:gap-2">
+                    <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Attach Screenshot (Optional)</label>
+                    <label className="w-full p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center gap-1.5 sm:gap-2 border-2 border-dashed transition-all cursor-pointer bg-white/40 backdrop-blur-xl border-white/80 hover:border-purple-400 hover:bg-white/60 hover:shadow-[0_0_25px_rgba(168,85,247,0.3)]">
+                       <input type="file" className="hidden" accept="image/*" onChange={(e) => setScreenshot(e.target.files?.[0] || null)} />
+                       <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm border border-slate-100">
+                         {screenshot ? <ImagePlus size={16} className="text-purple-500" /> : <UploadCloud size={16} className="text-slate-400" />}
+                       </div>
+                       <span className={`text-[11px] sm:text-[12px] font-semibold text-center ${screenshot ? 'text-purple-600' : 'text-slate-900'}`}>
+                         {screenshot ? screenshot.name : "Click to upload"}
+                       </span>
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {type === 'REQUEST' && (
+                <div className="flex flex-col gap-1.5 sm:gap-2">
+                  <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Equipment Category</label>
+                  <div className="relative rounded-2xl overflow-hidden flex items-center pr-4 transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:border-emerald-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                    <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} className="w-full pl-4 pr-10 py-3 text-[12px] sm:text-[13px] font-semibold transition-all outline-none cursor-pointer appearance-none bg-transparent text-slate-900">
+                      <option>Laptop / PC</option>
+                      <option>Monitor</option>
+                      <option>Keyboard / Mouse</option>
+                      <option>Headset / Audio</option>
+                      <option>Other Accessory</option>
+                    </select>
+                    <ChevronDown size={18} className="absolute right-4 pointer-events-none text-slate-500" />
+                  </div>
+                </div>
+              )}
+
               {(type === 'INSPECTION' || type === 'RETURN') && isUnlocked && (
                 <div className="flex flex-col gap-1.5 sm:gap-2 animate-in slide-in-from-top-4 duration-300">
                   <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">Current Asset Condition</label>
@@ -1526,9 +1633,9 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
 
               <div className="flex flex-col gap-1.5 sm:gap-2">
                 <label className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-500">
-                  {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : 'Detailed Explanation'}
+                  {type === 'INSPECTION' ? 'Audit Notes' : type === 'RETURN' ? 'Return Reason & Notes' : type === 'REQUEST' ? 'Business Justification' : 'Detailed Explanation'}
                 </label>
-                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 py-3 rounded-2xl text-[12px] sm:text-[13px] font-semibold transition-all outline-none resize-none min-h-[80px] bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 ${type === 'RETURN' ? 'focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300' : 'focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300'}`}/>
+                <textarea rows={3} value={formText} onChange={e=>setFormText(e.target.value)} required placeholder={type === 'INSPECTION' ? "Note any missing keys, screen cracks, or damage..." : type === 'RETURN' ? "Provide reason for returning..." : "Describe what happened..."} className={`w-full px-4 py-3 rounded-2xl text-[12px] sm:text-[13px] font-semibold transition-all outline-none resize-none min-h-[80px] bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] placeholder-[#818b9c] text-[#0f172a] focus:bg-white/60 ${type === 'RETURN' ? 'focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300' : type === 'REQUEST' ? 'focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300' : 'focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300'}`}/>
               </div>
             </form>
           )}
@@ -1547,14 +1654,16 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
               <button 
                 type="submit"
                 form="genericModalForm"
-                disabled={needsLock && !isUnlocked} 
+                disabled={isTransmitting || (needsLock && !isUnlocked)} 
                 className={`flex-1 py-3 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
                   type === 'RETURN' 
                     ? 'bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]' 
-                    : 'bg-amber-500 shadow-[0_4px_15px_rgba(245,158,11,0.4)] border border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]'
+                    : type === 'REQUEST'
+                    ? 'bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.4)] border border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)]'
+                    : 'bg-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.4)] border border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.5)]'
                 }`}
               >
-                Generate QR
+                {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : (type === 'INSPECTION' || type === 'RETURN' ? 'Generate QR' : 'Transmit')}
               </button>
             </>
           )}
