@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => n.is_read === false).length;
   
   const [adminProfile, setAdminProfile] = useState<AdminProfile>({
     name: 'Loading...', email: '...', initials: 'AD', role: 'admin'
@@ -194,9 +194,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           
           {!isHRPortal && adminProfile.role !== 'hr_admin' && (
             <>
+              {/* 🌟 SOFT ORANGE GLASS ANNOUNCEMENT BUTTON */}
               <button 
                 onClick={handleTriggerAnnouncement}
-                className="hidden sm:flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-[0_4px_15px_rgba(249,115,22,0.4)] cursor-pointer active:scale-95 border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-all"
+                className={`hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest cursor-pointer active:scale-95 transition-all shadow-[0_4px_15px_rgba(249,115,22,0.1)] border ${isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20' : 'bg-orange-50/50 backdrop-blur-xl border-orange-200 text-orange-600 hover:bg-orange-100/60'}`}
               >
                 <Megaphone size={16} /> <span>Announcement</span>
               </button>
@@ -214,7 +215,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <Bell size={18} strokeWidth={2.5} className={unreadCount > 0 ? 'animate-pulse text-orange-500' : ''} />
               
-              {/* 🌟 FIXED BADGE COLOR: Orange Gradient instead of harsh Red/Black */}
               {unreadCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-gradient-to-tr from-orange-500 to-purple-600 text-white text-[10px] font-black rounded-full border border-white/40 shadow-[0_2px_8px_rgba(249,115,22,0.6)] z-10">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -229,11 +229,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <h3 className={`text-xs font-black uppercase tracking-widest ${theme.textMain}`}>Alerts & Updates</h3>
                     <button 
                       onClick={async () => {
-                        // Gather IDs so the update firmly writes to the DB without silently failing on RLS scopes
-                        const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+                        const unreadIds = notifications.filter(n => n.is_read === false).map(n => n.id);
                         if (unreadIds.length > 0) {
                           const { error } = await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
-                          if (!error) {
+                          if (error) {
+                            console.error("Error marking all read:", error);
+                          } else {
                             setNotifications(prev => prev.map(n => ({...n, is_read: true})));
                           }
                         }
@@ -251,7 +252,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         <div key={notif.id} className={`p-5 border-b border-white/20 transition-all hover:bg-white/50 cursor-pointer ${notif.is_read ? 'opacity-60' : 'bg-orange-50/40'}`} onClick={async () => {
                            if (!notif.is_read) {
                              const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
-                             if (!error) {
+                             if (error) {
+                               console.error("Error marking individual read:", error);
+                             } else {
                                setNotifications(prev => prev.map(n => n.id === notif.id ? {...n, is_read: true} : n));
                              }
                            }
