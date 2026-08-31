@@ -1294,6 +1294,9 @@ export default function StaffDashboardPage() {
                           if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
                         }} />
                       </label>
+                      {localPhotos.length > 0 && (
+                         <p className="text-[10px] text-emerald-600 mt-2 font-bold">{localPhotos.length} file(s) selected locally.</p>
+                      )}
                     </div>
                   </div>
 
@@ -1301,15 +1304,21 @@ export default function StaffDashboardPage() {
                     <button type="button" onClick={() => setQrUrl(null)} className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
                       <ChevronLeft size={20} strokeWidth={2.5} />
                     </button>
-                    {/* 🌟 DIV ONCLICK EXPLICITLY CALLS DB INSERTION LOGIC */}
+                    
                     <div 
                       onClick={(e) => {
-                        if (hasEnoughPhotos && !isSubmittingReplace) handleReplaceSubmit(e);
+                        if (isSubmittingReplace) return;
+                        if (!hasEnoughPhotos) {
+                          const proceed = window.confirm(`You haven't uploaded the required ${REQUIRED_PHOTOS} photos. Your request may be rejected by IT Admin. Do you want to submit anyway?`);
+                          if (!proceed) return;
+                        }
+                        handleReplaceSubmit(e);
                       }} 
-                      className={`flex-1 h-12 rounded-xl text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${(!hasEnoughPhotos || isSubmittingReplace) ? 'opacity-50 cursor-not-allowed bg-purple-600/50' : 'bg-purple-600 hover:bg-purple-700 hover:scale-[1.02] active:scale-95'}`}
+                      className={`flex-1 h-12 rounded-xl text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${isSubmittingReplace ? 'opacity-50 cursor-not-allowed bg-purple-600/50' : 'bg-purple-600 hover:bg-purple-700 hover:scale-[1.02] active:scale-95'}`}
                     >
                       {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
                     </div>
+
                   </div>
                 </div>
               )}
