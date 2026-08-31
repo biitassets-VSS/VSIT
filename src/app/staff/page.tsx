@@ -20,6 +20,25 @@ function safeString(val: any) {
   return String(val);
 }
 
+export const getInspectionStatusColor = (status: string) => {
+  const s = safeString(status).toLowerCase().trim();
+  if (s.includes('sent to admin') || s.includes('pending review') || s.includes('inspection sent') || s.includes('pending')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+  if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+  if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-sm';
+  if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
+  if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection') || s.includes('overdue')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+  if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
+  return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
+};
+
+export const getStatusBadge = (status: string) => {
+  const s = (status || '').toLowerCase().trim();
+  if (s === 'open' || s === 'pending') return 'bg-orange-100/80 text-orange-600 font-bold border border-orange-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+  if (s === 'in progress') return 'bg-purple-100/80 text-purple-600 font-bold border border-purple-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+  if (s === 'resolved' || s === 'closed') return 'bg-emerald-100/80 text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+  return 'bg-slate-100/80 text-slate-600 font-bold border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
+};
+
 function getAuditWindowInfo(category: string = 'Laptop') {
   const today = new Date();
   const year = today.getFullYear();
@@ -406,17 +425,6 @@ export default function StaffDashboardPage() {
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
-  useEffect(() => {
-    if (!qrSessionId) return;
-    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
-      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
-        if (payload.payload?.url) {
-          setRemotePhotos(prev => [...prev, payload.payload.url]);
-        }
-      }).subscribe();
-    return () => { supabase.removeChannel(photoChannel); };
-  }, [qrSessionId]);
-
   const getAssetAuditState = (asset: any) => {
     const auditWindow = getAuditWindowInfo(asset.category);
     const trueInspStatus = (asset.true_inspection_state || '').toLowerCase();
@@ -473,8 +481,24 @@ export default function StaffDashboardPage() {
   const overdueAssetsList = assignedAssets.filter(a => a.isOverdue && !a.isReturnPending && !a.isReplacePending && !a.true_inspection_state?.includes('pending'));
 
   useEffect(() => {
-    setStats(prev => ({...prev, needsInspection: needsInspCount + pendingHandovers.length + overdueAssetsList.length}));
-  }, [assignedAssets, needsInspCount, pendingHandovers.length, overdueAssetsList.length]);
+    setStats(prev => ({
+      ...prev,
+      totalAssets: assignedAssets.length,
+      needsInspection: needsInspCount + pendingHandovers.length + overdueAssetsList.length,
+      openTickets: myTickets.filter(t => !['resolved', 'closed'].includes((t.status || '').toLowerCase())).length
+    }));
+  }, [assignedAssets, needsInspCount, pendingHandovers.length, overdueAssetsList.length, myTickets]);
+
+  useEffect(() => {
+    if (!qrSessionId) return;
+    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
+      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
+        if (payload.payload?.url) {
+          setRemotePhotos(prev => [...prev, payload.payload.url]);
+        }
+      }).subscribe();
+    return () => { supabase.removeChannel(photoChannel); };
+  }, [qrSessionId]);
 
   const handleRateTicket = async (ticketId: string, rating: number) => {
     try {
@@ -521,7 +545,7 @@ export default function StaffDashboardPage() {
     const sessionId = crypto.randomUUID();
     setQrSessionId(sessionId);
     
-    // 🌟 mode=upload_only forces the mobile device to just act as a camera, skipping DB insertion
+    // mode=upload_only forces the mobile device to just act as a camera, skipping DB insertion
     const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&mode=upload_only`;
     
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
@@ -555,8 +579,7 @@ export default function StaffDashboardPage() {
       if (insertError) throw insertError;
 
       const { error: updateError } = await supabase.from('assets').update({ 
-        status: 'Replacement Requested', 
-        inspection_status: 'Pending Review', 
+        status: 'Replace Pending', 
         admin_remarks: null 
       }).eq('id', activeAsset.id);
       if (updateError) throw updateError;
@@ -618,25 +641,6 @@ export default function StaffDashboardPage() {
     } finally {
       setIsSigning(false);
     }
-  };
-  
-  const getStatusBadge = (status: string) => {
-    const s = (status || '').toLowerCase().trim();
-    if (s === 'open' || s === 'pending') return 'bg-orange-100/80 text-orange-600 font-bold border border-orange-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
-    if (s === 'in progress') return 'bg-purple-100/80 text-purple-600 font-bold border border-purple-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
-    if (s === 'resolved' || s === 'closed') return 'bg-emerald-100/80 text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
-    return 'bg-slate-100/80 text-slate-600 font-bold border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]';
-  };
-
-  const getInspectionStatusColor = (status: string) => {
-    const s = safeString(status).toLowerCase().trim();
-    if (s.includes('sent to admin') || s.includes('pending review') || s.includes('pending')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
-    if (s.includes('approved') || s.includes('pass') || s.includes('audited')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
-    if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
-    if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
-    if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection') || s.includes('overdue')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
-    if (s.includes('pending handover')) return 'bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-sm';
-    return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
   };
 
   const theme = {
@@ -817,7 +821,8 @@ export default function StaffDashboardPage() {
                     const btnState = getAssetAuditState(asset);
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
 
-                    let baseAuditStatus = asset.true_inspection_state === 'Approved' && asset.isOverdue ? 'Overdue' : asset.true_inspection_state;
+                    // Base audit status derives directly from the computed display status
+                    const baseAuditStatus = asset.live_inspection_status;
 
                     return (
                       <motion.div 
@@ -1369,8 +1374,8 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
       }
 
       try {
-        await supabase.from('assets').update({ status: 'Pending Return', inspection_status: 'Pending Review' }).eq('id', targetAsset.id);
-        if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map(a => a.id === targetAsset.id ? { ...a, status: 'Pending Return', live_inspection_status: 'Pending Review' } : a));
+        await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', targetAsset.id);
+        if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map(a => a.id === targetAsset.id ? { ...a, status: 'Pending Return', live_inspection_status: 'Return Pending' } : a));
         
         const baseUrl = window.location.origin;
         const cat = targetAsset.category;
