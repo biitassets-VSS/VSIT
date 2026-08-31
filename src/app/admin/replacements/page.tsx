@@ -9,6 +9,11 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const formatEmailAsName = (email: string) => {
+  if (!email) return null;
+  return email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
 function AdminReplacementsContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -70,7 +75,7 @@ function AdminReplacementsContent() {
 
       if (error) throw error;
       
-      let allReplacements = (replData || []).map(r => {
+      let nativeReplacements = (replData || []).map(r => {
         let photosList: string[] = [];
         try {
           if (Array.isArray(r.photos)) photosList = r.photos;
@@ -88,10 +93,36 @@ function AdminReplacementsContent() {
         .or('status.ilike.%replace%,notes.ilike.%replace%')
         .order('created_at', { ascending: false });
 
-      if (inspData && inspData.length > 0) {
-        const legacyReplacements = inspData.map(insp => {
+      // 3. Fetch assets currently in replacement pipeline
+      const { data: assetLogs } = await supabase
+        .from('assets')
+        .select('*')
+        .or('status.ilike.%replace%');
+
+      const replacementAssets = assetLogs || [];
+      const assetIdsFromAssets = replacementAssets.map(a => a.id).filter(Boolean);
+
+      // 4. Fetch ALL inspections for these assets (to catch mobile audit uploads)
+      let extraInspections: any[] = [];
+      if (assetIdsFromAssets.length > 0) {
+        const { data: extraInsp } = await supabase
+          .from('inspections')
+          .select('*, assets(*)')
+          .in('asset_id', assetIdsFromAssets)
+          .order('created_at', { ascending: false });
+        extraInspections = extraInsp || [];
+      }
+
+      // Combine all inspections to find legacy replacements
+      const combinedInspections = [...(inspData || []), ...extraInspections];
+      const inspectionMap = new Map();
+      combinedInspections.forEach(item => {
+        if (item && item.id) inspectionMap.set(item.id, item);
+      });
+      const validLegacyInspections = Array.from(inspectionMap.values());
+
+      const legacyReplacements = validLegacyInspections.map(insp => {
           const asset = insp.assets || {};
-          
           let photosList: string[] = [];
           try {
             if (Array.isArray(insp.photos)) photosList = insp.photos;
@@ -107,25 +138,194 @@ function AdminReplacementsContent() {
             asset_tag: asset.asset_tag || 'N/A',
             serial_number: asset.serial_number || 'N/A',
             user_id: insp.user_id || insp.inspected_by || asset.assigned_to,
-            staff_name: insp.user_name || 'Staff Member',
+            staff_name: insp.user_name, // Nullable to trigger resolution
             user_email: insp.user_email || '',
-            emp_code: insp.emp_code || 'UNKNOWN',
+            emp_code: insp.emp_code, // Nullable to trigger resolution
             condition: 'Legacy Record (See Notes)',
             reason: insp.notes || 'Replacement requested via old inspection log',
             photos: photosList,
             status: insp.status || 'Pending Review',
             created_at: insp.created_at,
-            admin_remarks: insp.admin_remarks
+            admin_remarks: insp.admin_remarks,
+            assets: asset
           };
-        });
-        
-        allReplacements = [...allReplacements, ...legacyReplacements];
+      });
+
+      // 5. Create synthetic records for fully orphaned assets
+      const orphanAssets = replacementAssets.filter(asset => 
+         !legacyReplacements.some(r => r.old_asset_id === asset.id) && 
+         !nativeReplacements.some(r => r.old_asset_id === asset.id)
+      );
+
+      const syntheticReplacements = orphanAssets.map(asset => ({
+        id: `synthetic-${asset.id}`,
+        sourceTable: 'synthetic',
+        old_asset_id: asset.id,
+        asset_tag: asset.asset_tag || 'N/A',
+        serial_number: asset.serial_number || 'N/A',
+        user_id: asset.assigned_to,
+        staff_name: null,
+        user_email: null,
+        emp_code: null,
+        condition: 'Unknown',
+        reason: asset.notes || 'Replacement derived from asset status.',
+        photos: [],
+        status: asset.status,
+        created_at: asset.updated_at || asset.created_at || new Date().toISOString(),
+        admin_remarks: asset.admin_remarks,
+        assets: asset
+      }));
+
+      const allReplacements = [...nativeReplacements, ...legacyReplacements, ...syntheticReplacements];
+
+      if (allReplacements.length === 0) {
+        setReplacementRequests([]);
+        return;
       }
 
-      // Sort combined array
-      allReplacements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // --- 🌟 AGGRESSIVE IDENTITY RESOLUTION ENGINE ---
+      const assetIds = [...new Set(allReplacements.map(r => r.old_asset_id).filter(Boolean))];
+      const { data: allAssetInspections } = await supabase
+        .from('inspections')
+        .select('*')
+        .in('asset_id', assetIds)
+        .order('created_at', { ascending: false });
 
-      setReplacementRequests(allReplacements);
+      const rawIdentifiers = [
+        ...allReplacements.map(r => r.user_id),
+        ...allReplacements.map(r => r.assets?.assigned_to)
+      ].filter(Boolean);
+      
+      const userEmails = [
+        ...allReplacements.map(r => r.user_email),
+        ...rawIdentifiers.filter(id => String(id).includes('@'))
+      ].filter(Boolean);
+
+      const validUUIDs = rawIdentifiers.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id)));
+      const empCodes = rawIdentifiers.filter(id => String(id).toUpperCase().startsWith('EMP'));
+
+      const safeQuery = async (queryPromise: any) => {
+        try {
+          const { data, error } = await queryPromise;
+          return { data: error ? [] : (data || []) };
+        } catch (e) { return { data: [] }; }
+      };
+
+      const profilePromises = [];
+      if (validUUIDs.length > 0) profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('id', validUUIDs)));
+      if (userEmails.length > 0) profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('email', userEmails)));
+      if (empCodes.length > 0) {
+        profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('emp_code', empCodes)));
+        profilePromises.push(safeQuery(supabase.from('profiles').select('*').in('emp_id', empCodes)));
+      }
+      
+      const profilesResults = await Promise.all(profilePromises);
+      const allProfiles = profilesResults.flatMap((res: any) => res?.data || []);
+      
+      const profilesMap: Record<string, any> = {};
+      const cleanId = (id: any) => id ? String(id).trim().toLowerCase() : '';
+      
+      allProfiles.forEach((p: any) => {
+        if (p.id) profilesMap[cleanId(p.id)] = p;
+        if (p.email) profilesMap[cleanId(p.email)] = p;
+        if (p.emp_code) profilesMap[cleanId(p.emp_code)] = p;
+        if (p.employee_code) profilesMap[cleanId(p.employee_code)] = p;
+        if (p.emp_id) profilesMap[cleanId(p.emp_id)] = p;
+      });
+
+      const mergedData = allReplacements.map((item: any) => {
+        const profile = profilesMap[cleanId(item.user_id)] || 
+                        profilesMap[cleanId(item.user_email)] || 
+                        profilesMap[cleanId(item.assets?.assigned_to)] || null;
+        
+        let resolvedName = item.staff_name || profile?.name || profile?.full_name || formatEmailAsName(item.user_email);
+        let resolvedEmpCode = item.emp_code || profile?.emp_code || profile?.employee_code || profile?.emp_id;
+
+        if (!resolvedEmpCode && item.user_id && String(item.user_id).toUpperCase().startsWith('EMP')) {
+           resolvedEmpCode = String(item.user_id).toUpperCase();
+        }
+
+        const extractIdentityFromText = (text: string) => {
+            if (!text) return null;
+            let name = null;
+            let emp = null;
+            const patterns = [
+                /Historical User:\s*([^|]+?)\s*\|\s*ID:\s*([^\]]+)/i,
+                /Staff:\s*([^(]+?)\s*\((EMP-[^)]+)\)/i,
+                /by\s+([A-Za-z\s\.]+?)(?:\s*\(\s*(EMP-\d+)\s*\)|\s+on\b|\s+at\b)/i,
+                /(?:assigned|handed over)\s+to\s+([A-Za-z\s\.]+?)(?:\s*\(\s*(EMP-\d+)\s*\)|\s+on\b)/i,
+                /(?:previous holder|holder):?\s+([A-Za-z\s\.]+?)(?:\s*\(\s*(EMP-\d+)\s*\)|\s*\||$)/i
+            ];
+
+            for (const p of patterns) {
+                const match = text.match(p);
+                if (match) {
+                    const potentialName = match[1].trim();
+                    if (!potentialName.toLowerCase().includes('admin') && !potentialName.toLowerCase().includes('system')) {
+                        name = potentialName;
+                        if (match[2]) emp = match[2].trim();
+                        break;
+                    }
+                }
+            }
+            if (!emp) {
+                const empMatch = text.match(/(EMP-\d+)/i);
+                if (empMatch) emp = empMatch[1].toUpperCase();
+            }
+            if (name) name = name.replace(/\s+(upon|processed|awaiting|signed).*$/i, '').trim();
+            return (name || emp) ? { name, emp } : null;
+        };
+
+        if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+            const currentItemText = `${item.reason || ''} ${item.admin_remarks || ''} ${item.assets?.notes || ''}`;
+            const extracted = extractIdentityFromText(currentItemText);
+            if (extracted) {
+                if (!resolvedName || resolvedName === 'Staff Member') resolvedName = extracted.name;
+                if ((!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') && extracted.emp) resolvedEmpCode = extracted.emp;
+            }
+        }
+
+        if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+            const assetHistory = allAssetInspections?.filter((insp: any) => insp.asset_id === item.old_asset_id) || [];
+            
+            for (const hist of assetHistory) {
+                if ((!resolvedName || resolvedName === 'Staff Member') && hist.user_name && !hist.user_name.toLowerCase().includes('admin')) {
+                    resolvedName = hist.user_name;
+                }
+                if ((!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') && hist.emp_code && hist.emp_code !== 'SYS-ADMIN') {
+                    resolvedEmpCode = hist.emp_code;
+                }
+
+                const histText = `${hist.notes || ''} ${hist.admin_remarks || ''}`;
+                const extracted = extractIdentityFromText(histText);
+                if (extracted) {
+                    if (!resolvedName || resolvedName === 'Staff Member') resolvedName = extracted.name;
+                    if ((!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') && extracted.emp) resolvedEmpCode = extracted.emp;
+                }
+
+                if (resolvedName && resolvedName !== 'Staff Member' && resolvedEmpCode && resolvedEmpCode !== 'UNKNOWN') break;
+            }
+        }
+
+        if (!resolvedName || resolvedName === 'Staff Member') {
+            if (String(item.user_id).includes('@')) resolvedName = formatEmailAsName(String(item.user_id));
+            if (String(item.assets?.assigned_to).includes('@')) resolvedName = formatEmailAsName(String(item.assets?.assigned_to));
+        }
+
+        if (!resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
+            resolvedEmpCode = item.user_id ? String(item.user_id).substring(0,6).toUpperCase() : 'UNKNOWN';
+        }
+
+        return { 
+          ...item, 
+          staff_name: resolvedName || 'Staff Member',
+          emp_code: resolvedEmpCode
+        };
+      });
+
+      mergedData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setReplacementRequests(mergedData);
     } catch (err: any) {
       alert("Failed to fetch replacements: " + err.message);
     } finally {
@@ -140,21 +340,31 @@ function AdminReplacementsContent() {
 
     setUpdatingId(item.id);
     try {
-      // Update the correct table dynamically
+      
+      // Target correct source table
       if (item.sourceTable === 'inspections') {
         const mappedStatus = action === 'Resolved' ? 'Replacement Approved' : action === 'Rejected' ? 'Replacement Rejected' : action;
         await supabase.from('inspections').update({ 
           status: mappedStatus, 
           admin_remarks: remarks 
         }).eq('id', item.id);
-      } else {
+      } else if (item.sourceTable === 'replacements') {
         await supabase.from('replacements').update({ 
           status: action, 
           admin_remarks: remarks 
         }).eq('id', item.id);
+      } else if (item.sourceTable === 'synthetic') {
+         const mappedStatus = action === 'Resolved' ? 'Replacement Approved' : action === 'Rejected' ? 'Replacement Rejected' : action;
+         await supabase.from('inspections').insert({
+            asset_id: item.old_asset_id,
+            user_id: item.user_id,
+            status: mappedStatus,
+            admin_remarks: remarks,
+            notes: `[LEGACY REPLACEMENT] ${item.reason}`
+         });
       }
 
-      // IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
+      // 🌟 IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
       if (action === 'Resolved') {
         await supabase.from('assets').update({
           status: 'In Stock',
@@ -172,7 +382,7 @@ function AdminReplacementsContent() {
           is_read: false
         });
 
-      // IF REJECTED: LEAVE ASSIGNED, UPDATE STATUS SO STAFF SEES "REJECTED"
+      // 🌟 IF REJECTED: LEAVE ASSIGNED, UPDATE STATUS SO STAFF SEES "REJECTED"
       } else if (action === 'Rejected') {
         const isReturn = (item.status || '').toLowerCase().includes('return') || (item.reason || '').toLowerCase().includes('return');
         
@@ -362,9 +572,9 @@ function AdminReplacementsContent() {
                         <User size={20} strokeWidth={2.5} />
                       </div>
                       <div className="overflow-hidden">
-                        <h3 className={`text-[16px] font-bold leading-tight truncate ${theme.textMain}`}>{item.staff_name || item.user_email || 'Staff Member'}</h3>
+                        <h3 className={`text-[16px] font-bold leading-tight truncate ${theme.textMain}`}>{item.staff_name}</h3>
                         <span className={`text-[10px] font-black px-2.5 py-1 rounded-md shadow-sm border mt-1 inline-block uppercase tracking-widest ${theme.glassInnerCard} ${theme.textSub}`}>
-                          EMP: {item.emp_code || 'UNKNOWN'}
+                          EMP: {item.emp_code}
                         </span>
                       </div>
                     </div>
