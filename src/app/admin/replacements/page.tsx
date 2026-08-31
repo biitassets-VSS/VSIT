@@ -18,7 +18,7 @@ function AdminReplacementsContent() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // 🌟 GLASS GALLERY STATE
+  // GLASS GALLERY STATE
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, scale: 1 });
 
   useEffect(() => {
@@ -140,7 +140,6 @@ function AdminReplacementsContent() {
 
     setUpdatingId(item.id);
     try {
-      
       // Update the correct table dynamically
       if (item.sourceTable === 'inspections') {
         const mappedStatus = action === 'Resolved' ? 'Replacement Approved' : action === 'Rejected' ? 'Replacement Rejected' : action;
@@ -155,11 +154,11 @@ function AdminReplacementsContent() {
         }).eq('id', item.id);
       }
 
-      // 🌟 IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
+      // IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
       if (action === 'Resolved') {
         await supabase.from('assets').update({
           status: 'In Stock',
-          assigned_to: null, // Unassigns the asset
+          assigned_to: null, 
           inspection_status: null,
           admin_remarks: `Approved Swap: ${remarks}`
         }).eq('id', item.old_asset_id);
@@ -173,7 +172,7 @@ function AdminReplacementsContent() {
           is_read: false
         });
 
-      // 🌟 IF REJECTED: LEAVE ASSIGNED, UPDATE STATUS SO STAFF SEES "REJECTED"
+      // IF REJECTED: LEAVE ASSIGNED, UPDATE STATUS SO STAFF SEES "REJECTED"
       } else if (action === 'Rejected') {
         const isReturn = (item.status || '').toLowerCase().includes('return') || (item.reason || '').toLowerCase().includes('return');
         
@@ -236,7 +235,7 @@ function AdminReplacementsContent() {
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
 
-      {/* 🌟 FULL SCREEN GLASS GALLERY MODAL */}
+      {/* FULL SCREEN GLASS GALLERY MODAL */}
       {gallery.isOpen && (
         <div className="fixed inset-0 z-99999 flex items-center justify-center bg-slate-900/90 backdrop-blur-3xl animate-in fade-in">
           <div className="absolute inset-0" onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })}></div>
@@ -412,7 +411,7 @@ function AdminReplacementsContent() {
                           <p className={`text-[13px] font-medium leading-relaxed whitespace-pre-wrap ${theme.textMain}`}>{item.reason || 'No description provided.'}</p>
                         </div>
 
-                        {/* 📸 PHOTOS SECTION WITH GALLERY */}
+                        {/* PHOTOS SECTION WITH GALLERY */}
                         {item.photos && item.photos.length > 0 && (
                           <div className={`p-4 rounded-[1rem] flex flex-col gap-2 ${theme.glassItem}`}>
                             <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14}/> Photo Evidence Provided</span>
