@@ -573,7 +573,9 @@ export default function StaffDashboardPage() {
       const allPhotos = [...remotePhotos, ...newUrls];
 
       // Robust Auto-Degrading Payload for schema mismatch safety
+      // We inject both asset_id and old_asset_id, and both reason and notes to ensure it catches on the correct schema fields
       let payload: any = {
+        asset_id: activeAsset.id,
         old_asset_id: activeAsset.id,
         asset_tag: activeAsset.asset_tag,
         serial_number: activeAsset.serial_number,
@@ -583,6 +585,7 @@ export default function StaffDashboardPage() {
         emp_code: currentUser.emp_id,
         condition: replaceCondition,
         reason: replaceReason,
+        notes: replaceReason, 
         photos: allPhotos.length > 0 ? allPhotos : null,
         status: 'Pending Approval'
       };
@@ -590,15 +593,16 @@ export default function StaffDashboardPage() {
       let dbSuccess = false;
       let lastErr = null;
 
-      for (let i = 0; i < 5; i++) {
+      // Aggressive retry loop (15 iterations) to strip off any column that doesn't exist in the database table
+      for (let i = 0; i < 15; i++) {
         const { error: insertError } = await supabase.from('replacements').insert(payload);
         if (insertError) {
           lastErr = insertError;
+          // Capture the missing column name from the Supabase error message
           const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
           if (match && match[1]) {
             const col = match[1];
-            if (col === 'old_asset_id') payload['asset_id'] = activeAsset.id; // Try fallback naming
-            delete payload[col];
+            delete payload[col]; // Strip missing column and try again
             continue;
           }
           throw insertError;
