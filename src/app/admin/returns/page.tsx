@@ -75,28 +75,45 @@ function AdminReturnsContent() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      // 1. Fetch only logs that explicitly mention "return" (Ignore "Pending Handover")
-      const { data: returnsData, error } = await supabase
+      // 1. Fetch logs that explicitly mention "return"
+      const { data: explicitReturns, error } = await supabase
         .from('inspections')
         .select('*, assets(*)')
-        .or('status.ilike.%return%,notes.ilike.%return request%')
+        .or('status.ilike.%return%,notes.ilike.%return%')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      const validReturns = returnsData || [];
 
-      // 2. Fetch assets that currently have a Return status
+      // 2. Fetch assets currently in the return pipeline
       const { data: assetReturns } = await supabase
         .from('assets')
         .select('*')
         .ilike('status', '%return%');
 
-      // 3. Find orphaned return assets that don't have a matching inspection log
+      const pendingAssetIds = (assetReturns || []).map(a => a.id);
+      
+      // 3. GUARANTEE FETCH: Grab ALL recent inspections for these assets to catch mobile-audit submissions
+      let pendingAssetInspections: any[] = [];
+      if (pendingAssetIds.length > 0) {
+         const { data: paInspections } = await supabase
+           .from('inspections')
+           .select('*, assets(*)')
+           .in('asset_id', pendingAssetIds)
+           .order('created_at', { ascending: false });
+         pendingAssetInspections = paInspections || [];
+      }
+
+      // Combine and Deduplicate
+      const allFetchedInspections = [...(explicitReturns || []), ...pendingAssetInspections];
+      const uniqueInspectionsMap = new Map();
+      allFetchedInspections.forEach(item => {
+         if (item.id) uniqueInspectionsMap.set(item.id, item);
+      });
+      const validReturns = Array.from(uniqueInspectionsMap.values());
+
+      // 4. Find completely orphaned return assets (User requested return but abandoned photo app)
       const orphanedAssets = (assetReturns || []).filter(asset => {
-         return !validReturns.some(r => 
-           r.asset_id === asset.id && 
-           (r.status || '').toLowerCase().includes('return')
-         );
+         return !validReturns.some(r => r.asset_id === asset.id);
       });
 
       // 🌟 FORCE SYNTHETIC RETURNS TO WIN DATE SORTS
@@ -105,7 +122,7 @@ function AdminReturnsContent() {
          asset_id: asset.id,
          user_id: asset.assigned_to,
          status: asset.status, // "Pending Return"
-         notes: asset.notes || '[RETURN REQUEST] Submitted via Staff Dashboard',
+         notes: asset.notes || '[RETURN REQUEST] No notes provided (User may have aborted photo upload)',
          created_at: new Date().toISOString(), 
          assets: asset,
          isSynthetic: true 
@@ -549,7 +566,15 @@ function AdminReturnsContent() {
               const isHistorical = !item.isLatest; 
               const isPending = !isHistorical && ((item.status || '').toLowerCase().includes('pending') || (item.status || '').toLowerCase().includes('request'));
               const asset = item.assets || {};
-              const photosList = Array.isArray(item.photos) ? item.photos : item.photo_url ? [item.photo_url] : [];
+              
+              // Robust array parsing for photos
+              let photosList: string[] = [];
+              try {
+                if (Array.isArray(item.photos)) photosList = item.photos;
+                else if (typeof item.photos === 'string' && item.photos.startsWith('[')) photosList = JSON.parse(item.photos);
+                else if (item.photos && typeof item.photos === 'object') photosList = Object.values(item.photos);
+                else if (item.photo_url) photosList = [item.photo_url];
+              } catch(e) {}
 
               return (
                 <div key={uniqueKey} className={`p-6 md:p-8 rounded-3xl flex flex-col xl:flex-row gap-8 ${theme.glassItem} transition-all hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] dark:hover:border-orange-500 dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.6)] ${isPending ? isDarkMode ? 'border-orange-500! ring-4 ring-orange-500/20 bg-orange-500/10!' : 'border-orange-400! ring-4 ring-orange-400/20 bg-orange-50/50!' : ''}`}>
