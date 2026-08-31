@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   ArrowLeft, RefreshCw, CheckCircle2, Clock, 
-  Laptop, User, Search, XCircle, AlertCircle, Wrench, X, Image as ImageIcon, ArrowRight
+  Laptop, User, Search, XCircle, AlertCircle, Wrench, X, Image as ImageIcon, ArrowRight, ZoomIn, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,6 +17,9 @@ function AdminReplacementsContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // 🌟 GLASS GALLERY STATE
+  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, scale: 1 });
 
   useEffect(() => {
     const syncTheme = () => {
@@ -33,6 +36,7 @@ function AdminReplacementsContent() {
     const realtimeChannel = supabase
       .channel('admin_replacements_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'replacements' }, () => fetchReplacements(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => fetchReplacements(false))
       .subscribe();
 
     return () => { 
@@ -41,18 +45,87 @@ function AdminReplacementsContent() {
     };
   }, []);
 
+  // Keyboard navigation for Gallery
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!gallery.isOpen) return;
+      if (e.key === 'Escape') setGallery(g => ({ ...g, isOpen: false, scale: 1 }));
+      if (e.key === 'ArrowRight' && gallery.index < gallery.images.length - 1) setGallery(g => ({ ...g, index: g.index + 1, scale: 1 }));
+      if (e.key === 'ArrowLeft' && gallery.index > 0) setGallery(g => ({ ...g, index: g.index - 1, scale: 1 }));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gallery]);
+
   const fetchReplacements = async (showSpin = true) => {
     if (showSpin) setLoading(true);
     else setIsRefreshing(true);
 
     try {
+      // 1. Fetch native replacements
       const { data: replData, error } = await supabase
         .from('replacements')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReplacementRequests(replData || []);
+      
+      let allReplacements = (replData || []).map(r => {
+        let photosList: string[] = [];
+        try {
+          if (Array.isArray(r.photos)) photosList = r.photos;
+          else if (typeof r.photos === 'string' && r.photos.startsWith('[')) photosList = JSON.parse(r.photos);
+          else if (r.photos && typeof r.photos === 'object') photosList = Object.values(r.photos);
+        } catch(e) {}
+
+        return { ...r, sourceTable: 'replacements', photos: photosList };
+      });
+
+      // 2. Fetch older inspections that acted as replacements (Legacy Recovery)
+      const { data: inspData } = await supabase
+        .from('inspections')
+        .select('*, assets(*)')
+        .or('status.ilike.%replace%,notes.ilike.%replace%')
+        .order('created_at', { ascending: false });
+
+      if (inspData && inspData.length > 0) {
+        const legacyReplacements = inspData.map(insp => {
+          const asset = insp.assets || {};
+          
+          let photosList: string[] = [];
+          try {
+            if (Array.isArray(insp.photos)) photosList = insp.photos;
+            else if (typeof insp.photos === 'string' && insp.photos.startsWith('[')) photosList = JSON.parse(insp.photos);
+            else if (insp.photos && typeof insp.photos === 'object') photosList = Object.values(insp.photos);
+            else if (insp.photo_url) photosList = [insp.photo_url];
+          } catch(e) {}
+
+          return {
+            id: insp.id,
+            sourceTable: 'inspections',
+            old_asset_id: insp.asset_id,
+            asset_tag: asset.asset_tag || 'N/A',
+            serial_number: asset.serial_number || 'N/A',
+            user_id: insp.user_id || insp.inspected_by || asset.assigned_to,
+            staff_name: insp.user_name || 'Staff Member',
+            user_email: insp.user_email || '',
+            emp_code: insp.emp_code || 'UNKNOWN',
+            condition: 'Legacy Record (See Notes)',
+            reason: insp.notes || 'Replacement requested via old inspection log',
+            photos: photosList,
+            status: insp.status || 'Pending Review',
+            created_at: insp.created_at,
+            admin_remarks: insp.admin_remarks
+          };
+        });
+        
+        allReplacements = [...allReplacements, ...legacyReplacements];
+      }
+
+      // Sort combined array
+      allReplacements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setReplacementRequests(allReplacements);
     } catch (err: any) {
       alert("Failed to fetch replacements: " + err.message);
     } finally {
@@ -67,10 +140,20 @@ function AdminReplacementsContent() {
 
     setUpdatingId(item.id);
     try {
-      await supabase.from('replacements').update({ 
-        status: action, 
-        admin_remarks: remarks 
-      }).eq('id', item.id);
+      
+      // Update the correct table dynamically
+      if (item.sourceTable === 'inspections') {
+        const mappedStatus = action === 'Resolved' ? 'Replacement Approved' : action === 'Rejected' ? 'Replacement Rejected' : action;
+        await supabase.from('inspections').update({ 
+          status: mappedStatus, 
+          admin_remarks: remarks 
+        }).eq('id', item.id);
+      } else {
+        await supabase.from('replacements').update({ 
+          status: action, 
+          admin_remarks: remarks 
+        }).eq('id', item.id);
+      }
 
       // 🌟 IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
       if (action === 'Resolved') {
@@ -78,14 +161,14 @@ function AdminReplacementsContent() {
           status: 'In Stock',
           assigned_to: null, // Unassigns the asset
           inspection_status: null,
-          admin_remarks: `Approved: ${remarks}`
+          admin_remarks: `Approved Swap: ${remarks}`
         }).eq('id', item.old_asset_id);
 
         await supabase.from('notifications').insert({
           target_user: item.user_id || item.user_email,
           target_role: 'staff',
           title: '✅ Request Approved',
-          message: `Request received and admin will assign new assets. Notes: ${remarks}`,
+          message: `Your replacement request was approved. Admin will assign new assets. Notes: ${remarks}`,
           type: 'success',
           is_read: false
         });
@@ -96,14 +179,14 @@ function AdminReplacementsContent() {
         
         await supabase.from('assets').update({
           status: isReturn ? 'Return Rejected' : 'Replacement Rejected',
-          admin_remarks: `Denied: ${remarks}`
+          admin_remarks: `Denied Swap: ${remarks}`
         }).eq('id', item.old_asset_id);
 
         await supabase.from('notifications').insert({
           target_user: item.user_id || item.user_email,
           target_role: 'staff',
           title: '❌ Request Denied',
-          message: `Your request for ${item.asset_tag} was rejected. Notes: ${remarks}`,
+          message: `Your replacement request for ${item.asset_tag} was rejected. Notes: ${remarks}`,
           type: 'error',
           is_read: false
         });
@@ -115,6 +198,10 @@ function AdminReplacementsContent() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const openGallery = (images: string[], startIndex: number) => {
+    setGallery({ isOpen: true, images, index: startIndex, scale: 1 });
   };
 
   const filteredList = replacementRequests.filter(item => {
@@ -148,6 +235,52 @@ function AdminReplacementsContent() {
     <div className={`min-h-screen ${theme.bg} relative overflow-x-hidden font-sans antialiased pb-12 transition-colors duration-1000`}>
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10 transition-all duration-1000" />
+
+      {/* 🌟 FULL SCREEN GLASS GALLERY MODAL */}
+      {gallery.isOpen && (
+        <div className="fixed inset-0 z-99999 flex items-center justify-center bg-slate-900/90 backdrop-blur-3xl animate-in fade-in">
+          <div className="absolute inset-0" onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })}></div>
+          
+          <button onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })} className="absolute top-6 right-6 text-white/60 hover:text-white z-50 bg-white/10 p-3 rounded-full backdrop-blur-md transition-all hover:scale-110">
+             <X size={24} />
+          </button>
+          
+          <div className="relative w-full max-w-6xl h-[85vh] flex items-center justify-between px-4 z-40 pointer-events-none">
+              
+              <button 
+                onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index - 1, scale: 1 }); }} 
+                disabled={gallery.index === 0}
+                className={`pointer-events-auto p-4 rounded-full backdrop-blur-xl border border-white/20 transition-all ${gallery.index === 0 ? 'opacity-30 cursor-not-allowed bg-black/20' : 'bg-white/10 hover:bg-white/20 text-white cursor-pointer hover:scale-110'}`}
+              >
+                 <ChevronLeft size={32} />
+              </button>
+
+              <div className="flex-1 h-full flex items-center justify-center pointer-events-auto relative px-8 overflow-hidden">
+                <img 
+                   src={gallery.images[gallery.index]} 
+                   style={{ transform: `scale(${gallery.scale})` }}
+                   onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, scale: gallery.scale === 1 ? 2 : 1 }); }}
+                   className={`max-w-full max-h-full object-contain transition-transform duration-300 rounded-lg shadow-2xl ${gallery.scale === 1 ? 'cursor-zoom-in' : 'cursor-zoom-out'}`} 
+                   alt="Gallery View"
+                />
+              </div>
+
+              <button 
+                onClick={(e) => { e.stopPropagation(); setGallery({ ...gallery, index: gallery.index + 1, scale: 1 }); }} 
+                disabled={gallery.index === gallery.images.length - 1}
+                className={`pointer-events-auto p-4 rounded-full backdrop-blur-xl border border-white/20 transition-all ${gallery.index === gallery.images.length - 1 ? 'opacity-30 cursor-not-allowed bg-black/20' : 'bg-white/10 hover:bg-white/20 text-white cursor-pointer hover:scale-110'}`}
+              >
+                 <ChevronRight size={32} />
+              </button>
+          </div>
+
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/10 border border-white/20 backdrop-blur-xl px-6 py-2.5 rounded-full text-white font-black tracking-widest text-xs flex items-center gap-3">
+             <ImageIcon size={14}/> {gallery.index + 1} / {gallery.images.length}
+             <span className="w-px h-3 bg-white/30 mx-2"></span>
+             <ZoomIn size={14} className="opacity-70"/> Click to Zoom
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 mx-auto space-y-5 sm:space-y-6 pt-4 relative z-10">
         
@@ -220,7 +353,7 @@ function AdminReplacementsContent() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={item.id} 
-                  className={`${theme.glassCard} rounded-[2rem] p-5 sm:p-7 relative overflow-hidden flex flex-col`}
+                  className={`${theme.glassCard} rounded-[2rem] p-5 sm:p-7 relative overflow-hidden flex flex-col hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] transition-all`}
                 >
                   <div className={`absolute top-0 right-0 w-48 h-48 blur-[60px] -z-10 rounded-full opacity-10 transition-opacity duration-500 pointer-events-none ${isResolved ? 'bg-emerald-500' : isRejected ? 'bg-rose-500' : 'bg-amber-500'}`} />
 
@@ -279,14 +412,22 @@ function AdminReplacementsContent() {
                           <p className={`text-[13px] font-medium leading-relaxed whitespace-pre-wrap ${theme.textMain}`}>{item.reason || 'No description provided.'}</p>
                         </div>
 
+                        {/* 📸 PHOTOS SECTION WITH GALLERY */}
                         {item.photos && item.photos.length > 0 && (
                           <div className={`p-4 rounded-[1rem] flex flex-col gap-2 ${theme.glassItem}`}>
                             <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${theme.textSub}`}><ImageIcon size={14}/> Photo Evidence Provided</span>
                             <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
                               {item.photos.map((url: string, i: number) => (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0 hover:scale-105 transition-transform border border-white/20 rounded-xl overflow-hidden shadow-sm block">
-                                  <img src={url} alt={`Evidence ${i}`} className="h-20 w-20 object-cover" />
-                                </a>
+                                <div 
+                                  key={`photo-${item.id}-${i}`} 
+                                  onClick={() => openGallery(item.photos, i)}
+                                  className="relative group cursor-pointer shrink-0"
+                                >
+                                  <img src={url} alt={`Evidence ${i}`} className="h-20 w-20 object-cover rounded-xl border-2 border-transparent transition-all group-hover:border-orange-500 group-hover:scale-105" />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                                    <ZoomIn size={16} className="text-white" />
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           </div>
