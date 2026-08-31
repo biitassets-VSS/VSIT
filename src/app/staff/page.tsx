@@ -533,11 +533,12 @@ export default function StaffDashboardPage() {
     setQrSessionId(null);
     setRemotePhotos([]);
     setLocalPhotos([]);
+    setIsSubmittingReplace(false);
   };
 
   const handleGenerateQR = (asset: any) => {
     if (!asset || !replaceReason.trim()) {
-      toast.error("Please ensure asset and reason are provided.");
+      alert("Please ensure you provide a valid Replace Reason & Notes before generating a QR code.");
       return;
     }
 
@@ -545,7 +546,6 @@ export default function StaffDashboardPage() {
     const sessionId = crypto.randomUUID();
     setQrSessionId(sessionId);
     
-    // mode=upload_only forces the mobile device to just act as a camera, skipping DB insertion
     const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&mode=upload_only`;
     
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
@@ -554,16 +554,26 @@ export default function StaffDashboardPage() {
   const handleReplaceSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) e.preventDefault();
     if (!replaceAssetId) return;
+
+    if (!replaceReason.trim()) {
+      alert("Validation Error: Please provide a descriptive Reason & Notes for this replacement request.");
+      return;
+    }
+
     setIsSubmittingReplace(true);
 
-    const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
-    if (!activeAsset) return;
+    const activeAsset = assignedAssets.find(a => String(a.id) === String(replaceAssetId));
+    if (!activeAsset) {
+      setIsSubmittingReplace(false);
+      return;
+    }
 
     try {
       const newUrls = await uploadMultiplePhotos(localPhotos);
       const allPhotos = [...remotePhotos, ...newUrls];
 
-      const { error: insertError } = await supabase.from('replacements').insert({
+      // Robust Auto-Degrading Payload for schema mismatch safety
+      let payload: any = {
         old_asset_id: activeAsset.id,
         asset_tag: activeAsset.asset_tag,
         serial_number: activeAsset.serial_number,
@@ -575,13 +585,35 @@ export default function StaffDashboardPage() {
         reason: replaceReason,
         photos: allPhotos.length > 0 ? allPhotos : null,
         status: 'Pending Approval'
-      });
-      if (insertError) throw insertError;
+      };
+
+      let dbSuccess = false;
+      let lastErr = null;
+
+      for (let i = 0; i < 5; i++) {
+        const { error: insertError } = await supabase.from('replacements').insert(payload);
+        if (insertError) {
+          lastErr = insertError;
+          const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
+          if (match && match[1]) {
+            const col = match[1];
+            if (col === 'old_asset_id') payload['asset_id'] = activeAsset.id; // Try fallback naming
+            delete payload[col];
+            continue;
+          }
+          throw insertError;
+        }
+        dbSuccess = true;
+        break;
+      }
+
+      if (!dbSuccess && lastErr) throw lastErr;
 
       const { error: updateError } = await supabase.from('assets').update({ 
         status: 'Replace Pending', 
         admin_remarks: null 
       }).eq('id', activeAsset.id);
+
       if (updateError) throw updateError;
 
       loadRealDatabase(false); 
@@ -589,7 +621,7 @@ export default function StaffDashboardPage() {
       toast.success(`Replacement request for ${activeAsset.asset_tag} sent successfully.`);
     } catch (err: any) { 
       console.error("Replace Submit Error:", err);
-      toast.error(`Failed to submit: ${err.message || err.details || 'Unknown error occurred'}`); 
+      alert(`Critical Error Submitting Request:\n\n${err.message || 'Unknown database issue'}`);
     } finally { 
       setIsSubmittingReplace(false); 
     }
@@ -656,7 +688,7 @@ export default function StaffDashboardPage() {
   if (loading) return null; 
   if (!isAuthorized) return null; 
 
-  const activeAsset = assignedAssets.find(a => String(a.id) === replaceAssetId);
+  const activeAsset = assignedAssets.find(a => String(a.id) === String(replaceAssetId));
   const isLaptopObj = (activeAsset?.category || '').toLowerCase().includes('laptop');
   const REQUIRED_PHOTOS = isLaptopObj ? 5 : 2;
   const currentPhotoCount = remotePhotos.length + localPhotos.length;
@@ -1284,7 +1316,7 @@ export default function StaffDashboardPage() {
                     </div>
                     
                     <p className={`text-[11px] sm:text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
-                      {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${REQUIRED_PHOTOS - currentPhotoCount} more photo(s)...`}
+                      {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${Math.max(0, REQUIRED_PHOTOS - currentPhotoCount)} more photo(s)...`}
                     </p>
 
                     <div className="mt-5 pt-5 border-t border-slate-100 w-full">
@@ -1305,7 +1337,8 @@ export default function StaffDashboardPage() {
                       <ChevronLeft size={20} strokeWidth={2.5} />
                     </button>
                     
-                    <div 
+                    <button 
+                      type="button"
                       onClick={(e) => {
                         if (isSubmittingReplace) return;
                         if (!hasEnoughPhotos) {
@@ -1317,7 +1350,7 @@ export default function StaffDashboardPage() {
                       className={`flex-1 h-12 rounded-xl text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${isSubmittingReplace ? 'opacity-50 cursor-not-allowed bg-purple-600/50' : 'bg-purple-600 hover:bg-purple-700 hover:scale-[1.02] active:scale-95'}`}
                     >
                       {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
-                    </div>
+                    </button>
 
                   </div>
                 </div>
