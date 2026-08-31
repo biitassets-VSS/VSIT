@@ -75,57 +75,60 @@ function AdminReturnsContent() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      // 1. Fetch logs that explicitly mention "return"
-      const { data: explicitReturns, error } = await supabase
+      // 1. Fetch inspections with return keywords in status or notes
+      const { data: inspLogs, error: inspErr } = await supabase
         .from('inspections')
         .select('*, assets(*)')
-        .or('status.ilike.%return%,notes.ilike.%return%')
+        .or('status.ilike.%return%,notes.ilike.%return%,notes.ilike.%returned%')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (inspErr) console.warn("Inspection query warning:", inspErr);
 
-      // 2. Fetch assets currently in the return pipeline
-      const { data: assetReturns } = await supabase
+      // 2. Fetch assets that have return keywords in status or notes
+      const { data: assetLogs, error: assetErr } = await supabase
         .from('assets')
         .select('*')
-        .ilike('status', '%return%');
+        .or('status.ilike.%return%,notes.ilike.%return%,notes.ilike.%returned%');
 
-      const pendingAssetIds = (assetReturns || []).map(a => a.id);
-      
-      // 3. GUARANTEE FETCH: Grab ALL recent inspections for these assets to catch mobile-audit submissions
-      let pendingAssetInspections: any[] = [];
-      if (pendingAssetIds.length > 0) {
-         const { data: paInspections } = await supabase
-           .from('inspections')
-           .select('*, assets(*)')
-           .in('asset_id', pendingAssetIds)
-           .order('created_at', { ascending: false });
-         pendingAssetInspections = paInspections || [];
+      if (assetErr) console.warn("Asset query warning:", assetErr);
+
+      const returnAssets = assetLogs || [];
+      const assetIdsFromAssets = returnAssets.map(a => a.id).filter(Boolean);
+
+      // 3. Fetch ALL inspections for any identified return assets
+      let assetInspections: any[] = [];
+      if (assetIdsFromAssets.length > 0) {
+        const { data: extraInsp } = await supabase
+          .from('inspections')
+          .select('*, assets(*)')
+          .in('asset_id', assetIdsFromAssets)
+          .order('created_at', { ascending: false });
+        assetInspections = extraInsp || [];
       }
 
-      // Combine and Deduplicate
-      const allFetchedInspections = [...(explicitReturns || []), ...pendingAssetInspections];
-      const uniqueInspectionsMap = new Map();
-      allFetchedInspections.forEach(item => {
-         if (item.id) uniqueInspectionsMap.set(item.id, item);
-      });
-      const validReturns = Array.from(uniqueInspectionsMap.values());
-
-      // 4. Find completely orphaned return assets (User requested return but abandoned photo app)
-      const orphanedAssets = (assetReturns || []).filter(asset => {
-         return !validReturns.some(r => r.asset_id === asset.id);
+      // Combine and deduplicate
+      const combinedInspections = [...(inspLogs || []), ...assetInspections];
+      const inspectionMap = new Map();
+      combinedInspections.forEach(item => {
+        if (item && item.id) {
+          inspectionMap.set(item.id, item);
+        }
       });
 
-      // 🌟 FORCE SYNTHETIC RETURNS TO WIN DATE SORTS
-      const syntheticReturns = orphanedAssets.map(asset => ({
-         id: `synthetic-${asset.id}`,
-         asset_id: asset.id,
-         user_id: asset.assigned_to,
-         status: asset.status, // "Pending Return"
-         notes: asset.notes || '[RETURN REQUEST] No notes provided (User may have aborted photo upload)',
-         created_at: new Date().toISOString(), 
-         assets: asset,
-         isSynthetic: true 
+      const validReturns = Array.from(inspectionMap.values());
+
+      // 4. Create synthetic records ONLY for truly orphaned assets
+      const orphanAssets = returnAssets.filter(asset => !validReturns.some(r => r.asset_id === asset.id));
+
+      const syntheticReturns = orphanAssets.map(asset => ({
+        id: `synthetic-${asset.id}`,
+        asset_id: asset.id,
+        user_id: asset.assigned_to,
+        status: (asset.status || '').toLowerCase().includes('return') ? asset.status : 'Return Approved',
+        notes: asset.notes || 'Return record derived from asset history.',
+        created_at: asset.updated_at || asset.created_at || new Date().toISOString(),
+        assets: asset,
+        isSynthetic: true
       }));
 
       const allReturns = [...validReturns, ...syntheticReturns];
@@ -135,6 +138,7 @@ function AdminReturnsContent() {
         return;
       }
 
+      // Fetch profile data for all users involved
       const assetIds = [...new Set(allReturns.map(r => r.asset_id).filter(Boolean))];
       const { data: allAssetInspections } = await supabase
         .from('inspections')
@@ -185,7 +189,7 @@ function AdminReturnsContent() {
         if (p.emp_id) profilesMap[cleanId(p.emp_id)] = p;
       });
 
-      // 🌟 AGGRESSIVE IDENTITY RESOLUTION ENGINE (DEEP EXTRACTION)
+      // Identity resolution
       const mergedData = allReturns.map((item: any) => {
         const profile = profilesMap[cleanId(item.user_id)] || 
                         profilesMap[cleanId(item.user_email)] || 
@@ -199,7 +203,6 @@ function AdminReturnsContent() {
            resolvedEmpCode = String(item.inspected_by).toUpperCase();
         }
 
-        // Regex Text Extraction Engine
         const extractIdentityFromText = (text: string) => {
             if (!text) return null;
             let name = null;
@@ -231,7 +234,6 @@ function AdminReturnsContent() {
             return (name || emp) ? { name, emp } : null;
         };
 
-        // Fallback 1: Extract from current notes
         if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
             const currentItemText = `${item.notes || ''} ${item.admin_remarks || ''} ${item.assets?.notes || ''}`;
             const extracted = extractIdentityFromText(currentItemText);
@@ -241,7 +243,6 @@ function AdminReturnsContent() {
             }
         }
 
-        // Fallback 2: Search ALL historical logs for this specific asset
         if (!resolvedName || resolvedName === 'Staff Member' || !resolvedEmpCode || resolvedEmpCode === 'UNKNOWN') {
             const assetHistory = allAssetInspections?.filter((insp: any) => insp.asset_id === item.asset_id) || [];
             
@@ -282,32 +283,29 @@ function AdminReturnsContent() {
         };
       });
 
-      // 🌟 HISTORICAL ARCHIVING ENGINE
-      const assetGroups: Record<string, any[]> = {};
-      mergedData.forEach((item: any) => {
-        const aId = item.asset_id || item.assets?.id || `unknown-${Math.random()}`;
-        if (!assetGroups[aId]) assetGroups[aId] = [];
-        assetGroups[aId].push(item);
-      });
-
-      const finalReturns: any[] = [];
-      Object.values(assetGroups).forEach(group => {
-        group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        group.forEach((item, index) => {
-          item.isLatest = index === 0; 
-          finalReturns.push(item);
-        });
-      });
-
-      finalReturns.sort((a, b) => {
-        const aActive = (a.isLatest && (a.status || '').toLowerCase().includes('pending')) ? -1 : 1;
-        const bActive = (b.isLatest && (b.status || '').toLowerCase().includes('pending')) ? -1 : 1;
-        if (aActive !== bActive) return aActive - bActive;
+      // Sort: Pending items first, then newer items to older items
+      mergedData.sort((a, b) => {
+        const aPending = (a.status || '').toLowerCase().includes('pending');
+        const bPending = (b.status || '').toLowerCase().includes('pending');
+        if (aPending !== bPending) return aPending ? -1 : 1;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
-      setReturnRequests(finalReturns);
+      // Flag latest entry per asset while keeping all history intact
+      const assetSeen = new Set<string>();
+      mergedData.forEach(item => {
+        const aId = item.asset_id || item.assets?.id;
+        if (aId && !assetSeen.has(aId)) {
+          item.isLatest = true;
+          assetSeen.add(aId);
+        } else {
+          item.isLatest = false;
+        }
+      });
+
+      setReturnRequests(mergedData);
     } catch (err: any) {
+      console.error("Fetch returns error:", err);
       alert("Failed to fetch return requests: " + err.message);
     } finally {
       setLoading(false);
@@ -567,13 +565,18 @@ function AdminReturnsContent() {
               const isPending = !isHistorical && ((item.status || '').toLowerCase().includes('pending') || (item.status || '').toLowerCase().includes('request'));
               const asset = item.assets || {};
               
-              // Robust array parsing for photos
+              // Robust array parsing for photos with multi-field fallback
               let photosList: string[] = [];
               try {
                 if (Array.isArray(item.photos)) photosList = item.photos;
                 else if (typeof item.photos === 'string' && item.photos.startsWith('[')) photosList = JSON.parse(item.photos);
                 else if (item.photos && typeof item.photos === 'object') photosList = Object.values(item.photos);
                 else if (item.photo_url) photosList = [item.photo_url];
+
+                if (photosList.length === 0 && item.assets?.photos) {
+                  if (Array.isArray(item.assets.photos)) photosList = item.assets.photos;
+                  else if (typeof item.assets.photos === 'string' && item.assets.photos.startsWith('[')) photosList = JSON.parse(item.assets.photos);
+                }
               } catch(e) {}
 
               return (
