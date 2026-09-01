@@ -84,6 +84,60 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
+const extractAdminReason = (remarks: string, notes: string) => {
+  if (remarks && remarks.trim() !== '') return remarks;
+  const lowerNotes = (notes || '').toLowerCase();
+  if (lowerNotes.includes('declin') || lowerNotes.includes('reject')) {
+    const parts = notes.split(/reason:/i);
+    return parts.length > 1 ? parts[1].trim() : notes;
+  }
+  if (lowerNotes.includes('approv')) {
+     const parts = notes.split(/reason:|remarks:/i);
+     return parts.length > 1 ? parts[1].trim() : "Return has been processed and approved.";
+  }
+  return 'No administrative remarks provided.';
+};
+
+// 🌟 ADDED MISSING EXTRACT PHOTOS FUNCTION
+const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
+  let extracted: string[] = [];
+  
+  const processItem = (item: any) => {
+    if (typeof item === 'string' && item.length > 5 && item.startsWith('http')) {
+      extracted.push(item);
+    } else if (typeof item === 'object' && item !== null) {
+      if (item.url) extracted.push(item.url);
+      else if (item.publicUrl) extracted.push(item.publicUrl);
+      else if (item.photo_url) extracted.push(item.photo_url);
+      else Object.values(item).forEach(processItem);
+    }
+  };
+
+  try {
+    if (Array.isArray(recordPhotos)) {
+      recordPhotos.forEach(processItem);
+    } else if (typeof recordPhotos === 'string') {
+      if (recordPhotos.trim().startsWith('[')) {
+        try { JSON.parse(recordPhotos).forEach(processItem); } catch(e){}
+      } else {
+        processItem(recordPhotos.trim());
+      }
+    } else if (recordPhotos && typeof recordPhotos === 'object') {
+      Object.values(recordPhotos).forEach(processItem);
+    }
+    
+    // Fallbacks
+    if (extracted.length === 0) {
+      if (fallbackRecord.photo_url) processItem(fallbackRecord.photo_url);
+      if (fallbackRecord.image_url) processItem(fallbackRecord.image_url);
+      if (fallbackRecord.evidence) processItem(fallbackRecord.evidence);
+      if (fallbackRecord.photos && typeof fallbackRecord.photos === 'string') processItem(fallbackRecord.photos);
+    }
+  } catch (e) {}
+  
+  return Array.from(new Set(extracted));
+};
+
 export default function StaffDashboardPage() {
   const router = useRouter(); 
   const [loading, setLoading] = useState(true);
@@ -446,26 +500,15 @@ export default function StaffDashboardPage() {
     }));
   }, [assignedAssets, needsInspCount, pendingHandovers.length, overdueAssetsList.length, myTickets]);
 
-  // 🌟 CATCH-ALL REALTIME LISTENER FOR MOBILE UPLOADS
   useEffect(() => {
     if (!qrSessionId) return;
-    
-    const handlePhoto = (payload: any) => {
-      if (payload.payload?.url) {
-        setRemotePhotos(prev => {
-          if (prev.includes(payload.payload.url)) return prev;
-          return [...prev, payload.payload.url];
-        });
-      }
-    };
-
-    const c1 = supabase.channel(`qr_session_${qrSessionId}`).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
-    const c2 = supabase.channel(qrSessionId).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
-    
-    return () => { 
-      supabase.removeChannel(c1); 
-      supabase.removeChannel(c2); 
-    };
+    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
+      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
+        if (payload.payload?.url) {
+          setRemotePhotos(prev => [...prev, payload.payload.url]);
+        }
+      }).subscribe();
+    return () => { supabase.removeChannel(photoChannel); };
   }, [qrSessionId]);
 
   const handleRateTicket = async (ticketId: string, rating: number) => {
@@ -545,7 +588,6 @@ export default function StaffDashboardPage() {
         condition: replaceCondition,
         reason: replaceReason,
         notes: replaceReason, 
-        // 🌟 STRINGIFY TO GUARANTEE JSONB COMPATIBILITY
         photos: allPhotos.length > 0 ? JSON.stringify(allPhotos) : JSON.stringify([]),
         status: 'Pending Approval'
       };
