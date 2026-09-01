@@ -288,7 +288,15 @@ export default function AdminDashboardPage() {
         }
 
         const statusText = (log.status || '').toLowerCase();
+        const notesText = (log.notes || '').toLowerCase();
         const isApproved = statusText.includes('resolv') || statusText.includes('approv');
+        const isRejected = statusText.includes('reject') || statusText.includes('declin');
+        const isReInspect = statusText.includes('re-inspect') || statusText.includes('action req');
+
+        // Dynamically determine the request type
+        let reqType = 'inspection';
+        if (notesText.includes('return') || statusText.includes('return')) reqType = 'return';
+        else if (notesText.includes('replace') || statusText.includes('replace')) reqType = 'replacement';
 
         let displayName = requesterName; 
         let empCode = requesterEmpCode;
@@ -297,8 +305,8 @@ export default function AdminDashboardPage() {
 
         if (statusText.includes('pending') || statusText === '') {
           logTheme = 'text-orange-500 bg-orange-500/10 border-orange-500/20';
-          actionText = `Requested return/inspection for ${assetName}.`;
-        } else if (isApproved) {
+          actionText = `Submitted ${reqType} request for ${assetName}.`;
+        } else if (isApproved || isRejected || isReInspect) {
           let approverName = currentAdminName;
           if (log.inspected_by && log.inspected_by !== 'admin' && log.inspected_by !== activeUser.id) {
             const approverProfile = staffData.find(p => p.id === log.inspected_by);
@@ -307,8 +315,17 @@ export default function AdminDashboardPage() {
 
           displayName = approverName; 
           empCode = 'ADMIN';          
-          logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-          actionText = `Approved return request from ${requesterName} for ${assetName}.`;
+          
+          if (isApproved) {
+            logTheme = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+            actionText = `Approved ${reqType} request from ${requesterName} for ${assetName}.`;
+          } else if (isRejected) {
+            logTheme = 'text-rose-500 bg-rose-500/10 border-rose-500/20';
+            actionText = `Rejected ${reqType} request from ${requesterName} for ${assetName}.`;
+          } else {
+            logTheme = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+            actionText = `Requested re-inspection from ${requesterName} for ${assetName}.`;
+          }
         }
 
         return { ...log, displayName, empCode, logTheme, actionText };
@@ -363,7 +380,7 @@ export default function AdminDashboardPage() {
   };
 
   // ==========================================
-  // 🌟 TRUE TRANSPARENT LIQUID GLASS THEME (Refined for less white, more blur)
+  // 🌟 TRUE TRANSPARENT LIQUID GLASS THEME
   // ==========================================
   const theme = {
     textMain: isDarkMode ? 'text-zinc-100' : 'text-slate-800',
@@ -401,14 +418,12 @@ export default function AdminDashboardPage() {
   );
 
   return (
-    // 🌟 FULL SCREEN EXACT FIT (h-full overflow-hidden) ensures no page scrollbar
     <div className="w-full h-full flex flex-col font-sans antialiased overflow-hidden bg-transparent">
       
       {/* 🌟 Premium Background Orbs */}
       <div className="fixed top-[-10%] left-[0%] w-[50vw] h-[50vh] bg-orange-500/20 dark:bg-orange-600/15 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-[-10%] right-[0%] w-[50vw] h-[50vh] bg-purple-600/20 dark:bg-purple-700/15 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      {/* 🌟 FLEX-1 MIN-H-0 ensures layout perfectly scales inside window boundaries */}
       <div className="flex-1 flex flex-col w-full max-w-[1600px] mx-auto p-4 lg:p-6 gap-5 lg:gap-6 z-10 min-h-0">
         
         {/* 🌟 Top Dashboard Header */}
@@ -520,7 +535,7 @@ export default function AdminDashboardPage() {
         {/* 🌟 System Modules & Live Activity Container */}
         <div className="flex-1 flex flex-col lg:flex-row gap-5 relative z-30 min-h-0 mt-2">
           
-          {/* 🌟 System Modules (Left Side) - Visiting Card Proportions, No Scroll */}
+          {/* 🌟 System Modules (Left Side) */}
           <div className="w-full lg:w-[72%] flex flex-col min-h-0">
             <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-2 mb-3 shrink-0 ${theme.textSub}`}>System Modules</h3>
             
@@ -540,14 +555,11 @@ export default function AdminDashboardPage() {
                   <button 
                     key={i} 
                     onClick={() => router.push(m.path)} 
-                    // 🌟 aspect-[1.7/1] forces the exact proportions of a Visiting Card. 
-                    // 🌟 hover:ring-1 ensures the glass outline stays visible on hover and isn't clipped.
                     className={`text-left cursor-pointer p-4 rounded-3xl flex flex-col justify-between ease-out group w-full aspect-[1.7/1] ${theme.glassItem} hover:-translate-y-1 hover:shadow-2xl transition-all duration-300 ${isOrange ? 'hover:border-orange-400 hover:ring-1 hover:ring-orange-400 hover:shadow-orange-500/20' : 'hover:border-purple-400 hover:ring-1 hover:ring-purple-400 hover:shadow-purple-500/20'}`}
                   >
                     <div className="flex items-start justify-between w-full relative">
                       <div className={`relative w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 ${theme.glassInnerCard} ${isOrange ? 'text-orange-500' : 'text-purple-500'}`}>
                         <m.icon size={26} strokeWidth={2} />
-                        {/* Badge */}
                         {m.badge > 0 && (
                           <span className="absolute -top-2.5 -right-2.5 min-w-[22px] h-5 px-1 flex items-center justify-center bg-gradient-to-tr from-orange-500 to-purple-600 text-white text-[10px] font-black rounded-full border border-white/40 shadow-[0_4px_10px_rgba(249,115,22,0.4)] z-50 transition-transform hover:scale-110">
                             {m.badge}
@@ -568,7 +580,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* 🌟 Live Activity Log (Right Side) - Strictly Limited to 4 Items */}
+          {/* 🌟 Live Activity Log (Right Side) */}
           <div className="w-full lg:w-[28%] flex flex-col min-h-0 pb-2">
             <h3 className={`text-[11px] font-bold uppercase tracking-widest pl-2 shrink-0 mb-3 ${theme.textSub}`}>Live Activity Log</h3>
             <div className={`${theme.glassCard} rounded-3xl p-5 flex flex-col h-full`}>
