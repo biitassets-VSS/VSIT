@@ -98,6 +98,46 @@ const extractAdminReason = (remarks: string, notes: string) => {
   return 'No administrative remarks provided.';
 };
 
+// 🌟 ADDED MISSING EXTRACT PHOTOS FUNCTION
+const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
+  let extracted: string[] = [];
+  
+  const processItem = (item: any) => {
+    if (typeof item === 'string' && item.length > 5 && item.startsWith('http')) {
+      extracted.push(item);
+    } else if (typeof item === 'object' && item !== null) {
+      if (item.url) extracted.push(item.url);
+      else if (item.publicUrl) extracted.push(item.publicUrl);
+      else if (item.photo_url) extracted.push(item.photo_url);
+      else Object.values(item).forEach(processItem);
+    }
+  };
+
+  try {
+    if (Array.isArray(recordPhotos)) {
+      recordPhotos.forEach(processItem);
+    } else if (typeof recordPhotos === 'string') {
+      if (recordPhotos.trim().startsWith('[')) {
+        try { JSON.parse(recordPhotos).forEach(processItem); } catch(e){}
+      } else {
+        processItem(recordPhotos.trim());
+      }
+    } else if (recordPhotos && typeof recordPhotos === 'object') {
+      Object.values(recordPhotos).forEach(processItem);
+    }
+    
+    // Fallbacks
+    if (extracted.length === 0) {
+      if (fallbackRecord.photo_url) processItem(fallbackRecord.photo_url);
+      if (fallbackRecord.image_url) processItem(fallbackRecord.image_url);
+      if (fallbackRecord.evidence) processItem(fallbackRecord.evidence);
+      if (fallbackRecord.photos && typeof fallbackRecord.photos === 'string') processItem(fallbackRecord.photos);
+    }
+  } catch (e) {}
+  
+  return Array.from(new Set(extracted));
+};
+
 export default function StaffDashboardPage() {
   const router = useRouter(); 
   const [loading, setLoading] = useState(true);
@@ -1210,7 +1250,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
 
   useEffect(() => {
     if (!qrSessionId) return;
-    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
+    const photoChannel = supabase.channel(`modal_qr_session_${qrSessionId}`)
       .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
         if (payload.payload?.url) {
           setRemotePhotos(prev => [...prev, payload.payload.url]);
