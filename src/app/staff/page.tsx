@@ -429,14 +429,12 @@ export default function StaffDashboardPage() {
     const auditWindow = getAuditWindowInfo(asset.category);
     const trueInspStatus = (asset.true_inspection_state || '').toLowerCase();
     
+    // 1. Lock if currently under review
     if (trueInspStatus.includes('pending')) {
       return { disabled: true, text: "Under Review", classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     }
 
-    if (trueInspStatus === 'approved') {
-      return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
-    }
-
+    // 2. Unlock if previously rejected or needs re-inspection
     if (trueInspStatus.includes('audit rejected') || trueInspStatus.includes('fail')) {
       return { disabled: false, text: "Re-Audit Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
@@ -445,10 +443,12 @@ export default function StaffDashboardPage() {
       return { disabled: false, text: "Re-Inspection Required", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
+    // 3. PRIORITY CHECK: Unlock immediately if overdue
     if (asset.isOverdue) {
       return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
+    // 4. Only lock if it was explicitly approved WITHIN the current valid cycle window
     const hasAudited = allInspections.some(insp => {
        const d = new Date(insp.created_at);
        return insp.asset_id === asset.id && 
@@ -459,11 +459,17 @@ export default function StaffDashboardPage() {
               (insp.status === 'Approved'); 
     });
 
-    if (hasAudited) return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    if (hasAudited) {
+      return { disabled: true, text: "Audited This Cycle", classes: "bg-emerald-50/80 backdrop-blur-xl text-emerald-600 font-bold border border-emerald-200 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] cursor-not-allowed" };
+    }
     
+    // 5. Lock if the standard window hasn't opened yet
     const auditDateStr = auditWindow.windowStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    if (!auditWindow.isOpen) return { disabled: true, text: `Opens ${auditDateStr}`, classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
+    if (!auditWindow.isOpen) {
+      return { disabled: true, text: `Opens ${auditDateStr}`, classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
+    }
     
+    // 6. Otherwise, standard audit is open
     return { disabled: false, text: "Audit Device Now", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
   };
 
@@ -585,7 +591,7 @@ export default function StaffDashboardPage() {
         condition: replaceCondition,
         reason: replaceReason,
         notes: replaceReason,             // Safe fallback
-        photos: allPhotos.length > 0 ? allPhotos : [], // 🌟 Send empty array for JSONB default safety
+        photos: allPhotos.length > 0 ? allPhotos : [], // Send empty array for JSONB default safety
         status: 'Pending Approval'
       };
 
@@ -601,7 +607,7 @@ export default function StaffDashboardPage() {
           if (match && match[1]) {
             const col = match[1];
             
-            // 🌟 EXPLICIT WARNING if the photo column is STILL missing
+            // EXPLICIT WARNING if the photo column is STILL missing
             if (col === 'photos') {
               toast.error("Database missing 'photos' column! Images were not saved.", { duration: 6000 });
             }
