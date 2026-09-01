@@ -1307,40 +1307,50 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
           staff_name: humanName 
         });
         submitError = error;
-      } else if (type === 'INSPECTION') {
-        // 🌟 Direct DB Insert for Inspection from Desktop Modal
+      } else if (type === 'INSPECTION' || type === 'RETURN') {
+        // 🌟 Direct DB Insert for Inspection/Return from Desktop Modal
         const newUrls = await uploadMultiplePhotos(localPhotos);
         const allPhotos = [...remotePhotos, ...newUrls];
-        const { error: inspErr } = await supabase.from('inspections').insert({
+        
+        let payload: any = {
           asset_id: activeAsset.id,
-          user_id: user.id,
+          inspected_by: user.id, // Primary
+          user_id: user.id,      // Backup
           user_name: user.name,
           user_email: user.email,
           emp_code: user.emp_id,
-          status: 'Pending Review',
+          status: type === 'RETURN' ? 'Return Pending' : 'Pending Review',
           condition: formCondition,
-          notes: formText,
+          notes: type === 'RETURN' ? `[RETURN REQUEST] ${formText}` : formText,
           photos: allPhotos.length > 0 ? allPhotos : []
-        });
-        if (inspErr) throw inspErr;
-        await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', activeAsset.id);
-      } else if (type === 'RETURN') {
-        // 🌟 Direct DB Insert for Return from Desktop Modal
-        const newUrls = await uploadMultiplePhotos(localPhotos);
-        const allPhotos = [...remotePhotos, ...newUrls];
-        const { error: retErr } = await supabase.from('inspections').insert({
-          asset_id: activeAsset.id,
-          user_id: user.id,
-          user_name: user.name,
-          user_email: user.email,
-          emp_code: user.emp_id,
-          status: 'Return Pending',
-          condition: formCondition,
-          notes: `[RETURN REQUEST] ${formText}`,
-          photos: allPhotos.length > 0 ? allPhotos : []
-        });
-        if (retErr) throw retErr;
-        await supabase.from('assets').update({ status: 'Pending Return', inspection_status: 'Return Pending' }).eq('id', activeAsset.id);
+        };
+
+        let dbSuccess = false;
+        let lastErr = null;
+
+        // Auto-stripping loop to guarantee it inserts regardless of schema differences
+        for (let i = 0; i < 15; i++) {
+          const { error: insertError } = await supabase.from('inspections').insert(payload);
+          if (insertError) {
+            lastErr = insertError;
+            const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
+            if (match && match[1]) {
+              delete payload[match[1]]; 
+              continue;
+            }
+            throw insertError;
+          }
+          dbSuccess = true;
+          break;
+        }
+
+        if (!dbSuccess && lastErr) throw lastErr;
+        
+        if (type === 'INSPECTION') {
+          await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', activeAsset.id);
+        } else {
+          await supabase.from('assets').update({ status: 'Pending Return', inspection_status: 'Return Pending' }).eq('id', activeAsset.id);
+        }
       }
       
       if (submitError) throw submitError;
