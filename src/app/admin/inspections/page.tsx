@@ -41,6 +41,28 @@ const ASSET_LEGACY_MAP: Record<string, {name: string, empCode: string}> = {
 };
 
 // --- Helper Functions ---
+const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
+  let extracted: string[] = [];
+  try {
+    if (Array.isArray(recordPhotos)) {
+      extracted = recordPhotos;
+    } else if (typeof recordPhotos === 'string') {
+      if (recordPhotos.trim().startsWith('[')) {
+        extracted = JSON.parse(recordPhotos);
+      } else if (recordPhotos.trim() !== '') {
+        extracted = [recordPhotos.trim()];
+      }
+    } else if (recordPhotos && typeof recordPhotos === 'object') {
+      extracted = Object.values(recordPhotos);
+    }
+    
+    // Fallbacks
+    if (extracted.length === 0 && fallbackRecord.photo_url) extracted = [fallbackRecord.photo_url];
+    if (extracted.length === 0 && fallbackRecord.image_url) extracted = [fallbackRecord.image_url];
+    if (extracted.length === 0 && fallbackRecord.evidence) extracted = [fallbackRecord.evidence];
+  } catch (e) {}
+  return extracted.filter(url => typeof url === 'string' && url.length > 5);
+};
 
 function getCategoryIcon(category: string, size = 18) {
   const cat = String(category || '').toLowerCase();
@@ -421,7 +443,9 @@ function AdminInspectionReviewContent() {
         }
 
         const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isProfileAdmin;
-        const photosArray = Array.isArray(insp.photos) ? insp.photos : Object.values(insp.photos || {});
+        
+        // 🌟 Use the robust extraction function
+        const photosArray = extractPhotos(insp.photos, insp);
 
         let currentAssignee = matchedAsset.assigned_to;
         let isOldUser = false;
@@ -661,7 +685,6 @@ function AdminInspectionReviewContent() {
         // Fallback for missing UUID mappings
         query = query.eq('asset_id', assetId).ilike('status', '%Pending%');
       } else {
-        // FIX: Target exclusively by Primary Key to prevent silent 0-row updates
         query = query.eq('id', inspectionId);
       }
 
@@ -765,7 +788,6 @@ function AdminInspectionReviewContent() {
     }).length;
   };
 
-  // 🌟 TRUE LIQUID GLASS THEME TOKENS EVERYWHERE
   const liquidGlass = {
     card: "bg-white/40 backdrop-blur-3xl border border-white/60 shadow-[0_8px_32px_rgba(230,210,200,0.15),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-[2rem]",
     pill: "bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] rounded-full",
@@ -788,7 +810,6 @@ function AdminInspectionReviewContent() {
       {mounted && gallery.isOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 sm:p-12 overflow-hidden">
           
-          {/* 🌟 FIXED, PROMINENT CLOSE BUTTON */}
           <button 
             onClick={() => {
               setGallery({ isOpen: false, images: [], index: 0 });
@@ -799,7 +820,6 @@ function AdminInspectionReviewContent() {
             <X size={24} strokeWidth={2.5} />
           </button>
 
-          {/* Header Info */}
           <div className="absolute top-6 left-6 z-[1000000] flex flex-col pointer-events-none">
             <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-white bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
@@ -809,7 +829,6 @@ function AdminInspectionReviewContent() {
             </span>
           </div>
           
-          {/* 🌟 GLASS FRAME FOR IMAGE */}
           <div className="relative w-full max-w-5xl h-full max-h-[80vh] flex-1 flex flex-col items-center justify-center p-3 sm:p-4 rounded-[2rem] bg-white/10 backdrop-blur-3xl border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.3)] mt-8">
             <div 
               className="w-full h-full relative flex items-center justify-center overflow-hidden rounded-2xl bg-black/50"
@@ -831,7 +850,6 @@ function AdminInspectionReviewContent() {
             </div>
           </div>
           
-          {/* Navigation Controls */}
           {gallery.images.length > 1 && (
              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
                 <button 
@@ -892,7 +910,6 @@ function AdminInspectionReviewContent() {
                 </span>
               </div>
 
-              {/* TIMELINE LOGS WITH PREVIOUS / CURRENT HOLDER LABELS */}
               <div className={`p-5 ${liquidGlass.inner}`}>
                 <h4 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-slate-700">
                   <HistoryIcon size={16} className="text-orange-500"/> Activity Lifecycle & Holder History
@@ -1027,7 +1044,7 @@ function AdminInspectionReviewContent() {
               {filteredList.map((insp: any) => {
                 const isPending = String(insp.status).toLowerCase().includes('pending');
                 const isReInspect = String(insp.status).toLowerCase().includes('re-inspection');
-                const photosArray = insp.photos || [];
+                const photosArray = extractPhotos(insp.photos, insp); // 🌟 Apply robust parser
 
                 return (
                   <motion.div 
