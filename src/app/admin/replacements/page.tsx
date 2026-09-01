@@ -66,8 +66,33 @@ function AdminReplacementsContent() {
     if (showSpin) setLoading(true);
     else setIsRefreshing(true);
 
+    // 🌟 ROBUST PHOTO PARSER
+    const extractPhotos = (record: any) => {
+      let extracted: string[] = [];
+      try {
+        if (Array.isArray(record.photos)) {
+          extracted = record.photos;
+        } else if (typeof record.photos === 'string') {
+          if (record.photos.trim().startsWith('[')) {
+            extracted = JSON.parse(record.photos);
+          } else if (record.photos.trim() !== '') {
+            extracted = [record.photos.trim()]; // FIX: Captures single plain string URLs
+          }
+        } else if (record.photos && typeof record.photos === 'object') {
+          extracted = Object.values(record.photos);
+        }
+        // Fallbacks if photos are saved in a different column
+        if (extracted.length === 0 && record.photo_url) extracted = [record.photo_url];
+        if (extracted.length === 0 && record.image_url) extracted = [record.image_url];
+        if (extracted.length === 0 && record.evidence) extracted = [record.evidence];
+      } catch (e) {
+        console.warn("Photo parse error for ID:", record.id);
+      }
+      return extracted.filter(url => typeof url === 'string' && url.length > 5);
+    };
+
     try {
-      // 1. Fetch native replacements with joined assets
+      // 1. Fetch native replacements
       const { data: replData, error } = await supabase
         .from('replacements')
         .select('*, assets(*)')
@@ -76,17 +101,10 @@ function AdminReplacementsContent() {
       if (error) throw error;
       
       let nativeReplacements = (replData || []).map(r => {
-        let photosList: string[] = [];
-        try {
-          if (Array.isArray(r.photos)) photosList = r.photos;
-          else if (typeof r.photos === 'string' && r.photos.startsWith('[')) photosList = JSON.parse(r.photos);
-          else if (r.photos && typeof r.photos === 'object') photosList = Object.values(r.photos);
-        } catch(e) {}
-
         return { 
           ...r, 
           sourceTable: 'replacements', 
-          photos: photosList,
+          photos: extractPhotos(r), // Apply robust parser
           asset_tag: r.assets?.asset_tag || r.asset_tag || 'N/A',
           serial_number: r.assets?.serial_number || r.serial_number || 'N/A',
           old_asset_id: r.asset_id || r.old_asset_id
@@ -109,7 +127,7 @@ function AdminReplacementsContent() {
       const replacementAssets = assetLogs || [];
       const assetIdsFromAssets = replacementAssets.map(a => a.id).filter(Boolean);
 
-      // 4. Fetch ALL inspections for these assets (to catch mobile audit uploads)
+      // 4. Fetch ALL inspections for these assets
       let extraInspections: any[] = [];
       if (assetIdsFromAssets.length > 0) {
         const { data: extraInsp } = await supabase
@@ -120,7 +138,6 @@ function AdminReplacementsContent() {
         extraInspections = extraInsp || [];
       }
 
-      // Combine all inspections to find legacy replacements
       const combinedInspections = [...(inspData || []), ...extraInspections];
       const inspectionMap = new Map();
       combinedInspections.forEach(item => {
@@ -130,14 +147,6 @@ function AdminReplacementsContent() {
 
       const legacyReplacements = validLegacyInspections.map(insp => {
           const asset = insp.assets || {};
-          let photosList: string[] = [];
-          try {
-            if (Array.isArray(insp.photos)) photosList = insp.photos;
-            else if (typeof insp.photos === 'string' && insp.photos.startsWith('[')) photosList = JSON.parse(insp.photos);
-            else if (insp.photos && typeof insp.photos === 'object') photosList = Object.values(insp.photos);
-            else if (insp.photo_url) photosList = [insp.photo_url];
-          } catch(e) {}
-
           return {
             id: insp.id,
             sourceTable: 'inspections',
@@ -150,7 +159,7 @@ function AdminReplacementsContent() {
             emp_code: insp.emp_code,
             condition: 'Legacy Record (See Notes)',
             reason: insp.notes || 'Replacement requested via old inspection log',
-            photos: photosList,
+            photos: extractPhotos(insp), // Apply robust parser
             status: insp.status || 'Pending Review',
             created_at: insp.created_at,
             admin_remarks: insp.admin_remarks,
@@ -190,7 +199,7 @@ function AdminReplacementsContent() {
         return;
       }
 
-      // --- 🌟 AGGRESSIVE IDENTITY RESOLUTION ENGINE ---
+      // --- AGGRESSIVE IDENTITY RESOLUTION ENGINE ---
       const assetIds = [...new Set(allReplacements.map(r => r.old_asset_id).filter(Boolean))];
       const { data: allAssetInspections } = await supabase
         .from('inspections')
