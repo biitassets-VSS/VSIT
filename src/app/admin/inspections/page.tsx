@@ -40,28 +40,44 @@ const ASSET_LEGACY_MAP: Record<string, {name: string, empCode: string}> = {
   'vss-kmu-3564': { name: 'Damanpreet Singh', empCode: 'EMP-1986' }
 };
 
-// --- Helper Functions ---
+// --- AGGRESSIVE PHOTO EXTRACTOR ---
 const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
   let extracted: string[] = [];
+  
+  const processItem = (item: any) => {
+    if (typeof item === 'string' && item.length > 5 && item.startsWith('http')) {
+      extracted.push(item);
+    } else if (typeof item === 'object' && item !== null) {
+      if (item.url) extracted.push(item.url);
+      else if (item.publicUrl) extracted.push(item.publicUrl);
+      else if (item.photo_url) extracted.push(item.photo_url);
+      else Object.values(item).forEach(processItem);
+    }
+  };
+
   try {
     if (Array.isArray(recordPhotos)) {
-      extracted = recordPhotos;
+      recordPhotos.forEach(processItem);
     } else if (typeof recordPhotos === 'string') {
       if (recordPhotos.trim().startsWith('[')) {
-        extracted = JSON.parse(recordPhotos);
-      } else if (recordPhotos.trim() !== '') {
-        extracted = [recordPhotos.trim()];
+        try { JSON.parse(recordPhotos).forEach(processItem); } catch(e){}
+      } else {
+        processItem(recordPhotos.trim());
       }
     } else if (recordPhotos && typeof recordPhotos === 'object') {
-      extracted = Object.values(recordPhotos);
+      Object.values(recordPhotos).forEach(processItem);
     }
     
-    // Fallbacks
-    if (extracted.length === 0 && fallbackRecord.photo_url) extracted = [fallbackRecord.photo_url];
-    if (extracted.length === 0 && fallbackRecord.image_url) extracted = [fallbackRecord.image_url];
-    if (extracted.length === 0 && fallbackRecord.evidence) extracted = [fallbackRecord.evidence];
+    // Fallbacks if primary check fails
+    if (extracted.length === 0) {
+      if (fallbackRecord.photo_url) processItem(fallbackRecord.photo_url);
+      if (fallbackRecord.image_url) processItem(fallbackRecord.image_url);
+      if (fallbackRecord.evidence) processItem(fallbackRecord.evidence);
+      if (fallbackRecord.photos && typeof fallbackRecord.photos === 'string') processItem(fallbackRecord.photos);
+    }
   } catch (e) {}
-  return extracted.filter(url => typeof url === 'string' && url.length > 5);
+  
+  return Array.from(new Set(extracted)); // Remove duplicates
 };
 
 function getCategoryIcon(category: string, size = 18) {
@@ -444,7 +460,7 @@ function AdminInspectionReviewContent() {
 
         const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isProfileAdmin;
         
-        // 🌟 Use the robust extraction function
+        // 🌟 Apply robust parser immediately
         const photosArray = extractPhotos(insp.photos, insp);
 
         let currentAssignee = matchedAsset.assigned_to;
@@ -488,7 +504,7 @@ function AdminInspectionReviewContent() {
           
           is_deleted_user: false,
           status: normalizedStatus,
-          photos: photosArray,
+          photos: photosArray, // 🌟 Safe Photos Array
           next_due: nextDue,
           days_until_due: daysUntilDue,
           is_due_soon: daysUntilDue <= 5 && daysUntilDue >= 0 && !isHistorical,
@@ -625,39 +641,6 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, status: string) => {
-    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-') || staffId === 'UnknownID') {
-      return alert("Cannot send alert: No valid active employee profile attached to this record.");
-    }
-    setSendingAlertId(staffId);
-    try {
-      const isReInspect = status === 'Re-Inspection';
-      const isOverdue = status === 'Overdue';
-      const isDueSoon = status === 'Due Soon';
-      const title = isReInspect ? `⚠️ Mandatory Re-Inspection Required` : isOverdue ? `🚨 OVERDUE: Hardware Audit Required` : `🔔 Hardware Audit Reminder Due`;
-      const message = isReInspect
-        ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
-        : isOverdue
-        ? `Your hardware inspection for ${assetName} (${tagId}) is OVERDUE. Please submit your visual verification immediately to avoid compliance strikes.`
-        : `Please submit your scheduled visual inspection photos for ${assetName} (${tagId}) via your staff portal dashboard.`;
-
-      const { error } = await supabase.from('notifications').insert([{
-        target_user: staffId,
-        title: title,
-        message: message,
-        is_read: false,
-        type: isReInspect || isOverdue ? 'warning' : 'info'
-      }]);
-
-      if (error) throw error;
-      alert(`✔ Success: Immediate notification push sent directly to employee dashboard!`);
-    } catch (err: any) {
-      alert(`Error sending notification push: ${err.message}`);
-    } finally {
-      setSendingAlertId(null);
-    }
-  };
-
   const executeVerdict = async (
     inspectionId: string, 
     assetId: string, 
@@ -682,7 +665,6 @@ function AdminInspectionReviewContent() {
       let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
       
       if (isTemporaryId) {
-        // Fallback for missing UUID mappings
         query = query.eq('asset_id', assetId).ilike('status', '%Pending%');
       } else {
         query = query.eq('id', inspectionId);
@@ -723,11 +705,6 @@ function AdminInspectionReviewContent() {
     } finally {
       setUpdatingId(null);
     }
-  };
-
-  const clearAssetFilter = () => {
-    setAssetFilter(null);
-    router.replace('/admin/inspections'); 
   };
 
   const filteredList = inspections.filter(item => {
@@ -806,10 +783,8 @@ function AdminInspectionReviewContent() {
   return (
     <div className="min-h-[calc(100vh-6rem)] bg-linear-to-br from-rose-50/40 via-orange-50/30 to-indigo-50/30 p-4 sm:p-6 lg:p-8 relative z-10 font-sans text-slate-900">
       
-      {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER GALLERY MODAL */}
       {mounted && gallery.isOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 sm:p-12 overflow-hidden">
-          
           <button 
             onClick={() => {
               setGallery({ isOpen: false, images: [], index: 0 });
@@ -823,9 +798,6 @@ function AdminInspectionReviewContent() {
           <div className="absolute top-6 left-6 z-[1000000] flex flex-col pointer-events-none">
             <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-white bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
-            </span>
-            <span className="text-[8px] md:text-[10px] text-white uppercase tracking-widest mt-2 font-bold bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 w-fit shadow-sm">
-              {zoomProps.isZoomed ? "Move mouse/finger to Pan" : "Click image to Zoom In"}
             </span>
           </div>
           
@@ -880,7 +852,6 @@ function AdminInspectionReviewContent() {
         document.body
       )}
 
-      {/* ASSET LIFECYCLE MODAL */}
       {mounted && assetDetailModal && createPortal(
         <div style={{ zIndex: 100 }} className="fixed inset-0 flex flex-col items-center justify-start pt-20 pb-6 px-4 backdrop-blur-2xl bg-slate-900/30">
           <div className="absolute inset-0" onClick={() => setAssetDetailModal(null)}></div>
@@ -972,7 +943,6 @@ function AdminInspectionReviewContent() {
 
       <div className="max-w-screen-2xl mx-auto space-y-6">
         
-        {/* iOS LIGHT LIQUID GLASS HEADER */}
         <div className={`${liquidGlass.pill} p-4 flex justify-between items-center`}>
           <div className="flex items-center gap-4">
             <button onClick={() => router.push('/admin')} className={`p-3 rounded-full bg-white/40 backdrop-blur-md transition-all border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${liquidGlass.buttonHover}`}><ArrowLeft size={18} /></button>
@@ -986,7 +956,6 @@ function AdminInspectionReviewContent() {
           </button>
         </div>
 
-        {/* ASSET TIMELINE FILTER BANNER */}
         {assetFilter && (
           <div className="p-4 rounded-2xl bg-orange-100/50 backdrop-blur-md border border-orange-200/60 flex justify-between items-center text-orange-700 shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]">
             <div className="flex items-center gap-2 text-xs font-bold">
@@ -998,7 +967,6 @@ function AdminInspectionReviewContent() {
           </div>
         )}
 
-        {/* TABS (LIQUID GLASS PILL BAR) */}
         <div className={`p-1.5 flex items-center gap-2 overflow-x-auto ${liquidGlass.pill}`}>
           {TABS.map(tab => (
             <button
@@ -1017,7 +985,6 @@ function AdminInspectionReviewContent() {
           ))}
         </div>
 
-        {/* SEARCH BAR */}
         <div className={`${liquidGlass.pill} p-2 flex items-center relative`}>
           <Search size={18} className="absolute left-5 text-slate-400" />
           <input 
@@ -1044,7 +1011,7 @@ function AdminInspectionReviewContent() {
               {filteredList.map((insp: any) => {
                 const isPending = String(insp.status).toLowerCase().includes('pending');
                 const isReInspect = String(insp.status).toLowerCase().includes('re-inspection');
-                const photosArray = extractPhotos(insp.photos, insp); // 🌟 Apply robust parser
+                const photosArray = insp.photos || [];
 
                 return (
                   <motion.div 
@@ -1054,7 +1021,6 @@ function AdminInspectionReviewContent() {
                     className={`${liquidGlass.card} p-6 flex flex-col justify-between hover:-translate-y-1 transition-all duration-300`}
                   >
                     <div>
-                      {/* STAFF HEADER */}
                       <div className="flex justify-between items-start mb-5">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-white/50 backdrop-blur-md border border-white/80 flex items-center justify-center font-extrabold text-slate-800 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)]">
@@ -1063,7 +1029,6 @@ function AdminInspectionReviewContent() {
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="text-sm font-bold text-slate-900">{insp.historical_staff_name}</h3>
-                              {/* 🟢 OLD USER BADGE */}
                               {insp.is_old_user && (
                                 <span className="bg-slate-100/50 backdrop-blur-md text-slate-600 border border-slate-200/60 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]">
                                   Old User
@@ -1085,7 +1050,6 @@ function AdminInspectionReviewContent() {
                         </span>
                       </div>
 
-                      {/* ASSET DATA PILL */}
                       <div className={`${liquidGlass.inner} p-4 mb-4 space-y-2.5 text-xs`}>
                         <div className="flex items-center gap-2 mb-2 pb-2.5 border-b border-white/50">
                           <Laptop size={14} className="text-slate-500" />
@@ -1107,7 +1071,6 @@ function AdminInspectionReviewContent() {
                           <span className="text-slate-800 font-semibold">{formatDate(insp.created_at)}</span>
                         </div>
                         
-                        {/* 🌟 NOW ASSIGNED TO (FOR OLD USERS) */}
                         {insp.is_old_user && (
                           <div className="flex justify-between items-center pt-2.5 mt-2.5 border-t border-white/50 text-rose-500">
                             <span className="font-bold uppercase tracking-wider text-[10px]">Now Assigned To</span>

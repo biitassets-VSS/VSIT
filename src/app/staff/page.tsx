@@ -486,7 +486,9 @@ export default function StaffDashboardPage() {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
         const { error } = await supabase.storage.from('asset-photos').upload(fileName, file);
-        if (!error) {
+        if (error) {
+          toast.error(`Image upload failed: ${error.message}`);
+        } else {
           const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
           uploadedUrls.push(data.publicUrl);
         }
@@ -793,8 +795,8 @@ export default function StaffDashboardPage() {
                     const asset = visibleAsset;
                     const btnState = getAssetAuditState(asset);
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
+
                     const baseAuditStatus = asset.live_inspection_status;
-                    const isPendingHandover = (asset.status || '').toLowerCase().trim() === 'pending handover';
 
                     return (
                       <motion.div 
@@ -874,14 +876,14 @@ export default function StaffDashboardPage() {
                               </span>
                             </div>
                             <div className="min-w-0 flex flex-col justify-start relative">
-                              {isPendingHandover && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
+                              {asset.status === 'Pending Handover' && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
                               <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Handover</span>
                               <button 
-                                onClick={() => isPendingHandover ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${isPendingHandover ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
+                                onClick={() => asset.status === 'Pending Handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${asset.status === 'Pending Handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
                               >
                                 <FileSignature size={14} />
-                                {isPendingHandover ? 'Pending' : 'Signed'}
+                                {asset.status === 'Pending Handover' ? 'Pending' : 'Signed'}
                               </button>
                             </div>
                           </div>
@@ -1092,16 +1094,7 @@ export default function StaffDashboardPage() {
       <AnimatePresence>
         {viewInspectionAsset && (() => {
           const asset = viewInspectionAsset;
-          let photosArray: string[] = [];
-          try {
-            if (Array.isArray(asset.latest_photos)) photosArray = asset.latest_photos;
-            else if (typeof asset.latest_photos === 'string' && asset.latest_photos.startsWith('[')) {
-              const parsed = JSON.parse(asset.latest_photos);
-              if (Array.isArray(parsed)) photosArray = parsed;
-            } else if (asset.latest_photos && typeof asset.latest_photos === 'object') {
-              photosArray = Object.values(asset.latest_photos);
-            }
-          } catch(e){}
+          const photosArray = extractPhotos(asset.latest_photos || asset.photos, asset);
 
           return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/40">
@@ -1155,7 +1148,7 @@ export default function StaffDashboardPage() {
                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Uploaded Evidence</h4>
                        <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-2">
                          {photosArray.map((url, i) => (
-                           <img key={`insp-photo-${i}`} src={url} alt="Evidence" className="h-28 w-28 sm:h-36 sm:w-36 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0 hover:scale-105 transition-transform" />
+                           <img key={`insp-photo-${i}`} src={url} alt="Evidence" className="h-28 w-28 sm:h-36 sm:w-36 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0 hover:scale-105 transition-transform cursor-pointer" />
                          ))}
                        </div>
                      </div>
@@ -1217,7 +1210,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
 
   useEffect(() => {
     if (!qrSessionId) return;
-    const photoChannel = supabase.channel(`modal_qr_session_${qrSessionId}`)
+    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
       .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
         if (payload.payload?.url) {
           setRemotePhotos(prev => [...prev, payload.payload.url]);
@@ -1322,13 +1315,12 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
           status: type === 'RETURN' ? 'Return Pending' : 'Pending Review',
           condition: formCondition,
           notes: type === 'RETURN' ? `[RETURN REQUEST] ${formText}` : formText,
-          photos: allPhotos.length > 0 ? allPhotos : []
+          photos: allPhotos, // Sending array safely
         };
 
         let dbSuccess = false;
         let lastErr = null;
 
-        // Auto-stripping loop to guarantee it inserts regardless of schema differences
         for (let i = 0; i < 15; i++) {
           const { error: insertError } = await supabase.from('inspections').insert(payload);
           if (insertError) {
@@ -1336,7 +1328,8 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
             const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
             if (match && match[1]) {
               if (match[1] === 'photos') {
-                 toast.error("Database missing 'photos' column in 'inspections' table! Images dropped.", { duration: 6000 });
+                 // Fallback if 'photos' fails: try injecting 'photo_url' instead
+                 payload.photo_url = allPhotos.length > 0 ? allPhotos[0] : null;
               }
               delete payload[match[1]]; 
               continue;
