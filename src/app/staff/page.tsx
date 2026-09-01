@@ -8,13 +8,12 @@ import {
   AlertCircle, Clock, X, CheckCircle2, AlertTriangle, 
   Loader2, CheckCircle, Lock, Monitor, LogOut, Star, Camera, ArrowRight,
   ChevronDown, PackageOpen, ImagePlus, UploadCloud, FileSignature, ShieldCheck,
-  RefreshCcw, ChevronLeft, ChevronRight
+  RefreshCcw, ChevronLeft, ChevronRight, Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 // --- Utility Functions ---
-
 function safeString(val: any) {
   if (val === null || val === undefined) return '';
   return String(val);
@@ -43,33 +42,23 @@ function getAuditWindowInfo(category: string = 'Laptop') {
   const today = new Date();
   const year = today.getFullYear();
   const currentMonth = today.getMonth(); 
-  
   let targetMonth = currentMonth;
   const isLaptop = (category || '').toLowerCase().includes('laptop');
-  
   if (!isLaptop) {
     const quarter = Math.floor(currentMonth / 3);
     targetMonth = (quarter * 3) + 2; 
   }
-
   const lastDayOfMonth = new Date(year, targetMonth + 1, 0);
   const lastSaturday = new Date(lastDayOfMonth);
   while (lastSaturday.getDay() !== 6) {
     lastSaturday.setDate(lastSaturday.getDate() - 1);
   }
   lastSaturday.setHours(23, 59, 59, 999);
-
   const windowStart = new Date(lastSaturday);
   windowStart.setDate(lastSaturday.getDate() - 4);
   windowStart.setHours(0, 0, 0, 0);
 
-  return {
-    isOpen: today >= windowStart && today <= lastSaturday,
-    windowStart,
-    lastSaturday,
-    year,
-    month: targetMonth
-  };
+  return { isOpen: today >= windowStart && today <= lastSaturday, windowStart, lastSaturday, year, month: targetMonth };
 }
 
 const calculateNextDueDate = (baseDateStr: string | null, cat: string) => {
@@ -87,7 +76,6 @@ const formatDuration = (start: string, end: string) => {
   const d1 = new Date(start).getTime();
   const d2 = new Date(end).getTime();
   const diffHrs = Math.max(0, (d2 - d1) / (1000 * 60 * 60));
-  
   if (diffHrs < 1) {
     const mins = Math.max(0, (d2 - d1) / (1000 * 60));
     return `${Math.floor(mins)} mins`;
@@ -112,12 +100,12 @@ const extractAdminReason = (remarks: string, notes: string) => {
 
 export default function StaffDashboardPage() {
   const router = useRouter(); 
-  
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>({ name: 'Staff Member', email: '', emp_id: 'STAFF' });
   const [isAuthorized, setIsAuthorized] = useState(false); 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   
   const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
   const [currentAssetIndex, setCurrentAssetIndex] = useState(0); 
@@ -125,10 +113,7 @@ export default function StaffDashboardPage() {
   const [allInspections, setAllInspections] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalAssets: 0, needsInspection: 0, openTickets: 0 });
 
-  const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({
-    isOpen: false,
-    type: '',
-  });
+  const [modal, setModal] = useState<{ isOpen: boolean; type: string; targetAsset?: any }>({ isOpen: false, type: '' });
 
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [replaceAssetId, setReplaceAssetId] = useState('');
@@ -184,8 +169,21 @@ export default function StaffDashboardPage() {
     );
   };
 
+  const fetchUnreadCount = async (userId: string, userEmail: string, empId: string) => {
+    try {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_read', false)
+        .or(`target_user.eq.${userId},target_user.eq.${userEmail},target_user.eq.${empId},target_user.eq.ALL_STAFF,target_role.eq.staff`);
+      setUnreadNotifications(count || 0);
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id || currentUser.id === 'guest-mock-uuid') return;
+
+    fetchUnreadCount(currentUser.id, currentUser.email, currentUser.emp_id);
 
     const notifChannel = supabase.channel('staff-notifications-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
@@ -195,9 +193,11 @@ export default function StaffDashboardPage() {
           notif.target_user === currentUser.email ||
           notif.target_user === currentUser.emp_id ||
           notif.target_user === 'ALL_STAFF' ||
+          notif.target_role === 'staff' ||
           notif.type === 'broadcast'
         ) {
           triggerDesktopAlert(notif.title || 'System Alert', notif.message || 'You have a new notification.');
+          setUnreadNotifications(prev => prev + 1);
           loadRealDatabase(false);
         }
       })
@@ -211,12 +211,8 @@ export default function StaffDashboardPage() {
     if (overdueList.length > 0) {
       const todayDate = new Date().toDateString();
       const lastAlertDate = localStorage.getItem('vsit_last_overdue_alert');
-      
       if (lastAlertDate !== todayDate) {
-        triggerDesktopAlert(
-          '🚨 Inspection Overdue', 
-          `You have ${overdueList.length} device(s) with an overdue inspection. Please complete your audit immediately.`
-        );
+        triggerDesktopAlert('🚨 Inspection Overdue', `You have ${overdueList.length} device(s) with an overdue inspection. Please complete your audit immediately.`);
         localStorage.setItem('vsit_last_overdue_alert', todayDate);
       }
     }
@@ -228,7 +224,6 @@ export default function StaffDashboardPage() {
 
     try {
       const isGuest = localStorage.getItem('isGuestSession') === 'true';
-
       if (isGuest) {
         clearTimeout(safetyTimeoutId);
         setCurrentUser({ id: 'guest-mock-uuid', email: 'demo_user@virtualstaffing.com', emp_id: 'DEMO-001', name: 'Demo Guest User' });
@@ -274,11 +269,7 @@ export default function StaffDashboardPage() {
       const compiledAssets = (assetsRes.data || []).map(asset => {
         const assetInspections = inspResData.filter(i => i.asset_id === asset.id);
         const latestInsp = assetInspections[0]; 
-        
-        const latestReturnInsp = assetInspections.find(i => 
-            (i.status || '').toLowerCase().includes('return') || 
-            (i.notes || '').toLowerCase().includes('return')
-        );
+        const latestReturnInsp = assetInspections.find(i => (i.status || '').toLowerCase().includes('return') || (i.notes || '').toLowerCase().includes('return'));
 
         let nextDue = null;
         if (asset.next_inspection_date) {
@@ -294,7 +285,6 @@ export default function StaffDashboardPage() {
         const inspStatus = (asset.inspection_status || '').toLowerCase().trim();
         const liveInspStatus = (latestInsp?.status || '').toLowerCase().trim();
         const fullNotes = ((asset.notes || '') + ' ' + (latestInsp?.notes || '')).toLowerCase();
-        
         const allAdminRemarks = ((asset.admin_remarks || '') + ' ' + (latestReturnInsp?.admin_remarks || '') + ' ' + (latestInsp?.admin_remarks || '')).toLowerCase();
 
         let isReturnApproved = false;
@@ -302,7 +292,6 @@ export default function StaffDashboardPage() {
         let isReturnPending = false;
         let isReplacePending = false;
         let isReplaceRejected = false;
-        let isInspectionRejected = false;
 
         const hasRejectionKeywords = ['reject', 'declin', 'missing', 'upload', 'resend', 'again'].some(kw => allAdminRemarks.includes(kw));
 
@@ -329,12 +318,6 @@ export default function StaffDashboardPage() {
             }
         }
 
-        if (!isReturnRejected && !isReturnPending && !isReturnApproved && !isReplacePending && !isReplaceRejected) {
-            if (inspStatus.includes('reject') || inspStatus.includes('fail') || inspStatus.includes('action required') || liveInspStatus.includes('reject') || liveInspStatus.includes('fail') || liveInspStatus.includes('re-inspection')) {
-                isInspectionRejected = true;
-            }
-        }
-
         let true_inspection_state = 'Approved';
         if (liveInspStatus.includes('pending') || inspStatus.includes('pending')) {
             true_inspection_state = 'Pending Review';
@@ -349,26 +332,15 @@ export default function StaffDashboardPage() {
         }
 
         let finalDisplayStatus = 'Assigned & Active';
-
-        if (isReturnPending) {
-            finalDisplayStatus = 'Return Pending';
-        } else if (isReplacePending) {
-            finalDisplayStatus = 'Replace Pending';
-        } else if (true_inspection_state === 'Pending Review') {
-            finalDisplayStatus = 'Inspection Sent to Admin';
-        } else if (isReturnRejected) {
-            finalDisplayStatus = 'Return Declined';
-        } else if (isReplaceRejected) {
-            finalDisplayStatus = 'Replace Declined';
-        } else if (true_inspection_state === 'Re-Inspection Required') {
-            finalDisplayStatus = 'Re-Inspection Required';
-        } else if (true_inspection_state === 'Audit Rejected') {
-            finalDisplayStatus = 'Audit Rejected';
-        } else if (isOverdue) {
-            finalDisplayStatus = 'Overdue';
-        } else {
-            finalDisplayStatus = 'Approved';
-        }
+        if (isReturnPending) finalDisplayStatus = 'Return Pending';
+        else if (isReplacePending) finalDisplayStatus = 'Replace Pending';
+        else if (true_inspection_state === 'Pending Review') finalDisplayStatus = 'Inspection Sent to Admin';
+        else if (isReturnRejected) finalDisplayStatus = 'Return Declined';
+        else if (isReplaceRejected) finalDisplayStatus = 'Replace Declined';
+        else if (true_inspection_state === 'Re-Inspection Required') finalDisplayStatus = 'Re-Inspection Required';
+        else if (true_inspection_state === 'Audit Rejected') finalDisplayStatus = 'Audit Rejected';
+        else if (isOverdue) finalDisplayStatus = 'Overdue';
+        else finalDisplayStatus = 'Approved';
 
         return {
           ...asset,
@@ -392,11 +364,7 @@ export default function StaffDashboardPage() {
       for (const asset of compiledAssets) {
         if (asset.isReturnApproved) {
           if (asset.status !== 'In Stock' || asset.assigned_to !== null) {
-              supabase.from('assets').update({ 
-                status: 'In Stock', 
-                assigned_to: null,
-                inspection_status: null 
-              }).eq('id', asset.id).then();
+              supabase.from('assets').update({ status: 'In Stock', assigned_to: null, inspection_status: null }).eq('id', asset.id).then();
           }
         } else {
           displayAssets.push(asset);
@@ -415,13 +383,11 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     loadRealDatabase();
-
     const realtimeChannel = supabase.channel('staff-dashboard-changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tickets' }, () => { loadRealDatabase(false); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assets' }, () => { loadRealDatabase(false); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inspections' }, () => { loadRealDatabase(false); })
       .subscribe();
-
     return () => { supabase.removeChannel(realtimeChannel); };
   }, []);
 
@@ -448,7 +414,7 @@ export default function StaffDashboardPage() {
       return { disabled: false, text: "Overdue: Audit Now", classes: "bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse border-transparent" };
     }
 
-    // 4. Only lock if it was explicitly approved WITHIN the current valid cycle window
+    // 4. Lock if it was explicitly approved WITHIN the current valid cycle window
     const hasAudited = allInspections.some(insp => {
        const d = new Date(insp.created_at);
        return insp.asset_id === asset.id && 
@@ -469,7 +435,6 @@ export default function StaffDashboardPage() {
       return { disabled: true, text: `Opens ${auditDateStr}`, classes: "bg-slate-200/70 text-slate-500 font-bold border border-slate-300 cursor-not-allowed" };
     }
     
-    // 6. Otherwise, standard audit is open
     return { disabled: false, text: "Audit Device Now", classes: "bg-gradient-to-r from-orange-500 to-orange-600 hover:shadow-[0_0_25px_rgba(249,115,22,0.6)] font-bold text-white cursor-pointer border border-orange-400" };
   };
 
@@ -547,58 +512,45 @@ export default function StaffDashboardPage() {
       alert("Please ensure you provide a valid Replace Reason & Notes before generating a QR code.");
       return;
     }
-
     const requiredPhotos = (asset?.category || '').toLowerCase().includes('laptop') ? 5 : 2;
     const sessionId = crypto.randomUUID();
     setQrSessionId(sessionId);
-    
     const uploadLink = `${window.location.origin}/mobile-audit?session=${sessionId}&assetId=${asset.id}&req=${requiredPhotos}&name=${encodeURIComponent(currentUser.name)}&empCode=${encodeURIComponent(currentUser.emp_id)}&cat=${encodeURIComponent(asset.category)}&mode=upload_only`;
-    
     setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uploadLink)}&color=0f172a&bgcolor=ffffff`);
   };
 
   const handleReplaceSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) e.preventDefault();
     if (!replaceAssetId) return;
-
     if (!replaceReason.trim()) {
       alert("Validation Error: Please provide a descriptive Reason & Notes for this replacement request.");
       return;
     }
-
     setIsSubmittingReplace(true);
-
     const activeAsset = assignedAssets.find(a => String(a.id) === String(replaceAssetId));
-    if (!activeAsset) {
-      setIsSubmittingReplace(false);
-      return;
-    }
+    if (!activeAsset) { setIsSubmittingReplace(false); return; }
 
     try {
       const newUrls = await uploadMultiplePhotos(localPhotos);
       const allPhotos = [...remotePhotos, ...newUrls];
-
-      // 🌟 UPDATED PAYLOAD: Strictly matched to your table schema screenshot
       let payload: any = {
         old_asset_id: activeAsset.id,
-        asset_id: activeAsset.id,         // Added for backwards compatibility if needed
-        asset_tag: activeAsset.asset_tag, // Safe fallback
-        serial_number: activeAsset.serial_number, // Safe fallback
+        asset_id: activeAsset.id,
+        asset_tag: activeAsset.asset_tag, 
+        serial_number: activeAsset.serial_number,
         user_id: currentUser.id,
-        user_name: currentUser.name,      // 🌟 Matches DB schema
-        staff_name: currentUser.name,     // Safe fallback 
+        user_name: currentUser.name, 
+        staff_name: currentUser.name, 
         emp_code: currentUser.emp_id,
         condition: replaceCondition,
         reason: replaceReason,
-        notes: replaceReason,             // Safe fallback
-        photos: allPhotos.length > 0 ? allPhotos : [], // Send empty array for JSONB default safety
+        notes: replaceReason, 
+        photos: allPhotos.length > 0 ? allPhotos : [],
         status: 'Pending Approval'
       };
 
       let dbSuccess = false;
       let lastErr = null;
-
-      // Aggressive retry loop to safely strip missing columns
       for (let i = 0; i < 15; i++) {
         const { error: insertError } = await supabase.from('replacements').insert(payload);
         if (insertError) {
@@ -606,13 +558,8 @@ export default function StaffDashboardPage() {
           const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
           if (match && match[1]) {
             const col = match[1];
-            
-            // EXPLICIT WARNING if the photo column is STILL missing
-            if (col === 'photos') {
-              toast.error("Database missing 'photos' column! Images were not saved.", { duration: 6000 });
-            }
-            
-            delete payload[col]; // Strip missing column and try again
+            if (col === 'photos') toast.error("Database missing 'photos' column! Images were not saved.", { duration: 6000 });
+            delete payload[col]; 
             continue;
           }
           throw insertError;
@@ -620,14 +567,8 @@ export default function StaffDashboardPage() {
         dbSuccess = true;
         break;
       }
-
       if (!dbSuccess && lastErr) throw lastErr;
-
-      const { error: updateError } = await supabase.from('assets').update({ 
-        status: 'Replace Pending', 
-        admin_remarks: null 
-      }).eq('id', activeAsset.id);
-
+      const { error: updateError } = await supabase.from('assets').update({ status: 'Replace Pending', admin_remarks: null }).eq('id', activeAsset.id);
       if (updateError) throw updateError;
 
       loadRealDatabase(false); 
@@ -651,33 +592,9 @@ export default function StaffDashboardPage() {
       const empCode = currentUser.emp_code || currentUser.emp_id;
       const officialNote = `Digitally Signed Handover Agreement by ${staffName} on ${timestamp}`;
 
-      await supabase
-        .from('assets')
-        .update({ 
-          status: 'Assigned', 
-          inspection_status: 'Approved',
-          last_inspection_date: new Date().toISOString()
-        })
-        .eq('id', handoverAsset.id);
-
-      await supabase
-        .from('inspections')
-        .insert({
-          asset_id: handoverAsset.id,
-          inspected_by: currentUser.id,
-          status: 'Approved',
-          notes: officialNote
-        });
-
-      await supabase
-        .from('notifications')
-        .insert({
-          target_role: 'admin',
-          title: '📝 Agreement Signed',
-          message: `${staffName} (${empCode}) has digitally signed the handover agreement for ${handoverAsset.name || handoverAsset.asset_name} (${handoverAsset.asset_tag}).`,
-          type: 'success',
-          is_read: false
-        });
+      await supabase.from('assets').update({ status: 'Assigned', inspection_status: 'Approved', last_inspection_date: new Date().toISOString() }).eq('id', handoverAsset.id);
+      await supabase.from('inspections').insert({ asset_id: handoverAsset.id, inspected_by: currentUser.id, status: 'Approved', notes: officialNote });
+      await supabase.from('notifications').insert({ target_role: 'admin', title: '📝 Agreement Signed', message: `${staffName} (${empCode}) has digitally signed the handover agreement for ${handoverAsset.name || handoverAsset.asset_name} (${handoverAsset.asset_tag}).`, type: 'success', is_read: false });
 
       toast.success("Handover Agreement Successfully Signed!");
       setHandoverAsset(null);
@@ -727,7 +644,15 @@ export default function StaffDashboardPage() {
             <span className="font-bold text-slate-600">{currentUser.email}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0 mt-2 sm:mt-0">
+        <div className="flex items-center gap-4 shrink-0 mt-2 sm:mt-0">
+          <button onClick={() => { setUnreadNotifications(0); router.push('/staff/dashboard/notifications'); }} className="relative p-2.5 bg-white/50 rounded-full border border-white/80 shadow-sm hover:scale-105 transition-transform text-slate-600 hover:text-purple-600">
+            <Bell size={18} />
+            {unreadNotifications > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm border-2 border-white">
+                {unreadNotifications > 9 ? '9+' : unreadNotifications}
+              </span>
+            )}
+          </button>
           <button 
             onClick={() => loadRealDatabase(true)} 
             disabled={isRefreshing}
@@ -741,10 +666,10 @@ export default function StaffDashboardPage() {
       <div className="shrink-0 flex flex-col xl:flex-row gap-4 sm:gap-5 w-full">
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600', type: 'TICKET', isActionDisabled: false, path: null },
-            { name: 'Device Audit', desc: isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed', icon: ClipboardCheck, color: isGlobalAuditOpen ? 'text-amber-600' : 'text-slate-400', type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null },
-            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600', type: 'REQUEST', isActionDisabled: false, path: null },
-            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600', type: 'ROUTE', isActionDisabled: false, path: '/staff/dashboard/remote' },
+            { name: 'Raise Ticket', desc: 'IT failure', icon: Ticket, color: 'text-purple-600', type: 'TICKET', isActionDisabled: false, path: null, badge: stats.openTickets > 0 },
+            { name: 'Device Audit', desc: isGlobalAuditOpen ? 'Submit inspection' : 'Window Closed', icon: ClipboardCheck, color: isGlobalAuditOpen ? 'text-amber-600' : 'text-slate-400', type: 'INSPECTION', isActionDisabled: !isGlobalAuditOpen, path: null, badge: stats.needsInspection > 0 },
+            { name: 'Request Gear', desc: 'New equipment', icon: PlusCircle, color: 'text-emerald-600', type: 'REQUEST', isActionDisabled: false, path: null, badge: false },
+            { name: 'Team Screen', desc: 'Remote access', icon: Monitor, color: 'text-orange-600', type: 'ROUTE', isActionDisabled: false, path: '/staff/dashboard/remote', badge: false },
           ].map((item) => (
             <button 
               key={item.name} 
@@ -752,9 +677,10 @@ export default function StaffDashboardPage() {
               disabled={item.isActionDisabled}
               className={`relative ${theme.glassItem} min-h-18 sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between transition-all duration-300 ease-out group ${item.isActionDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(0,0,0,0.06)]'}`}
             >
-              <div className="flex items-start justify-between w-full">
+              <div className="flex items-start justify-between w-full relative">
                 <div className={`p-2.5 rounded-xl bg-white/40 border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] transition-all duration-300 ${item.isActionDisabled ? '' : 'group-hover:scale-110 group-hover:bg-white/60'} ${item.color}`}>
                   {item.isActionDisabled ? <Lock size={16} /> : <item.icon size={16} strokeWidth={2.5} />}
+                  {item.badge && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm"></span>}
                 </div>
                 {!item.isActionDisabled && (
                   <div className="p-1.5 rounded-full bg-white/40 border border-white/60 text-slate-400 group-hover:bg-white/80 group-hover:text-purple-600 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]">
@@ -783,8 +709,9 @@ export default function StaffDashboardPage() {
           </div>
           
           <div className={`${theme.glassCard} min-h-18 sm:min-h-20 p-3.5 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:border-orange-300 hover:shadow-[0_0_30px_rgba(249,115,22,0.2)]`}>
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start relative">
               <div className="p-2.5 rounded-xl bg-white/60 border border-white/80 text-amber-600 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)]"><AlertCircle size={16} strokeWidth={2.5} /></div>
+              {stats.needsInspection > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm"></span>}
               <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Action Req.</span>
             </div>
             <div>
@@ -867,7 +794,6 @@ export default function StaffDashboardPage() {
                     const btnState = getAssetAuditState(asset);
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
 
-                    // Base audit status derives directly from the computed display status
                     const baseAuditStatus = asset.live_inspection_status;
 
                     return (
@@ -947,7 +873,8 @@ export default function StaffDashboardPage() {
                                 {asset.nextDue ? asset.nextDue.toLocaleDateString('en-GB') : 'N/A'}
                               </span>
                             </div>
-                            <div className="min-w-0 flex flex-col justify-start">
+                            <div className="min-w-0 flex flex-col justify-start relative">
+                              {asset.status === 'Pending Handover' && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
                               <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Handover</span>
                               <button 
                                 onClick={() => asset.status === 'Pending Handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
@@ -1123,6 +1050,45 @@ export default function StaffDashboardPage() {
 
       </div>
 
+      {/* 🌟 HANDOVER AGREEMENT MODALS */}
+      <AnimatePresence>
+        {handoverAsset && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl relative overflow-hidden border border-slate-100">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-5 border border-amber-200 shadow-sm mx-auto"><FileSignature size={32} /></div>
+              <h2 className="text-xl font-black text-center text-slate-900 mb-2">Sign Agreement</h2>
+              <p className="text-sm text-center text-slate-600 font-medium mb-6">I acknowledge receipt of the <strong className="text-slate-800">{handoverAsset.name || handoverAsset.category} ({handoverAsset.asset_tag})</strong> in working condition and agree to the company IT policy.</p>
+              <div className="flex gap-3">
+                 <button onClick={() => setHandoverAsset(null)} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors">Cancel</button>
+                 <button onClick={handleDigitalSign} disabled={isSigning} className="flex-1 py-3.5 bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-md hover:bg-emerald-600 hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                   {isSigning ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle2 size={16}/> I Agree & Sign</>}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewAgreementAsset && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl relative overflow-hidden border border-slate-100">
+              <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4 border border-emerald-200"><ShieldCheck size={24} /></div>
+              <h2 className="text-lg font-black text-slate-900 mb-1">Handover Agreement</h2>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-6">Digitally Signed & Verified</p>
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 space-y-3">
+                <div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Asset</span><span className="text-sm font-bold text-slate-800">{viewAgreementAsset.name || viewAgreementAsset.category} ({viewAgreementAsset.asset_tag})</span></div>
+                <div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Signed By</span><span className="text-sm font-bold text-slate-800">{currentUser.name} ({currentUser.emp_id})</span></div>
+                <div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Date of Signature</span><span className="text-sm font-bold text-slate-800">{viewAgreementAsset.last_inspection_date ? new Date(viewAgreementAsset.last_inspection_date).toLocaleString('en-GB') : 'Unknown'}</span></div>
+              </div>
+              <button onClick={() => setViewAgreementAsset(null)} className="w-full py-3.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors">Close Document</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🌟 ASSET INSPECTION HISTORY MODAL */}
       <AnimatePresence>
         {viewInspectionAsset && (() => {
           const asset = viewInspectionAsset;
@@ -1214,172 +1180,14 @@ export default function StaffDashboardPage() {
           />
         )}
       </AnimatePresence>
-
-      <AnimatePresence>
-        {showReplaceModal && activeAsset && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowReplaceModal(false)}
-              className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm`}
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
-              animate={{ scale: 1, opacity: 1, y: 0 }} 
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-[#e9e9ec] rounded-[2rem] w-full max-w-[420px] shadow-2xl overflow-hidden border border-white font-sans flex flex-col relative transition-all duration-300 z-10"
-            >
-              <div className="p-5 sm:p-6 flex justify-between items-center shrink-0 bg-white/40 border-b border-white/60">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-200">
-                    <RefreshCcw className="text-purple-600" size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-[15px] sm:text-[16px] font-black text-slate-900 uppercase tracking-wider leading-tight">
-                      Asset Replace Request
-                    </h3>
-                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                      Initiate Hardware Swap
-                    </p>
-                  </div>
-                </div>
-                <button onClick={resetReplaceModal} className="w-10 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-colors"><X size={16} strokeWidth={2.5} /></button>
-              </div>
-
-              {!qrUrl ? (
-                <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">Select Assigned Asset</label>
-                    <div className="w-full px-4 py-3 bg-white rounded-2xl text-[13px] font-bold text-slate-800 shadow-sm opacity-90 cursor-not-allowed flex justify-between items-center border border-slate-100">
-                      <span className="truncate">{activeAsset.name || activeAsset.category} ({activeAsset.asset_tag})</span>
-                      <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 bg-white rounded-2xl p-4 shadow-sm gap-4 border border-slate-100">
-                    <div>
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Tag ID</p>
-                      <p className="text-sm font-black text-slate-900">{activeAsset.asset_tag}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Serial Number</p>
-                      <p className="text-sm font-black text-slate-900 truncate">{activeAsset.serial_number}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">Current Asset Condition</label>
-                    <div className="relative">
-                      <select 
-                        value={replaceCondition} 
-                        onChange={(e) => setReplaceCondition(e.target.value)} 
-                        className="w-full px-4 py-3 bg-white rounded-2xl text-[13px] font-bold text-slate-800 shadow-sm outline-none appearance-none cursor-pointer focus:ring-2 focus:ring-[#ff7300]/20 border border-slate-100"
-                      >
-                        <option value="Minor Wear">Minor Hardware Issue</option>
-                        <option value="Minor Wear">Minor Wear (Scratches/Dents)</option>
-                        <option value="Damaged">Damaged / Broken Part</option>
-                        <option value="Not Working">Not Working / Won't Power On</option>
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <div className="w-2 h-2 border-r-2 border-b-2 border-slate-400 rotate-45 transform -translate-y-1"></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5 pl-2">
-                      Replace Reason & Notes
-                    </label>
-                    <textarea 
-                      required 
-                      value={replaceReason} 
-                      onChange={(e) => setReplaceReason(e.target.value)} 
-                      placeholder={`Provide reason for this request...`}
-                      className="w-full px-4 py-3.5 bg-white/70 rounded-2xl text-[13px] font-bold text-slate-700 outline-none resize-none h-24 shadow-inner placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-purple-500/20 border border-transparent" 
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-3">
-                    <button type="button" onClick={resetReplaceModal} className="flex-1 py-3 bg-white rounded-xl text-[10px] font-black text-slate-900 uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-colors cursor-pointer border border-slate-200">
-                      Cancel
-                    </button>
-                    <button type="button" onClick={() => handleGenerateQR(activeAsset)} className={`flex-1 py-3 rounded-xl text-[10px] font-black text-white uppercase tracking-widest shadow-md transition-all cursor-pointer bg-purple-600 hover:bg-purple-700 border border-purple-500`}>
-                      Generate QR
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                
-                <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5 flex flex-col animate-in slide-in-from-right-4">
-                  
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Scan to Upload Photos</h4>
-                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">
-                      {isLaptopObj ? 'Laptop: Requires 5 Photos' : 'Accessory: Requires 2 Photos'}
-                    </p>
-                    
-                    <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-5">
-                      <img src={qrUrl} alt="Upload QR Code" className="w-40 h-40 sm:w-48 sm:h-48 object-contain" />
-                    </div>
-                    
-                    <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden border border-slate-200">
-                      <div 
-                        className={`h-full transition-all duration-500 bg-purple-500`} 
-                        style={{ width: `${Math.min((currentPhotoCount / REQUIRED_PHOTOS) * 100, 100)}%` }} 
-                      />
-                    </div>
-                    
-                    <p className={`text-[11px] sm:text-xs font-bold ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
-                      {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${Math.max(0, REQUIRED_PHOTOS - currentPhotoCount)} more photo(s)...`}
-                    </p>
-
-                    <div className="mt-5 pt-5 border-t border-slate-100 w-full">
-                      <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 hover:text-slate-600 underline cursor-pointer uppercase tracking-widest transition-colors">
-                        Or upload directly from computer
-                        <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
-                          if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
-                        }} />
-                      </label>
-                      {localPhotos.length > 0 && (
-                         <p className="text-[10px] text-emerald-600 mt-2 font-bold">{localPhotos.length} file(s) selected locally.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button type="button" onClick={() => setQrUrl(null)} className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors cursor-pointer shrink-0">
-                      <ChevronLeft size={20} strokeWidth={2.5} />
-                    </button>
-                    
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        if (isSubmittingReplace) return;
-                        if (!hasEnoughPhotos) {
-                          const proceed = window.confirm(`You haven't uploaded the required ${REQUIRED_PHOTOS} photos. Your request may be rejected by IT Admin. Do you want to submit anyway?`);
-                          if (!proceed) return;
-                        }
-                        handleReplaceSubmit(e);
-                      }} 
-                      className={`flex-1 h-12 rounded-xl text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${isSubmittingReplace ? 'opacity-50 cursor-not-allowed bg-purple-600/50' : 'bg-purple-600 hover:bg-purple-700 hover:scale-[1.02] active:scale-95'}`}
-                    >
-                      {isSubmittingReplace ? <Loader2 size={16} className="animate-spin" /> : 'Submit Request'}
-                    </button>
-
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
 
+// 🌟 REBUILT MODAL: NOW SUPPORTS FULL PHOTO UPLOAD FOR INSPECTIONS & RETURNS
 function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAssets, onClose, theme }: any) {
   const needsLock = type === 'INSPECTION';
+  const [step, setStep] = useState(1); // 1 = Form, 2 = Photos
   const [isUnlocked, setIsUnlocked] = useState(!needsLock);
   const [serialInput, setSerialInput] = useState('');
   const [lockError, setLockError] = useState(false);
@@ -1392,10 +1200,31 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const [formCondition, setFormCondition] = useState('Pristine / Flawless');
   const [screenshot, setScreenshot] = useState<File | null>(null); 
   
-  const [showQR, setShowQR] = useState(false);
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState('');
+  const [remotePhotos, setRemotePhotos] = useState<string[]>([]);
+  const [localPhotos, setLocalPhotos] = useState<File[]>([]);
+  
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
+
+  // Active Asset Context for Photos
+  const activeAsset = type === 'RETURN' ? assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId)) : asset;
+  const isLaptopObj = (activeAsset?.category || '').toLowerCase().includes('laptop');
+  const REQUIRED_PHOTOS = isLaptopObj ? 5 : 2;
+  const currentPhotoCount = remotePhotos.length + localPhotos.length;
+  const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
+
+  useEffect(() => {
+    if (!qrSessionId) return;
+    const photoChannel = supabase.channel(`modal_qr_session_${qrSessionId}`)
+      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
+        if (payload.payload?.url) {
+          setRemotePhotos(prev => [...prev, payload.payload.url]);
+        }
+      }).subscribe();
+    return () => { supabase.removeChannel(photoChannel); };
+  }, [qrSessionId]);
 
   const handleAttemptUnlock = () => {
     if (!asset) { alert("No hardware assigned to test against!"); return; }
@@ -1406,46 +1235,43 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
     } else setLockError(true);
   };
 
-  const generateMobileHandoff = () => {
-    const baseUrl = window.location.origin;
-    const cat = asset?.category || formCategory;
-    const url = `${baseUrl}/mobile-audit?assetId=${asset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(formText)}&auditType=${type}&mode=upload_only`;
-    setQrUrl(url); setShowQR(true);
+  const uploadMultiplePhotos = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const { error } = await supabase.storage.from('asset-photos').upload(fileName, file);
+        if (!error) {
+          const { data } = supabase.storage.from('asset-photos').getPublicUrl(fileName);
+          uploadedUrls.push(data.publicUrl);
+        }
+      } catch (error) { console.error("Upload failed", error); }
+    }
+    return uploadedUrls;
   };
 
   const handleLivePostgresSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    if (type === 'RETURN') {
-      const targetAsset = assignedAssets?.find((a: any) => String(a.id) === String(selectedReturnId));
-      if (!targetAsset) return;
-
-      const confirmed = window.confirm(
-        `WARNING: VERIFY SERIAL NUMBER\n\nAre you sure your physical asset's Serial Number matches this serial number?\n\nAsset: ${targetAsset.name || targetAsset.asset_name}\nTag ID: ${targetAsset.asset_tag}\nSerial Number: ${targetAsset.serial_number || 'N/A'}\n\nClick OK if it matches exactly.`
-      );
-
-      if (!confirmed) {
-        toast.error("Return aborted. Serial numbers must match.");
-        return; 
+    // 🌟 If Inspection/Return, move to Step 2 (Photos)
+    if ((type === 'INSPECTION' || type === 'RETURN') && step === 1) {
+      if (type === 'RETURN') {
+        if (!activeAsset) return;
+        const confirmed = window.confirm(
+          `WARNING: VERIFY SERIAL NUMBER\n\nAre you sure your physical asset's Serial Number matches this serial number?\n\nAsset: ${activeAsset.name || activeAsset.asset_name}\nTag ID: ${activeAsset.asset_tag}\nSerial Number: ${activeAsset.serial_number || 'N/A'}\n\nClick OK if it matches exactly.`
+        );
+        if (!confirmed) return;
       }
 
-      try {
-        await supabase.from('assets').update({ status: 'Pending Return' }).eq('id', targetAsset.id);
-        if (setAssignedAssets) setAssignedAssets((prev: any[]) => prev.map(a => a.id === targetAsset.id ? { ...a, status: 'Pending Return', live_inspection_status: 'Return Pending' } : a));
-        
-        const baseUrl = window.location.origin;
-        const cat = targetAsset.category;
-        const finalNotes = `[RETURN REQUEST] ${formText}`;
-        const url = `${baseUrl}/mobile-audit?assetId=${targetAsset.id}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&cond=${encodeURIComponent(formCondition)}&notes=${encodeURIComponent(finalNotes)}&auditType=${type}`;
-        setQrUrl(url); setShowQR(true);
-      } catch(e) {
-        toast.error("Error submitting return request.");
-      }
+      const sessionId = crypto.randomUUID();
+      setQrSessionId(sessionId);
+      const baseUrl = window.location.origin;
+      const cat = activeAsset?.category || formCategory;
+      const url = `${baseUrl}/mobile-audit?session=${sessionId}&assetId=${activeAsset.id}&req=${REQUIRED_PHOTOS}&empCode=${user.emp_id}&name=${encodeURIComponent(user.name)}&cat=${encodeURIComponent(cat)}&mode=upload_only`;
+      setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&color=0f172a&bgcolor=ffffff`);
+      setStep(2);
       return;
-    }
-
-    if (type === 'INSPECTION') {
-      generateMobileHandoff(); return;
     }
 
     setIsTransmitting(true);
@@ -1481,7 +1307,42 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
           staff_name: humanName 
         });
         submitError = error;
+      } else if (type === 'INSPECTION') {
+        // 🌟 Direct DB Insert for Inspection from Desktop Modal
+        const newUrls = await uploadMultiplePhotos(localPhotos);
+        const allPhotos = [...remotePhotos, ...newUrls];
+        const { error: inspErr } = await supabase.from('inspections').insert({
+          asset_id: activeAsset.id,
+          user_id: user.id,
+          user_name: user.name,
+          user_email: user.email,
+          emp_code: user.emp_id,
+          status: 'Pending Review',
+          condition: formCondition,
+          notes: formText,
+          photos: allPhotos.length > 0 ? allPhotos : []
+        });
+        if (inspErr) throw inspErr;
+        await supabase.from('assets').update({ inspection_status: 'Pending Review' }).eq('id', activeAsset.id);
+      } else if (type === 'RETURN') {
+        // 🌟 Direct DB Insert for Return from Desktop Modal
+        const newUrls = await uploadMultiplePhotos(localPhotos);
+        const allPhotos = [...remotePhotos, ...newUrls];
+        const { error: retErr } = await supabase.from('inspections').insert({
+          asset_id: activeAsset.id,
+          user_id: user.id,
+          user_name: user.name,
+          user_email: user.email,
+          emp_code: user.emp_id,
+          status: 'Return Pending',
+          condition: formCondition,
+          notes: `[RETURN REQUEST] ${formText}`,
+          photos: allPhotos.length > 0 ? allPhotos : []
+        });
+        if (retErr) throw retErr;
+        await supabase.from('assets').update({ status: 'Pending Return', inspection_status: 'Return Pending' }).eq('id', activeAsset.id);
       }
+      
       if (submitError) throw submitError;
       setSuccessDone(true); setTimeout(() => onClose(), 1200);
     } catch (e: any) { alert(`Database Error: ${e.message || JSON.stringify(e)}`); } finally { setIsTransmitting(false); }
@@ -1544,21 +1405,35 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
               <CheckCircle2 size={72} className="text-emerald-500 mx-auto animate-bounce"/>
               <h4 className="text-xl sm:text-2xl font-bold text-slate-900">Database Updated!</h4>
             </div>
-          ) : showQR ? (
+          ) : step === 2 ? (
             <div className="py-4 text-center space-y-5 animate-in zoom-in-95 duration-300">
               <div>
                 <h4 className="text-base sm:text-lg font-bold uppercase tracking-widest text-slate-900">Mobile Device Handoff</h4>
                 <p className="text-[11px] sm:text-xs font-medium mt-1.5 text-slate-500">Scan this code with your phone camera to take certified watermark photos of the asset.</p>
               </div>
               <div className="p-4 sm:p-5 rounded-[2rem] inline-block shadow-2xl mx-auto border bg-white border-slate-200">
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
+                <img src={qrUrl} alt="Scan to Audit" className="w-40 h-40 sm:w-48 sm:h-48 rounded-xl" />
               </div>
               
-              <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:border-purple-300">
-                <h5 className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-purple-600"><Camera size={16}/> Photo Requirements</h5>
-                <ul className="text-[11px] sm:text-xs font-semibold space-y-2 ml-1 text-slate-900">
-                  <p>Follow the instructions on your mobile device to complete this process.</p>
-                </ul>
+              <div className="p-4 sm:p-5 rounded-2xl text-left transition-all bg-white/40 backdrop-blur-xl border border-white/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.9)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+                <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden border border-slate-200">
+                  <div className={`h-full transition-all duration-500 bg-purple-500`} style={{ width: `${Math.min((currentPhotoCount / REQUIRED_PHOTOS) * 100, 100)}%` }} />
+                </div>
+                <p className={`text-[11px] sm:text-xs font-bold text-center mb-4 ${hasEnoughPhotos ? 'text-emerald-600' : 'text-slate-500 animate-pulse'}`}>
+                  {hasEnoughPhotos ? 'Uploads Complete ✓' : `Waiting for ${Math.max(0, REQUIRED_PHOTOS - currentPhotoCount)} more photo(s)...`}
+                </p>
+
+                <div className="pt-4 border-t border-slate-200 w-full text-center">
+                  <label className="text-[10px] font-bold text-purple-600 hover:text-purple-700 underline cursor-pointer uppercase tracking-widest transition-colors">
+                    Or upload directly from computer
+                    <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
+                      if (e.target.files) setLocalPhotos([...localPhotos, ...Array.from(e.target.files)]);
+                    }} />
+                  </label>
+                  {localPhotos.length > 0 && (
+                     <p className="text-[10px] text-emerald-600 mt-2 font-bold">{localPhotos.length} file(s) selected locally.</p>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -1703,10 +1578,30 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
         </div>
 
         <div className="px-5 py-4 sm:px-6 sm:py-5 flex justify-center items-center gap-3 sm:gap-4 shrink-0 relative z-10 border-t border-slate-200/60">
-          {showQR ? (
-            <button onClick={onClose} className={`w-full py-3 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
-              Close Portal
-            </button>
+          {step === 2 ? (
+            <>
+              <button onClick={() => setStep(1)} className={`w-12 h-12 bg-white hover:bg-slate-50 text-slate-600 rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 cursor-pointer shrink-0 transition-colors`}>
+                <ChevronLeft size={20} strokeWidth={2.5} />
+              </button>
+              <button 
+                onClick={(e) => {
+                  if (isTransmitting) return;
+                  if (!hasEnoughPhotos) {
+                    const proceed = window.confirm(`You haven't uploaded the required ${REQUIRED_PHOTOS} photos. Your request may be rejected by IT Admin. Do you want to submit anyway?`);
+                    if (!proceed) return;
+                  }
+                  handleLivePostgresSubmit(e as any);
+                }} 
+                disabled={isTransmitting}
+                className={`flex-1 py-3 text-white rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 ${
+                  type === 'RETURN' 
+                    ? 'bg-orange-500 shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)]' 
+                    : 'bg-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.4)] border border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.5)]'
+                }`}
+              >
+                {isTransmitting ? <Loader2 size={16} className="animate-spin" /> : 'Submit Final Request'}
+              </button>
+            </>
           ) : (
             <>
               <button onClick={onClose} className={`flex-1 py-3 rounded-2xl text-[11px] sm:text-[12px] font-bold uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${theme.glassButton}`}>
