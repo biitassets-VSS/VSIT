@@ -40,44 +40,53 @@ const ASSET_LEGACY_MAP: Record<string, {name: string, empCode: string}> = {
   'vss-kmu-3564': { name: 'Damanpreet Singh', empCode: 'EMP-1986' }
 };
 
-// --- AGGRESSIVE PHOTO EXTRACTOR ---
+// 🌟 ULTRA-AGGRESSIVE PHOTO EXTRACTOR 🌟
 const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
-  let extracted: string[] = [];
+  let extracted: Set<string> = new Set();
   
   const processItem = (item: any) => {
-    if (typeof item === 'string' && item.length > 5 && item.startsWith('http')) {
-      extracted.push(item);
+    if (!item) return;
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      if (trimmed.length < 5) return;
+      
+      // Parse stringified JSON arrays
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) parsed.forEach(processItem);
+          else if (typeof parsed === 'object') processItem(parsed);
+        } catch (e) {
+          extracted.add(trimmed); // If parse fails, add raw string just in case
+        }
+      } 
+      // Handle comma-separated URL strings
+      else if (trimmed.includes(',http') || trimmed.includes(', http') || trimmed.includes(',/storage')) {
+        trimmed.split(',').forEach(u => {
+          if (u.trim()) extracted.add(u.trim());
+        });
+      } 
+      // Accept any valid path/URL string
+      else {
+        extracted.add(trimmed);
+      }
     } else if (typeof item === 'object' && item !== null) {
-      if (item.url) extracted.push(item.url);
-      else if (item.publicUrl) extracted.push(item.publicUrl);
-      else if (item.photo_url) extracted.push(item.photo_url);
+      if (item.url) extracted.add(item.url);
+      else if (item.publicUrl) extracted.add(item.publicUrl);
+      else if (item.photo_url) extracted.add(item.photo_url);
       else Object.values(item).forEach(processItem);
     }
   };
 
   try {
-    if (Array.isArray(recordPhotos)) {
-      recordPhotos.forEach(processItem);
-    } else if (typeof recordPhotos === 'string') {
-      if (recordPhotos.trim().startsWith('[')) {
-        try { JSON.parse(recordPhotos).forEach(processItem); } catch(e){}
-      } else {
-        processItem(recordPhotos.trim());
-      }
-    } else if (recordPhotos && typeof recordPhotos === 'object') {
-      Object.values(recordPhotos).forEach(processItem);
-    }
-    
-    // Fallbacks if primary check fails
-    if (extracted.length === 0) {
-      if (fallbackRecord.photo_url) processItem(fallbackRecord.photo_url);
-      if (fallbackRecord.image_url) processItem(fallbackRecord.image_url);
-      if (fallbackRecord.evidence) processItem(fallbackRecord.evidence);
-      if (fallbackRecord.photos && typeof fallbackRecord.photos === 'string') processItem(fallbackRecord.photos);
-    }
+    processItem(recordPhotos);
+    // Deep scan all possible fallback columns where mobile app might have saved it
+    ['photo_url', 'image_url', 'evidence', 'photos', 'attachments', 'images', 'capture'].forEach(key => {
+      if (fallbackRecord[key]) processItem(fallbackRecord[key]);
+    });
   } catch (e) {}
   
-  return Array.from(new Set(extracted)); // Remove duplicates
+  return Array.from(extracted).filter(url => url && typeof url === 'string');
 };
 
 function getCategoryIcon(category: string, size = 18) {
@@ -460,7 +469,7 @@ function AdminInspectionReviewContent() {
 
         const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isProfileAdmin;
         
-        // 🌟 Apply robust parser immediately
+        // 🌟 Apply robust parser immediately during ledger mapping
         const photosArray = extractPhotos(insp.photos, insp);
 
         let currentAssignee = matchedAsset.assigned_to;
@@ -504,7 +513,7 @@ function AdminInspectionReviewContent() {
           
           is_deleted_user: false,
           status: normalizedStatus,
-          photos: photosArray, // 🌟 Safe Photos Array
+          photos: photosArray, // 🌟 Safe Photos Array injected
           next_due: nextDue,
           days_until_due: daysUntilDue,
           is_due_soon: daysUntilDue <= 5 && daysUntilDue >= 0 && !isHistorical,
@@ -641,6 +650,39 @@ function AdminInspectionReviewContent() {
     }
   };
 
+  const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, status: string) => {
+    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-') || staffId === 'UnknownID') {
+      return alert("Cannot send alert: No valid active employee profile attached to this record.");
+    }
+    setSendingAlertId(staffId);
+    try {
+      const isReInspect = status === 'Re-Inspection';
+      const isOverdue = status === 'Overdue';
+      const isDueSoon = status === 'Due Soon';
+      const title = isReInspect ? `⚠️ Mandatory Re-Inspection Required` : isOverdue ? `🚨 OVERDUE: Hardware Audit Required` : `🔔 Hardware Audit Reminder Due`;
+      const message = isReInspect
+        ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
+        : isOverdue
+        ? `Your hardware inspection for ${assetName} (${tagId}) is OVERDUE. Please submit your visual verification immediately to avoid compliance strikes.`
+        : `Please submit your scheduled visual inspection photos for ${assetName} (${tagId}) via your staff portal dashboard.`;
+
+      const { error } = await supabase.from('notifications').insert([{
+        target_user: staffId,
+        title: title,
+        message: message,
+        is_read: false,
+        type: isReInspect || isOverdue ? 'warning' : 'info'
+      }]);
+
+      if (error) throw error;
+      alert(`✔ Success: Immediate notification push sent directly to employee dashboard!`);
+    } catch (err: any) {
+      alert(`Error sending notification push: ${err.message}`);
+    } finally {
+      setSendingAlertId(null);
+    }
+  };
+
   const executeVerdict = async (
     inspectionId: string, 
     assetId: string, 
@@ -705,6 +747,11 @@ function AdminInspectionReviewContent() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const clearAssetFilter = () => {
+    setAssetFilter(null);
+    router.replace('/admin/inspections'); 
   };
 
   const filteredList = inspections.filter(item => {
@@ -1093,6 +1140,13 @@ function AdminInspectionReviewContent() {
                       ) : (
                         <div className="p-3 rounded-2xl border border-amber-200/50 bg-amber-50/50 backdrop-blur-md text-amber-700 text-xs font-semibold mb-4 flex items-center gap-2 shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]">
                           <AlertTriangle size={14}/> Missing inspection photos
+                        </div>
+                      )}
+
+                      {/* RAW DATA FALLBACK (Helpful for debugging if extractor fails) */}
+                      {photosArray.length === 0 && insp.photos && (
+                        <div className="p-2 mb-4 rounded-xl bg-slate-100/50 text-[9px] text-slate-500 font-mono break-words border border-slate-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]">
+                          Raw DB Data: {typeof insp.photos === 'string' ? insp.photos : JSON.stringify(insp.photos)}
                         </div>
                       )}
 
