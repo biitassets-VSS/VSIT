@@ -572,36 +572,40 @@ export default function StaffDashboardPage() {
       const newUrls = await uploadMultiplePhotos(localPhotos);
       const allPhotos = [...remotePhotos, ...newUrls];
 
-      // Robust Auto-Degrading Payload for schema mismatch safety
-      // We inject both asset_id and old_asset_id, and both reason and notes to ensure it catches on the correct schema fields
+      // 🌟 UPDATED PAYLOAD: Strictly matched to your table schema screenshot
       let payload: any = {
-        asset_id: activeAsset.id,
         old_asset_id: activeAsset.id,
-        asset_tag: activeAsset.asset_tag,
-        serial_number: activeAsset.serial_number,
+        asset_id: activeAsset.id,         // Added for backwards compatibility if needed
+        asset_tag: activeAsset.asset_tag, // Safe fallback
+        serial_number: activeAsset.serial_number, // Safe fallback
         user_id: currentUser.id,
-        staff_name: currentUser.name,
-        user_email: currentUser.email, 
+        user_name: currentUser.name,      // 🌟 Matches DB schema
+        staff_name: currentUser.name,     // Safe fallback 
         emp_code: currentUser.emp_id,
         condition: replaceCondition,
         reason: replaceReason,
-        notes: replaceReason, 
-        photos: allPhotos.length > 0 ? allPhotos : null,
+        notes: replaceReason,             // Safe fallback
+        photos: allPhotos.length > 0 ? allPhotos : [], // 🌟 Send empty array for JSONB default safety
         status: 'Pending Approval'
       };
 
       let dbSuccess = false;
       let lastErr = null;
 
-      // Aggressive retry loop (15 iterations) to strip off any column that doesn't exist in the database table
+      // Aggressive retry loop to safely strip missing columns
       for (let i = 0; i < 15; i++) {
         const { error: insertError } = await supabase.from('replacements').insert(payload);
         if (insertError) {
           lastErr = insertError;
-          // Capture the missing column name from the Supabase error message
           const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
           if (match && match[1]) {
             const col = match[1];
+            
+            // 🌟 EXPLICIT WARNING if the photo column is STILL missing
+            if (col === 'photos') {
+              toast.error("Database missing 'photos' column! Images were not saved.", { duration: 6000 });
+            }
+            
             delete payload[col]; // Strip missing column and try again
             continue;
           }
