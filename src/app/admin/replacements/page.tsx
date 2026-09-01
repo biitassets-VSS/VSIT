@@ -67,10 +67,10 @@ function AdminReplacementsContent() {
     else setIsRefreshing(true);
 
     try {
-      // 1. Fetch native replacements
+      // 1. Fetch native replacements with joined assets
       const { data: replData, error } = await supabase
         .from('replacements')
-        .select('*')
+        .select('*, assets(*)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -83,7 +83,14 @@ function AdminReplacementsContent() {
           else if (r.photos && typeof r.photos === 'object') photosList = Object.values(r.photos);
         } catch(e) {}
 
-        return { ...r, sourceTable: 'replacements', photos: photosList };
+        return { 
+          ...r, 
+          sourceTable: 'replacements', 
+          photos: photosList,
+          asset_tag: r.assets?.asset_tag || r.asset_tag || 'N/A',
+          serial_number: r.assets?.serial_number || r.serial_number || 'N/A',
+          old_asset_id: r.asset_id || r.old_asset_id
+        };
       });
 
       // 2. Fetch older inspections that acted as replacements (Legacy Recovery)
@@ -138,9 +145,9 @@ function AdminReplacementsContent() {
             asset_tag: asset.asset_tag || 'N/A',
             serial_number: asset.serial_number || 'N/A',
             user_id: insp.user_id || insp.inspected_by || asset.assigned_to,
-            staff_name: insp.user_name, // Nullable to trigger resolution
+            staff_name: insp.user_name,
             user_email: insp.user_email || '',
-            emp_code: insp.emp_code, // Nullable to trigger resolution
+            emp_code: insp.emp_code,
             condition: 'Legacy Record (See Notes)',
             reason: insp.notes || 'Replacement requested via old inspection log',
             photos: photosList,
@@ -344,34 +351,40 @@ function AdminReplacementsContent() {
       // Target correct source table
       if (item.sourceTable === 'inspections') {
         const mappedStatus = action === 'Resolved' ? 'Replacement Approved' : action === 'Rejected' ? 'Replacement Rejected' : action;
-        await supabase.from('inspections').update({ 
+        const { error: inspErr } = await supabase.from('inspections').update({ 
           status: mappedStatus, 
           admin_remarks: remarks 
         }).eq('id', item.id);
+        if (inspErr) throw new Error(`Inspections Error: ${inspErr.message}`);
+
       } else if (item.sourceTable === 'replacements') {
-        await supabase.from('replacements').update({ 
+        const { error: replErr } = await supabase.from('replacements').update({ 
           status: action, 
           admin_remarks: remarks 
         }).eq('id', item.id);
+        if (replErr) throw new Error(`Replacements Error: ${replErr.message}. Ensure 'admin_remarks' column exists on replacements table.`);
+
       } else if (item.sourceTable === 'synthetic') {
          const mappedStatus = action === 'Resolved' ? 'Replacement Approved' : action === 'Rejected' ? 'Replacement Rejected' : action;
-         await supabase.from('inspections').insert({
+         const { error: synthErr } = await supabase.from('inspections').insert({
             asset_id: item.old_asset_id,
             user_id: item.user_id,
             status: mappedStatus,
             admin_remarks: remarks,
             notes: `[LEGACY REPLACEMENT] ${item.reason}`
          });
+         if (synthErr) throw new Error(`Synthetic Insert Error: ${synthErr.message}`);
       }
 
       // 🌟 IF APPROVED: AUTO-REMOVE ASSET FROM STAFF
       if (action === 'Resolved') {
-        await supabase.from('assets').update({
+        const { error: assetErr } = await supabase.from('assets').update({
           status: 'In Stock',
           assigned_to: null, 
           inspection_status: null,
           admin_remarks: `Approved Swap: ${remarks}`
         }).eq('id', item.old_asset_id);
+        if (assetErr) throw new Error(`Assets Update Error: ${assetErr.message}`);
 
         await supabase.from('notifications').insert({
           target_user: item.user_id || item.user_email,
@@ -386,10 +399,11 @@ function AdminReplacementsContent() {
       } else if (action === 'Rejected') {
         const isReturn = (item.status || '').toLowerCase().includes('return') || (item.reason || '').toLowerCase().includes('return');
         
-        await supabase.from('assets').update({
+        const { error: assetErr2 } = await supabase.from('assets').update({
           status: isReturn ? 'Return Rejected' : 'Replacement Rejected',
           admin_remarks: `Denied Swap: ${remarks}`
         }).eq('id', item.old_asset_id);
+        if (assetErr2) throw new Error(`Assets Update Error: ${assetErr2.message}`);
 
         await supabase.from('notifications').insert({
           target_user: item.user_id || item.user_email,
@@ -403,7 +417,7 @@ function AdminReplacementsContent() {
 
       fetchReplacements(false);
     } catch (err: any) {
-      alert(`Error updating replacement: ${err.message}`);
+      alert(`Update Failed: ${err.message}`);
     } finally {
       setUpdatingId(null);
     }
@@ -447,7 +461,7 @@ function AdminReplacementsContent() {
 
       {/* FULL SCREEN GLASS GALLERY MODAL */}
       {gallery.isOpen && (
-        <div className="fixed inset-0 z-99999 flex items-center justify-center bg-slate-900/90 backdrop-blur-3xl animate-in fade-in">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/90 backdrop-blur-3xl animate-in fade-in">
           <div className="absolute inset-0" onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })}></div>
           
           <button onClick={() => setGallery({ ...gallery, isOpen: false, scale: 1 })} className="absolute top-6 right-6 text-white/60 hover:text-white z-50 bg-white/10 p-3 rounded-full backdrop-blur-md transition-all hover:scale-110">
