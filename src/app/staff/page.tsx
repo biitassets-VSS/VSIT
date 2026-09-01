@@ -448,7 +448,7 @@ export default function StaffDashboardPage() {
     return !state.disabled && !state.text.includes('Opens');
   }).length;
 
-  const pendingHandovers = assignedAssets.filter(a => a.status === 'Pending Handover');
+  const pendingHandovers = assignedAssets.filter(a => (a.status || '').toLowerCase().trim() === 'pending handover');
   const overdueAssetsList = assignedAssets.filter(a => a.isOverdue && !a.isReturnPending && !a.isReplacePending && !a.true_inspection_state?.includes('pending'));
 
   useEffect(() => {
@@ -645,7 +645,7 @@ export default function StaffDashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0 mt-2 sm:mt-0">
-          <button onClick={() => { setUnreadNotifications(0); router.push('/staff/dashboard/notifications'); }} className="relative p-2.5 bg-white/50 rounded-full border border-white/80 shadow-sm hover:scale-105 transition-transform text-slate-600 hover:text-purple-600">
+          <button onClick={() => { setUnreadNotifications(0); router.push('/staff/dashboard/notifications'); }} className="relative p-2.5 bg-white/50 rounded-full border border-white/80 shadow-sm hover:scale-105 transition-transform text-slate-600 hover:text-purple-600 cursor-pointer">
             <Bell size={18} />
             {unreadNotifications > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm border-2 border-white">
@@ -793,8 +793,8 @@ export default function StaffDashboardPage() {
                     const asset = visibleAsset;
                     const btnState = getAssetAuditState(asset);
                     const isActionLocked = asset.isReturnPending || asset.isReplacePending || btnState.text === 'Under Review' || btnState.text.includes('Opens');
-
                     const baseAuditStatus = asset.live_inspection_status;
+                    const isPendingHandover = (asset.status || '').toLowerCase().trim() === 'pending handover';
 
                     return (
                       <motion.div 
@@ -874,14 +874,14 @@ export default function StaffDashboardPage() {
                               </span>
                             </div>
                             <div className="min-w-0 flex flex-col justify-start relative">
-                              {asset.status === 'Pending Handover' && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
+                              {isPendingHandover && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
                               <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Handover</span>
                               <button 
-                                onClick={() => asset.status === 'Pending Handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${asset.status === 'Pending Handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
+                                onClick={() => isPendingHandover ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${isPendingHandover ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
                               >
                                 <FileSignature size={14} />
-                                {asset.status === 'Pending Handover' ? 'Pending' : 'Signed'}
+                                {isPendingHandover ? 'Pending' : 'Signed'}
                               </button>
                             </div>
                           </div>
@@ -1059,8 +1059,8 @@ export default function StaffDashboardPage() {
               <h2 className="text-xl font-black text-center text-slate-900 mb-2">Sign Agreement</h2>
               <p className="text-sm text-center text-slate-600 font-medium mb-6">I acknowledge receipt of the <strong className="text-slate-800">{handoverAsset.name || handoverAsset.category} ({handoverAsset.asset_tag})</strong> in working condition and agree to the company IT policy.</p>
               <div className="flex gap-3">
-                 <button onClick={() => setHandoverAsset(null)} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors">Cancel</button>
-                 <button onClick={handleDigitalSign} disabled={isSigning} className="flex-1 py-3.5 bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-md hover:bg-emerald-600 hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                 <button onClick={() => setHandoverAsset(null)} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors cursor-pointer">Cancel</button>
+                 <button onClick={handleDigitalSign} disabled={isSigning} className="flex-1 py-3.5 bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-md hover:bg-emerald-600 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer">
                    {isSigning ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle2 size={16}/> I Agree & Sign</>}
                  </button>
               </div>
@@ -1082,7 +1082,7 @@ export default function StaffDashboardPage() {
                 <div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Signed By</span><span className="text-sm font-bold text-slate-800">{currentUser.name} ({currentUser.emp_id})</span></div>
                 <div><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-0.5">Date of Signature</span><span className="text-sm font-bold text-slate-800">{viewAgreementAsset.last_inspection_date ? new Date(viewAgreementAsset.last_inspection_date).toLocaleString('en-GB') : 'Unknown'}</span></div>
               </div>
-              <button onClick={() => setViewAgreementAsset(null)} className="w-full py-3.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors">Close Document</button>
+              <button onClick={() => setViewAgreementAsset(null)} className="w-full py-3.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors cursor-pointer">Close Document</button>
             </motion.div>
           </div>
         )}
@@ -1335,6 +1335,9 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
             lastErr = insertError;
             const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
             if (match && match[1]) {
+              if (match[1] === 'photos') {
+                 toast.error("Database missing 'photos' column in 'inspections' table! Images dropped.", { duration: 6000 });
+              }
               delete payload[match[1]]; 
               continue;
             }
