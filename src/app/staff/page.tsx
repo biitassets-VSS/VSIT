@@ -84,60 +84,6 @@ const formatDuration = (start: string, end: string) => {
   return `${Math.floor(diffHrs)} hrs`;
 };
 
-const extractAdminReason = (remarks: string, notes: string) => {
-  if (remarks && remarks.trim() !== '') return remarks;
-  const lowerNotes = (notes || '').toLowerCase();
-  if (lowerNotes.includes('declin') || lowerNotes.includes('reject')) {
-    const parts = notes.split(/reason:/i);
-    return parts.length > 1 ? parts[1].trim() : notes;
-  }
-  if (lowerNotes.includes('approv')) {
-     const parts = notes.split(/reason:|remarks:/i);
-     return parts.length > 1 ? parts[1].trim() : "Return has been processed and approved.";
-  }
-  return 'No administrative remarks provided.';
-};
-
-// 🌟 ADDED MISSING EXTRACT PHOTOS FUNCTION
-const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
-  let extracted: string[] = [];
-  
-  const processItem = (item: any) => {
-    if (typeof item === 'string' && item.length > 5 && item.startsWith('http')) {
-      extracted.push(item);
-    } else if (typeof item === 'object' && item !== null) {
-      if (item.url) extracted.push(item.url);
-      else if (item.publicUrl) extracted.push(item.publicUrl);
-      else if (item.photo_url) extracted.push(item.photo_url);
-      else Object.values(item).forEach(processItem);
-    }
-  };
-
-  try {
-    if (Array.isArray(recordPhotos)) {
-      recordPhotos.forEach(processItem);
-    } else if (typeof recordPhotos === 'string') {
-      if (recordPhotos.trim().startsWith('[')) {
-        try { JSON.parse(recordPhotos).forEach(processItem); } catch(e){}
-      } else {
-        processItem(recordPhotos.trim());
-      }
-    } else if (recordPhotos && typeof recordPhotos === 'object') {
-      Object.values(recordPhotos).forEach(processItem);
-    }
-    
-    // Fallbacks
-    if (extracted.length === 0) {
-      if (fallbackRecord.photo_url) processItem(fallbackRecord.photo_url);
-      if (fallbackRecord.image_url) processItem(fallbackRecord.image_url);
-      if (fallbackRecord.evidence) processItem(fallbackRecord.evidence);
-      if (fallbackRecord.photos && typeof fallbackRecord.photos === 'string') processItem(fallbackRecord.photos);
-    }
-  } catch (e) {}
-  
-  return Array.from(new Set(extracted));
-};
-
 export default function StaffDashboardPage() {
   const router = useRouter(); 
   const [loading, setLoading] = useState(true);
@@ -500,15 +446,26 @@ export default function StaffDashboardPage() {
     }));
   }, [assignedAssets, needsInspCount, pendingHandovers.length, overdueAssetsList.length, myTickets]);
 
+  // 🌟 CATCH-ALL REALTIME LISTENER FOR MOBILE UPLOADS
   useEffect(() => {
     if (!qrSessionId) return;
-    const photoChannel = supabase.channel(`qr_session_${qrSessionId}`)
-      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
-        if (payload.payload?.url) {
-          setRemotePhotos(prev => [...prev, payload.payload.url]);
-        }
-      }).subscribe();
-    return () => { supabase.removeChannel(photoChannel); };
+    
+    const handlePhoto = (payload: any) => {
+      if (payload.payload?.url) {
+        setRemotePhotos(prev => {
+          if (prev.includes(payload.payload.url)) return prev;
+          return [...prev, payload.payload.url];
+        });
+      }
+    };
+
+    const c1 = supabase.channel(`qr_session_${qrSessionId}`).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
+    const c2 = supabase.channel(qrSessionId).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
+    
+    return () => { 
+      supabase.removeChannel(c1); 
+      supabase.removeChannel(c2); 
+    };
   }, [qrSessionId]);
 
   const handleRateTicket = async (ticketId: string, rating: number) => {
@@ -574,7 +531,8 @@ export default function StaffDashboardPage() {
 
     try {
       const newUrls = await uploadMultiplePhotos(localPhotos);
-      const allPhotos = [...remotePhotos, ...newUrls];
+      const allPhotos = Array.from(new Set([...remotePhotos, ...newUrls]));
+      
       let payload: any = {
         old_asset_id: activeAsset.id,
         asset_id: activeAsset.id,
@@ -587,7 +545,8 @@ export default function StaffDashboardPage() {
         condition: replaceCondition,
         reason: replaceReason,
         notes: replaceReason, 
-        photos: allPhotos.length > 0 ? allPhotos : [],
+        // 🌟 STRINGIFY TO GUARANTEE JSONB COMPATIBILITY
+        photos: allPhotos.length > 0 ? JSON.stringify(allPhotos) : JSON.stringify([]),
         status: 'Pending Approval'
       };
 
@@ -599,9 +558,7 @@ export default function StaffDashboardPage() {
           lastErr = insertError;
           const match = insertError.message.match(/Could not find the '([^']+)' column/i) || insertError.message.match(/column "([^"]+)" of relation/i);
           if (match && match[1]) {
-            const col = match[1];
-            if (col === 'photos') toast.error("Database missing 'photos' column! Images were not saved.", { duration: 6000 });
-            delete payload[col]; 
+            delete payload[match[1]]; 
             continue;
           }
           throw insertError;
@@ -916,14 +873,14 @@ export default function StaffDashboardPage() {
                               </span>
                             </div>
                             <div className="min-w-0 flex flex-col justify-start relative">
-                              {asset.status === 'Pending Handover' && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
+                              {(asset.status || '').toLowerCase().trim() === 'pending handover' && <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full animate-pulse border-2 border-white shadow-sm z-10 -mr-2 -mt-2"></span>}
                               <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5 text-slate-500">Handover</span>
                               <button 
-                                onClick={() => asset.status === 'Pending Handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${asset.status === 'Pending Handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
+                                onClick={() => (asset.status || '').toLowerCase().trim() === 'pending handover' ? setHandoverAsset(asset) : setViewAgreementAsset(asset)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shadow-sm transition-all hover:scale-105 cursor-pointer w-fit leading-tight ${(asset.status || '').toLowerCase().trim() === 'pending handover' ? 'bg-amber-100/80 text-amber-700 border-amber-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
                               >
                                 <FileSignature size={14} />
-                                {asset.status === 'Pending Handover' ? 'Pending' : 'Signed'}
+                                {(asset.status || '').toLowerCase().trim() === 'pending handover' ? 'Pending' : 'Signed'}
                               </button>
                             </div>
                           </div>
@@ -1248,15 +1205,28 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
   const currentPhotoCount = remotePhotos.length + localPhotos.length;
   const hasEnoughPhotos = currentPhotoCount >= REQUIRED_PHOTOS;
 
+  // 🌟 CATCH-ALL REALTIME LISTENER FOR MOBILE UPLOADS
   useEffect(() => {
     if (!qrSessionId) return;
-    const photoChannel = supabase.channel(`modal_qr_session_${qrSessionId}`)
-      .on('broadcast', { event: 'photo_uploaded' }, (payload) => {
-        if (payload.payload?.url) {
-          setRemotePhotos(prev => [...prev, payload.payload.url]);
-        }
-      }).subscribe();
-    return () => { supabase.removeChannel(photoChannel); };
+    
+    const handlePhoto = (payload: any) => {
+      if (payload.payload?.url) {
+        setRemotePhotos(prev => {
+          if (prev.includes(payload.payload.url)) return prev;
+          return [...prev, payload.payload.url];
+        });
+      }
+    };
+
+    const c1 = supabase.channel(`qr_session_${qrSessionId}`).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
+    const c2 = supabase.channel(qrSessionId).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
+    const c3 = supabase.channel(`modal_qr_session_${qrSessionId}`).on('broadcast', { event: 'photo_uploaded' }, handlePhoto).subscribe();
+    
+    return () => { 
+      supabase.removeChannel(c1); 
+      supabase.removeChannel(c2); 
+      supabase.removeChannel(c3); 
+    };
   }, [qrSessionId]);
 
   const handleAttemptUnlock = () => {
@@ -1343,7 +1313,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
       } else if (type === 'INSPECTION' || type === 'RETURN') {
         // 🌟 Direct DB Insert for Inspection/Return from Desktop Modal
         const newUrls = await uploadMultiplePhotos(localPhotos);
-        const allPhotos = [...remotePhotos, ...newUrls];
+        const allPhotos = Array.from(new Set([...remotePhotos, ...newUrls]));
         
         let payload: any = {
           asset_id: activeAsset.id,
@@ -1355,7 +1325,7 @@ function LiveDatabaseModal({ type, asset, user, assignedAssets, setAssignedAsset
           status: type === 'RETURN' ? 'Return Pending' : 'Pending Review',
           condition: formCondition,
           notes: type === 'RETURN' ? `[RETURN REQUEST] ${formText}` : formText,
-          photos: allPhotos, // Sending array safely
+          photos: allPhotos.length > 0 ? JSON.stringify(allPhotos) : JSON.stringify([]) // 🌟 Stringify to guarantee JSONB acceptance
         };
 
         let dbSuccess = false;
