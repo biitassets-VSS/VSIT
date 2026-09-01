@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
@@ -9,9 +9,10 @@ import {
   Laptop, ShieldAlert, Search, RefreshCw, 
   X, History as HistoryIcon, FilterX, Settings2,
   Send, AlertTriangle, List, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Archive,
-  ShieldCheck, Cpu, User, Monitor, Keyboard, RectangleHorizontal, Mouse, Headphones, Sparkles, Package, Loader2
+  ShieldCheck, Cpu, User, Monitor, Keyboard, RectangleHorizontal, Mouse, Headphones, Sparkles, Package, Loader2, PenTool, Undo2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 // --- Legacy Data Recovery Dictionaries ---
 const LEGACY_STAFF_MAP: Record<string, {name: string, empCode: string}> = {
@@ -49,27 +50,17 @@ const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
     if (typeof item === 'string') {
       const trimmed = item.trim();
       if (trimmed.length < 5) return;
-      
-      // Parse stringified JSON arrays
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
         try {
           const parsed = JSON.parse(trimmed);
           if (Array.isArray(parsed)) parsed.forEach(processItem);
           else if (typeof parsed === 'object') processItem(parsed);
-        } catch (e) {
-          extracted.add(trimmed); // If parse fails, add raw string just in case
-        }
+        } catch (e) { extracted.add(trimmed); }
       } 
-      // Handle comma-separated URL strings
       else if (trimmed.includes(',http') || trimmed.includes(', http') || trimmed.includes(',/storage')) {
-        trimmed.split(',').forEach(u => {
-          if (u.trim()) extracted.add(u.trim());
-        });
+        trimmed.split(',').forEach(u => { if (u.trim()) extracted.add(u.trim()); });
       } 
-      // Accept any valid path/URL string
-      else {
-        extracted.add(trimmed);
-      }
+      else { extracted.add(trimmed); }
     } else if (typeof item === 'object' && item !== null) {
       if (item.url) extracted.add(item.url);
       else if (item.publicUrl) extracted.add(item.publicUrl);
@@ -80,7 +71,6 @@ const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
 
   try {
     processItem(recordPhotos);
-    // Deep scan all possible fallback columns where mobile app might have saved it
     ['photo_url', 'image_url', 'evidence', 'photos', 'attachments', 'images', 'capture'].forEach(key => {
       if (fallbackRecord[key]) processItem(fallbackRecord[key]);
     });
@@ -99,11 +89,6 @@ function getCategoryIcon(category: string, size = 18) {
   if (cat.includes('headphone')) return <Headphones size={size} />;
   if (cat.includes('cleaning')) return <Sparkles size={size} />;
   return <Package size={size} />;
-}
-
-function safeString(val: any) {
-  if (val === null || val === undefined) return '';
-  return String(val);
 }
 
 function safeDate(dateStr: any) {
@@ -130,29 +115,35 @@ const formatDate = (dateString: string | Date | null) => {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, ' ');
 };
 
+export const getInspectionStatusColor = (status: string) => {
+  const s = String(status || '').toLowerCase().trim();
+  if (s.includes('sent to admin') || s.includes('pending review') || s.includes('pending')) return 'bg-purple-500/10 border border-purple-500/30 text-purple-500 shadow-sm';
+  if (s.includes('approved') || s.includes('pass')) return 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 shadow-sm';
+  if (s.includes('return') && !s.includes('decline') && !s.includes('reject')) return 'bg-orange-500/10 border border-orange-500/30 text-orange-500 shadow-sm';
+  if (s.includes('replace') && !s.includes('decline') && !s.includes('reject')) return 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-500 shadow-sm';
+  if (s.includes('reject') || s.includes('fail') || s.includes('decline') || s.includes('re-audit') || s.includes('re-inspection')) return 'bg-rose-500/10 border border-rose-500/30 text-rose-500 shadow-sm';
+  return 'bg-blue-500/10 border border-blue-500/30 text-blue-500 shadow-sm';
+};
+
 function parseHistoricalDetailsFromNotes(notes: string) {
   if (!notes) return { name: null, empCode: null };
   let name = null;
   let empCode = null;
-
   const histMatch = notes.match(/Historical User:\s*([^|]+)\|\s*ID:\s*([^\s\]]+)/i);
   if (histMatch) {
     name = histMatch[1].trim();
     empCode = histMatch[2].trim();
   }
-
   if (!name) {
     const signMatch = notes.match(/by\s+([A-Za-z\s]+?)\s+(?:on|at|\d{1,2}\/|$)/i);
     if (signMatch) name = signMatch[1].trim();
   }
-
   return { name, empCode };
 }
 
 function AdminInspectionReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
   const targetAssetId = searchParams.get('asset_id'); 
 
   const [loading, setLoading] = useState(true);
@@ -165,14 +156,22 @@ function AdminInspectionReviewContent() {
   
   const [assetFilter, setAssetFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [sendingAlertId, setSendingAlertId] = useState<string | null>(null);
   
-  // MODAL & ZOOM STATES
-  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0 });
+  // 🌟 GALLERY & ANNOTATION STATE 🌟
+  const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, inspectionId: null as string | null });
   const [zoomProps, setZoomProps] = useState({ isZoomed: false, originX: '50%', originY: '50%' });
   const [assetDetailModal, setAssetDetailModal] = useState<any>(null);
   const [assetHistory, setAssetHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // 🖌️ Drawing Canvas State
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [isDrawMode, setIsDrawMode] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
+  const [history, setHistory] = useState<ImageData[]>([]);
+  const [isSavingAnnotation, setIsSavingAnnotation] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -187,7 +186,6 @@ function AdminInspectionReviewContent() {
     return () => observer.disconnect();
   }, []);
 
-  // REALTIME DATABASE SYNC
   useEffect(() => {
     const realtimeChannel = supabase.channel('admin_inspections_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => fetchVerificationLedger(false))
@@ -203,10 +201,10 @@ function AdminInspectionReviewContent() {
     }
   }, [targetAssetId]);
 
-  // Keyboard navigation for Gallery
+  // Gallery Navigation (Only active if not drawing)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!gallery.isOpen) return;
+      if (!gallery.isOpen || isDrawMode) return;
       if (e.key === 'Escape') {
         setGallery(g => ({ ...g, isOpen: false }));
         setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
@@ -222,15 +220,127 @@ function AdminInspectionReviewContent() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gallery]);
+  }, [gallery, isDrawMode]);
 
-  const openGallery = (images: string[], startIndex: number) => {
-    setGallery({ isOpen: true, images, index: startIndex });
+  const openGallery = (images: string[], startIndex: number, inspectionId: string) => {
+    setGallery({ isOpen: true, images, index: startIndex, inspectionId });
     setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+    setIsDrawMode(false);
   };
 
-  // CLICK-TO-ZOOM HANDLERS
+  // 🌟 CANVAS DRAWING & ANNOTATION LOGIC 🌟
+  const enableDrawMode = () => {
+    setIsDrawMode(true);
+    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+    setTimeout(() => {
+      if (canvasRef.current && imageRef.current) {
+        const canvas = canvasRef.current;
+        const img = imageRef.current;
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const context = canvas.getContext('2d');
+        if (context) {
+          context.drawImage(img, 0, 0);
+          context.strokeStyle = '#ef4444'; // Rose 500
+          context.lineWidth = Math.max(5, canvas.width * 0.005);
+          context.lineCap = 'round';
+          context.lineJoin = 'round';
+          setCtx(context);
+          setHistory([]);
+        }
+      }
+    }, 100);
+  };
+
+  const saveCanvasState = () => {
+    if (canvasRef.current && ctx) {
+      setHistory(prev => [...prev, ctx.getImageData(0, 0, canvasRef.current!.width, canvasRef.current!.height)]);
+    }
+  };
+
+  const undoAnnotation = () => {
+    if (history.length > 0 && ctx && canvasRef.current) {
+      const prevState = history[history.length - 1];
+      ctx.putImageData(prevState, 0, 0);
+      setHistory(prev => prev.slice(0, -1));
+    }
+  };
+
+  const getPointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { offsetX: 0, offsetY: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      offsetX: (e.clientX - rect.left) * scaleX,
+      offsetY: (e.clientY - rect.top) * scaleY
+    };
+  };
+
+  const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!ctx) return;
+    saveCanvasState();
+    setIsDrawing(true);
+    const { offsetX, offsetY } = getPointerPos(e);
+    ctx.beginPath();
+    ctx.moveTo(offsetX, offsetY);
+  };
+
+  const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !ctx) return;
+    const { offsetX, offsetY } = getPointerPos(e);
+    ctx.lineTo(offsetX, offsetY);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing || !ctx) return;
+    setIsDrawing(false);
+    ctx.closePath();
+  };
+
+  const handleSaveAnnotation = async () => {
+    if (!canvasRef.current || !gallery.inspectionId) return;
+    setIsSavingAnnotation(true);
+    try {
+      const canvas = canvasRef.current;
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/jpeg', 0.9));
+      
+      const currentUrl = gallery.images[gallery.index];
+      const urlParts = currentUrl.split('/asset-photos/');
+      if (urlParts.length !== 2) throw new Error("Could not parse image URL format for saving.");
+      
+      const fileName = urlParts[1].split('?')[0]; 
+      
+      const { error } = await supabase.storage.from('asset-photos').upload(fileName, blob, {
+        upsert: true,
+        contentType: 'image/jpeg',
+        cacheControl: '0'
+      });
+      
+      if (error) throw error;
+      
+      const newUrl = `${urlParts[0]}/asset-photos/${fileName}?t=${Date.now()}`;
+      const newImages = [...gallery.images];
+      newImages[gallery.index] = newUrl;
+      
+      // Update DB to persist cache-busted URL
+      await supabase.from('inspections').update({ photos: newImages }).eq('id', gallery.inspectionId);
+      
+      setGallery(g => ({ ...g, images: newImages }));
+      setIsDrawMode(false);
+      fetchVerificationLedger(false);
+      toast.success("Damage annotation saved and overwritten securely!");
+    } catch (err: any) {
+      toast.error("Failed to save annotation: " + err.message);
+    } finally {
+      setIsSavingAnnotation(false);
+    }
+  };
+
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (isDrawMode) return;
     if (zoomProps.isZoomed) {
       setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
     } else {
@@ -242,7 +352,7 @@ function AdminInspectionReviewContent() {
   };
 
   const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (zoomProps.isZoomed) {
+    if (zoomProps.isZoomed && !isDrawMode) {
       const img = e.currentTarget.querySelector('img');
       if (!img) return;
       const rect = img.getBoundingClientRect();
@@ -307,12 +417,7 @@ function AdminInspectionReviewContent() {
         const isCurrentHolder = staffId && String(staffId).toLowerCase() === String(currentAssigneeId || '').toLowerCase();
         const userTag = isCurrentHolder ? 'Current Holder' : 'Old User';
 
-        return { 
-          ...log, 
-          historical_staff_name: historicalName, 
-          historical_emp_code: historicalEmpCode,
-          user_sequence_tag: userTag
-        };
+        return { ...log, historical_staff_name: historicalName, historical_emp_code: historicalEmpCode, user_sequence_tag: userTag };
       });
 
       setAssetHistory(compiled);
@@ -346,7 +451,6 @@ function AdminInspectionReviewContent() {
         const inspNotesLower = String(insp.notes || '').toLowerCase();
         const inspTypeLower = String(insp.type || insp.inspection_type || '').toLowerCase();
 
-        // 🟢 STRICT EXCLUSION GATE
         if (
           inspStatusLower.includes('replace') || inspNotesLower.includes('replace') || inspTypeLower.includes('replace') ||
           inspStatusLower.includes('return') || inspNotesLower.includes('return') || inspTypeLower.includes('return') ||
@@ -357,9 +461,7 @@ function AdminInspectionReviewContent() {
           inspNotesLower.includes('awaiting agreement') || inspNotesLower.includes('sign-off') ||
           inspStatusLower === 'assigned' || inspStatusLower === 'stock intake' || inspStatusLower === 'demo use' ||
           inspNotesLower.includes('demo use') || inspNotesLower.includes('asset configuration updated')
-        ) {
-          return; 
-        }
+        ) { return; }
 
         const inspAssetIdStr = String(insp.asset_id || '').toLowerCase().trim();
         const inspTagStr = String(insp.asset_tag || '').toLowerCase().trim();
@@ -468,8 +570,6 @@ function AdminInspectionReviewContent() {
         }
 
         const isHistorical = ['approved', 'pass', 'resolved'].some(k => inspStatusLower.includes(k)) || isProfileAdmin;
-        
-        // 🌟 Apply robust parser immediately during ledger mapping
         const photosArray = extractPhotos(insp.photos, insp);
 
         let currentAssignee = matchedAsset.assigned_to;
@@ -513,7 +613,7 @@ function AdminInspectionReviewContent() {
           
           is_deleted_user: false,
           status: normalizedStatus,
-          photos: photosArray, // 🌟 Safe Photos Array injected
+          photos: photosArray,
           next_due: nextDue,
           days_until_due: daysUntilDue,
           is_due_soon: daysUntilDue <= 5 && daysUntilDue >= 0 && !isHistorical,
@@ -650,61 +750,29 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  const sendStaffAuditReminder = async (staffId: string, assetName: string, tagId: string, status: string) => {
-    if (!staffId || staffId.includes('REMOVED-ID') || staffId.includes('NO-EMP-RECORD') || staffId.includes('ADMIN') || staffId.includes('ID-') || staffId === 'UnknownID') {
-      return alert("Cannot send alert: No valid active employee profile attached to this record.");
-    }
-    setSendingAlertId(staffId);
-    try {
-      const isReInspect = status === 'Re-Inspection';
-      const isOverdue = status === 'Overdue';
-      const isDueSoon = status === 'Due Soon';
-      const title = isReInspect ? `⚠️ Mandatory Re-Inspection Required` : isOverdue ? `🚨 OVERDUE: Hardware Audit Required` : `🔔 Hardware Audit Reminder Due`;
-      const message = isReInspect
-        ? `Your previous visual audit for ${assetName} (${tagId}) requires immediate re-inspection. Please open your staff dashboard and upload fresh device captures.`
-        : isOverdue
-        ? `Your hardware inspection for ${assetName} (${tagId}) is OVERDUE. Please submit your visual verification immediately to avoid compliance strikes.`
-        : `Please submit your scheduled visual inspection photos for ${assetName} (${tagId}) via your staff portal dashboard.`;
-
-      const { error } = await supabase.from('notifications').insert([{
-        target_user: staffId,
-        title: title,
-        message: message,
-        is_read: false,
-        type: isReInspect || isOverdue ? 'warning' : 'info'
-      }]);
-
-      if (error) throw error;
-      alert(`✔ Success: Immediate notification push sent directly to employee dashboard!`);
-    } catch (err: any) {
-      alert(`Error sending notification push: ${err.message}`);
-    } finally {
-      setSendingAlertId(null);
-    }
-  };
-
   const executeVerdict = async (
     inspectionId: string, 
     assetId: string, 
     verdict: 'Approved' | 'Re-Inspection' | 'Rejected', 
     staffId?: string, 
-    isDeletedUser?: boolean
+    isDeletedUser?: boolean,
+    existingRemarks?: string
   ) => {
     if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
 
-    let remarks = '';
-    if (verdict === 'Re-Inspection' || verdict === 'Rejected') {
-      remarks = prompt(`Provide administrative remarks/reason for marking this device as ${verdict}:`) || '';
-      if (!remarks.trim()) return alert("Remarks are required to issue returned actions.");
-    }
-
-    if (!confirm(`Are you sure you want to mark this submission as "${verdict}"?`)) return;
+    const isApproval = verdict === 'Approved';
+    const defaultMsg = isApproval ? "All hardware confirmed working." : "";
+    const remarks = prompt(`Provide administrative remarks for marking this as ${verdict}:`, defaultMsg);
+    
+    if (remarks === null) return; 
+    if (!isApproval && !remarks.trim()) return alert("Remarks are required to issue returned actions.");
 
     setUpdatingId(inspectionId);
     try {
       const isTemporaryId = String(inspectionId).startsWith('synthetic-') || String(inspectionId).startsWith('missing-') || String(inspectionId).startsWith('insp-');
       
-      let query = supabase.from('inspections').update({ status: verdict, admin_remarks: remarks || null });
+      const finalRemarks = remarks.trim() || existingRemarks || null;
+      let query = supabase.from('inspections').update({ status: verdict, admin_remarks: finalRemarks });
       
       if (isTemporaryId) {
         query = query.eq('asset_id', assetId).ilike('status', '%Pending%');
@@ -716,7 +784,7 @@ function AdminInspectionReviewContent() {
       if (inspErr && !isTemporaryId) throw inspErr;
 
       const assetUpdatePayload: any = { inspection_status: verdict };
-      if (verdict === 'Approved') {
+      if (isApproval) {
         assetUpdatePayload.last_inspection_date = new Date().toISOString();
         assetUpdatePayload.status = 'Assigned'; 
       } else if (verdict === 'Re-Inspection') {
@@ -732,26 +800,21 @@ function AdminInspectionReviewContent() {
         try {
           await supabase.from('notifications').insert([{
             target_user: staffId,
-            title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ Action Required: ${verdict}`,
-            message: verdict === 'Approved' ? `Your recent hardware audit has been successfully approved by the IT Admin.` : `Your asset inspection was marked as ${verdict}. Reason: ${remarks}`,
+            title: isApproval ? '✔ Inspection Approved' : `⚠ Action Required: ${verdict}`,
+            message: isApproval ? `Your recent hardware audit has been successfully approved by the IT Admin.` : `Your asset inspection was marked as ${verdict}. Reason: ${finalRemarks}`,
             is_read: false,
-            type: verdict === 'Approved' ? 'success' : 'warning'
+            type: isApproval ? 'success' : 'warning'
           }]);
         } catch (notifError) {}
       }
 
       fetchVerificationLedger(false);
-      alert(`Success: Review locked in as ${verdict}. Live alert pushed to staff dashboard.`);
+      toast.success(`Review locked in as ${verdict}. Admin remarks saved.`);
     } catch (err: any) {
       alert(`Error transmitting verdict: ${err.message}`);
     } finally {
       setUpdatingId(null);
     }
-  };
-
-  const clearAssetFilter = () => {
-    setAssetFilter(null);
-    router.replace('/admin/inspections'); 
   };
 
   const filteredList = inspections.filter(item => {
@@ -782,7 +845,6 @@ function AdminInspectionReviewContent() {
       ));
 
     if (!matchesSearch) return false;
-
     if (!assetFilter && !item.isLatest) return false;
 
     if (filterTab === 'All Logs') return item.isLatest; 
@@ -830,12 +892,14 @@ function AdminInspectionReviewContent() {
   return (
     <div className="min-h-[calc(100vh-6rem)] bg-linear-to-br from-rose-50/40 via-orange-50/30 to-indigo-50/30 p-4 sm:p-6 lg:p-8 relative z-10 font-sans text-slate-900">
       
+      {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER & ANNOTATION GALLERY MODAL */}
       {mounted && gallery.isOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 sm:p-12 overflow-hidden">
+          
           <button 
             onClick={() => {
-              setGallery({ isOpen: false, images: [], index: 0 });
-              setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
+              setGallery({ isOpen: false, images: [], index: 0, inspectionId: null });
+              setIsDrawMode(false);
             }}
             className="absolute top-6 right-6 w-12 h-12 bg-rose-600 hover:bg-rose-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] border border-rose-400 cursor-pointer z-[1000000] transition-transform active:scale-95"
           >
@@ -846,48 +910,83 @@ function AdminInspectionReviewContent() {
             <span className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-white bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] w-fit">
               Photo {gallery.index + 1} of {gallery.images.length}
             </span>
+            {!isDrawMode && (
+              <span className="text-[8px] md:text-[10px] text-white uppercase tracking-widest mt-2 font-bold bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 w-fit shadow-sm">
+                {zoomProps.isZoomed ? "Move mouse to Pan" : "Click image to Zoom"}
+              </span>
+            )}
           </div>
           
+          {/* 🌟 ANNOTATION CONTROLS */}
+          {gallery.inspectionId && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000000] flex items-center gap-3">
+              {isDrawMode ? (
+                <>
+                  <button onClick={undoAnnotation} disabled={history.length === 0} className="px-4 py-2 rounded-full bg-white/20 text-white font-bold text-xs flex items-center gap-2 hover:bg-white/30 disabled:opacity-50 transition-colors backdrop-blur-md border border-white/30 cursor-pointer">
+                    <Undo2 size={16}/> Undo
+                  </button>
+                  <button onClick={() => { setIsDrawMode(false); setCtx(null); }} className="px-4 py-2 rounded-full bg-slate-500/80 text-white font-bold text-xs hover:bg-slate-500 transition-colors backdrop-blur-md cursor-pointer">
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveAnnotation} disabled={isSavingAnnotation} className="px-5 py-2 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.4)] border border-emerald-400 hover:bg-emerald-400 cursor-pointer transition-colors disabled:opacity-70">
+                    {isSavingAnnotation ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle2 size={16}/>} Save Overwrite
+                  </button>
+                </>
+              ) : (
+                <button onClick={enableDrawMode} className="px-5 py-2 rounded-full bg-orange-500 text-white font-bold text-xs flex items-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.4)] border border-orange-400 hover:bg-orange-400 cursor-pointer transition-colors">
+                  <PenTool size={16}/> Annotate Damage
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 🌟 IMAGE & CANVAS FRAME */}
           <div className="relative w-full max-w-5xl h-full max-h-[80vh] flex-1 flex flex-col items-center justify-center p-3 sm:p-4 rounded-[2rem] bg-white/10 backdrop-blur-3xl border border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.3)] mt-8">
             <div 
-              className="w-full h-full relative flex items-center justify-center overflow-hidden rounded-2xl bg-black/50"
+              className={`relative flex items-center justify-center overflow-hidden rounded-2xl bg-black/50 ${isDrawMode ? '' : 'w-full h-full'}`}
+              style={isDrawMode ? {} : undefined}
               onMouseMove={handleImageMouseMove}
               onMouseLeave={() => setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' })}
               onClick={handleImageClick}
             >
               <img 
+                ref={imageRef}
                 src={gallery.images[gallery.index]} 
+                crossOrigin="anonymous"
                 alt="Expanded capture" 
-                style={{ 
+                style={isDrawMode ? { maxHeight: '75vh', maxWidth: '100%', objectFit: 'contain' } : { 
                   transform: zoomProps.isZoomed ? `scale(2.5)` : `scale(1)`, 
                   transformOrigin: `${zoomProps.originX} ${zoomProps.originY}`,
                   transition: zoomProps.isZoomed ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
                 }}
-                className={`max-w-full max-h-full object-contain shadow-2xl transition-transform ${zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
+                className={`max-w-full max-h-full object-contain shadow-2xl transition-transform ${isDrawMode ? 'invisible' : zoomProps.isZoomed ? 'cursor-move' : 'cursor-zoom-in'}`} 
                 draggable={false}
               />
+              
+              {isDrawMode && (
+                <canvas
+                  ref={canvasRef}
+                  onPointerDown={startDrawing}
+                  onPointerMove={draw}
+                  onPointerUp={stopDrawing}
+                  onPointerOut={stopDrawing}
+                  className="absolute top-0 left-0 w-full h-full touch-none cursor-crosshair z-50 shadow-2xl"
+                />
+              )}
             </div>
           </div>
           
-          {gallery.images.length > 1 && (
+          {!isDrawMode && gallery.images.length > 1 && (
              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 z-[1000000]">
                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) }));
-                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-                  }}
+                  onClick={(e) => { e.stopPropagation(); setGallery(g => ({ ...g, index: Math.max(g.index - 1, 0) })); }}
                   disabled={gallery.index === 0}
                   className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-white/20 backdrop-blur-xl border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] rounded-full text-white disabled:opacity-20 active:scale-95 transition-all hover:bg-white/30 cursor-pointer"
                 >
                   <ChevronLeft size={28} />
                 </button>
                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1) }));
-                    setZoomProps({ isZoomed: false, originX: '50%', originY: '50%' });
-                  }}
+                  onClick={(e) => { e.stopPropagation(); setGallery(g => ({ ...g, index: Math.min(g.index + 1, g.images.length - 1) })); }}
                   disabled={gallery.index === gallery.images.length - 1}
                   className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-white/20 backdrop-blur-xl border border-white/30 shadow-[0_4px_15px_rgba(0,0,0,0.2)] rounded-full text-white disabled:opacity-20 active:scale-95 transition-all hover:bg-white/30 cursor-pointer"
                 >
@@ -899,6 +998,7 @@ function AdminInspectionReviewContent() {
         document.body
       )}
 
+      {/* ASSET LIFECYCLE MODAL */}
       {mounted && assetDetailModal && createPortal(
         <div style={{ zIndex: 100 }} className="fixed inset-0 flex flex-col items-center justify-start pt-20 pb-6 px-4 backdrop-blur-2xl bg-slate-900/30">
           <div className="absolute inset-0" onClick={() => setAssetDetailModal(null)}></div>
@@ -990,6 +1090,7 @@ function AdminInspectionReviewContent() {
 
       <div className="max-w-screen-2xl mx-auto space-y-6">
         
+        {/* iOS LIGHT LIQUID GLASS HEADER */}
         <div className={`${liquidGlass.pill} p-4 flex justify-between items-center`}>
           <div className="flex items-center gap-4">
             <button onClick={() => router.push('/admin')} className={`p-3 rounded-full bg-white/40 backdrop-blur-md transition-all border border-white/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] ${liquidGlass.buttonHover}`}><ArrowLeft size={18} /></button>
@@ -1014,6 +1115,7 @@ function AdminInspectionReviewContent() {
           </div>
         )}
 
+        {/* TABS (LIQUID GLASS PILL BAR) */}
         <div className={`p-1.5 flex items-center gap-2 overflow-x-auto ${liquidGlass.pill}`}>
           {TABS.map(tab => (
             <button
@@ -1032,6 +1134,7 @@ function AdminInspectionReviewContent() {
           ))}
         </div>
 
+        {/* SEARCH BAR */}
         <div className={`${liquidGlass.pill} p-2 flex items-center relative`}>
           <Search size={18} className="absolute left-5 text-slate-400" />
           <input 
@@ -1058,7 +1161,7 @@ function AdminInspectionReviewContent() {
               {filteredList.map((insp: any) => {
                 const isPending = String(insp.status).toLowerCase().includes('pending');
                 const isReInspect = String(insp.status).toLowerCase().includes('re-inspection');
-                const photosArray = insp.photos || [];
+                const photosArray = extractPhotos(insp.photos, insp); // 🌟 Apply robust parser
 
                 return (
                   <motion.div 
@@ -1068,6 +1171,7 @@ function AdminInspectionReviewContent() {
                     className={`${liquidGlass.card} p-6 flex flex-col justify-between hover:-translate-y-1 transition-all duration-300`}
                   >
                     <div>
+                      {/* STAFF HEADER */}
                       <div className="flex justify-between items-start mb-5">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-white/50 backdrop-blur-md border border-white/80 flex items-center justify-center font-extrabold text-slate-800 shadow-[0_1px_2px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.9)]">
@@ -1076,6 +1180,7 @@ function AdminInspectionReviewContent() {
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="text-sm font-bold text-slate-900">{insp.historical_staff_name}</h3>
+                              {/* 🟢 OLD USER BADGE */}
                               {insp.is_old_user && (
                                 <span className="bg-slate-100/50 backdrop-blur-md text-slate-600 border border-slate-200/60 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)]">
                                   Old User
@@ -1097,6 +1202,7 @@ function AdminInspectionReviewContent() {
                         </span>
                       </div>
 
+                      {/* ASSET DATA PILL */}
                       <div className={`${liquidGlass.inner} p-4 mb-4 space-y-2.5 text-xs`}>
                         <div className="flex items-center gap-2 mb-2 pb-2.5 border-b border-white/50">
                           <Laptop size={14} className="text-slate-500" />
@@ -1118,6 +1224,7 @@ function AdminInspectionReviewContent() {
                           <span className="text-slate-800 font-semibold">{formatDate(insp.created_at)}</span>
                         </div>
                         
+                        {/* 🌟 NOW ASSIGNED TO (FOR OLD USERS) */}
                         {insp.is_old_user && (
                           <div className="flex justify-between items-center pt-2.5 mt-2.5 border-t border-white/50 text-rose-500">
                             <span className="font-bold uppercase tracking-wider text-[10px]">Now Assigned To</span>
@@ -1132,7 +1239,7 @@ function AdminInspectionReviewContent() {
                       {photosArray.length > 0 ? (
                         <div className="flex gap-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
                           {photosArray.map((url: string, i: number) => (
-                            <button key={i} type="button" onClick={() => openGallery(photosArray, i)} className="w-14 h-14 rounded-2xl overflow-hidden border border-white/60 shadow-sm hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all cursor-zoom-in shrink-0 bg-white/20 backdrop-blur-md">
+                            <button key={i} type="button" onClick={() => openGallery(photosArray, i, insp.id)} className="w-14 h-14 rounded-2xl overflow-hidden border border-white/60 shadow-sm hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all cursor-zoom-in shrink-0 bg-white/20 backdrop-blur-md">
                               <img src={url} alt="Capture" className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity"/>
                             </button>
                           ))}
@@ -1143,7 +1250,7 @@ function AdminInspectionReviewContent() {
                         </div>
                       )}
 
-                      {/* RAW DATA FALLBACK (Helpful for debugging if extractor fails) */}
+                      {/* RAW DATA FALLBACK */}
                       {photosArray.length === 0 && insp.photos && (
                         <div className="p-2 mb-4 rounded-xl bg-slate-100/50 text-[9px] text-slate-500 font-mono break-words border border-slate-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]">
                           Raw DB Data: {typeof insp.photos === 'string' ? insp.photos : JSON.stringify(insp.photos)}
@@ -1170,29 +1277,35 @@ function AdminInspectionReviewContent() {
                       <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/40 mt-2">
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user)} 
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
                           className="py-2.5 bg-emerald-500/80 backdrop-blur-xl border border-emerald-400/50 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(16,185,129,0.3)]"
                         >
                           Approve
                         </button>
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user)} 
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
                           className="py-2.5 bg-orange-500/80 backdrop-blur-xl border border-orange-400/50 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(249,115,22,0.3)]"
                         >
                           Retry
                         </button>
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user)} 
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
                           className="py-2.5 bg-rose-500/80 backdrop-blur-xl border border-rose-400/50 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(244,63,94,0.3)]"
                         >
                           Reject
                         </button>
                       </div>
                     ) : (
-                      <div className="text-center pt-4 text-xs font-bold text-slate-500 border-t border-white/40 mt-2 flex items-center justify-center gap-1">
-                        <CheckCircle2 size={12}/> Saved in Record
+                      <div className="grid grid-cols-1 pt-4 border-t border-white/40 mt-2">
+                        <button 
+                          disabled={updatingId === insp.id}
+                          onClick={() => executeVerdict(insp.id, insp.asset_id, insp.status, insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
+                          className="py-2 bg-slate-100 hover:bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-bold transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                        >
+                          <Settings2 size={12}/> Edit Admin Notes
+                        </button>
                       </div>
                     )}
                   </motion.div>
