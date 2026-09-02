@@ -156,6 +156,7 @@ function AdminInspectionReviewContent() {
   
   const [assetFilter, setAssetFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [verdictAction, setVerdictAction] = useState<any>(null); // State for the custom remarks Modal
   
   // 🌟 GALLERY & ANNOTATION STATE 🌟
   const [gallery, setGallery] = useState({ isOpen: false, images: [] as string[], index: 0, inspectionId: null as string | null });
@@ -381,7 +382,7 @@ function AdminInspectionReviewContent() {
           (log.user_email && String(p.email).toLowerCase() === String(log.user_email).toLowerCase()) ||
           (historicalEmpCode && (String(p.emp_code).toLowerCase() === String(historicalEmpCode).toLowerCase() || String(p.emp_id).toLowerCase() === String(historicalEmpCode).toLowerCase()))
         );
-         
+          
         if (matchedProfile) {
           if (!historicalName) historicalName = matchedProfile.full_name || matchedProfile.name || matchedProfile.user_name;
           if (!historicalEmpCode) historicalEmpCode = matchedProfile.emp_code || matchedProfile.emp_id || matchedProfile.employee_code;
@@ -744,35 +745,24 @@ function AdminInspectionReviewContent() {
 
       setInspections(finalLedger);
     } catch (err: any) {
-      alert("Failed to fetch inspection records.");
+      toast.error("Failed to fetch inspection records.");
     } finally {
       setLoading(false);
     }
   };
 
-  const executeVerdict = async (
-    inspectionId: string, 
-    assetId: string, 
-    verdict: 'Approved' | 'Re-Inspection' | 'Rejected', 
-    staffId?: string, 
-    isDeletedUser?: boolean,
-    existingRemarks?: string
-  ) => {
-    if (!inspectionId || !assetId) return alert("System Error: Missing unique record identifier.");
-
-    const isApproval = verdict === 'Approved';
-    const defaultMsg = isApproval ? "All hardware confirmed working." : "";
-    const remarks = prompt(`Provide administrative remarks for marking this as ${verdict}:`, defaultMsg);
+  const confirmVerdict = async (finalRemarks: string) => {
+    if (!verdictAction) return;
+    const { inspectionId, assetId, verdict, staffId, isDeletedUser } = verdictAction;
     
-    if (remarks === null) return; 
-    if (!isApproval && !remarks.trim()) return alert("Remarks are required to issue returned actions.");
-
     setUpdatingId(inspectionId);
+    setVerdictAction(null);
+
     try {
       const isTemporaryId = String(inspectionId).startsWith('synthetic-') || String(inspectionId).startsWith('missing-') || String(inspectionId).startsWith('insp-');
       
-      const finalRemarks = remarks.trim() || existingRemarks || null;
-      let query = supabase.from('inspections').update({ status: verdict, admin_remarks: finalRemarks });
+      const finalRemarksFormatted = finalRemarks.trim() || null;
+      let query = supabase.from('inspections').update({ status: verdict, admin_remarks: finalRemarksFormatted });
       
       if (isTemporaryId) {
         query = query.eq('asset_id', assetId).ilike('status', '%Pending%');
@@ -784,7 +774,7 @@ function AdminInspectionReviewContent() {
       if (inspErr && !isTemporaryId) throw inspErr;
 
       const assetUpdatePayload: any = { inspection_status: verdict };
-      if (isApproval) {
+      if (verdict === 'Approved') {
         assetUpdatePayload.last_inspection_date = new Date().toISOString();
         assetUpdatePayload.status = 'Assigned'; 
       } else if (verdict === 'Re-Inspection') {
@@ -800,18 +790,18 @@ function AdminInspectionReviewContent() {
         try {
           await supabase.from('notifications').insert([{
             target_user: staffId,
-            title: isApproval ? '✔ Inspection Approved' : `⚠ Action Required: ${verdict}`,
-            message: isApproval ? `Your recent hardware audit has been successfully approved by the IT Admin.` : `Your asset inspection was marked as ${verdict}. Reason: ${finalRemarks}`,
+            title: verdict === 'Approved' ? '✔ Inspection Approved' : `⚠ Action Required: ${verdict}`,
+            message: verdict === 'Approved' ? `Your recent hardware audit has been successfully approved by the IT Admin.` : `Your asset inspection was marked as ${verdict}. Reason: ${finalRemarksFormatted}`,
             is_read: false,
-            type: isApproval ? 'success' : 'warning'
+            type: verdict === 'Approved' ? 'success' : 'warning'
           }]);
         } catch (notifError) {}
       }
 
       fetchVerificationLedger(false);
-      toast.success(`Review locked in as ${verdict}. Admin remarks saved.`);
+      toast.success(`Review locked in as ${verdict}.`);
     } catch (err: any) {
-      alert(`Error transmitting verdict: ${err.message}`);
+      toast.error(`Error transmitting verdict: ${err.message}`);
     } finally {
       setUpdatingId(null);
     }
@@ -892,6 +882,45 @@ function AdminInspectionReviewContent() {
   return (
     <div className="min-h-[calc(100vh-6rem)] bg-linear-to-br from-rose-50/40 via-orange-50/30 to-indigo-50/30 p-4 sm:p-6 lg:p-8 relative z-10 font-sans text-slate-900">
       
+      {/* 🌟 VERDICT REMARKS CUSTOM MODAL */}
+      <AnimatePresence>
+        {mounted && verdictAction && createPortal(
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-[2rem] w-full max-w-md p-6 shadow-2xl relative overflow-hidden border border-slate-100">
+              <h3 className="text-lg font-black text-slate-900 mb-2">Confirm {verdictAction.verdict}</h3>
+              <p className="text-xs text-slate-500 mb-4 font-medium">Provide administrative remarks for this action.</p>
+              
+              <textarea 
+                id="verdict-remarks"
+                className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all resize-none mb-4"
+                rows={3}
+                defaultValue={verdictAction.verdict === 'Approved' ? "All hardware confirmed working." : (verdictAction.existingRemarks || "")}
+                placeholder="Enter your remarks here..."
+              />
+              
+              <div className="flex gap-3">
+                <button onClick={() => setVerdictAction(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors cursor-pointer">Cancel</button>
+                <button onClick={() => {
+                  const val = (document.getElementById('verdict-remarks') as HTMLTextAreaElement).value;
+                  if (verdictAction.verdict !== 'Approved' && !val.trim()) {
+                    toast.error("Remarks are required for rejected/retry actions.");
+                    return;
+                  }
+                  confirmVerdict(val);
+                }} className={`flex-1 py-3 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.2)] active:scale-95 ${
+                  verdictAction.verdict === 'Approved' ? 'bg-emerald-500 hover:bg-emerald-600' :
+                  verdictAction.verdict === 'Re-Inspection' ? 'bg-orange-500 hover:bg-orange-600' :
+                  'bg-rose-500 hover:bg-rose-600'
+                }`}>
+                  Confirm
+                </button>
+              </div>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
+
       {/* 🌟 FULL-SCREEN INTERACTIVE MAGNIFIER & ANNOTATION GALLERY MODAL */}
       {mounted && gallery.isOpen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 sm:p-12 overflow-hidden">
@@ -1277,21 +1306,21 @@ function AdminInspectionReviewContent() {
                       <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/40 mt-2">
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Approved', insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setVerdictAction({ inspectionId: insp.id, assetId: insp.asset_id, verdict: 'Approved', staffId: insp.staff_id, isDeletedUser: insp.is_deleted_user, existingRemarks: insp.admin_remarks }); }} 
                           className="py-2.5 bg-emerald-500/80 backdrop-blur-xl border border-emerald-400/50 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(16,185,129,0.3)]"
                         >
                           Approve
                         </button>
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Re-Inspection', insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setVerdictAction({ inspectionId: insp.id, assetId: insp.asset_id, verdict: 'Re-Inspection', staffId: insp.staff_id, isDeletedUser: insp.is_deleted_user, existingRemarks: insp.admin_remarks }); }} 
                           className="py-2.5 bg-orange-500/80 backdrop-blur-xl border border-orange-400/50 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(249,115,22,0.3)]"
                         >
                           Retry
                         </button>
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, 'Rejected', insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setVerdictAction({ inspectionId: insp.id, assetId: insp.asset_id, verdict: 'Rejected', staffId: insp.staff_id, isDeletedUser: insp.is_deleted_user, existingRemarks: insp.admin_remarks }); }} 
                           className="py-2.5 bg-rose-500/80 backdrop-blur-xl border border-rose-400/50 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(244,63,94,0.3)]"
                         >
                           Reject
@@ -1301,7 +1330,7 @@ function AdminInspectionReviewContent() {
                       <div className="grid grid-cols-1 pt-4 border-t border-white/40 mt-2">
                         <button 
                           disabled={updatingId === insp.id}
-                          onClick={() => executeVerdict(insp.id, insp.asset_id, insp.status, insp.staff_id, insp.is_deleted_user, insp.admin_remarks)} 
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setVerdictAction({ inspectionId: insp.id, assetId: insp.asset_id, verdict: insp.status, staffId: insp.staff_id, isDeletedUser: insp.is_deleted_user, existingRemarks: insp.admin_remarks }); }} 
                           className="py-2 bg-slate-100 hover:bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-bold transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
                         >
                           <Settings2 size={12}/> Edit Admin Notes
