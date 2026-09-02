@@ -145,7 +145,7 @@ function AdminInspectionReviewContent() {
   const [assetFilter, setAssetFilter] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   
-  // Custom Remark Modal for Retry / Reject / Editing Notes
+  // Custom Remark Modal for Approve / Retry / Reject / Editing Notes
   const [modalState, setModalState] = useState<{ insp: any; verdict: string; isEditingRemarks?: boolean } | null>(null);
   
   // Gallery & Annotation state
@@ -730,7 +730,7 @@ function AdminInspectionReviewContent() {
     }
   };
 
-  // Direct Execution logic with resilient fallbacks
+  // Execution logic tied to the modal form
   const executeVerdict = async (
     insp: any,
     verdict: 'Approved' | 'Re-Inspection' | 'Rejected',
@@ -743,8 +743,9 @@ function AdminInspectionReviewContent() {
 
     try {
       const isApproval = verdict === 'Approved';
-      const finalRemarks = customRemarks !== undefined 
-        ? customRemarks 
+      // Use the typed note, or a default context string
+      const finalRemarks = customRemarks !== undefined && customRemarks.trim() !== ''
+        ? customRemarks.trim()
         : (isApproval ? 'All hardware confirmed working.' : `Marked as ${verdict} by IT Admin.`);
 
       const inspectionId = insp.id;
@@ -912,8 +913,8 @@ function AdminInspectionReviewContent() {
               id="admin-modal-remarks"
               className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all resize-none mb-4"
               rows={3}
-              defaultValue={modalState.insp.admin_remarks || ''}
-              placeholder={modalState.verdict === 'Re-Inspection' ? 'E.g. Missing serial number photo, please re-audit...' : 'E.g. Visible physical hardware defect, declined...'}
+              defaultValue={modalState.isEditingRemarks ? (modalState.insp.admin_remarks || '') : (modalState.verdict === 'Approved' ? 'All hardware confirmed working.' : '')}
+              placeholder={modalState.verdict === 'Re-Inspection' ? 'E.g. Missing serial number photo, please re-audit...' : modalState.verdict === 'Approved' ? 'E.g. All hardware confirmed working.' : 'E.g. Visible physical hardware defect, declined...'}
             />
             
             <div className="flex gap-3">
@@ -929,8 +930,8 @@ function AdminInspectionReviewContent() {
                 onClick={() => {
                   const el = document.getElementById('admin-modal-remarks') as HTMLTextAreaElement;
                   const val = el ? el.value.trim() : '';
-                  if (!val && modalState.verdict !== 'Approved' && !modalState.isEditingRemarks) {
-                    toast.error("Please provide a reason.");
+                  if (!val && !modalState.isEditingRemarks) {
+                    toast.error("Please provide an administrative note.");
                     return;
                   }
                   executeVerdict(modalState.insp, modalState.verdict as any, val);
@@ -1333,7 +1334,7 @@ function AdminInspectionReviewContent() {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            executeVerdict(insp, 'Approved');
+                            setModalState({ insp, verdict: 'Approved' });
                           }} 
                           className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-[0_4px_15px_rgba(16,185,129,0.3)] active:scale-95 disabled:opacity-50 flex items-center justify-center"
                         >
