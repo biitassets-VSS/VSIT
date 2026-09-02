@@ -98,7 +98,6 @@ const extractAdminReason = (remarks: string, notes: string) => {
   return 'No administrative remarks provided.';
 };
 
-// 🌟 ADDED MISSING EXTRACT PHOTOS FUNCTION
 const extractPhotos = (recordPhotos: any, fallbackRecord: any = {}) => {
   let extracted: string[] = [];
   
@@ -686,14 +685,6 @@ export default function StaffDashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0 mt-2 sm:mt-0">
-          <button onClick={() => { setUnreadNotifications(0); router.push('/staff/dashboard/notifications'); }} className="relative p-2.5 bg-white/50 rounded-full border border-white/80 shadow-sm hover:scale-105 transition-transform text-slate-600 hover:text-purple-600 cursor-pointer">
-            <Bell size={18} />
-            {unreadNotifications > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm border-2 border-white">
-                {unreadNotifications > 9 ? '9+' : unreadNotifications}
-              </span>
-            )}
-          </button>
           <button 
             onClick={() => loadRealDatabase(true)} 
             disabled={isRefreshing}
